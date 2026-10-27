@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,7 +9,7 @@ import { colors, font, space } from '@/theme';
 
 // Temporary home screen until the camera is built.
 export default function Home() {
-  const { profile, signOut } = useMe();
+  const { userId, profile, signOut } = useMe();
 
   return (
     <SafeAreaView style={styles.wrap}>
@@ -19,7 +20,10 @@ export default function Home() {
           {profile ? `Logged in as @${profile.username}` : 'Loading your profile…'}
         </Text>
       </View>
-      <Button title="Log out" variant="secondary" icon="log-out-outline" onPress={signOut} />
+      <View style={styles.buttons}>
+        <Button title="My profile" icon="person-circle-outline" onPress={() => router.push(`/profile/${userId}`)} />
+        <Button title="Log out" variant="secondary" icon="log-out-outline" onPress={signOut} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -42,5 +46,8 @@ const styles = StyleSheet.create({
   subtitle: {
     ...font.body,
     color: colors.textMuted,
+  },
+  buttons: {
+    gap: space.md,
   },
 });

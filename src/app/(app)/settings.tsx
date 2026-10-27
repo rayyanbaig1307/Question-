@@ -1,0 +1,160 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Constants from 'expo-constants';
+import { router, Stack } from 'expo-router';
+import type { ReactNode } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+
+import { useOverlays } from '@/components/Overlays';
+import { useMe } from '@/lib/auth';
+import { friendlyError } from '@/lib/errors';
+import { updateMyProfile } from '@/lib/profiles';
+import { colors, font, radius, space } from '@/theme';
+
+export default function Settings() {
+  const { userId, profile, setProfile, signOut } = useMe();
+  const { showToast } = useOverlays();
+
+  async function setPrivate(value: boolean) {
+    try {
+      setProfile(await updateMyProfile(userId, { is_private: value }));
+      showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
+    } catch (error) {
+      Alert.alert('Could not save', friendlyError(error));
+    }
+  }
+
+  function confirmSignOut() {
+    Alert.alert('Log out?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: signOut },
+    ]);
+  }
+
+  return (
+    <ScrollView style={styles.fill} contentContainerStyle={styles.content}>
+      <Stack.Screen options={{ headerShown: true, title: 'Settings' }} />
+
+      <Section title="Privacy & safety">
+        <Row
+          icon="lock-closed"
+          color={colors.pink}
+          title="Private account"
+          subtitle="Only friends can see your posts"
+          right={
+            <Switch
+              value={profile?.is_private ?? false}
+              onValueChange={setPrivate}
+              trackColor={{ true: colors.pink, false: colors.border }}
+              thumbColor={colors.white}
+            />
+          }
+        />
+        <Row
+          icon="hand-left"
+          color={colors.orange}
+          title="Blocked accounts"
+          onPress={() => router.push('/blocked')}
+        />
+      </Section>
+
+      <Section title="Account">
+        <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
+        <Row icon="log-out" color={colors.red} title="Log out" onPress={confirmSignOut} />
+      </Section>
+
+      <Text style={styles.footer}>
+        Peekaboo {Constants.expoConfig?.version ?? ''} · made with 💛
+      </Text>
+    </ScrollView>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+function Row({ icon, color, title, subtitle, right, onPress }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      <View style={[styles.icon, { backgroundColor: color }]}>
+        <Ionicons name={icon} size={18} color={colors.white} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textFaint} /> : null)}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  content: {
+    padding: space.lg,
+    gap: space.xl,
+  },
+  section: {
+    gap: space.sm,
+  },
+  sectionTitle: {
+    ...font.label,
+    textTransform: 'uppercase',
+    marginLeft: space.sm,
+  },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+  },
+  rowPressed: {
+    backgroundColor: colors.cardPressed,
+  },
+  icon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitle: {
+    ...font.body,
+    fontWeight: '700',
+  },
+  rowSubtitle: {
+    ...font.small,
+  },
+  footer: {
+    ...font.small,
+    textAlign: 'center',
+    color: colors.textFaint,
+  },
+});

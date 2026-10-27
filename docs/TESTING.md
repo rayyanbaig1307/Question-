@@ -35,3 +35,27 @@ If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` w
    - Right password → you're back in.
 7. Try signing up again with the **same username** → it says it's taken.
 8. In Supabase → **Table Editor → profiles**, you'll see a row for each account you made.
+
+## Step 3 – Profiles
+
+For now you reach your profile from the **My profile** button (once the camera is built it's the round
+picture in the top-left corner).
+
+1. Tap **My profile**. You see your picture (a colorful letter for now), name, @username, **0 Posts · 0 Friends**,
+   and "No posts yet 📸".
+2. Tap **Edit profile**:
+   - Tap **Change photo** → pick a picture → crop it into a square → it shows up right away.
+   - Change your name and write a bio (watch the counter go up to 160).
+   - Change your username to one that's taken (e.g. another account you made) → **Save** → "Taken!".
+   - Change it to something free → **Save** → "Profile saved ✨" and the profile shows the new info.
+3. Close and reopen the app → your new picture, name and bio are still there.
+4. Pull down on your profile to refresh.
+5. Tap the ⚙️ **gear** (top right) → **Settings**:
+   - Flip **Private account** on → "Your account is private 🔒". Your profile now shows a **🔒 Private** badge.
+   - **Blocked accounts** → "Nobody blocked" (you'll block people once friends search exists).
+   - **Log out** asks first, then logs you out.
+6. In Supabase → **Storage → avatars**, you'll see your picture in a folder named after your user id.
+
+The photo grid, full-screen photo viewer, and deleting a post are tested in step 4 (once you can post).
+**Report** and **Block** live in the **•••** menu on other people's profiles – you'll be able to reach those
+in step 5 (friends search).

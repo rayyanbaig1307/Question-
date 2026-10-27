@@ -14,7 +14,8 @@ export default function AppLayout() {
         headerTitleStyle: { fontWeight: '800' },
         headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',
-      }}
-    />
+      }}>
+      <Stack.Screen name="post/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+    </Stack>
   );
 }
