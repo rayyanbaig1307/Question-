@@ -1,53 +1,51 @@
-import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from 'expo-router';
+import { useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import PagerView from 'react-native-pager-view';
 
-import { Avatar } from '@/components/Avatar';
-import { Button } from '@/components/Button';
-import { useMe } from '@/lib/auth';
-import { colors, font, space } from '@/theme';
+import { CameraPage } from '@/components/home/CameraPage';
+import { ChatPage } from '@/components/home/ChatPage';
+import { StoriesPage } from '@/components/home/StoriesPage';
+import { colors } from '@/theme';
 
-// Temporary home screen until the camera is built.
+const CHAT = 0;
+const CAMERA = 1;
+const STORIES = 2;
+
+// Swipe left/right between Chat ← Camera → Stories, just like Snapchat.
 export default function Home() {
-  const { userId, profile, signOut } = useMe();
+  const pager = useRef<PagerView>(null);
+  const [page, setPage] = useState(CAMERA);
+  const focused = useIsFocused();
+
+  const goTo = (index: number) => pager.current?.setPage(index);
 
   return (
-    <SafeAreaView style={styles.wrap}>
-      <View style={styles.center}>
-        <Avatar path={profile?.avatar_path} name={profile?.display_name} size={96} ring />
-        <Text style={styles.title}>You&apos;re in! 🎉</Text>
-        <Text style={styles.subtitle}>
-          {profile ? `Logged in as @${profile.username}` : 'Loading your profile…'}
-        </Text>
+    <PagerView
+      ref={pager}
+      style={styles.fill}
+      initialPage={CAMERA}
+      onPageSelected={(event) => setPage(event.nativeEvent.position)}>
+      <View key="chat" style={styles.fill}>
+        <ChatPage onCamera={() => goTo(CAMERA)} />
       </View>
-      <View style={styles.buttons}>
-        <Button title="My profile" icon="person-circle-outline" onPress={() => router.push(`/profile/${userId}`)} />
-        <Button title="Log out" variant="secondary" icon="log-out-outline" onPress={signOut} />
+      <View key="camera" style={styles.fill}>
+        <CameraPage
+          active={focused && page === CAMERA}
+          onOpenChat={() => goTo(CHAT)}
+          onOpenStories={() => goTo(STORIES)}
+        />
       </View>
-    </SafeAreaView>
+      <View key="stories" style={styles.fill}>
+        <StoriesPage visible={focused && page === STORIES} onCamera={() => goTo(CAMERA)} />
+      </View>
+    </PagerView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  fill: {
     flex: 1,
-    padding: space.xl,
-    backgroundColor: colors.bg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.md,
-  },
-  title: {
-    ...font.title,
-  },
-  subtitle: {
-    ...font.body,
-    color: colors.textMuted,
-  },
-  buttons: {
-    gap: space.md,
+    backgroundColor: colors.black,
   },
 });

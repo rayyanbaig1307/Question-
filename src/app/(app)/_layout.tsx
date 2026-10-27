@@ -15,6 +15,7 @@ export default function AppLayout() {
         headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',
       }}>
+      <Stack.Screen name="editor" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="post/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
     </Stack>
   );

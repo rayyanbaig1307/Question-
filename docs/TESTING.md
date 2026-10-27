@@ -24,12 +24,12 @@ If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` w
    - Type a username with capitals or spaces – they're removed automatically.
    - After a second it says **"✅ @yourname is free!"**.
    - Tap **Let's go!** without ticking "I'm 13 or older" → you get a friendly error.
-3. Fill everything in and tap **Let's go!** → you see **"You're in! 🎉 Logged in as @yourname"**.
+3. Fill everything in and tap **Let's go!** → the app opens straight to the **camera** 📸 (you're logged in).
    - If it says **"Check your email"** instead, "Confirm email" is still on in Supabase. Either tap the link in the
      email (the page it opens may look broken – that's OK, the account is confirmed) and log in, or turn the setting
      off (README step 3).
 4. **Close the app completely and open it again** → you're still logged in.
-5. Tap **Log out** → back to Welcome.
+5. Log out: tap your round picture (top-left) → ⚙️ gear (top-right) → **Log out** → back to Welcome.
 6. Tap **I already have an account**:
    - Wrong password → "That email or password doesn't look right."
    - Right password → you're back in.
@@ -38,10 +38,9 @@ If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` w
 
 ## Step 3 – Profiles
 
-For now you reach your profile from the **My profile** button (once the camera is built it's the round
-picture in the top-left corner).
+Open your profile by tapping **your round picture in the top-left corner of the camera**.
 
-1. Tap **My profile**. You see your picture (a colorful letter for now), name, @username, **0 Posts · 0 Friends**,
+1. Open your profile. You see your picture (a colorful letter for now), name, @username, **0 Posts · 0 Friends**,
    and "No posts yet 📸".
 2. Tap **Edit profile**:
    - Tap **Change photo** → pick a picture → crop it into a square → it shows up right away.
@@ -59,3 +58,33 @@ picture in the top-left corner).
 The photo grid, full-screen photo viewer, and deleting a post are tested in step 4 (once you can post).
 **Report** and **Block** live in the **•••** menu on other people's profiles – you'll be able to reach those
 in step 5 (friends search).
+
+## Step 4 – Camera + posting
+
+1. Open the app → it goes **straight to the camera**. The first time, tap **Allow camera**.
+   - Said no by accident? Tap **Open Settings** and turn the camera on for Expo Go.
+2. **Swipe right** (or tap **Chat** at the bottom-left) → the Chat page. **Swipe left** twice (or tap **Stories**)
+   → the Stories page. The 📷 button on those pages brings you back to the camera.
+3. On the camera: tap 🔄 to flip to the selfie camera, ⚡ to turn the flash on (it turns yellow).
+4. Tap the **big white circle** → your photo opens in the editor.
+   - **Aa / T button** → type something → pick a color → the **Aa** circle switches between plain text and a
+     colored bubble → **Done**. Tap the text later to change it.
+   - **😊 button** → pick an emoji or a word sticker (LOL, OMG…).
+   - **Drag** things with one finger. **Pinch** with two fingers to make them bigger/smaller, and **twist** to turn them.
+   - Drag something to the **red trash can** at the bottom to remove it. ↩️ removes the last thing you added.
+   - **✕** (top-left) asks before throwing the photo away.
+5. Tap **Send to** → choose:
+   - **My Story** (on by default) – friends can see it for 24 hours.
+   - **Post to my profile** – type a caption if you want.
+   - Tap **Send** → "Added to your story! ✨" and you're back on the camera.
+6. Swipe to **Stories** → **My Story** shows your photo in a colorful ring with "1 snap · 23h left".
+7. Take another photo, this time pick only **Post to my profile** with a caption → open your profile (top-left
+   picture) → the photo is in your grid and the **Posts** count went up.
+8. Tap the photo in the grid → it opens **full screen** with your caption at the bottom. Tap **•••** →
+   **Delete post** → it disappears from your grid.
+9. Tap the **🖼️ gallery button** (left of the shutter) → pick a photo from your phone → decorate and send it.
+10. Check Supabase: **Table Editor → stories** and **posts** have your rows; **Storage → media** has the photos
+    (in folders named after your user id).
+
+**Good to know:** stories are hidden after 24 hours automatically. Viewing *friends'* stories and the feed
+come in later steps.
