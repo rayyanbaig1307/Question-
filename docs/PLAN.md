@@ -60,7 +60,7 @@ All of this is in one file: `supabase/migrations/20261027000000_core_schema.sql`
 Core features, one at a time (✅ = done):
 
 1. ✅ Project setup + database
-2. ⬜ Sign up / log in
+2. ✅ Sign up / log in
 3. ⬜ Profiles (picture, name, username, bio, photo grid, full-screen photos, private account, block & report)
 4. ⬜ Camera + posting (take a photo, add text and stickers, post to your story or profile)
 5. ⬜ Friends (search by username, send / accept requests)
