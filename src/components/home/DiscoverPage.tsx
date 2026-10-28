@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { DISCOVER_PAGE_SIZE, fetchDiscover, setLiked, type FeedPost } from '@/lib/feed';
-import { APP_LINK, inviteFriends } from '@/lib/invite';
+import { inviteFriends, withAppLink } from '@/lib/invite';
 import { useMediaUrls } from '@/lib/media';
 import { timeAgo } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
@@ -108,7 +108,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
 
   function share(post: FeedPost) {
     const who = post.author ? `@${post.author.username}` : 'this';
-    Share.share({ message: `Look what ${who} posted on Peekaboo 👀\n\n${APP_LINK}` }).catch(() => {});
+    Share.share({ message: withAppLink(`Look what ${who} posted on Peekaboo 👀`) }).catch(() => {});
   }
 
   function openMenu(post: FeedPost) {

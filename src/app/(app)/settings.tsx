@@ -94,7 +94,7 @@ export default function Settings() {
             icon="paper-plane"
             color={colors.accent}
             title="Invite friends"
-            subtitle="Text them a link to Peekaboo"
+            subtitle="Tell your friends about Peekaboo"
             onPress={() => inviteFriends(profile?.username)}
           />
           <Row icon="people" color={colors.blue} title="My friends" onPress={() => router.push('/friends')} />
