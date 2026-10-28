@@ -5,11 +5,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
+import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { useUnreadCount } from '@/lib/chat';
 import { useIncomingRequestCount } from '@/lib/friends';
@@ -86,7 +86,7 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
       )}
 
       {/* Top: your picture on the left, camera controls on the right */}
-      <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
+      <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
         {isHome ? (
           <View style={styles.topLeft}>
             <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
@@ -114,10 +114,10 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
             onPress={() => setFlash(flash === 'on' ? 'off' : 'on')}
           />
         </View>
-      </SafeAreaView>
+      </SafeEdge>
 
       {/* Bottom: gallery, the big shutter button, and shortcuts to the other pages */}
-      <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
+      <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
         <View style={styles.shutterRow}>
           <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
           <Pressable
@@ -143,7 +143,7 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
             </Pressable>
           </View>
         ) : null}
-      </SafeAreaView>
+      </SafeEdge>
     </View>
   );
 }

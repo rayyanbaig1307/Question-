@@ -44,7 +44,31 @@ export function IconButton({
   );
 }
 
+// A plain icon for the top bar of a screen (the phone draws its own bubble around it).
+export function HeaderIconButton({ icon, label, onPress }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={10}
+      onPress={onPress}
+      style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}>
+      <Ionicons name={icon} size={24} color={colors.text} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  header: {
+    padding: 4,
+  },
+  headerPressed: {
+    opacity: 0.6,
+  },
   base: {
     alignItems: 'center',
     justifyContent: 'center',

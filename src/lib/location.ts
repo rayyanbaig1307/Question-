@@ -19,7 +19,7 @@ export type FriendLocation = {
 export async function fetchMapLocations(): Promise<FriendLocation[]> {
   const { data, error } = await supabase
     .from('locations')
-    .select('*, profile:profiles(*)')
+    .select('*, profile:profiles!locations_user_id_fkey(*)')
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as FriendLocation[];

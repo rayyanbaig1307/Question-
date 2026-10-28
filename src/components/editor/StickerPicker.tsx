@@ -1,6 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SafeEdge } from '@/components/SafeEdge';
 import { colors, font, radius, space } from '@/theme';
 import { EMOJI_STICKERS, WORD_STICKERS } from './stickers';
 
@@ -14,7 +14,7 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord }: {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <SafeAreaView edges={['bottom']} style={styles.sheet}>
+        <SafeEdge edge="bottom" style={styles.sheet}>
           <Pressable>
             <View style={styles.handle} />
             <Text style={styles.title}>Stickers</Text>
@@ -41,7 +41,7 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord }: {
               </View>
             </ScrollView>
           </Pressable>
-        </SafeAreaView>
+        </SafeEdge>
       </Pressable>
     </Modal>
   );

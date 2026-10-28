@@ -6,7 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
-import { IconButton } from '@/components/IconButton';
+import { HeaderIconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
 import { useMe } from '@/lib/auth';
@@ -87,15 +87,9 @@ export default function ProfileScreen() {
         title: profile ? `@${profile.username}` : '',
         headerRight: () =>
           isMe ? (
-            <IconButton
-              icon="settings-outline"
-              label="Settings"
-              size={38}
-              background={colors.card}
-              onPress={() => router.push('/settings')}
-            />
+            <HeaderIconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
           ) : profile ? (
-            <IconButton icon="ellipsis-horizontal" label="More" size={38} background={colors.card} onPress={openMenu} />
+            <HeaderIconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} />
           ) : null,
       }}
     />

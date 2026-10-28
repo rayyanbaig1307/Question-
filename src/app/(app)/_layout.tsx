@@ -22,9 +22,12 @@ export default function AppLayout() {
         headerBackButtonDisplayMode: 'minimal',
       }}>
       <Stack.Screen name="editor" options={{ animation: 'fade', gestureEnabled: false }} />
-      <Stack.Screen name="post/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-      <Stack.Screen name="snap/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-      <Stack.Screen name="stories/[user]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen name="post/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.black } }} />
+      <Stack.Screen name="snap/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.black } }} />
+      <Stack.Screen
+        name="stories/[user]"
+        options={{ animation: 'fade', contentStyle: { backgroundColor: colors.black } }}
+      />
       <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="map" options={{ animation: 'slide_from_bottom' }} />
     </Stack>

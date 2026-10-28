@@ -15,6 +15,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { fetchMessage, getSnapUrl, openSnap } from '@/lib/chat';
 import { fetchProfile } from '@/lib/profiles';
@@ -111,7 +112,7 @@ export default function SnapViewer() {
   return (
     <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close peek">
       <Image source={{ uri: state.url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
-      <SafeAreaView edges={['top']} style={styles.top}>
+      <SafeEdge edge="top" style={styles.top}>
         <View style={styles.track}>
           <Animated.View style={[styles.bar, barStyle]} />
         </View>
@@ -119,7 +120,7 @@ export default function SnapViewer() {
           <Avatar path={state.sender?.avatar_path} name={name} size={32} />
           <Text style={styles.senderName}>{name}</Text>
         </View>
-      </SafeAreaView>
+      </SafeEdge>
     </Pressable>
   );
 }

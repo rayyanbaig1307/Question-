@@ -45,7 +45,7 @@ export async function fetchFeed(me: string, before?: string): Promise<FeedPost[]
   const authors = [me, ...friends.map((friend) => friend.id)];
   let query = supabase
     .from('posts')
-    .select('*, author:profiles(*), likes(count), comments(count)')
+    .select('*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)')
     .in('user_id', authors)
     .order('created_at', { ascending: false })
     .limit(FEED_PAGE_SIZE);
@@ -59,7 +59,7 @@ export async function fetchFeed(me: string, before?: string): Promise<FeedPost[]
 export async function fetchPostStats(me: string, postId: string): Promise<PostStats | null> {
   const { data, error } = await supabase
     .from('posts')
-    .select('*, author:profiles(*), likes(count), comments(count)')
+    .select('*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)')
     .eq('id', postId)
     .maybeSingle();
   if (error) throw error;
@@ -80,7 +80,7 @@ export async function setLiked(me: string, postId: string, liked: boolean): Prom
 export async function fetchComments(postId: string): Promise<Comment[]> {
   const { data, error } = await supabase
     .from('comments')
-    .select('*, author:profiles(*)')
+    .select('*, author:profiles!comments_user_id_fkey(*)')
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
     .limit(200);
@@ -92,7 +92,7 @@ export async function addComment(me: string, postId: string, body: string): Prom
   const { data, error } = await supabase
     .from('comments')
     .insert({ post_id: postId, user_id: me, body: body.trim() })
-    .select('*, author:profiles(*)')
+    .select('*, author:profiles!comments_user_id_fkey(*)')
     .single();
   if (error) throw error;
   return data as Comment;

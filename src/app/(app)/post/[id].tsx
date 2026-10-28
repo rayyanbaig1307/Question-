@@ -4,12 +4,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
@@ -114,7 +114,7 @@ export default function PostViewer() {
         <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
       )}
 
-      <SafeAreaView edges={['top']} style={styles.top}>
+      <SafeEdge edge="top" style={styles.top}>
         <LinearGradient colors={['rgba(0,0,0,0.6)', 'transparent']} style={StyleSheet.absoluteFill} />
         <IconButton icon="close" label="Close" onPress={() => router.back()} />
         {author ? (
@@ -131,10 +131,10 @@ export default function PostViewer() {
           <View style={styles.author} />
         )}
         {post ? <IconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} /> : null}
-      </SafeAreaView>
+      </SafeEdge>
 
       {post ? (
-        <SafeAreaView edges={['bottom']} style={styles.bottom}>
+        <SafeEdge edge="bottom" style={styles.bottom}>
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFill} />
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
           {stats ? (
@@ -153,7 +153,7 @@ export default function PostViewer() {
               </Pressable>
             </View>
           ) : null}
-        </SafeAreaView>
+        </SafeEdge>
       ) : null}
     </View>
   );

@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, font, radius, space } from '@/theme';
+import { SafeEdge } from '@/components/SafeEdge';
 
 export type SheetOption = {
   label: string;
@@ -56,16 +56,16 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
       {children}
 
       {toast && (
-        <SafeAreaView edges={['top']} style={styles.toastWrap} pointerEvents="none">
+        <SafeEdge edge="top" style={styles.toastWrap} pointerEvents="none">
           <Animated.View key={toast.id} entering={FadeInUp} exiting={FadeOutUp} style={styles.toast}>
             <Text style={styles.toastText}>{toast.message}</Text>
           </Animated.View>
-        </SafeAreaView>
+        </SafeEdge>
       )}
 
       <Modal visible={sheet !== null} transparent animationType="fade" onRequestClose={closeSheet}>
         <Pressable style={styles.backdrop} onPress={closeSheet}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
+          <SafeEdge edge="bottom" style={styles.sheet}>
             <Pressable>
               {sheet?.title ? <Text style={styles.sheetTitle}>{sheet.title}</Text> : null}
               {sheet?.message ? <Text style={styles.sheetMessage}>{sheet.message}</Text> : null}
@@ -85,7 +85,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
                 <Text style={[styles.optionText, styles.cancelText]}>Cancel</Text>
               </Pressable>
             </Pressable>
-          </SafeAreaView>
+          </SafeEdge>
         </Pressable>
       </Modal>
     </OverlayContext.Provider>

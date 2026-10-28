@@ -37,7 +37,7 @@ export async function deleteStory(story: Story): Promise<void> {
 async function fetchVisibleStories(onlyUser?: string): Promise<StoryWithAuthor[]> {
   let query = supabase
     .from('stories')
-    .select('*, author:profiles(*)')
+    .select('*, author:profiles!stories_user_id_fkey(*)')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: true });
   if (onlyUser) query = query.eq('user_id', onlyUser);

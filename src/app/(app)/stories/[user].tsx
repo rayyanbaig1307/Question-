@@ -12,13 +12,13 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Avatar } from '@/components/Avatar';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
+import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrls } from '@/lib/media';
@@ -214,7 +214,7 @@ export default function StoryViewer() {
         />
       </View>
 
-      <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
+      <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
         <LinearGradient colors={['rgba(0,0,0,0.55)', 'transparent']} style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={styles.bars} pointerEvents="none">
           {ring.stories.map((s, i) => (
@@ -232,20 +232,20 @@ export default function StoryViewer() {
           <IconButton icon="ellipsis-horizontal" label="More" size={38} onPress={openMenu} />
           <IconButton icon="close" label="Close" size={38} onPress={() => router.back()} />
         </View>
-      </SafeAreaView>
+      </SafeEdge>
 
       {isMine ? (
-        <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
+        <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
           <Pressable style={styles.viewersButton} onPress={() => setViewersOpen(true)}>
             <Ionicons name="eye" size={18} color={colors.white} />
             <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
           </Pressable>
-        </SafeAreaView>
+        </SafeEdge>
       ) : null}
 
       <Modal visible={viewersOpen} transparent animationType="slide" onRequestClose={() => setViewersOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setViewersOpen(false)}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
+          <SafeEdge edge="bottom" style={styles.sheet}>
             <Pressable>
               <Text style={styles.sheetTitle}>👁 Seen by</Text>
               <FlatList
@@ -257,7 +257,7 @@ export default function StoryViewer() {
                 renderItem={({ item }) => <PersonRow person={item} />}
               />
             </Pressable>
-          </SafeAreaView>
+          </SafeEdge>
         </Pressable>
       </Modal>
     </View>

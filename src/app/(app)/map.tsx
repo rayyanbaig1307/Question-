@@ -2,12 +2,12 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchMapLocations, setLocationSharing, type FriendLocation } from '@/lib/location';
@@ -119,7 +119,7 @@ export default function FriendMap() {
         })}
       </MapView>
 
-      <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
+      <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
         <IconButton icon="close" label="Close map" background={colors.overlayStrong} onPress={() => router.back()} />
         <View style={styles.titlePill}>
           <Text style={styles.title}>Friend Map</Text>
@@ -128,9 +128,9 @@ export default function FriendMap() {
           </Text>
         </View>
         <View style={styles.topSpacer} />
-      </SafeAreaView>
+      </SafeEdge>
 
-      <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
+      <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
         <View style={styles.card}>
           <Pressable style={styles.cardRow} onPress={toggleSharing} disabled={busy}>
             <Text style={styles.cardEmoji}>{sharing ? '👀' : '🙈'}</Text>
@@ -151,7 +151,7 @@ export default function FriendMap() {
             onPress={toggleSharing}
           />
         </View>
-      </SafeAreaView>
+      </SafeEdge>
     </View>
   );
 }

@@ -4,7 +4,6 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 
 import { DraggableItem, type TrashZone } from '@/components/editor/DraggableItem';
@@ -12,6 +11,7 @@ import { StickerPicker } from '@/components/editor/StickerPicker';
 import { randomOffset, TEXT_COLORS, type OverlayItem } from '@/components/editor/stickers';
 import { TextComposer, type TextDraft } from '@/components/editor/TextComposer';
 import { IconButton } from '@/components/IconButton';
+import { SafeEdge } from '@/components/SafeEdge';
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
 
@@ -107,7 +107,7 @@ export default function Editor() {
 
       {!dragging && !composer ? (
         <>
-          <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
+          <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
             <IconButton icon="close" label="Close" onPress={close} />
             <View style={styles.tools}>
               <IconButton
@@ -122,9 +122,9 @@ export default function Editor() {
                 <IconButton icon="arrow-undo" label="Undo" onPress={() => setItems((current) => current.slice(0, -1))} />
               ) : null}
             </View>
-          </SafeAreaView>
+          </SafeEdge>
 
-          <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
+          <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
             {items.length === 0 ? (
               <Text style={styles.hint}>Add text or stickers, or just send it!</Text>
             ) : (
@@ -138,7 +138,7 @@ export default function Editor() {
               <Text style={styles.sendText}>{busy ? 'Saving…' : 'Send to'}</Text>
               <Ionicons name="send" size={18} color={colors.onAccent} />
             </Pressable>
-          </SafeAreaView>
+          </SafeEdge>
         </>
       ) : null}
 
