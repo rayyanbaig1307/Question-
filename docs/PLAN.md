@@ -67,7 +67,7 @@ Core features, one at a time (✅ = done):
 6. ✅ Chat + snaps (1-on-1, live)
 7. ✅ Stories (tap through friends' stories)
 8. ✅ Feed (friends' posts, likes, comments)
-9. ⬜ Friend map (share location, ghost mode)
+9. ✅ Friend map (share location, ghost mode)
 
 Then the viral features, in this order, only after the core works:
 daily dare → invite to unlock → roast my profile → fit check → face swap stories → mystery match.

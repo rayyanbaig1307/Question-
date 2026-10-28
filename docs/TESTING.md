@@ -187,3 +187,23 @@ You need **two accounts that are friends** (step 5).
    **Delete post**; on a friend's you can **Report post**.
 7. **Privacy check:** someone who isn't your friend never sees your posts in their feed. (They *can* see them on your
    profile if your account is public – make it private in Settings to stop that.)
+
+## Step 9 – Friend map + ghost mode
+
+You need **two accounts that are friends**, ideally on two phones.
+
+1. On the camera, tap the **🗺️ map button** (top-right). The Friend Map opens.
+   - At the bottom it says **"👻 Ghost mode is on – Nobody can see where you are."** That's the default.
+2. Tap **Share my location with friends** → your phone asks for location permission → allow it.
+   - You appear on the map as your picture with a **pink** ring, labelled **"You"**.
+   - The card now says **"📍 Sharing with friends"**.
+3. On your **friend's phone**, open the map → you show up with a **yellow** ring, your name and "now".
+   Tap your picture → it opens your profile.
+4. Your spot updates whenever you open the app (and every few minutes while it's open).
+5. Tap **Turn on ghost mode** → "👻 Ghost mode on – you're hidden". On your friend's phone you disappear from the
+   map **within a second or two**.
+6. You can also flip **Ghost mode** in **Settings** (profile → ⚙️).
+7. **Privacy checks:**
+   - Someone who is **not** your friend never sees you, even with sharing on.
+   - If you unfriend or block someone, you vanish from their map.
+   - In Supabase → **Table Editor → locations**, your row is deleted the moment ghost mode turns on.

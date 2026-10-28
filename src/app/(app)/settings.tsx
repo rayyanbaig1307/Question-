@@ -7,6 +7,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
+import { setLocationSharing } from '@/lib/location';
 import { updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
 
@@ -18,6 +19,20 @@ export default function Settings() {
     try {
       setProfile(await updateMyProfile(userId, { is_private: value }));
       showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
+    } catch (error) {
+      Alert.alert('Could not save', friendlyError(error));
+    }
+  }
+
+  async function setGhostMode(ghost: boolean) {
+    try {
+      const updated = await setLocationSharing(userId, !ghost);
+      if (!updated) {
+        Alert.alert('Location is turned off', 'Allow location for Expo Go in your phone settings to share your spot.');
+        return;
+      }
+      setProfile(updated);
+      showToast(ghost ? "👻 Ghost mode on – you're hidden" : '📍 Your friends can see you now');
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
@@ -49,6 +64,21 @@ export default function Settings() {
             />
           }
         />
+        <Row
+          icon="eye-off"
+          color={colors.purple}
+          title="Ghost mode"
+          subtitle="When on, nobody sees you on the friend map"
+          right={
+            <Switch
+              value={!(profile?.location_sharing ?? false)}
+              onValueChange={setGhostMode}
+              trackColor={{ true: colors.purple, false: colors.border }}
+              thumbColor={colors.white}
+            />
+          }
+        />
+        <Row icon="map" color={colors.green} title="Friend map" onPress={() => router.push('/map')} />
         <Row
           icon="hand-left"
           color={colors.orange}

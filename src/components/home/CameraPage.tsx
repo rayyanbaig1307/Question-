@@ -101,6 +101,7 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
           <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
         )}
         <View style={styles.tools}>
+          {isHome ? <IconButton icon="map" label="Friend map" onPress={() => router.push('/map')} /> : null}
           <IconButton
             icon="camera-reverse"
             label="Flip camera"

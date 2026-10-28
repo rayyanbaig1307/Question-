@@ -45,6 +45,15 @@
         {
           "photosPermission": "Peekaboo lets you pick photos to post or use as your profile picture."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Peekaboo shows your spot to your friends on the friend map, only when you turn location sharing on.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
+        }
       ]
     ],
     "experiments": {
