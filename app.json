@@ -49,6 +49,18 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "owner": "rbaig18",
+    "extra": {
+      "eas": {
+        "projectId": "3c421eae-c4ec-47ea-92da-4b2d07b7d13e"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3c421eae-c4ec-47ea-92da-4b2d07b7d13e"
     }
   }
 }
