@@ -3,9 +3,10 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Bouncy } from '@/components/Bouncy';
 import { colors, font, gradients, space } from '@/theme';
 
 // The bar at the top of a screen: a round back button, a title, and an optional button on the right.
@@ -48,17 +49,18 @@ export function RoundIconButton({ icon, label, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Bouncy
       accessibilityRole="button"
+      pressScale={0.85}
       accessibilityLabel={label}
       hitSlop={10}
       onPress={() => {
         Haptics.selectionAsync();
         onPress();
       }}
-      style={({ pressed }) => [styles.round, styles.back, pressed && styles.pressed]}>
+      style={[styles.round, styles.back]}>
       <Ionicons name={icon} size={icon === 'chevron-back' ? 24 : 20} color={colors.text} />
-    </Pressable>
+    </Bouncy>
   );
 }
 
@@ -69,19 +71,20 @@ export function BrandIconButton({ icon, label, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Bouncy
       accessibilityRole="button"
+      pressScale={0.85}
       accessibilityLabel={label}
       hitSlop={10}
       onPress={() => {
         Haptics.selectionAsync();
         onPress();
       }}
-      style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
+      style={styles.round}>
       <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
         <Ionicons name={icon} size={20} color={colors.white} />
       </LinearGradient>
-    </Pressable>
+    </Bouncy>
   );
 }
 
@@ -124,9 +127,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressed: {
-    transform: [{ scale: 0.9 }],
-    opacity: 0.85,
   },
 });

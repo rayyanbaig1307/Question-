@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
+import { Bouncy } from '@/components/Bouncy';
 import { colors } from '@/theme';
 
 type Props = {
@@ -25,22 +26,18 @@ export function IconButton({
   style,
 }: Props) {
   return (
-    <Pressable
+    <Bouncy
       accessibilityRole="button"
+      pressScale={0.85}
       accessibilityLabel={label}
       hitSlop={8}
       onPress={() => {
         Haptics.selectionAsync();
         onPress();
       }}
-      style={({ pressed }) => [
-        styles.base,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: background },
-        pressed && styles.pressed,
-        style,
-      ]}>
+      style={[styles.base, { width: size, height: size, borderRadius: size / 2, backgroundColor: background }, style]}>
       <Ionicons name={icon} size={size * 0.5} color={color} />
-    </Pressable>
+    </Bouncy>
   );
 }
 
@@ -48,8 +45,5 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressed: {
-    transform: [{ scale: 0.9 }],
   },
 });

@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
+import { Bouncy, usePop } from '@/components/Bouncy';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -27,6 +28,7 @@ export function FeedCard({ post, url, onLike, onMenu }: {
 }) {
   const lastTap = useRef(0);
   const heart = useSharedValue(0);
+  const likeButton = usePop();
   const author = post.author;
   const name = author ? author.display_name || author.username : 'Someone';
 
@@ -37,7 +39,10 @@ export function FeedCard({ post, url, onLike, onMenu }: {
       lastTap.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       heart.set(withSequence(withSpring(1, { damping: 8 }), withDelay(500, withTiming(0, { duration: 200 }))));
-      if (!post.likedByMe) onLike(true);
+      if (!post.likedByMe) {
+        likeButton.pop();
+        onLike(true);
+      }
     } else {
       lastTap.current = now;
     }
@@ -86,20 +91,29 @@ export function FeedCard({ post, url, onLike, onMenu }: {
       </Pressable>
 
       <View style={styles.actions}>
-        <Pressable
+        <Bouncy
           style={styles.action}
+          pressScale={0.85}
           onPress={() => {
-            Haptics.selectionAsync();
+            if (post.likedByMe) {
+              Haptics.selectionAsync();
+            } else {
+              // A little buzz and a heart pop when you like something.
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              likeButton.pop();
+            }
             onLike(!post.likedByMe);
           }}
           accessibilityLabel={post.likedByMe ? 'Unlike' : 'Like'}>
-          <Ionicons
-            name={post.likedByMe ? 'heart' : 'heart-outline'}
-            size={28}
-            color={post.likedByMe ? colors.pink : colors.text}
-          />
+          <Animated.View style={likeButton.style}>
+            <Ionicons
+              name={post.likedByMe ? 'heart' : 'heart-outline'}
+              size={28}
+              color={post.likedByMe ? colors.pink : colors.text}
+            />
+          </Animated.View>
           <Text style={styles.count}>{post.likeCount}</Text>
-        </Pressable>
+        </Bouncy>
         <Pressable style={styles.action} onPress={() => router.push(`/comments/${post.id}`)} accessibilityLabel="Comments">
           <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
           <Text style={styles.count}>{post.commentCount}</Text>

@@ -1,11 +1,14 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
+import { Bouncy, usePop } from '@/components/Bouncy';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -29,6 +32,7 @@ export default function PostViewer() {
   const [post, setPost] = useState<PostWithAuthor | null | undefined>(undefined);
   const [stats, setStats] = useState<PostStats | null>(null);
   const uri = useMediaUrl(post?.media_path);
+  const likeButton = usePop();
 
   useEffect(() => {
     fetchPost(id)
@@ -49,6 +53,13 @@ export default function PostViewer() {
     if (!stats) return;
     const liked = !stats.likedByMe;
     const before = stats;
+    if (liked) {
+      // A little buzz and a heart pop when you like something.
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      likeButton.pop();
+    } else {
+      Haptics.selectionAsync();
+    }
     setStats({ ...stats, likedByMe: liked, likeCount: Math.max(0, stats.likeCount + (liked ? 1 : -1)) });
     try {
       await setLiked(userId, id, liked);
@@ -139,14 +150,20 @@ export default function PostViewer() {
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
           {stats ? (
             <View style={styles.actions}>
-              <Pressable style={styles.action} onPress={toggleLike} accessibilityLabel={stats.likedByMe ? 'Unlike' : 'Like'}>
-                <Ionicons
-                  name={stats.likedByMe ? 'heart' : 'heart-outline'}
-                  size={28}
-                  color={stats.likedByMe ? colors.pink : colors.white}
-                />
+              <Bouncy
+                style={styles.action}
+                pressScale={0.85}
+                onPress={toggleLike}
+                accessibilityLabel={stats.likedByMe ? 'Unlike' : 'Like'}>
+                <Animated.View style={likeButton.style}>
+                  <Ionicons
+                    name={stats.likedByMe ? 'heart' : 'heart-outline'}
+                    size={28}
+                    color={stats.likedByMe ? colors.pink : colors.white}
+                  />
+                </Animated.View>
                 <Text style={styles.count}>{stats.likeCount}</Text>
-              </Pressable>
+              </Bouncy>
               <Pressable style={styles.action} onPress={() => router.push(`/comments/${post.id}`)} accessibilityLabel="Comments">
                 <Ionicons name="chatbubble-outline" size={26} color={colors.white} />
                 <Text style={styles.count}>{stats.commentCount}</Text>

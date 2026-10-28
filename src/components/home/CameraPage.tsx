@@ -5,8 +5,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
+import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
@@ -18,9 +20,11 @@ import { colors, font, radius, space } from '@/theme';
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
+export function CameraPage({ active, warm = false, sendTo, onOpenChat, onOpenStories }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
+  // You're swiping towards the camera: start it early so it's ready when you get there.
+  warm?: boolean;
   // A friend's id: the photo goes straight to them as a peek.
   sendTo?: string;
   onOpenChat?: () => void;
@@ -35,6 +39,9 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
   const isHome = !sendTo;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const unreadCount = useUnreadCount(userId, active && isHome);
+  // A quick white flash on screen when a photo is taken.
+  const flashOverlay = useSharedValue(0);
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
 
   const openEditor = (uri: string, fit: 'cover' | 'contain') =>
     router.push({ pathname: '/editor', params: sendTo ? { uri, fit, to: sendTo } : { uri, fit } });
@@ -42,7 +49,8 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
   async function takePhoto() {
     if (!cameraRef.current || busy) return;
     setBusy(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       openEditor(photo.uri, 'cover');
@@ -63,7 +71,7 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        active ? (
+        active || warm ? (
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
@@ -84,6 +92,8 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
           )}
         </View>
       )}
+
+      <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
 
       {/* Top: your picture on the left, camera controls on the right */}
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
@@ -120,27 +130,29 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
       <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
         <View style={styles.shutterRow}>
           <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
-          <Pressable
+          {/* The big shutter button squishes when you press it */}
+          <Bouncy
             onPress={takePhoto}
             disabled={!permission?.granted || busy}
             accessibilityRole="button"
             accessibilityLabel="Take photo"
-            style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed]}>
+            pressScale={0.82}
+            style={styles.shutter}>
             <View style={styles.shutterInner} />
-          </Pressable>
+          </Bouncy>
           <View style={styles.shutterSpacer} />
         </View>
         {isHome ? (
           <View style={styles.nav}>
-            <Pressable style={styles.navButton} onPress={onOpenChat} accessibilityRole="button">
+            <Bouncy style={styles.navButton} onPress={onOpenChat} accessibilityRole="button">
               <Ionicons name="chatbubble" size={20} color={colors.blue} />
               <Text style={styles.navText}>Chat</Text>
               <CountBadge count={unreadCount} />
-            </Pressable>
-            <Pressable style={styles.navButton} onPress={onOpenStories} accessibilityRole="button">
+            </Bouncy>
+            <Bouncy style={styles.navButton} onPress={onOpenStories} accessibilityRole="button">
               <Text style={styles.navText}>Stories</Text>
               <Ionicons name="sparkles" size={20} color={colors.pink} />
-            </Pressable>
+            </Bouncy>
           </View>
         ) : null}
       </SafeEdge>
@@ -244,8 +256,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterPressed: {
-    transform: [{ scale: 0.92 }],
+  flash: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.white,
   },
   shutterInner: {
     width: 62,

@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -63,6 +64,8 @@ export default function Share() {
         await createPost(userId, photo, caption);
         setDone((current) => ({ ...current, profile: true }));
       }
+      // A happy little buzz: it's sent!
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(successMessage(picked.length, toStory, toProfile));
       // Back to the chat you came from, or to the camera.
       router.dismissTo(to ? `/chat/${to}` : '/');

@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 
+import { Bouncy } from '@/components/Bouncy';
 import { colors, gradients, radius, space } from '@/theme';
 
 type Variant = 'primary' | 'secondary' | 'pink' | 'danger' | 'plain';
@@ -34,24 +35,24 @@ const textColors: Record<Variant, string> = {
   plain: colors.textMuted,
 };
 
-// A big, friendly, rounded button.
+// A big, friendly, rounded button that bounces when you tap it.
 export function Button({ title, onPress, variant = 'primary', icon, loading, disabled, small, style }: Props) {
   const inactive = disabled || loading;
   const textColor = textColors[variant];
 
   return (
-    <Pressable
+    <Bouncy
       accessibilityRole="button"
       disabled={inactive}
+      pressScale={0.95}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         small && styles.small,
         { backgroundColor: backgrounds[variant] },
-        pressed && styles.pressed,
         inactive && styles.inactive,
         style,
       ]}>
@@ -71,7 +72,7 @@ export function Button({ title, onPress, variant = 'primary', icon, loading, dis
           <Text style={[styles.text, small && styles.smallText, { color: textColor }]}>{title}</Text>
         </>
       )}
-    </Pressable>
+    </Bouncy>
   );
 }
 
@@ -89,10 +90,6 @@ const styles = StyleSheet.create({
   small: {
     minHeight: 38,
     paddingHorizontal: space.lg,
-  },
-  pressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.9,
   },
   inactive: {
     opacity: 0.5,
