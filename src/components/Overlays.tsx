@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 
 import { colors, font, radius, space } from '@/theme';
@@ -25,6 +25,8 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const [sheet, setSheet] = useState<SheetRequest | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The option that was tapped, waiting for the menu to finish closing.
+  const pendingAction = useRef<(() => void) | null>(null);
 
   const showToast = useCallback((message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -45,10 +47,18 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     setSheet(null);
   };
 
+  const runPendingAction = () => {
+    const action = pendingAction.current;
+    pendingAction.current = null;
+    action?.();
+  };
+
   const choose = (option: SheetOption) => {
     closeSheet();
-    // Let the menu close before running the action (which may open another menu).
-    setTimeout(option.onPress, 250);
+    // Let the menu finish closing before running the action – the phone can't open the camera,
+    // the photo picker or another menu while this one is still on screen.
+    pendingAction.current = option.onPress;
+    setTimeout(runPendingAction, Platform.OS === 'ios' ? 700 : 250);
   };
 
   return (
@@ -63,7 +73,12 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
         </SafeEdge>
       )}
 
-      <Modal visible={sheet !== null} transparent animationType="fade" onRequestClose={closeSheet}>
+      <Modal
+        visible={sheet !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSheet}
+        onDismiss={runPendingAction}>
         <Pressable style={styles.backdrop} onPress={closeSheet}>
           <SafeEdge edge="bottom" style={styles.sheet}>
             <Pressable>

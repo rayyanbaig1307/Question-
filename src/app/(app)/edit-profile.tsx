@@ -24,24 +24,55 @@ const BIO_LIMIT = 160;
 
 export default function EditProfile() {
   const { userId, profile, setProfile } = useMe();
-  const { showToast } = useOverlays();
+  const { showToast, showOptions } = useOverlays();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [username, setUsername] = useState(profile?.username ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [isPrivate, setIsPrivate] = useState(profile?.is_private ?? false);
-  const [newPhoto, setNewPhoto] = useState<string | null>(null);
+  // 'keep' = leave the picture as it is; otherwise a new photo from the phone, or no photo at all.
+  const [photo, setPhoto] = useState<{ kind: 'keep' } | { kind: 'new'; uri: string } | { kind: 'remove' }>({ kind: 'keep' });
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function pickPhoto() {
+  const hasPhoto = photo.kind === 'new' || (photo.kind === 'keep' && !!profile?.avatar_path);
+
+  function changePhoto() {
+    showOptions({
+      title: 'Profile picture',
+      options: [
+        { label: '📸 Take a photo', onPress: takePhoto },
+        { label: '🖼️ Choose from camera roll', onPress: choosePhoto },
+        ...(hasPhoto ? [{ label: 'Remove photo', destructive: true, onPress: () => setPhoto({ kind: 'remove' }) }] : []),
+      ],
+    });
+  }
+
+  // Both open a square crop box, so the picture fits the circle nicely.
+  async function takePhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Camera is off', 'Allow camera access for Peekaboo in your phone settings to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+      cameraType: ImagePicker.CameraType.front,
+    });
+    if (!result.canceled && result.assets[0]) setPhoto({ kind: 'new', uri: result.assets[0].uri });
+  }
+
+  async function choosePhoto() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.9,
     });
-    if (!result.canceled && result.assets[0]) setNewPhoto(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) setPhoto({ kind: 'new', uri: result.assets[0].uri });
   }
 
   async function save() {
@@ -59,9 +90,8 @@ export default function EditProfile() {
         return;
       }
       let avatarPath = profile.avatar_path;
-      if (newPhoto) {
-        avatarPath = await uploadAvatar(userId, await resizePhoto(newPhoto, 512));
-      }
+      if (photo.kind === 'new') avatarPath = await uploadAvatar(userId, await resizePhoto(photo.uri, 512));
+      if (photo.kind === 'remove') avatarPath = null;
       const updated = await updateMyProfile(userId, {
         display_name: displayName.trim(),
         username,
@@ -70,7 +100,8 @@ export default function EditProfile() {
         avatar_path: avatarPath,
       });
       // Clean up the old picture once the new one is saved.
-      if (newPhoto && profile.avatar_path) deleteAvatar(profile.avatar_path).catch(() => {});
+      if (photo.kind !== 'keep' && profile.avatar_path) deleteAvatar(profile.avatar_path).catch(() => {});
+      // Updating the saved profile makes the new picture show up everywhere in the app right away.
       setProfile(updated);
       showToast('Profile saved ✨');
       router.back();
@@ -83,10 +114,10 @@ export default function EditProfile() {
 
   return (
     <FormScreen title="Edit profile">
-      <Pressable style={styles.photo} onPress={pickPhoto} accessibilityLabel="Change profile picture">
+      <Pressable style={styles.photo} onPress={changePhoto} accessibilityLabel="Change profile picture">
         <Avatar
-          path={profile?.avatar_path}
-          localUri={newPhoto}
+          path={photo.kind === 'keep' ? profile?.avatar_path : null}
+          localUri={photo.kind === 'new' ? photo.uri : null}
           name={displayName || username}
           size={112}
           ring
