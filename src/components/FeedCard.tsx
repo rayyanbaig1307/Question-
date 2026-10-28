@@ -2,10 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  FadeOut,
   useAnimatedStyle,
+  ZoomIn,
   useSharedValue,
   withDelay,
   withSequence,
@@ -14,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
@@ -26,20 +29,34 @@ const shapes = new Map<string, number>();
 
 // One post in the feed, Instagram-style: the whole photo (nothing cut off) with rounded corners,
 // then like + comment buttons, the number of likes and the caption. Double-tap the photo to like it.
-export function FeedCard({ post, url, onLike, onMenu }: {
+export function FeedCard({ post, url, locked = false, onLike, onMenu }: {
   post: FeedPost;
+  // The photo's link – or, while `locked`, the link of its tiny blurry preview.
   url: string | undefined;
+  // Peek to see: a friend's drop you can't see until you've posted your own drop today.
+  locked?: boolean;
   onLike: (like: boolean) => void;
   onMenu: () => void;
 }) {
   const lastTap = useRef(0);
   const [shape, setShape] = useState(() => shapes.get(post.media_path) ?? 3 / 4);
+  // Remember when this card goes from locked to unlocked, to play the reveal animation once.
+  const [wasLocked, setWasLocked] = useState(locked);
+  const [justUnlocked, setJustUnlocked] = useState(false);
+  if (locked !== wasLocked) {
+    setWasLocked(locked);
+    if (wasLocked && !locked) setJustUnlocked(true);
+  }
+  useEffect(() => {
+    if (justUnlocked) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [justUnlocked]);
   const heart = useSharedValue(0);
   const likeButton = usePop();
   const author = post.author;
   const name = author ? author.display_name || author.username : 'Someone';
 
   function tapPhoto() {
+    if (locked) return;
     const now = Date.now();
     if (now - lastTap.current < 300) {
       // Double tap → like + a big heart pops up.
@@ -83,8 +100,42 @@ export function FeedCard({ post, url, onLike, onMenu }: {
         </Pressable>
       </View>
 
-      <Pressable onPress={tapPhoto} onLongPress={() => router.push(`/post/${post.id}`)} style={styles.photoWrap}>
-        {url ? (
+      <Pressable
+        onPress={tapPhoto}
+        onLongPress={locked ? undefined : () => router.push(`/post/${post.id}`)}
+        style={styles.photoWrap}>
+        {locked ? (
+          // Blurry preview + "give a peek to get a peek" until you've posted your own drop.
+          <Animated.View exiting={FadeOut.duration(400)} style={[styles.photo, styles.locked, { aspectRatio: shape }]}>
+            {url ? (
+              <Image
+                source={{ uri: url, cacheKey: post.blur_path ?? undefined }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                blurRadius={25}
+                onLoad={({ source }) => {
+                  // The tiny preview has the same shape as the real photo.
+                  if (source.width > 0 && source.height > 0 && !shapes.has(post.media_path)) {
+                    setShape(source.width / source.height);
+                  }
+                }}
+              />
+            ) : null}
+            <View style={styles.lockedShade} />
+            <View style={styles.lockedContent}>
+              <Text style={styles.lockedEmoji}>🙈</Text>
+              <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
+              <Text style={styles.lockedText}>Post your Peekaboo drop to see {name}&apos;s.</Text>
+              <Button
+                title="Open camera"
+                icon="camera"
+                small
+                onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+              />
+            </View>
+          </Animated.View>
+        ) : url ? (
+          <Animated.View entering={justUnlocked ? ZoomIn.springify().damping(12) : undefined}>
           <Image
             source={{ uri: url, cacheKey: post.media_path }}
             style={[styles.photo, { aspectRatio: shape }]}
@@ -100,6 +151,7 @@ export function FeedCard({ post, url, onLike, onMenu }: {
               }
             }}
           />
+          </Animated.View>
         ) : (
           <View style={[styles.photo, styles.loading, { aspectRatio: shape }]} />
         )}
@@ -201,6 +253,40 @@ const styles = StyleSheet.create({
   },
   loading: {
     backgroundColor: colors.card,
+  },
+  locked: {
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedShade: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(11,11,16,0.35)',
+  },
+  lockedContent: {
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.xl,
+  },
+  lockedEmoji: {
+    fontSize: 44,
+  },
+  lockedTitle: {
+    color: colors.white,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowRadius: 6,
+  },
+  lockedText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: space.sm,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowRadius: 6,
   },
   bigHeart: {
     ...StyleSheet.absoluteFill,

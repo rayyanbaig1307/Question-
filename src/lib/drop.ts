@@ -105,3 +105,38 @@ export function useDropDone(me: string, enabled: boolean): boolean | null {
   }, [me, enabled]);
   return done?.day === localDay() ? done.done : null;
 }
+
+// Peek to see: a friend's drop photo stays blurred until you've posted your own drop that day.
+// (The database enforces this too – it won't hand out the real photo before then.)
+export function isDropLocked(
+  post: { drop_day: string | null; user_id: string },
+  me: string,
+  myDropDays: Set<string> | null,
+): boolean {
+  return post.drop_day !== null && post.user_id !== me && !(myDropDays?.has(post.drop_day) ?? false);
+}
+
+// The photo to load for a post: the tiny blurry preview while it's locked, the real one otherwise.
+export function visiblePath(
+  post: { drop_day: string | null; user_id: string; media_path: string; blur_path: string | null },
+  me: string,
+  myDropDays: Set<string> | null,
+): string | null {
+  return isDropLocked(post, me, myDropDays) ? post.blur_path : post.media_path;
+}
+
+// The days you've posted a drop for, loaded again whenever `refreshKey` changes. `null` = still loading
+// (until then, friends' drops count as locked).
+export function useMyDropDays(me: string, refreshKey: unknown): Set<string> | null {
+  const [days, setDays] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyDropDays(me)
+      .then((loaded) => !cancelled && setDays(loaded))
+      .catch(() => !cancelled && setDays(new Set()));
+    return () => {
+      cancelled = true;
+    };
+  }, [me, refreshKey]);
+  return days;
+}

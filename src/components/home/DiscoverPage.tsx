@@ -1,5 +1,6 @@
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -7,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FeedCard } from '@/components/FeedCard';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
+import { fetchMyDropDays, isDropLocked, localDay, visiblePath } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { inviteFriends } from '@/lib/invite';
@@ -27,18 +29,26 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   const [next, setNext] = useState<DiscoverCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
+  const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
 
-  const show = useCallback((page: { posts: DiscoverPost[]; next: DiscoverCursor | null }) => {
-    setPosts(page.posts);
-    setNext(page.next);
+  const show = useCallback((loaded: { page: { posts: DiscoverPost[]; next: DiscoverCursor | null }; days: Set<string> }) => {
+    setPosts(loaded.page.posts);
+    setNext(loaded.page.next);
+    setMyDropDays(loaded.days);
   }, []);
+
+  const loadAll = useCallback(async () => {
+    const [page, days] = await Promise.all([fetchDiscover(userId), fetchMyDropDays(userId).catch(() => new Set<string>())]);
+    return { page, days };
+  }, [userId]);
 
   // Fresh posts every time you come to this page.
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    fetchDiscover(userId)
-      .then((page) => !cancelled && show(page))
+    loadAll()
+      .then((loaded) => !cancelled && show(loaded))
       .catch((error) => {
         console.warn('Could not load Discover', error);
         if (!cancelled) setPosts((current) => current ?? []);
@@ -46,12 +56,24 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
     return () => {
       cancelled = true;
     };
-  }, [visible, userId, show]);
+  }, [visible, loadAll, show]);
+
+  // You just posted today's drop: celebrate – your friends' drops are unlocking.
+  const hadToday = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!myDropDays) return;
+    const hasToday = myDropDays.has(localDay());
+    if (hadToday.current === false && hasToday) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast("🔓 Today's drops unlocked!");
+    }
+    hadToday.current = hasToday;
+  }, [myDropDays, showToast]);
 
   async function refresh() {
     setRefreshing(true);
     try {
-      show(await fetchDiscover(userId));
+      show(await loadAll());
     } catch (error) {
       console.warn('Could not refresh Discover', error);
     }
@@ -135,7 +157,10 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
     }
   }
 
-  const urls = useMediaUrls((posts ?? []).map((post) => post.media_path));
+  // Locked drops only get their tiny blurry preview.
+  const urls = useMediaUrls(
+    (posts ?? []).map((post) => visiblePath(post, userId, myDropDays)).filter((path): path is string => !!path),
+  );
 
   return (
     <View style={styles.fill}>
@@ -180,7 +205,8 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
             ) : null}
             <FeedCard
               post={item}
-              url={urls[item.media_path]}
+              url={urls[visiblePath(item, userId, myDropDays) ?? '']}
+              locked={isDropLocked(item, userId, myDropDays)}
               onLike={(liked) => like(item, liked)}
               onMenu={() => openMenu(item)}
             />

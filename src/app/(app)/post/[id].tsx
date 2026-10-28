@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import Animated from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
@@ -18,6 +19,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
+import { isDropLocked, useMyDropDays, visiblePath } from '@/lib/drop';
 import { useMediaUrl } from '@/lib/media';
 import { deletePost, fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
@@ -33,7 +35,10 @@ export default function PostViewer() {
   const { report } = useSafetyActions();
   const [post, setPost] = useState<PostWithAuthor | null | undefined>(undefined);
   const [stats, setStats] = useState<PostStats | null>(null);
-  const uri = useMediaUrl(post?.media_path);
+  // A friend's drop stays blurry until you've posted your own drop that day ("peek to see").
+  const myDropDays = useMyDropDays(userId, post);
+  const locked = post ? isDropLocked(post, userId, myDropDays) : false;
+  const uri = useMediaUrl(post ? visiblePath(post, userId, myDropDays) : null);
   const likeButton = usePop();
 
   useEffect(() => {
@@ -121,6 +126,19 @@ export default function PostViewer() {
         <View style={[styles.fill, styles.center]}>
           <EmptyState emoji="💨" title="This post is gone" message="It was deleted, or you can't see it anymore." />
         </View>
+      ) : locked ? (
+        <View style={[styles.fill, styles.center]}>
+          {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={30} /> : null}
+          <View style={styles.lockedShade} />
+          <Text style={styles.lockedEmoji}>🙈</Text>
+          <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
+          <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
+          <Button
+            title="Open camera"
+            icon="camera"
+            onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+          />
+        </View>
       ) : uri ? (
         <Image source={{ uri, cacheKey: post.media_path }} style={styles.fill} contentFit="contain" transition={200} />
       ) : (
@@ -187,6 +205,27 @@ export default function PostViewer() {
 }
 
 const styles = StyleSheet.create({
+  lockedShade: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(11,11,16,0.4)',
+  },
+  lockedEmoji: {
+    fontSize: 56,
+  },
+  lockedTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: space.sm,
+  },
+  lockedText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: space.lg,
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.black,

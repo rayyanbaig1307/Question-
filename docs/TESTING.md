@@ -319,3 +319,14 @@ Two friends, two phones.
 6. Missed the notification? After the drop time, the camera shows a **"👀 Peekaboo! 1:42 left"** pill (or
    **"Post today's drop · you're late"**) until you've posted.
 7. Only one drop a day. Trying to post a drop before today's drop time says it hasn't happened yet.
+
+## Step 17 – Peek to see 🙈
+
+Two friends, two phones. Your friend posts today's drop first.
+
+1. Open **Discover**: their drop shows as a **blurry picture** with **"Give a peek to get a peek 👀"** and an
+   **Open camera** button. Same on their profile grid (🙈) and when you open it full screen.
+2. Tap **Open camera** → take your drop → Send. You land back on Discover: **"🔓 Today's drops unlocked!"**, a happy
+   buzz, and their photo pops into view.
+3. This only applies to drop posts – normal posts, stories and chat are never blurred.
+4. Not friends with someone (public account)? You still only see the blurry preview of their drop until you post yours.
