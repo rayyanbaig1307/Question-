@@ -330,3 +330,12 @@ Two friends, two phones. Your friend posts today's drop first.
    buzz, and their photo pops into view.
 3. This only applies to drop posts – normal posts, stories and chat are never blurred.
 4. Not friends with someone (public account)? You still only see the blurry preview of their drop until you post yours.
+
+## Step 18 – Hold to reveal (scratch) 👆
+
+1. After you've posted your drop, friends' drops in **Discover** still start **blurred**, with
+   **"👆 Hold & scratch to reveal"**.
+2. Hold your finger on the photo for a moment, then move it around: the blur wipes away under your finger, with tiny
+   buzzes. (A quick swipe still scrolls the feed.)
+3. Once most of it is clear, the rest disappears with a little **pop** and a happy buzz. It stays clear.
+4. Don't like it? **Settings → Peekaboo drops → Scratch to reveal drops** → off. Drop photos then show normally.

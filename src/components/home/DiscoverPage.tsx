@@ -14,6 +14,7 @@ import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from 
 import { inviteFriends } from '@/lib/invite';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
+import { useScratchToReveal } from '@/lib/preferences';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
@@ -24,6 +25,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
+  const [scratchToReveal] = useScratchToReveal();
   const tabSpace = useTabBarSpace();
   const [posts, setPosts] = useState<DiscoverPost[] | null>(null);
   const [next, setNext] = useState<DiscoverCursor | null>(null);
@@ -207,6 +209,8 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
               post={item}
               url={urls[visiblePath(item, userId, myDropDays) ?? '']}
               locked={isDropLocked(item, userId, myDropDays)}
+              // Other people's drops start blurred – hold and scratch to reveal (unless turned off in Settings).
+              scratch={scratchToReveal && item.drop_day !== null && item.user_id !== userId}
               onLike={(liked) => like(item, liked)}
               onMenu={() => openMenu(item)}
             />

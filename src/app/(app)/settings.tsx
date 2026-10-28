@@ -10,12 +10,14 @@ import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
+import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
 
 export default function Settings() {
   const { userId, profile, setProfile, signOut } = useMe();
   const { showToast } = useOverlays();
+  const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
 
   async function setPrivate(value: boolean) {
     try {
@@ -119,6 +121,23 @@ export default function Settings() {
             color={colors.orange}
             title="Blocked accounts"
             onPress={() => router.push('/blocked')}
+          />
+        </Section>
+
+        <Section title="Peekaboo drops">
+          <Row
+            icon="finger-print"
+            color={colors.accent}
+            title="Scratch to reveal drops"
+            subtitle="Drop photos start blurred – hold and scratch them clear"
+            right={
+              <Switch
+                value={scratchToReveal}
+                onValueChange={setScratchToReveal}
+                trackColor={{ true: colors.pink, false: colors.border }}
+                thumbColor={colors.white}
+              />
+            }
           />
         </Section>
 

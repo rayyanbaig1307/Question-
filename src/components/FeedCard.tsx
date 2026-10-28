@@ -20,21 +20,26 @@ import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
+import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
 
 // Each photo's shape (width ÷ height), remembered so cards don't jump when you scroll back.
 const shapes = new Map<string, number>();
+// Drop photos you've already scratched clear (so they stay clear when you scroll back).
+const scratched = new Set<string>();
 
 // One post in the feed, Instagram-style: the whole photo (nothing cut off) with rounded corners,
 // then like + comment buttons, the number of likes and the caption. Double-tap the photo to like it.
-export function FeedCard({ post, url, locked = false, onLike, onMenu }: {
+export function FeedCard({ post, url, locked = false, scratch = false, onLike, onMenu }: {
   post: FeedPost;
   // The photo's link – or, while `locked`, the link of its tiny blurry preview.
   url: string | undefined;
   // Peek to see: a friend's drop you can't see until you've posted your own drop today.
   locked?: boolean;
+  // Hold to reveal: the photo starts blurred and you scratch it clear.
+  scratch?: boolean;
   onLike: (like: boolean) => void;
   onMenu: () => void;
 }) {
@@ -43,6 +48,8 @@ export function FeedCard({ post, url, locked = false, onLike, onMenu }: {
   // Remember when this card goes from locked to unlocked, to play the reveal animation once.
   const [wasLocked, setWasLocked] = useState(locked);
   const [justUnlocked, setJustUnlocked] = useState(false);
+  const [revealed, setRevealed] = useState(() => scratched.has(post.id));
+  const scratchIt = scratch && !locked && !revealed && !!url && ScratchReveal !== null;
   if (locked !== wasLocked) {
     setWasLocked(locked);
     if (wasLocked && !locked) setJustUnlocked(true);
@@ -56,7 +63,7 @@ export function FeedCard({ post, url, locked = false, onLike, onMenu }: {
   const name = author ? author.display_name || author.username : 'Someone';
 
   function tapPhoto() {
-    if (locked) return;
+    if (locked || scratchIt) return;
     const now = Date.now();
     if (now - lastTap.current < 300) {
       // Double tap → like + a big heart pops up.
@@ -102,9 +109,18 @@ export function FeedCard({ post, url, locked = false, onLike, onMenu }: {
 
       <Pressable
         onPress={tapPhoto}
-        onLongPress={locked ? undefined : () => router.push(`/post/${post.id}`)}
+        onLongPress={locked || scratchIt ? undefined : () => router.push(`/post/${post.id}`)}
         style={styles.photoWrap}>
-        {locked ? (
+        {scratchIt && ScratchReveal && url ? (
+          <ScratchReveal
+            uri={url}
+            shape={shape}
+            onRevealed={() => {
+              scratched.add(post.id);
+              setRevealed(true);
+            }}
+          />
+        ) : locked ? (
           // Blurry preview + "give a peek to get a peek" until you've posted your own drop.
           <Animated.View exiting={FadeOut.duration(400)} style={[styles.photo, styles.locked, { aspectRatio: shape }]}>
             {url ? (
