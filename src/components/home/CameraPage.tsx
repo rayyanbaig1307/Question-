@@ -10,23 +10,27 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
+import { DareBanner } from '@/components/DareBanner';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { useUnreadCount } from '@/lib/chat';
+import { useDareDone } from '@/lib/dares';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, onOpenChat, onOpenStories }: {
+export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenChat, onOpenStories }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
   warm?: boolean;
   // A friend's id: the photo goes straight to them as a peek.
   sendTo?: string;
+  // Taking a photo for the Daily Dare.
+  dare?: boolean;
   onOpenChat?: () => void;
   onOpenStories?: () => void;
 }) {
@@ -36,15 +40,19 @@ export function CameraPage({ active, warm = false, sendTo, onOpenChat, onOpenSto
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const isHome = !sendTo;
+  const isHome = !sendTo && !dare;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const unreadCount = useUnreadCount(userId, active && isHome);
+  const dareDone = useDareDone(userId, active && isHome);
   // A quick white flash on screen when a photo is taken.
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
 
   const openEditor = (uri: string, fit: 'cover' | 'contain') =>
-    router.push({ pathname: '/editor', params: sendTo ? { uri, fit, to: sendTo } : { uri, fit } });
+    router.push({
+      pathname: '/editor',
+      params: { uri, fit, ...(sendTo ? { to: sendTo } : {}), ...(dare ? { dare: '1' } : {}) },
+    });
 
   async function takePhoto() {
     if (!cameraRef.current || busy) return;
@@ -97,19 +105,24 @@ export function CameraPage({ active, warm = false, sendTo, onOpenChat, onOpenSto
 
       {/* Top: your picture on the left, camera controls on the right */}
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
-        {isHome ? (
-          <View style={styles.topLeft}>
-            <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
-              <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
-            </Pressable>
-            <View>
-              <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
-              <CountBadge count={requestCount} />
+        <View style={styles.topLeftColumn} pointerEvents="box-none">
+          {isHome ? (
+            <View style={styles.topLeft}>
+              <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
+                <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
+              </Pressable>
+              <View>
+                <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
+                <CountBadge count={requestCount} />
+              </View>
             </View>
-          </View>
-        ) : (
-          <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
-        )}
+          ) : (
+            <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
+          )}
+          {/* Today's dare: tap it on the home camera; a reminder when you're taking the dare photo */}
+          {isHome ? <DareBanner done={dareDone} onPress={() => router.push('/dare')} /> : null}
+          {dare ? <DareBanner /> : null}
+        </View>
         <View style={styles.tools}>
           {isHome ? <IconButton icon="map" label="Friend map" onPress={() => router.push('/map')} /> : null}
           <IconButton
@@ -206,6 +219,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
+  },
+  topLeftColumn: {
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: space.md,
+    marginRight: space.lg,
   },
   topLeft: {
     flexDirection: 'row',

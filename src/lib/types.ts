@@ -17,6 +17,8 @@ export type Post = {
   user_id: string;
   media_path: string;
   caption: string;
+  // Set when this post was someone's answer to the Daily Dare (the day, like "2026-10-28").
+  dare_day: string | null;
   created_at: string;
 };
 

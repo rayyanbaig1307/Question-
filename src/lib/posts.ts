@@ -1,12 +1,24 @@
+import { todayDareDay } from './dares';
 import { deleteMedia, uploadMedia } from './media';
 import { supabase } from './supabase';
 import type { Post, PostWithAuthor } from './types';
 
-export async function createPost(userId: string, photoUri: string, caption: string): Promise<Post> {
+// `dare: true` tags the post as your answer to today's Daily Dare.
+export async function createPost(
+  userId: string,
+  photoUri: string,
+  caption: string,
+  options: { dare?: boolean } = {},
+): Promise<Post> {
   const mediaPath = await uploadMedia(userId, 'posts', photoUri);
   const { data, error } = await supabase
     .from('posts')
-    .insert({ user_id: userId, media_path: mediaPath, caption: caption.trim() })
+    .insert({
+      user_id: userId,
+      media_path: mediaPath,
+      caption: caption.trim(),
+      ...(options.dare ? { dare_day: todayDareDay() } : {}),
+    })
     .select('*')
     .single();
   if (error) {

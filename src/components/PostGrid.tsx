@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { ReactElement } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { useMediaUrls } from '@/lib/media';
 import type { Post } from '@/lib/types';
@@ -10,10 +10,12 @@ import { colors } from '@/theme';
 const GAP = 2;
 
 // Instagram-style grid of photos: 3 per row, each cropped to a perfect square. Tap one to see it full screen.
-export function PostGrid({ posts, header, empty, refreshing, onRefresh }: {
+export function PostGrid({ posts, header, empty, refreshing, onRefresh, hideDareBadge = false }: {
   posts: Post[];
   header: ReactElement;
   empty?: ReactElement;
+  // Daily Dare photos get a little 🎯 in the corner (not needed on the Dare screen itself).
+  hideDareBadge?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -49,6 +51,11 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh }: {
             ) : (
               <View style={[styles.image, styles.loading]} />
             )}
+            {item.dare_day && !hideDareBadge ? (
+              <View style={styles.dareBadge}>
+                <Text style={styles.dareBadgeText}>🎯</Text>
+              </View>
+            ) : null}
           </Pressable>
         );
       }}
@@ -72,5 +79,19 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.8,
+  },
+  dareBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dareBadgeText: {
+    fontSize: 14,
   },
 });

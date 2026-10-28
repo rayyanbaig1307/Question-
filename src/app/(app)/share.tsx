@@ -15,6 +15,7 @@ import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { resizePhoto } from '@/lib/media';
+import { dareFor, todayDareDay } from '@/lib/dares';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
 import type { Profile } from '@/lib/types';
@@ -23,19 +24,22 @@ import { colors, font, radius, space } from '@/theme';
 // "Send to…": choose where your photo goes – your story, your profile, and/or friends as a peek.
 export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
-  const { uri, to } = useLocalSearchParams<{ uri: string; to?: string }>();
+  // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
+  const { uri, to, dare } = useLocalSearchParams<{ uri: string; to?: string; dare?: string }>();
+  const fromDare = dare === '1';
   const { userId } = useMe();
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
 
-  const [toStory, setToStory] = useState(!to);
+  const [toStory, setToStory] = useState(!to && !fromDare);
   const [toProfile, setToProfile] = useState(false);
+  const [toDare, setToDare] = useState(fromDare);
   const [caption, setCaption] = useState('');
   const [friends, setFriends] = useState<Profile[] | null>(null);
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
   const [busy, setBusy] = useState(false);
   // Remember what already worked, so trying again doesn't send twice.
-  const [done, setDone] = useState({ story: false, profile: false, snaps: false });
+  const [done, setDone] = useState({ story: false, profile: false, snaps: false, dare: false });
 
   useEffect(() => {
     fetchFriends(userId)
@@ -46,7 +50,9 @@ export default function Share() {
   const toggleFriend = (id: string) =>
     setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
 
-  const nothingPicked = !toStory && !toProfile && picked.length === 0;
+  const nothingPicked = !toStory && !toProfile && !toDare && picked.length === 0;
+  // A dare photo is a post on your profile too, so "Post to my profile" isn't needed then.
+  const postToProfile = toProfile && !toDare;
 
   async function send() {
     setBusy(true);
@@ -60,15 +66,19 @@ export default function Share() {
         await createStory(userId, photo);
         setDone((current) => ({ ...current, story: true }));
       }
-      if (toProfile && !done.profile) {
+      if (postToProfile && !done.profile) {
         await createPost(userId, photo, caption);
         setDone((current) => ({ ...current, profile: true }));
       }
+      if (toDare && !done.dare) {
+        await createPost(userId, photo, caption, { dare: true });
+        setDone((current) => ({ ...current, dare: true }));
+      }
       // A happy little buzz: it's sent!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(successMessage(picked.length, toStory, toProfile));
-      // Back to the chat you came from, or to the camera.
-      router.dismissTo(to ? `/chat/${to}` : '/');
+      showToast(toDare ? 'Dare done! 🎯🔥' : successMessage(picked.length, toStory, postToProfile));
+      // Back to the Dare screen, the chat you came from, or the camera.
+      router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
     } finally {
@@ -85,20 +95,29 @@ export default function Share() {
           <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
 
           <Option
+            emoji="🎯"
+            title="Today's dare"
+            subtitle={`"${dareFor(todayDareDay()).text}" · everyone sees it on the Dare page`}
+            selected={toDare}
+            onPress={() => setToDare(!toDare)}
+          />
+          <Option
             emoji="✨"
             title="My Story"
             subtitle="Friends can see it for 24 hours"
             selected={toStory}
             onPress={() => setToStory(!toStory)}
           />
-          <Option
-            emoji="🖼️"
-            title="Post to my profile"
-            subtitle="Stays on your profile grid"
-            selected={toProfile}
-            onPress={() => setToProfile(!toProfile)}
-          />
-          {toProfile ? (
+          {toDare ? null : (
+            <Option
+              emoji="🖼️"
+              title="Post to my profile"
+              subtitle="Stays on your profile grid"
+              selected={toProfile}
+              onPress={() => setToProfile(!toProfile)}
+            />
+          )}
+          {postToProfile || toDare ? (
             <TextField
               label="Caption"
               value={caption}

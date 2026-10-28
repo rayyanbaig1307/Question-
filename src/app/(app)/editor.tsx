@@ -19,7 +19,12 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 
 // Decorate your photo: add text and stickers, move them around, then send it.
 export default function Editor() {
-  const { uri, fit, to } = useLocalSearchParams<{ uri: string; fit?: 'cover' | 'contain'; to?: string }>();
+  const { uri, fit, to, dare } = useLocalSearchParams<{
+    uri: string;
+    fit?: 'cover' | 'contain';
+    to?: string;
+    dare?: string;
+  }>();
   const { width, height } = useWindowDimensions();
   const canvasRef = useRef<ComponentRef<typeof View>>(null);
 
@@ -81,7 +86,10 @@ export default function Editor() {
     try {
       // Take a "screenshot" of the photo with all the text and stickers on it.
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
-      router.push({ pathname: '/share', params: to ? { uri: finished, to } : { uri: finished } });
+      router.push({
+        pathname: '/share',
+        params: { uri: finished, ...(to ? { to } : {}), ...(dare ? { dare } : {}) },
+      });
     } catch (error) {
       Alert.alert('Could not save the photo', friendlyError(error));
     } finally {

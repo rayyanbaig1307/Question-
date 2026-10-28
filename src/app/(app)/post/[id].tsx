@@ -9,6 +9,7 @@ import Animated from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy, usePop } from '@/components/Bouncy';
+import { DareTag } from '@/components/DareBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -147,6 +148,11 @@ export default function PostViewer() {
       {post ? (
         <SafeEdge edge="bottom" style={styles.bottom}>
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFill} />
+          {post.dare_day ? (
+            <View style={styles.dareTag}>
+              <DareTag day={post.dare_day} />
+            </View>
+          ) : null}
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
           {stats ? (
             <View style={styles.actions}>
@@ -232,6 +238,9 @@ const styles = StyleSheet.create({
   count: {
     ...font.body,
     fontWeight: '800',
+  },
+  dareTag: {
+    marginBottom: space.md,
   },
   caption: {
     ...font.body,

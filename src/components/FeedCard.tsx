@@ -15,6 +15,7 @@ import Animated, {
 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy, usePop } from '@/components/Bouncy';
+import { DareTag } from '@/components/DareBanner';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -120,6 +121,7 @@ export function FeedCard({ post, url, onLike, onMenu }: {
         </Pressable>
       </View>
 
+      {post.dare_day ? <DareTag day={post.dare_day} /> : null}
       {post.caption ? (
         <Text style={styles.caption}>
           <Text style={styles.captionName}>{name} </Text>
