@@ -9,7 +9,8 @@ export type Message = {
   id: string;
   sender_id: string;
   recipient_id: string;
-  kind: 'text' | 'snap';
+  // 'screenshot' = a notice that someone took a screenshot; body is 'chat' or 'peek'.
+  kind: 'text' | 'snap' | 'screenshot';
   body: string | null;
   media_path: string | null;
   created_at: string;
@@ -89,6 +90,14 @@ export async function sendText(me: string, friend: string, body: string): Promis
     .single();
   if (error) throw error;
   return data as Message;
+}
+
+// Lets your friend know you took a screenshot of the chat or of their peek.
+export async function sendScreenshotNotice(me: string, friend: string, what: 'chat' | 'peek'): Promise<void> {
+  const { error } = await supabase
+    .from('messages')
+    .insert({ sender_id: me, recipient_id: friend, kind: 'screenshot', body: what });
+  if (error) throw error;
 }
 
 // One photo, sent as a peek to one or more friends.

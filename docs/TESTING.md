@@ -280,3 +280,14 @@ You need **two accounts that are friends** (two phones is easiest).
    and **typing…** shows under your name at the top. They disappear when you stop typing for a few seconds, clear the
    box, or send the message.
 5. **Privacy checks:** only the two people in a chat can save its peeks or see each other typing – never anyone else.
+
+## Step 14 – Screenshot alerts 📸
+
+Two friends, two phones.
+
+1. In a chat, take a screenshot (iPhone: side button + volume up). Your friend's chat shows
+   **"📸 Ayaan took a screenshot of the chat!"**, and on the Chat page their row says **Took a screenshot! 📸**.
+2. Open a peek and screenshot it → they see **"📸 … took a screenshot of your peek!"**, and you get a little
+   reminder that they'll see it.
+3. Screenshot notices can't be unsent (press and hold does nothing on them).
+4. Android: works on Android 14 and newer.

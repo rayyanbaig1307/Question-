@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -46,6 +46,7 @@ import {
 import { friendlyError } from '@/lib/errors';
 import { fetchRelation } from '@/lib/friends';
 import { fetchProfile } from '@/lib/profiles';
+import { useScreenshotNotice } from '@/lib/screenshots';
 import { timeAgo } from '@/lib/time';
 import { useTyping } from '@/lib/typing';
 import type { Profile } from '@/lib/types';
@@ -67,6 +68,9 @@ export default function ChatScreen() {
   const cleanedUp = useRef(false);
   const insets = useSafeAreaInsets();
   const { friendTyping, onTextChange, clearFriendTyping } = useTyping(userId, friendId, areFriends);
+  // Screenshot this chat → your friend sees a notice. (Only while you're looking at it, not a peek on top of it.)
+  const focused = useIsFocused();
+  useScreenshotNotice(userId, friendId, 'chat', focused && areFriends);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -75,7 +79,7 @@ export default function ChatScreen() {
       // Their message just arrived, so they're not typing any more.
       if (list[0]?.sender_id === friendId) clearFriendTyping();
       // Opening the chat means you've read their messages.
-      if (list.some((m) => m.sender_id === friendId && m.kind === 'text' && !m.opened_at)) {
+      if (list.some((m) => m.sender_id === friendId && m.kind !== 'snap' && !m.opened_at)) {
         markChatRead(friendId).catch(() => {});
       }
       if (!cleanedUp.current) {
@@ -137,6 +141,8 @@ export default function ChatScreen() {
 
   // Press and hold a message: save/unsave a peek, unsend your own, or report theirs.
   function openMenu(message: Message) {
+    // Screenshot notices can't be unsent or reported.
+    if (message.kind === 'screenshot') return;
     const saveOptions =
       message.kind !== 'snap'
         ? []
@@ -179,7 +185,7 @@ export default function ChatScreen() {
 
   const name = friend ? friend.display_name || friend.username : '';
   // Show "Delivered / Opened" under your most recent message only.
-  const myLatestId = messages?.find((m) => m.sender_id === userId)?.id;
+  const myLatestId = messages?.find((m) => m.sender_id === userId && m.kind !== 'screenshot')?.id;
 
   return (
     <View style={styles.fill}>
@@ -220,6 +226,7 @@ export default function ChatScreen() {
               <MessageView
                 message={item}
                 me={userId}
+                friendName={name}
                 showStatus={item.id === myLatestId}
                 onLongPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -268,9 +275,10 @@ export default function ChatScreen() {
   );
 }
 
-function MessageView({ message, me, showStatus, onLongPress }: {
+function MessageView({ message, me, friendName, showStatus, onLongPress }: {
   message: Message;
   me: string;
+  friendName: string;
   showStatus: boolean;
   onLongPress: () => void;
 }) {
@@ -278,6 +286,19 @@ function MessageView({ message, me, showStatus, onLongPress }: {
   const time = timeAgo(message.created_at);
   const seen = message.replayed_at ? 'Replayed 🔁' : message.opened_at ? 'Opened' : 'Delivered';
   const status = mine && showStatus ? ` · ${seen}` : '';
+
+  if (message.kind === 'screenshot') {
+    const who = mine ? 'You' : friendName || 'They';
+    const what = message.body === 'peek' ? (mine ? 'their peek' : 'your peek') : 'the chat';
+    return (
+      <View style={styles.notice}>
+        <Text style={styles.noticeText}>
+          📸 {who} took a screenshot of {what}!
+        </Text>
+        <Text style={styles.time}>{time}</Text>
+      </View>
+    );
+  }
 
   if (message.kind === 'snap') {
     // What this peek looks like and does, from your side.
@@ -378,6 +399,18 @@ const styles = StyleSheet.create({
   headerName: {
     ...font.body,
     fontWeight: '800',
+  },
+  notice: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: space.xs,
+  },
+  noticeText: {
+    ...font.small,
+    color: colors.purple,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   headerTyping: {
     color: colors.accent,

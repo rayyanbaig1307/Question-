@@ -96,6 +96,15 @@ function describe(row: ChatRow, me: string): {
   if (row.newSnaps > 0) return { icon: 'square', color: colors.accent, label: 'New Peek', bold: true };
   if (row.newChats > 0) return { icon: 'chatbubble', color: colors.blue, label: 'New Chat', bold: true };
   if (!last) return { icon: 'chatbubble-outline', color: colors.textFaint, label: 'Tap to chat', bold: false };
+  if (last.kind === 'screenshot') {
+    const theyDidIt = last.sender_id !== me;
+    return {
+      icon: 'camera',
+      color: colors.purple,
+      label: theyDidIt ? 'Took a screenshot! 📸' : 'You took a screenshot',
+      bold: theyDidIt && !last.opened_at,
+    };
+  }
   const color = last.kind === 'snap' ? colors.accent : colors.blue;
   if (last.sender_id === me) {
     return { icon: last.opened_at ? 'paper-plane-outline' : 'paper-plane', color, label: last.opened_at ? 'Opened' : 'Delivered', bold: false };

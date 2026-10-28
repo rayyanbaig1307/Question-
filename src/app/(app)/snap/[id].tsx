@@ -23,6 +23,7 @@ import { useMe } from '@/lib/auth';
 import { canReplay, fetchMessage, getSnapUrl, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchProfile } from '@/lib/profiles';
+import { useScreenshotNotice } from '@/lib/screenshots';
 import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
 
@@ -35,7 +36,8 @@ type State =
   | { kind: 'loading' }
   | { kind: 'gone' }
   | { kind: 'error' }
-  | { kind: 'showing'; url: string; sender: Profile | null; mode: Mode };
+  // `other` = the other person in the chat (who gets told about screenshots).
+  | { kind: 'showing'; url: string; sender: Profile | null; mode: Mode; other: string };
 
 // Shows a peek (a photo sent in chat) for 10 seconds. You get one replay afterwards,
 // and a peek that's saved in the chat can be opened any time.
@@ -86,7 +88,8 @@ export default function SnapViewer() {
         const sender = await fetchProfile(message.sender_id).catch(() => null);
         if (!cancelled) {
           setSaved(mode === 'saved');
-          setState({ kind: 'showing', url, sender, mode });
+          const other = message.sender_id === userId ? message.recipient_id : message.sender_id;
+          setState({ kind: 'showing', url, sender, mode, other });
         }
       } catch {
         if (!cancelled) setState({ kind: 'error' });
@@ -110,6 +113,11 @@ export default function SnapViewer() {
     // Leaving early stops the timer, so it can't close some other screen later.
     return () => cancelAnimation(progress);
   }, [timed, progress]);
+
+  // Screenshot it → they'll know.
+  useScreenshotNotice(userId, state.kind === 'showing' ? state.other : null, 'peek', state.kind === 'showing', () =>
+    showToast('📸 They’ll see you took a screenshot'),
+  );
 
   const barStyle = useAnimatedStyle(() => ({ width: `${(1 - progress.get()) * 100}%` }));
 
