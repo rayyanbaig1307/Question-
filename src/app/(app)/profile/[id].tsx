@@ -1,16 +1,18 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { FriendButton } from '@/components/FriendButton';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
 import { useMe } from '@/lib/auth';
+import { fetchRelation, type Relation } from '@/lib/friends';
 import { fetchUserPosts } from '@/lib/posts';
-import { areFriends, fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
+import { fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
 import type { Post, Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -19,7 +21,7 @@ type Loaded = {
   profile: Profile | null;
   stats: ProfileStats;
   posts: Post[];
-  isFriend: boolean;
+  relation: Relation;
 };
 
 export default function ProfileScreen() {
@@ -34,16 +36,18 @@ export default function ProfileScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [profile, stats, posts, isFriend] = await Promise.all([
+      const [profile, stats, posts, relation] = await Promise.all([
         fetchProfile(id),
         fetchProfileStats(id),
         fetchUserPosts(id),
-        isMe ? Promise.resolve(false) : areFriends(userId, id),
+        isMe ? Promise.resolve<Relation>({ kind: 'none' }) : fetchRelation(userId, id),
       ]);
-      setData({ profile, stats, posts, isFriend });
+      setData({ profile, stats, posts, relation });
     } catch (error) {
       console.warn('Could not load profile', error);
-      setData((previous) => previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], isFriend: false });
+      setData(
+        (previous) => previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], relation: { kind: 'none' } },
+      );
     }
   }, [id, isMe, userId]);
 
@@ -115,7 +119,8 @@ export default function ProfileScreen() {
     );
   }
 
-  const locked = !isMe && profile.is_private && !data.isFriend;
+  const isFriend = data.relation.kind === 'friends';
+  const locked = !isMe && profile.is_private && !isFriend;
 
   const profileHeader = (
     <View style={styles.header}>
@@ -123,7 +128,9 @@ export default function ProfileScreen() {
         <Avatar path={profile.avatar_path} name={profile.display_name || profile.username} size={92} ring />
         <View style={styles.stats}>
           <Stat number={data.stats.posts} label={data.stats.posts === 1 ? 'Post' : 'Posts'} />
-          <Stat number={data.stats.friends} label={data.stats.friends === 1 ? 'Friend' : 'Friends'} />
+          <Pressable disabled={!isMe} onPress={() => router.push('/friends')} accessibilityLabel="My friends">
+            <Stat number={data.stats.friends} label={data.stats.friends === 1 ? 'Friend' : 'Friends'} />
+          </Pressable>
         </View>
       </View>
 
@@ -132,14 +139,33 @@ export default function ProfileScreen() {
         <View style={styles.badges}>
           <Text style={styles.username}>@{profile.username}</Text>
           {profile.is_private ? <Text style={styles.badge}>🔒 Private</Text> : null}
-          {data.isFriend ? <Text style={[styles.badge, styles.friendBadge]}>👯 Friends</Text> : null}
+          {isFriend ? <Text style={[styles.badge, styles.friendBadge]}>👯 Friends</Text> : null}
         </View>
         {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
       </View>
 
       {isMe ? (
-        <Button title="Edit profile" icon="create-outline" variant="secondary" small onPress={() => router.push('/edit-profile')} />
-      ) : null}
+        <View style={styles.actions}>
+          <Button
+            title="Edit profile"
+            icon="create-outline"
+            variant="secondary"
+            small
+            style={styles.action}
+            onPress={() => router.push('/edit-profile')}
+          />
+          <Button
+            title="Friends"
+            icon="people"
+            variant="secondary"
+            small
+            style={styles.action}
+            onPress={() => router.push('/friends')}
+          />
+        </View>
+      ) : (
+        <FriendButton person={profile} relation={data.relation} onChanged={load} />
+      )}
     </View>
   );
 
@@ -251,5 +277,12 @@ const styles = StyleSheet.create({
     ...font.body,
     lineHeight: 22,
     marginTop: space.xs,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  action: {
+    flex: 1,
   },
 });

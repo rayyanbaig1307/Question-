@@ -12,7 +12,7 @@ export function ChatPage({ onCamera }: { onCamera: () => void }) {
       <EmptyState
         emoji="💬"
         title="Chats are coming soon!"
-        message="Next up: add friends, then chat and send each other snaps right here."
+        message="Chatting and sending snaps arrive in the next step. Add friends now with the 👤+ button on the camera!"
       />
     </View>
   );

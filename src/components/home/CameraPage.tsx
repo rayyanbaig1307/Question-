@@ -11,6 +11,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { useMe } from '@/lib/auth';
+import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 
@@ -27,6 +28,7 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
+  const requestCount = useIncomingRequestCount(userId, active);
 
   async function takePhoto() {
     if (!cameraRef.current || busy) return;
@@ -76,9 +78,19 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
 
       {/* Top: your picture on the left, camera controls on the right */}
       <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
-        <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
-          <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
-        </Pressable>
+        <View style={styles.topLeft}>
+          <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
+            <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
+          </Pressable>
+          <View>
+            <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
+            {requestCount > 0 ? (
+              <View style={styles.badge} pointerEvents="none">
+                <Text style={styles.badgeText}>{requestCount > 9 ? '9+' : requestCount}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
         <View style={styles.tools}>
           <IconButton
             icon="camera-reverse"
@@ -159,6 +171,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
+  },
+  topLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: '900',
   },
   tools: {
     gap: space.md,

@@ -57,7 +57,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
         <EmptyState
           emoji="✨"
           title="Your friends' stories and posts will show up here"
-          message="Once friends are added (next step), you'll tap through their stories and scroll their posts."
+          message="Tapping through friends' stories and scrolling their posts arrive in a later step."
         />
       </ScrollView>
     </View>

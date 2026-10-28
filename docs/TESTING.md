@@ -51,12 +51,12 @@ Open your profile by tapping **your round picture in the top-left corner of the 
 4. Pull down on your profile to refresh.
 5. Tap the ⚙️ **gear** (top right) → **Settings**:
    - Flip **Private account** on → "Your account is private 🔒". Your profile now shows a **🔒 Private** badge.
-   - **Blocked accounts** → "Nobody blocked" (you'll block people once friends search exists).
+   - **Blocked accounts** → "Nobody blocked" (until you block someone in step 5).
    - **Log out** asks first, then logs you out.
 6. In Supabase → **Storage → avatars**, you'll see your picture in a folder named after your user id.
 
 The photo grid, full-screen photo viewer, and deleting a post are tested in step 4 (once you can post).
-**Report** and **Block** live in the **•••** menu on other people's profiles – you'll be able to reach those
+**Report** and **Block** live in the **•••** menu on other people's profiles – try those
 in step 5 (friends search).
 
 ## Step 4 – Camera + posting
@@ -88,3 +88,28 @@ in step 5 (friends search).
 
 **Good to know:** stories are hidden after 24 hours automatically. Viewing *friends'* stories and the feed
 come in later steps.
+
+## Step 5 – Friends
+
+You need **two accounts** for this. Easiest: two phones. Or on one phone: log out and log in as the other
+person when the steps say so (Settings → Log out).
+
+1. As **Person A**: on the camera, tap the **👤+ button** (next to your picture, top-left) → **Friends**.
+   - It says "Find your friends".
+2. Type part of Person B's username → they show up. Tap **Add** → "Friend request sent 💌".
+   The button changes to **Requested**, and they appear under **Waiting for them**.
+3. As **Person B**: the 👤+ button on the camera now has a **red 1**. (If B is already on the camera screen,
+   it appears by itself within a second or two – no refresh needed.)
+4. Tap it → **Friend requests (1)** → **Accept** → "You and @personA are friends! 🎉".
+   Both of you now see each other under **My friends**, and the **Friends** count on your profiles went up.
+5. Tap Person A's row → their profile. You see a **Friends** button and a **👯 Friends** badge.
+6. **Private accounts:** make Person B private (Settings). Log in as someone who is **not** B's friend and open
+   B's profile → "🔒 This account is private". Friends of B can still see B's photos.
+7. **Unfriend:** on a friend's profile tap **Friends** → **Unfriend**. Tap **Add friend** again to re-send.
+8. **Cancel a request:** tap **Requested** → **Cancel request**.
+9. **Report & block** (from step 3): on someone's profile tap **•••** (top-right):
+   - **Report** → pick a reason → "Thanks for telling us 💛" → choose **Not now**.
+     In Supabase → **Table Editor → reports**, you'll see the report.
+   - **Block** → confirm. You go back, and they're removed from your friends.
+     Logged in as the blocked person: searching for you finds nothing, and your profile is gone for them.
+   - Undo it in **Settings → Blocked accounts → Unblock**.

@@ -45,13 +45,3 @@ export async function updateMyProfile(
   if (error) throw error;
   return data as Profile;
 }
-
-export async function areFriends(me: string, other: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('friendships')
-    .select('status')
-    .or(`and(requester_id.eq.${me},addressee_id.eq.${other}),and(requester_id.eq.${other},addressee_id.eq.${me})`)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.status === 'accepted';
-}
