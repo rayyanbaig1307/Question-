@@ -9,7 +9,7 @@ import { colors } from '@/theme';
 
 const GAP = 2;
 
-// Instagram-style grid of photos, 3 per row. Tap one to see it full screen.
+// Instagram-style grid of photos: 3 per row, each cropped to a perfect square. Tap one to see it full screen.
 export function PostGrid({ posts, header, empty, refreshing, onRefresh }: {
   posts: Post[];
   header: ReactElement;
@@ -37,7 +37,7 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh }: {
           <Pressable
             accessibilityLabel="Open photo"
             onPress={() => router.push(`/post/${item.id}`)}
-            style={({ pressed }) => [{ width: size, height: size * 1.33 }, pressed && styles.pressed]}>
+            style={({ pressed }) => [{ width: size, height: size }, pressed && styles.pressed]}>
             {uri ? (
               <Image
                 source={{ uri, cacheKey: item.media_path }}

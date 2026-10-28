@@ -92,7 +92,17 @@ export default function Editor() {
   return (
     <View style={styles.fill}>
       <View ref={canvasRef} collapsable={false} style={styles.canvas}>
-        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode={fit === 'contain' ? 'contain' : 'cover'} />
+        {fit === 'contain' ? (
+          <>
+            {/* Photos from the camera roll keep their shape. Instead of black bars around them,
+                a blurry, zoomed-in copy of the same photo fills the empty space. */}
+            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={40} />
+            <View style={styles.dim} />
+            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+          </>
+        ) : (
+          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        )}
         {items.map((item) => (
           <DraggableItem
             key={item.id}
@@ -187,6 +197,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
+  },
+  dim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   tools: {
     gap: space.md,
