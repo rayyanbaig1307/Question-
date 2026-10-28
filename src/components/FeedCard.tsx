@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -20,7 +20,11 @@ import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
 
-// One post in the feed, Instagram-style. Double-tap the photo to like it.
+// Each photo's shape (width ÷ height), remembered so cards don't jump when you scroll back.
+const shapes = new Map<string, number>();
+
+// One post in the feed, Instagram-style: the whole photo (nothing cut off) with rounded corners,
+// then like + comment buttons, the number of likes and the caption. Double-tap the photo to like it.
 export function FeedCard({ post, url, onLike, onMenu }: {
   post: FeedPost;
   url: string | undefined;
@@ -28,6 +32,7 @@ export function FeedCard({ post, url, onLike, onMenu }: {
   onMenu: () => void;
 }) {
   const lastTap = useRef(0);
+  const [shape, setShape] = useState(() => shapes.get(post.media_path) ?? 3 / 4);
   const heart = useSharedValue(0);
   const likeButton = usePop();
   const author = post.author;
@@ -78,13 +83,21 @@ export function FeedCard({ post, url, onLike, onMenu }: {
         {url ? (
           <Image
             source={{ uri: url, cacheKey: post.media_path }}
-            style={styles.photo}
+            style={[styles.photo, { aspectRatio: shape }]}
             contentFit="cover"
             transition={200}
             recyclingKey={post.id}
+            onLoad={({ source }) => {
+              // Once we know the photo's real shape, make the card exactly that shape.
+              if (source.width > 0 && source.height > 0) {
+                const real = source.width / source.height;
+                shapes.set(post.media_path, real);
+                setShape(real);
+              }
+            }}
           />
         ) : (
-          <View style={[styles.photo, styles.loading]} />
+          <View style={[styles.photo, styles.loading, { aspectRatio: shape }]} />
         )}
         <Animated.View style={[styles.bigHeart, heartStyle]} pointerEvents="none">
           <Ionicons name="heart" size={110} color={colors.pink} />
@@ -113,13 +126,17 @@ export function FeedCard({ post, url, onLike, onMenu }: {
               color={post.likedByMe ? colors.pink : colors.text}
             />
           </Animated.View>
-          <Text style={styles.count}>{post.likeCount}</Text>
         </Bouncy>
-        <Pressable style={styles.action} onPress={() => router.push(`/comments/${post.id}`)} accessibilityLabel="Comments">
+        <Bouncy
+          style={styles.action}
+          pressScale={0.85}
+          onPress={() => router.push(`/comments/${post.id}`)}
+          accessibilityLabel="Comments">
           <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-          <Text style={styles.count}>{post.commentCount}</Text>
-        </Pressable>
+        </Bouncy>
       </View>
+
+      <Text style={styles.likes}>{post.likeCount === 1 ? '1 like' : `${post.likeCount} likes`}</Text>
 
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
       {post.caption ? (
@@ -172,7 +189,6 @@ const styles = StyleSheet.create({
   },
   photo: {
     width: '100%',
-    aspectRatio: 9 / 16,
   },
   loading: {
     backgroundColor: colors.card,
@@ -192,7 +208,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  count: {
+  likes: {
     ...font.body,
     fontWeight: '800',
   },
