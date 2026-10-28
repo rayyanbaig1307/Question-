@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,6 +12,7 @@ import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
+import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
 import { useMediaUrl } from '@/lib/media';
 import { deletePost, fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
@@ -25,6 +27,7 @@ export default function PostViewer() {
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
   const [post, setPost] = useState<PostWithAuthor | null | undefined>(undefined);
+  const [stats, setStats] = useState<PostStats | null>(null);
   const uri = useMediaUrl(post?.media_path);
 
   useEffect(() => {
@@ -32,6 +35,27 @@ export default function PostViewer() {
       .then(setPost)
       .catch(() => setPost(null));
   }, [id]);
+
+  // Likes and comment count – refreshed when you come back from the comments.
+  useFocusEffect(
+    useCallback(() => {
+      fetchPostStats(userId, id)
+        .then(setStats)
+        .catch(() => {});
+    }, [id, userId]),
+  );
+
+  async function toggleLike() {
+    if (!stats) return;
+    const liked = !stats.likedByMe;
+    const before = stats;
+    setStats({ ...stats, likedByMe: liked, likeCount: Math.max(0, stats.likeCount + (liked ? 1 : -1)) });
+    try {
+      await setLiked(userId, id, liked);
+    } catch {
+      setStats(before);
+    }
+  }
 
   const isMine = post?.user_id === userId;
   const author = post?.author;
@@ -109,10 +133,26 @@ export default function PostViewer() {
         {post ? <IconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} /> : null}
       </SafeAreaView>
 
-      {post?.caption ? (
+      {post ? (
         <SafeAreaView edges={['bottom']} style={styles.bottom}>
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFill} />
-          <Text style={styles.caption}>{post.caption}</Text>
+          {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
+          {stats ? (
+            <View style={styles.actions}>
+              <Pressable style={styles.action} onPress={toggleLike} accessibilityLabel={stats.likedByMe ? 'Unlike' : 'Like'}>
+                <Ionicons
+                  name={stats.likedByMe ? 'heart' : 'heart-outline'}
+                  size={28}
+                  color={stats.likedByMe ? colors.pink : colors.white}
+                />
+                <Text style={styles.count}>{stats.likeCount}</Text>
+              </Pressable>
+              <Pressable style={styles.action} onPress={() => router.push(`/comments/${post.id}`)} accessibilityLabel="Comments">
+                <Ionicons name="chatbubble-outline" size={26} color={colors.white} />
+                <Text style={styles.count}>{stats.commentCount}</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </SafeAreaView>
       ) : null}
     </View>
@@ -161,6 +201,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingTop: space.xxl,
     paddingBottom: space.lg,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: space.xl,
+    marginBottom: space.md,
+  },
+  action: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  count: {
+    ...font.body,
+    fontWeight: '800',
   },
   caption: {
     ...font.body,

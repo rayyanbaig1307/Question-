@@ -86,8 +86,8 @@ in step 5 (friends search).
 10. Check Supabase: **Table Editor → stories** and **posts** have your rows; **Storage → media** has the photos
     (in folders named after your user id).
 
-**Good to know:** stories are hidden after 24 hours automatically. Viewing *friends'* stories and the feed
-come in later steps.
+**Good to know:** stories are hidden after 24 hours automatically. Friends' stories and the feed are
+tested in steps 7 and 8.
 
 ## Step 5 – Friends
 
@@ -172,3 +172,18 @@ You need **two accounts that are friends** (step 5).
 8. **Report:** in a friend's story tap **•••** → **Report story**.
 9. **Privacy check:** someone who is **not** your friend never sees your story ring.
 10. Stories disappear by themselves **24 hours** after posting.
+
+## Step 8 – Feed (likes + comments)
+
+1. Post a couple of photos to your profile (camera → **Send to** → **Post to my profile**). Ask a friend to do the same.
+2. Swipe to the **Stories** page and scroll down past the stories → the **Feed** shows posts from you and your
+   friends, newest first. Pull down to refresh; keep scrolling to load older posts.
+3. **Double-tap a photo** → a big pink ❤️ pops up and the post is liked. Tap the ❤️ under it to unlike/like.
+4. Tap the 💬 → **Comments**. Write one and tap the pink **↑**. Go back – the comment count went up.
+5. Press and hold a comment:
+   - your own comment → **Delete comment**
+   - someone else's → **Report comment** (and if it's on *your* post you can delete it too)
+6. Tap **•••** on a post → **Open full screen** (likes and comments work there too). On your own post you can
+   **Delete post**; on a friend's you can **Report post**.
+7. **Privacy check:** someone who isn't your friend never sees your posts in their feed. (They *can* see them on your
+   profile if your account is public – make it private in Settings to stop that.)

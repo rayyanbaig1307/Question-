@@ -66,7 +66,7 @@ Core features, one at a time (✅ = done):
 5. ✅ Friends (search by username, send / accept requests)
 6. ✅ Chat + snaps (1-on-1, live)
 7. ✅ Stories (tap through friends' stories)
-8. ⬜ Feed (friends' posts, likes, comments)
+8. ✅ Feed (friends' posts, likes, comments)
 9. ⬜ Friend map (share location, ghost mode)
 
 Then the viral features, in this order, only after the core works:
