@@ -21,7 +21,7 @@ export default function Welcome() {
     bob.set(withRepeat(withSequence(withTiming(-14, { duration: 900 }), withTiming(0, { duration: 900 })), -1));
   }, [bob]);
 
-  const ghostStyle = useAnimatedStyle(() => ({
+  const mascotStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: bob.get() }, { rotate: `${bob.get() / 2}deg` }],
   }));
 
@@ -29,7 +29,7 @@ export default function Welcome() {
     <LinearGradient colors={[colors.purple, colors.pink, colors.orange]} style={styles.fill}>
       <SafeAreaView style={styles.fill}>
         <View style={styles.hero}>
-          <Animated.Text style={[styles.ghost, ghostStyle]}>👻</Animated.Text>
+          <Animated.Text style={[styles.mascot, mascotStyle]}>👀</Animated.Text>
           <Text style={styles.title}>Peekaboo</Text>
           <Text style={styles.tagline}>Snap it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
         </View>
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingHorizontal: space.xl,
   },
-  ghost: {
+  mascot: {
     fontSize: 96,
   },
   title: {

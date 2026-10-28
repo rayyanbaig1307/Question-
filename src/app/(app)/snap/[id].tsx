@@ -91,7 +91,7 @@ export default function SnapViewer() {
         ) : (
           <>
             <EmptyState
-              emoji={state.kind === 'gone' ? '👻' : '📶'}
+              emoji={state.kind === 'gone' ? '💨' : '📶'}
               title={state.kind === 'gone' ? 'This snap is gone' : "Couldn't load the snap"}
               message={
                 state.kind === 'gone'

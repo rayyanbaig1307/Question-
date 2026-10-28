@@ -57,7 +57,7 @@ export default function SignIn() {
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Log in" onPress={logIn} loading={busy} style={styles.button} />
-      <Button title="New here? Create an account" variant="ghost" onPress={() => router.replace('/sign-up')} />
+      <Button title="New here? Create an account" variant="plain" onPress={() => router.replace('/sign-up')} />
     </FormScreen>
   );
 }

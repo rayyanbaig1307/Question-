@@ -19,7 +19,7 @@ If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` w
 
 ## Step 2 – Sign up / log in
 
-1. You land on the **Welcome** screen with the bouncing ghost 👻.
+1. You land on the **Welcome** screen with the bouncing eyes 👀.
 2. Tap **Create account**.
    - Type a username with capitals or spaces – they're removed automatically.
    - After a second it says **"✅ @yourname is free!"**.
@@ -135,14 +135,14 @@ pop up live.
 
 **Snaps**
 8. As **Person A**, in the chat with B, tap the yellow **📷** button → take a photo (add stickers if you like)
-   → **Send to** → Person B is already ticked (My Story is off) → **Send** → "Snap sent to 1 friend! 👻" and you're
+   → **Send to** → Person B is already ticked (My Story is off) → **Send** → "Snap sent to 1 friend! 💌" and you're
    back in the chat, which shows "You sent a snap".
 9. You can also send from the main camera: take a photo → **Send to** → tick one or more friends under
-   **👻 Send as a snap** (you can tick My Story too).
+   **💌 Send as a snap** (you can tick My Story too).
 10. As **Person B**: the chat list shows **New Snap** in red. Open the chat → tap the red
     **"New snap · tap to view"**. It opens full screen with a bar that runs down for **10 seconds**, then closes.
     Tap anywhere to close it sooner.
-11. Tap the same snap again → it now says **Snap opened** and can't be opened again. 👻
+11. Tap the same snap again → it now says **Snap opened** and can't be opened again. 💨
     Person A sees **Opened** under it.
 12. **No signal?** If the snap can't load, it says "Couldn't load the snap" and does **not** count as opened –
     try again later.
@@ -188,22 +188,22 @@ You need **two accounts that are friends** (step 5).
 7. **Privacy check:** someone who isn't your friend never sees your posts in their feed. (They *can* see them on your
    profile if your account is public – make it private in Settings to stop that.)
 
-## Step 9 – Friend map + ghost mode
+## Step 9 – Friend map + hide me
 
 You need **two accounts that are friends**, ideally on two phones.
 
 1. On the camera, tap the **🗺️ map button** (top-right). The Friend Map opens.
-   - At the bottom it says **"👻 Ghost mode is on – Nobody can see where you are."** That's the default.
-2. Tap **Share my location with friends** → your phone asks for location permission → allow it.
+   - At the bottom it says **"🙈 You're hidden – Nobody can see where you are."** That's the default.
+2. Tap **Show me to my friends** → your phone asks for location permission → allow it.
    - You appear on the map as your picture with a **pink** ring, labelled **"You"**.
-   - The card now says **"📍 Sharing with friends"**.
+   - The card now says **"👀 Friends can see you"**.
 3. On your **friend's phone**, open the map → you show up with a **yellow** ring, your name and "now".
    Tap your picture → it opens your profile.
 4. Your spot updates whenever you open the app (and every few minutes while it's open).
-5. Tap **Turn on ghost mode** → "👻 Ghost mode on – you're hidden". On your friend's phone you disappear from the
+5. Tap **Hide me** → "🙈 You're hidden on the map". On your friend's phone you disappear from the
    map **within a second or two**.
-6. You can also flip **Ghost mode** in **Settings** (profile → ⚙️).
+6. You can also flip **Hide me on the map** in **Settings** (profile → ⚙️).
 7. **Privacy checks:**
    - Someone who is **not** your friend never sees you, even with sharing on.
    - If you unfriend or block someone, you vanish from their map.
-   - In Supabase → **Table Editor → locations**, your row is deleted the moment ghost mode turns on.
+   - In Supabase → **Table Editor → locations**, your row is deleted the moment you hide.

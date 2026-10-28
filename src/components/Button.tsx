@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type Vi
 
 import { colors, radius, space } from '@/theme';
 
-type Variant = 'primary' | 'secondary' | 'pink' | 'danger' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'pink' | 'danger' | 'plain';
 
 type Props = {
   title: string;
@@ -22,7 +22,7 @@ const backgrounds: Record<Variant, string> = {
   secondary: colors.card,
   pink: colors.pink,
   danger: colors.red,
-  ghost: 'transparent',
+  plain: 'transparent',
 };
 
 const textColors: Record<Variant, string> = {
@@ -30,7 +30,7 @@ const textColors: Record<Variant, string> = {
   secondary: colors.text,
   pink: colors.white,
   danger: colors.white,
-  ghost: colors.textMuted,
+  plain: colors.textMuted,
 };
 
 // A big, friendly, rounded button.

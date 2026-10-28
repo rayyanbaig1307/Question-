@@ -106,7 +106,7 @@ export default function PostViewer() {
         <ActivityIndicator style={styles.fill} color={colors.yellow} size="large" />
       ) : post === null ? (
         <View style={[styles.fill, styles.center]}>
-          <EmptyState emoji="👻" title="This post is gone" message="It was deleted, or you can't see it anymore." />
+          <EmptyState emoji="💨" title="This post is gone" message="It was deleted, or you can't see it anymore." />
         </View>
       ) : uri ? (
         <Image source={{ uri, cacheKey: post.media_path }} style={styles.fill} contentFit="contain" transition={200} />

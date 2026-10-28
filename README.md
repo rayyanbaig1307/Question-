@@ -1,4 +1,4 @@
-# Peekaboo 👻
+# Peekaboo 👀
 
 A fun photo app for friends – Snapchat's camera-first vibe plus Instagram-style profiles.
 Built with **Expo** (React Native + TypeScript) and **Supabase**.

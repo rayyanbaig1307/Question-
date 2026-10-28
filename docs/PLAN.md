@@ -2,7 +2,7 @@
 
 ## What we're building
 
-**Peekaboo** 👻 – a fun photo app for friends. It opens straight to the camera like Snapchat,
+**Peekaboo** 👀 – a fun photo app for friends. It opens straight to the camera like Snapchat,
 and every person has a profile with a photo grid like Instagram.
 ("Peekaboo" is just a placeholder name – change `name` in `app.json` whenever you like.)
 
@@ -49,7 +49,7 @@ The rules live in the database itself (called "Row Level Security"), so even a h
 * Snaps → only the person you sent it to, and only until they open it.
 * Chat → you can only message friends.
 * Friend map → **off by default**. Only friends can see you, only while sharing is on.
-  Turning on ghost mode deletes your spot from the map instantly.
+  Hiding again deletes your spot from the map instantly.
 * Blocking → removes the friendship; they can't see your profile, posts, stories or message you.
 * Reports → saved in the `reports` table for you to review in the Supabase dashboard.
 
@@ -67,7 +67,7 @@ Core features, one at a time (✅ = done):
 6. ✅ Chat + snaps (1-on-1, live)
 7. ✅ Stories (tap through friends' stories)
 8. ✅ Feed (friends' posts, likes, comments)
-9. ✅ Friend map (share location, ghost mode)
+9. ✅ Friend map (share location, hide me)
 
 Then the viral features, in this order, only after the core works:
 daily dare → invite to unlock → roast my profile → fit check → face swap stories → mystery match.

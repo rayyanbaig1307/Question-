@@ -141,7 +141,7 @@ export default function SignUp() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Let's go!" icon="sparkles" onPress={createAccount} loading={busy} />
-      <Button title="Already have an account? Log in" variant="ghost" onPress={() => router.replace('/sign-in')} />
+      <Button title="Already have an account? Log in" variant="plain" onPress={() => router.replace('/sign-in')} />
     </FormScreen>
   );
 }

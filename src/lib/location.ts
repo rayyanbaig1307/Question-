@@ -38,7 +38,7 @@ export async function shareMyLocationNow(me: string): Promise<{ latitude: number
   return spot;
 }
 
-// Turns location sharing on (asks for permission first) or off (= ghost mode).
+// Turns location sharing on (asks for permission first) or off (= hidden).
 // Returns the new profile, or null if the phone's location permission was refused.
 export async function setLocationSharing(me: string, share: boolean): Promise<Profile | null> {
   if (share) {

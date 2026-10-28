@@ -109,7 +109,7 @@ export default function Share() {
             />
           ) : null}
 
-          <Text style={styles.sectionTitle}>👻 Send as a snap</Text>
+          <Text style={styles.sectionTitle}>💌 Send as a snap</Text>
           {friends === null ? null : friends.length === 0 ? (
             <View style={styles.noFriends}>
               <Text style={styles.noFriendsText}>Add friends to send them snaps – they disappear once opened.</Text>
@@ -154,7 +154,7 @@ function successMessage(friendCount: number, toStory: boolean, toProfile: boolea
     toStory ? 'your story' : null,
     toProfile ? 'your profile' : null,
   ].filter((place): place is string => place !== null);
-  if (places.length === 1 && friendCount > 0) return `Snap sent to ${places[0]}! 👻`;
+  if (places.length === 1 && friendCount > 0) return `Snap sent to ${places[0]}! 💌`;
   // "a", "a and b", "a, b and c"
   const list = places.length > 1 ? `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}` : places[0];
   return `Shared to ${list}! 🎉`;

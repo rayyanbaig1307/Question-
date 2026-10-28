@@ -17,7 +17,7 @@ import { colors, font, radius, space } from '@/theme';
 
 const WHOLE_WORLD = { latitude: 25, longitude: 0, latitudeDelta: 120, longitudeDelta: 120 };
 
-// The friend map: see friends who share their location. You're hidden (ghost mode) unless you turn sharing on.
+// The friend map: see friends who share their location. You stay hidden unless you turn sharing on.
 export default function FriendMap() {
   const { userId, profile, setProfile } = useMe();
   const { showToast } = useOverlays();
@@ -75,7 +75,7 @@ export default function FriendMap() {
       setProfile(updated);
       zoomedIn.current = false;
       load();
-      showToast(updated.location_sharing ? '📍 Your friends can see you now' : "👻 Ghost mode on – you're hidden");
+      showToast(updated.location_sharing ? '👀 Your friends can see you now' : "🙈 You're hidden on the map");
     } catch (error) {
       Alert.alert('Could not change it', friendlyError(error));
     } finally {
@@ -133,9 +133,9 @@ export default function FriendMap() {
       <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
         <View style={styles.card}>
           <Pressable style={styles.cardRow} onPress={toggleSharing} disabled={busy}>
-            <Text style={styles.cardEmoji}>{sharing ? '📍' : '👻'}</Text>
+            <Text style={styles.cardEmoji}>{sharing ? '👀' : '🙈'}</Text>
             <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{sharing ? 'Sharing with friends' : 'Ghost mode is on'}</Text>
+              <Text style={styles.cardTitle}>{sharing ? 'Friends can see you' : "You're hidden"}</Text>
               <Text style={styles.cardSubtitle}>
                 {sharing
                   ? 'Only your friends can see your spot. It updates when you open the app.'
@@ -144,7 +144,7 @@ export default function FriendMap() {
             </View>
           </Pressable>
           <Button
-            title={sharing ? 'Turn on ghost mode' : 'Share my location with friends'}
+            title={sharing ? 'Hide me' : 'Show me to my friends'}
             icon={sharing ? 'eye-off' : 'location'}
             variant={sharing ? 'secondary' : 'primary'}
             loading={busy}

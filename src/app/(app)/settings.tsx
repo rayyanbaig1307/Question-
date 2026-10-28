@@ -24,15 +24,15 @@ export default function Settings() {
     }
   }
 
-  async function setGhostMode(ghost: boolean) {
+  async function setHidden(hidden: boolean) {
     try {
-      const updated = await setLocationSharing(userId, !ghost);
+      const updated = await setLocationSharing(userId, !hidden);
       if (!updated) {
         Alert.alert('Location is turned off', 'Allow location for Expo Go in your phone settings to share your spot.');
         return;
       }
       setProfile(updated);
-      showToast(ghost ? "👻 Ghost mode on – you're hidden" : '📍 Your friends can see you now');
+      showToast(hidden ? "🙈 You're hidden on the map" : '👀 Your friends can see you now');
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
@@ -67,12 +67,12 @@ export default function Settings() {
         <Row
           icon="eye-off"
           color={colors.purple}
-          title="Ghost mode"
-          subtitle="When on, nobody sees you on the friend map"
+          title="Hide me on the map"
+          subtitle="When on, nobody sees where you are"
           right={
             <Switch
               value={!(profile?.location_sharing ?? false)}
-              onValueChange={setGhostMode}
+              onValueChange={setHidden}
               trackColor={{ true: colors.purple, false: colors.border }}
               thumbColor={colors.white}
             />

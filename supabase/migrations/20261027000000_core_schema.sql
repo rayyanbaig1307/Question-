@@ -31,7 +31,7 @@ create table public.profiles (
   bio text not null default '',
   avatar_path text,                                   -- file in the "avatars" bucket
   is_private boolean not null default false,          -- private account: only friends see posts
-  location_sharing boolean not null default false,    -- friend map; OFF by default (ghost mode)
+  location_sharing boolean not null default false,    -- friend map; OFF by default (hidden)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_username_format check (username ~ '^[a-z0-9_.]{3,20}$'),
@@ -337,7 +337,7 @@ create trigger profiles_touch_updated_at
   before update on public.profiles
   for each row execute function private.touch_updated_at();
 
--- Turning on ghost mode (sharing off) instantly removes your spot on the map.
+-- Hiding (sharing off) instantly removes your spot on the map.
 create or replace function private.clear_location_when_ghost()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
