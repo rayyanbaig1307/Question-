@@ -248,3 +248,17 @@ You need **two accounts that are friends**, ideally on two phones.
    **"🎯 Dare …"** tag. Tap the tag → the Dare screen.
 6. You can also tick **🎯 Today's dare** on the Send screen after taking a normal photo.
 7. **Privacy check:** dare photos from private accounts only show for their friends.
+
+## Step 12 – Discover 🔥 (the endless scroll)
+
+1. At the bottom of the home screen there's now a **tab bar**: 💬 Chat · 📷 Camera · ✨ Stories · 🔥 Discover.
+   Tap a tab to jump there, or keep swiping left/right like before. Unread chats show a red number on 💬.
+2. Tap **🔥 Discover**. You see one photo filling the whole screen. **Swipe up** for the next one, and the next…
+3. Each photo shows who posted it (tap their name → their profile, where you can add them), the caption and any
+   🎯 dare. On the right: **❤️ like**, **💬 comments**, **✈️ share**, **••• more** (report or block).
+4. **Double-tap** a photo → big pink heart + buzz = liked.
+5. Pull down on the first photo to refresh. At the very end: "You've seen it all! 🌱".
+6. **Who shows up:** posts from **public** accounts and from **your friends** – never your own, never private
+   accounts you aren't friends with, never anyone you blocked (or who blocked you).
+7. **Privacy check:** turn on **Private account** (Settings) → your posts disappear from strangers' Discover.
+8. Block someone from **•••** → their posts vanish from your Discover straight away.

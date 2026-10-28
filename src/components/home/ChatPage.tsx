@@ -13,6 +13,7 @@ import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
+import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
 type ChatRow = {
@@ -25,6 +26,7 @@ type ChatRow = {
 // Left page: everyone you can chat with, most recent first.
 export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
+  const tabSpace = useTabBarSpace();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
         <FlatList
           data={rows}
           keyExtractor={(row) => row.friend.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
           ListEmptyComponent={
             <EmptyState
               emoji="👀"

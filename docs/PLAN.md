@@ -82,12 +82,15 @@ Then the viral features, in this order, only after the core works:
 15. Face swap stories
 16. Mystery match
 
+Extra: ✅ Discover tab – endless full-screen scroll of public posts (like Spotlight).
+
 ## How the screens fit together
 
 ```
-            ┌──────────┬──────────┬──────────┐
-  swipe ←→  │   Chat   │  Camera  │ Stories  │
-            │  (left)  │ (center) │  & Feed  │
-            └──────────┴──────────┴──────────┘
-                 Profile button at the top → your profile
+            ┌──────────┬──────────┬──────────┬──────────┐
+  swipe ←→  │   Chat   │  Camera  │ Stories  │ Discover │
+            │          │ (start)  │  & Feed  │ (scroll) │
+            └──────────┴──────────┴──────────┴──────────┘
+              Tab bar at the bottom: 💬 Chat · 📷 Camera · ✨ Stories · 🔥 Discover
+              Profile button at the top of the camera → your profile
 ```

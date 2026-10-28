@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,15 +13,15 @@ import { DareBanner, DareButton } from '@/components/DareBanner';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
-import { useUnreadCount } from '@/lib/chat';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, space } from '@/theme';
+import { TAB_BAR_HEIGHT } from './HomeTabBar';
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenChat, onOpenStories }: {
+export function CameraPage({ active, warm = false, sendTo, dare = false }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -31,8 +30,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
   sendTo?: string;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
-  onOpenChat?: () => void;
-  onOpenStories?: () => void;
 }) {
   const { userId, profile } = useMe();
   const [permission, requestPermission] = useCameraPermissions();
@@ -43,7 +40,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
   const [busy, setBusy] = useState(false);
   const isHome = !sendTo && !dare;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
-  const unreadCount = useUnreadCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   // The dare banner pops up once a day (until you've done the dare), then goes away for the rest of the day.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
@@ -171,8 +167,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
         </View>
       </SafeEdge>
 
-      {/* Bottom: gallery, the big shutter button, and shortcuts to the other pages */}
-      <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
+      {/* Bottom: gallery and the big shutter button (on the home screen, just above the tab bar) */}
+      <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
         <View style={styles.shutterRow}>
           <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
           {/* The big shutter button squishes when you press it */}
@@ -187,19 +183,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
           </Bouncy>
           <View style={styles.shutterSpacer} />
         </View>
-        {isHome ? (
-          <View style={styles.nav}>
-            <Bouncy style={styles.navButton} onPress={onOpenChat} accessibilityRole="button">
-              <Ionicons name="chatbubble" size={20} color={colors.blue} />
-              <Text style={styles.navText}>Chat</Text>
-              <CountBadge count={unreadCount} />
-            </Bouncy>
-            <Bouncy style={styles.navButton} onPress={onOpenStories} accessibilityRole="button">
-              <Text style={styles.navText}>Stories</Text>
-              <Ionicons name="sparkles" size={20} color={colors.pink} />
-            </Bouncy>
-          </View>
-        ) : null}
       </SafeEdge>
     </View>
   );
@@ -292,6 +275,9 @@ const styles = StyleSheet.create({
     paddingBottom: space.sm,
     gap: space.lg,
   },
+  bottomAboveTabs: {
+    paddingBottom: TAB_BAR_HEIGHT + space.md,
+  },
   shutterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,23 +305,5 @@ const styles = StyleSheet.create({
   },
   shutterSpacer: {
     width: 44,
-  },
-  nav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  navButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
-  },
-  navText: {
-    color: colors.white,
-    fontWeight: '800',
-    fontSize: 15,
   },
 });

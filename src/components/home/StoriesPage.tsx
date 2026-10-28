@@ -20,6 +20,7 @@ import { fetchStoryRings, type StoryRing } from '@/lib/stories';
 import { timeAgo, timeLeft } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, gradients, radius, space } from '@/theme';
+import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
 type Rings = { mine: StoryRing | null; friends: StoryRing[] };
@@ -27,6 +28,7 @@ type Rings = { mine: StoryRing | null; friends: StoryRing[] };
 // Right page: stories at the top, then the feed of your friends' posts.
 export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
+  const tabSpace = useTabBarSpace();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
   const [rings, setRings] = useState<Rings | null>(null);
@@ -147,7 +149,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
       <FlatList
         data={posts ?? []}
         keyExtractor={(post) => post.id}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabSpace + space.lg }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
