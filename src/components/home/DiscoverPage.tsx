@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -22,9 +22,11 @@ import { DareTag } from '@/components/DareBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
+import { friendlyError } from '@/lib/errors';
 import { DISCOVER_PAGE_SIZE, fetchDiscover, setLiked, type FeedPost } from '@/lib/feed';
 import { inviteFriends, withAppLink } from '@/lib/invite';
 import { useMediaUrls } from '@/lib/media';
+import { deletePost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
@@ -33,7 +35,7 @@ import { useTabBarSpace } from './HomeTabBar';
 // Discover: one photo per screen from everyone on Peekaboo. Swipe up for the next one… forever.
 export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
-  const { showOptions } = useOverlays();
+  const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
@@ -114,6 +116,34 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   function openMenu(post: FeedPost) {
     const author = post.author;
     if (!author) return;
+    if (post.user_id === userId) {
+      showOptions({
+        options: [
+          {
+            label: 'Delete post',
+            destructive: true,
+            onPress: () =>
+              Alert.alert('Delete this post?', 'It will be gone from your profile and Discover for good.', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deletePost(post);
+                      setPosts((current) => current?.filter((p) => p.id !== post.id) ?? null);
+                      showToast('Post deleted 🗑️');
+                    } catch (error) {
+                      Alert.alert('Could not delete', friendlyError(error));
+                    }
+                  },
+                },
+              ]),
+          },
+        ],
+      });
+      return;
+    }
     showOptions({
       options: [
         { label: `View @${author.username}'s profile`, onPress: () => router.push(`/profile/${author.id}`) },
@@ -187,6 +217,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
           renderItem={({ item }) => (
             <DiscoverCard
               post={item}
+              mine={item.user_id === userId}
               url={urls[item.media_path]}
               height={height}
               bottomSpace={tabSpace}
@@ -211,8 +242,10 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
 }
 
 // One full-screen photo with the person, caption and buttons on top. Double-tap to like.
-function DiscoverCard({ post, url, height, bottomSpace, onLike, onShare, onMenu }: {
+function DiscoverCard({ post, mine, url, height, bottomSpace, onLike, onShare, onMenu }: {
   post: FeedPost;
+  // Your own post: shows a little "You" tag.
+  mine: boolean;
   url: string | undefined;
   height: number;
   bottomSpace: number;
@@ -280,6 +313,7 @@ function DiscoverCard({ post, url, height, bottomSpace, onLike, onShare, onMenu 
           <View style={styles.authorText}>
             <Text style={styles.name} numberOfLines={1}>
               {name}
+              {mine ? <Text style={styles.you}>  · You</Text> : null}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
               @{author?.username ?? 'someone'} · {timeAgo(post.created_at)}
@@ -406,6 +440,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     ...shadow,
+  },
+  you: {
+    color: colors.accent,
   },
   meta: {
     color: 'rgba(255,255,255,0.8)',

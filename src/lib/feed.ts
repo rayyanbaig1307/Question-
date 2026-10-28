@@ -57,14 +57,13 @@ export async function fetchFeed(me: string, before?: string): Promise<FeedPost[]
 
 export const DISCOVER_PAGE_SIZE = 10;
 
-// Discover: newest posts from everyone except you – public accounts, plus your friends.
+// Discover: newest posts from everyone – yours, public accounts and your friends.
 // (The database leaves out private accounts you're not friends with, and anyone blocked.)
 // Pass `before` (a date) to load older ones.
 export async function fetchDiscover(me: string, before?: string): Promise<FeedPost[]> {
   let query = supabase
     .from('posts')
     .select('*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)')
-    .neq('user_id', me)
     .order('created_at', { ascending: false })
     .limit(DISCOVER_PAGE_SIZE);
   if (before) query = query.lt('created_at', before);
