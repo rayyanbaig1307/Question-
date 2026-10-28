@@ -11,7 +11,7 @@ export type SheetOption = {
   destructive?: boolean;
 };
 
-type SheetRequest = { title?: string; message?: string; options: SheetOption[] };
+type SheetRequest = { title?: string; message?: string; options: SheetOption[]; onClose?: () => void };
 
 type OverlayContextValue = {
   showToast: (message: string) => void;
@@ -40,8 +40,13 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
 
   const showOptions = useCallback((request: SheetRequest) => setSheet(request), []);
 
-  const choose = (option: SheetOption) => {
+  const closeSheet = () => {
+    sheet?.onClose?.();
     setSheet(null);
+  };
+
+  const choose = (option: SheetOption) => {
+    closeSheet();
     // Let the menu close before running the action (which may open another menu).
     setTimeout(option.onPress, 250);
   };
@@ -58,8 +63,8 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
         </SafeAreaView>
       )}
 
-      <Modal visible={sheet !== null} transparent animationType="fade" onRequestClose={() => setSheet(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setSheet(null)}>
+      <Modal visible={sheet !== null} transparent animationType="fade" onRequestClose={closeSheet}>
+        <Pressable style={styles.backdrop} onPress={closeSheet}>
           <SafeAreaView edges={['bottom']} style={styles.sheet}>
             <Pressable>
               {sheet?.title ? <Text style={styles.sheetTitle}>{sheet.title}</Text> : null}
@@ -75,7 +80,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
                 </Pressable>
               ))}
               <Pressable
-                onPress={() => setSheet(null)}
+                onPress={closeSheet}
                 style={({ pressed }) => [styles.option, styles.cancel, pressed && styles.optionPressed]}>
                 <Text style={[styles.optionText, styles.cancelText]}>Cancel</Text>
               </Pressable>

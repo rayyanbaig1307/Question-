@@ -1,0 +1,395 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
+
+import { Avatar } from '@/components/Avatar';
+import { IconButton } from '@/components/IconButton';
+import { useOverlays } from '@/components/Overlays';
+import { PersonRow } from '@/components/PersonRow';
+import { useMe } from '@/lib/auth';
+import { friendlyError } from '@/lib/errors';
+import { useMediaUrls } from '@/lib/media';
+import { deleteStory, fetchStoryRing, fetchStoryViewers, markStorySeen, type StoryRing } from '@/lib/stories';
+import { timeAgo } from '@/lib/time';
+import type { Profile } from '@/lib/types';
+import { useSafetyActions } from '@/lib/useSafetyActions';
+import { colors, font, radius, space } from '@/theme';
+
+const SECONDS_PER_SNAP = 5;
+
+// Watch someone's story: tap right = next, tap left = back, hold = pause.
+// `queue` lists the friends to watch next, so it flows from one friend to the next like Snapchat.
+export default function StoryViewer() {
+  const { user, queue } = useLocalSearchParams<{ user: string; queue?: string }>();
+  const { userId } = useMe();
+  const { showOptions, showToast } = useOverlays();
+  const { report } = useSafetyActions();
+  const isMine = user === userId;
+
+  const [ring, setRing] = useState<StoryRing | null | undefined>(undefined);
+  const [index, setIndex] = useState(0);
+  const [round, setRound] = useState(0); // bumps to replay the current snap
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [viewers, setViewers] = useState<{ storyId: string; people: Profile[] } | null>(null);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    fetchStoryRing(userId, user)
+      .then((loaded) => {
+        setRing(loaded);
+        // Start at the first snap you haven't seen yet.
+        if (loaded && !isMine) {
+          const firstNew = loaded.stories.findIndex((story) => !loaded.seenIds.has(story.id));
+          setIndex(firstNew >= 0 ? firstNew : 0);
+        }
+      })
+      .catch(() => setRing(null));
+  }, [user, userId, isMine]);
+
+  const urls = useMediaUrls(ring?.stories.map((story) => story.media_path) ?? []);
+  const story = ring?.stories[index];
+  const url = story ? urls[story.media_path] : undefined;
+
+  // Finished this person's stories (or they have none) → next friend in line, or close.
+  const finished = ring === null || (ring !== undefined && index >= ring.stories.length);
+  useEffect(() => {
+    if (!finished) return;
+    const rest = queue ? queue.split(',').filter(Boolean) : [];
+    if (rest.length > 0) {
+      router.replace({
+        pathname: '/stories/[user]',
+        params: rest.length > 1 ? { user: rest[0], queue: rest.slice(1).join(',') } : { user: rest[0] },
+      });
+    } else if (router.canGoBack()) {
+      router.back();
+    }
+  }, [finished, queue]);
+
+  const next = useCallback(() => setIndex((current) => current + 1), []);
+  const previous = () => (index > 0 ? setIndex(index - 1) : setRound(round + 1));
+
+  // The timer bar: restart for each new snap, run while the photo is on screen and not paused.
+  const storyId = story?.id;
+  useEffect(() => {
+    progress.set(0);
+  }, [storyId, round, progress]);
+
+  const running = storyId !== undefined && loadedId === storyId && !paused && !viewersOpen;
+  useEffect(() => {
+    if (!running) return;
+    const remaining = (1 - progress.get()) * SECONDS_PER_SNAP * 1000;
+    progress.set(
+      withTiming(1, { duration: remaining, easing: Easing.linear }, (done) => {
+        'worklet';
+        if (done) scheduleOnRN(next);
+      }),
+    );
+    return () => cancelAnimation(progress);
+  }, [running, storyId, round, progress, next]);
+
+  // Tell your friend you saw it.
+  useEffect(() => {
+    if (running && storyId && !isMine) markStorySeen(userId, storyId);
+  }, [running, storyId, isMine, userId]);
+
+  // On your own story: who has seen this snap.
+  useEffect(() => {
+    if (!isMine || !storyId) return;
+    fetchStoryViewers(storyId)
+      .then((people) => setViewers({ storyId, people }))
+      .catch(() => {});
+  }, [isMine, storyId]);
+
+  // Download the next snap in advance so it appears instantly.
+  const nextUrl = ring ? urls[ring.stories[index + 1]?.media_path ?? ''] : undefined;
+  useEffect(() => {
+    if (nextUrl) Image.prefetch(nextUrl);
+  }, [nextUrl]);
+
+  function openMenu() {
+    if (!ring || !story) return;
+    setPaused(true);
+    const resume = () => setPaused(false);
+    if (isMine) {
+      showOptions({
+        onClose: resume,
+        options: [
+          {
+            label: 'Delete this snap',
+            destructive: true,
+            onPress: () =>
+              Alert.alert('Delete this snap from your story?', undefined, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deleteStory(story);
+                      showToast('Snap deleted 🗑️');
+                      const remaining = ring.stories.filter((s) => s.id !== story.id);
+                      setRing({ ...ring, stories: remaining });
+                      // (If that was the last one, the viewer closes by itself.)
+                      setIndex(Math.min(index, Math.max(0, remaining.length - 1)));
+                    } catch (error) {
+                      Alert.alert('Could not delete', friendlyError(error));
+                    }
+                  },
+                },
+              ]),
+          },
+        ],
+      });
+    } else {
+      showOptions({
+        onClose: resume,
+        options: [
+          {
+            label: 'Report story',
+            onPress: () => report({ user: ring.author, contentType: 'story', contentId: story.id }),
+          },
+        ],
+      });
+    }
+  }
+
+  if (ring === undefined) {
+    return (
+      <View style={[styles.fill, styles.center]}>
+        <ActivityIndicator color={colors.yellow} size="large" />
+      </View>
+    );
+  }
+  // Nothing left to show: we're about to move on to the next friend (or close).
+  if (!story) return <View style={styles.fill} />;
+
+  const name = ring.author.display_name || ring.author.username;
+  const seenBy = viewers?.storyId === story.id ? viewers.people : null;
+
+  return (
+    <View style={styles.fill}>
+      {url ? (
+        <Image
+          key={story.id}
+          source={{ uri: url, cacheKey: story.media_path }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          onLoad={() => setLoadedId(story.id)}
+        />
+      ) : null}
+      {loadedId !== story.id ? <ActivityIndicator style={styles.spinner} color={colors.white} size="large" /> : null}
+
+      {/* Tap zones: left third goes back, the rest goes forward. Hold anywhere to pause. */}
+      <View style={styles.tapZones}>
+        <Pressable
+          style={styles.backZone}
+          onPress={previous}
+          onLongPress={() => setPaused(true)}
+          onPressOut={() => paused && setPaused(false)}
+          delayLongPress={200}
+          accessibilityLabel="Previous snap"
+        />
+        <Pressable
+          style={styles.nextZone}
+          onPress={next}
+          onLongPress={() => setPaused(true)}
+          onPressOut={() => paused && setPaused(false)}
+          delayLongPress={200}
+          accessibilityLabel="Next snap"
+        />
+      </View>
+
+      <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
+        <LinearGradient colors={['rgba(0,0,0,0.55)', 'transparent']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <View style={styles.bars} pointerEvents="none">
+          {ring.stories.map((s, i) => (
+            <ProgressBar key={s.id} state={i < index ? 'full' : i === index ? 'current' : 'empty'} progress={progress} />
+          ))}
+        </View>
+        <View style={styles.header}>
+          <Pressable style={styles.author} onPress={() => router.push(`/profile/${ring.author.id}`)}>
+            <Avatar path={ring.author.avatar_path} name={name} size={36} />
+            <Text style={styles.authorName} numberOfLines={1}>
+              {isMine ? 'My Story' : name}
+            </Text>
+            <Text style={styles.time}>{timeAgo(story.created_at)}</Text>
+          </Pressable>
+          <IconButton icon="ellipsis-horizontal" label="More" size={38} onPress={openMenu} />
+          <IconButton icon="close" label="Close" size={38} onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+
+      {isMine ? (
+        <SafeAreaView edges={['bottom']} style={styles.bottom} pointerEvents="box-none">
+          <Pressable style={styles.viewersButton} onPress={() => setViewersOpen(true)}>
+            <Ionicons name="eye" size={18} color={colors.white} />
+            <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
+          </Pressable>
+        </SafeAreaView>
+      ) : null}
+
+      <Modal visible={viewersOpen} transparent animationType="slide" onRequestClose={() => setViewersOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setViewersOpen(false)}>
+          <SafeAreaView edges={['bottom']} style={styles.sheet}>
+            <Pressable>
+              <Text style={styles.sheetTitle}>👁 Seen by</Text>
+              <FlatList
+                data={seenBy ?? []}
+                keyExtractor={(person) => person.id}
+                contentContainerStyle={styles.sheetList}
+                style={styles.sheetScroll}
+                ListEmptyComponent={<Text style={styles.sheetEmpty}>Nobody yet – check back soon!</Text>}
+                renderItem={({ item }) => <PersonRow person={item} />}
+              />
+            </Pressable>
+          </SafeAreaView>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+function ProgressBar({ state, progress }: { state: 'full' | 'current' | 'empty'; progress: SharedValue<number> }) {
+  const fill = useAnimatedStyle(() => ({
+    width: `${(state === 'full' ? 1 : state === 'current' ? progress.get() : 0) * 100}%`,
+  }));
+  return (
+    <View style={styles.track}>
+      <Animated.View style={[styles.fillBar, fill]} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinner: {
+    ...StyleSheet.absoluteFill,
+  },
+  tapZones: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: 'row',
+  },
+  backZone: {
+    flex: 1,
+  },
+  nextZone: {
+    flex: 2,
+  },
+  top: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: space.md,
+    paddingBottom: space.xl,
+    gap: space.md,
+  },
+  bars: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: space.sm,
+  },
+  track: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    overflow: 'hidden',
+  },
+  fillBar: {
+    height: 3,
+    backgroundColor: colors.white,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  author: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  authorName: {
+    ...font.body,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+  time: {
+    ...font.small,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  bottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingBottom: space.lg,
+  },
+  viewersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.overlayStrong,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+  },
+  viewersText: {
+    color: colors.white,
+    fontWeight: '800',
+  },
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: space.lg,
+  },
+  sheetTitle: {
+    ...font.heading,
+    textAlign: 'center',
+    marginBottom: space.md,
+  },
+  sheetScroll: {
+    maxHeight: 420,
+  },
+  sheetList: {
+    paddingHorizontal: space.lg,
+    paddingBottom: space.lg,
+    gap: space.sm,
+  },
+  sheetEmpty: {
+    ...font.small,
+    textAlign: 'center',
+    paddingVertical: space.lg,
+  },
+});

@@ -1,6 +1,6 @@
 import { deleteMedia, uploadMedia } from './media';
 import { supabase } from './supabase';
-import type { Post, PostWithAuthor, Story } from './types';
+import type { Post, PostWithAuthor } from './types';
 
 export async function createPost(userId: string, photoUri: string, caption: string): Promise<Post> {
   const mediaPath = await uploadMedia(userId, 'posts', photoUri);
@@ -14,20 +14,6 @@ export async function createPost(userId: string, photoUri: string, caption: stri
     throw error;
   }
   return data as Post;
-}
-
-export async function createStory(userId: string, photoUri: string): Promise<Story> {
-  const mediaPath = await uploadMedia(userId, 'stories', photoUri);
-  const { data, error } = await supabase
-    .from('stories')
-    .insert({ user_id: userId, media_path: mediaPath })
-    .select('*')
-    .single();
-  if (error) {
-    await deleteMedia([mediaPath]);
-    throw error;
-  }
-  return data as Story;
 }
 
 export async function fetchUserPosts(userId: string): Promise<Post[]> {
@@ -54,15 +40,4 @@ export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
   await deleteMedia([post.media_path]);
-}
-
-export async function fetchMyActiveStories(userId: string): Promise<Story[]> {
-  const { data, error } = await supabase
-    .from('stories')
-    .select('*')
-    .eq('user_id', userId)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as Story[];
 }

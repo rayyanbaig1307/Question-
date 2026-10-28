@@ -14,7 +14,8 @@ import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { resizePhoto } from '@/lib/media';
-import { createPost, createStory } from '@/lib/posts';
+import { createPost } from '@/lib/posts';
+import { createStory } from '@/lib/stories';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 

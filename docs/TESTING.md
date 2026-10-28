@@ -151,3 +151,24 @@ pop up live.
 13. Unfriend Person B (their profile → **Friends** → **Unfriend**). The chat screen now says
     "You need to be friends to chat." and the message box is gone.
 14. In Supabase → **Storage → media**, opened snaps get deleted the next time the sender opens that chat.
+
+## Step 7 – Stories
+
+You need **two accounts that are friends** (step 5).
+
+1. As **Person A**: take 2–3 photos and send each to **My Story**.
+2. Swipe to **Stories** (left from the camera). **My Story** shows "3 snaps · 23h left" with your latest photo.
+   The small **＋** adds another snap.
+3. Tap **My Story** → your story plays full screen:
+   - Bars at the top fill up, one per snap, **5 seconds** each.
+   - **Tap the right side** → next snap. **Tap the left side** → previous snap.
+   - **Press and hold** → pauses. Let go → carries on.
+   - At the bottom it says **"0 seen"**.
+4. As **Person B**: on the Stories page, Person A appears under **Friends** with a **colorful ring**. Tap it → watch.
+   When it ends, it closes (or moves on to the next friend with new stories).
+5. Back on the Stories page, Person A's ring is now **grey** (seen).
+6. As **Person A**: open **My Story** → it now says **"1 seen"**. Tap it → Person B is in the list.
+7. **Delete a snap:** in your own story tap **•••** → **Delete this snap**.
+8. **Report:** in a friend's story tap **•••** → **Report story**.
+9. **Privacy check:** someone who is **not** your friend never sees your story ring.
+10. Stories disappear by themselves **24 hours** after posting.
