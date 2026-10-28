@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { deleteMedia, uploadMedia } from './media';
 import { supabase } from './supabase';
 
+// A "peek" is a photo sent in chat that disappears once opened (stored with kind 'snap').
 export type Message = {
   id: string;
   sender_id: string;
@@ -11,7 +12,7 @@ export type Message = {
   body: string | null;
   media_path: string | null;
   created_at: string;
-  // When the other person read the message / opened the snap.
+  // When the other person read the message / opened the peek.
   opened_at: string | null;
 };
 
@@ -58,7 +59,7 @@ export async function sendText(me: string, friend: string, body: string): Promis
   return data as Message;
 }
 
-// One photo, sent as a snap to one or more friends.
+// One photo, sent as a peek to one or more friends.
 export async function sendSnap(me: string, friendIds: string[], photoUri: string): Promise<void> {
   const mediaPath = await uploadMedia(me, 'snaps', photoUri);
   const { error } = await supabase
@@ -70,13 +71,13 @@ export async function sendSnap(me: string, friendIds: string[], photoUri: string
   }
 }
 
-// Marks a snap as opened. After this the photo can never be loaded again.
+// Marks a peek as opened. After this the photo can never be loaded again.
 export async function openSnap(messageId: string): Promise<void> {
   const { error } = await supabase.rpc('open_snap', { message_id: messageId });
   if (error) throw error;
 }
 
-// A link to a snap's photo that only works for one minute.
+// A link to a peek's photo that only works for one minute.
 export async function getSnapUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('media').createSignedUrl(path, 60);
   if (error) return null;
@@ -94,7 +95,7 @@ export async function deleteMessage(message: Message): Promise<void> {
   if (message.media_path) await cleanUpSnapFile(message.sender_id, message.media_path);
 }
 
-// Deletes a snap photo you sent once every friend you sent it to has opened it (or it was unsent).
+// Deletes a peek photo you sent once every friend you sent it to has opened it (or it was unsent).
 async function cleanUpSnapFile(me: string, mediaPath: string): Promise<void> {
   const { data } = await supabase
     .from('messages')
@@ -106,7 +107,7 @@ async function cleanUpSnapFile(me: string, mediaPath: string): Promise<void> {
   }
 }
 
-// Called when you open a chat: tidies up photos of your snaps that were already opened.
+// Called when you open a chat: tidies up photos of your peeks that were already opened.
 export async function cleanUpOpenedSnaps(me: string, messages: Message[]): Promise<void> {
   const paths = new Set(
     messages
@@ -139,7 +140,7 @@ export function subscribeToMyMessages(name: string, onChange: () => void): () =>
   };
 }
 
-// Live number of unread chats + unopened snaps waiting for you.
+// Live number of unread chats + unopened peeks waiting for you.
 export function useUnreadCount(me: string, active: boolean): number {
   const [count, setCount] = useState(0);
 

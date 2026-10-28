@@ -44,7 +44,7 @@ export function TextComposer({ initial, onDone }: {
               placeholder="Type something…"
               placeholderTextColor="rgba(255,255,255,0.5)"
               keyboardAppearance="dark"
-              selectionColor={colors.yellow}
+              selectionColor={colors.accent}
               style={[
                 styles.input,
                 look === 'pill'
@@ -100,13 +100,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   done: {
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.accent,
     paddingHorizontal: space.xl,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
   },
   doneText: {
-    color: colors.black,
+    color: colors.onAccent,
     fontWeight: '900',
     fontSize: 16,
   },

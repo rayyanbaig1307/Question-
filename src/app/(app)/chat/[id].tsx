@@ -150,10 +150,10 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
         {messages === null ? (
-          <ActivityIndicator color={colors.yellow} style={styles.loading} />
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : messages.length === 0 ? (
           <View style={styles.empty}>
-            <EmptyState emoji="👋" title={`Say hi to ${name || 'your friend'}!`} message="Send a message or a snap." />
+            <EmptyState emoji="👋" title={`Say hi to ${name || 'your friend'}!`} message="Send a message or a peek." />
           </View>
         ) : (
           <FlatList
@@ -177,9 +177,9 @@ export default function ChatScreen() {
           <View style={styles.inputBar}>
             <IconButton
               icon="camera"
-              label="Send a snap"
-              background={colors.yellow}
-              color={colors.black}
+              label="Send a peek"
+              background={colors.accent}
+              color={colors.onAccent}
               onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
             />
             <TextInput
@@ -188,7 +188,7 @@ export default function ChatScreen() {
               placeholder="Send a chat"
               placeholderTextColor={colors.textFaint}
               keyboardAppearance="dark"
-              selectionColor={colors.yellow}
+              selectionColor={colors.accent}
               multiline
               maxLength={2000}
               style={styles.input}
@@ -227,10 +227,10 @@ function MessageView({ message, mine, showStatus, onLongPress }: {
         <Ionicons
           name={canOpen ? 'square' : mine ? 'paper-plane' : 'square-outline'}
           size={18}
-          color={canOpen ? colors.white : colors.red}
+          color={canOpen ? colors.white : colors.accent}
         />
         <Text style={[styles.snapText, canOpen && styles.snapTextNew]}>
-          {mine ? 'You sent a snap' : canOpen ? 'New snap · tap to view' : 'Snap opened'}
+          {mine ? 'You sent a peek' : canOpen ? 'New peek · tap to view' : 'Peek opened'}
         </Text>
         <Text style={[styles.time, canOpen && styles.snapTextNew]}>
           {time}
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   bubbleMine: {
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.purple,
     borderBottomRightRadius: 6,
   },
   bubbleTheirs: {
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   bubbleTextMine: {
-    color: colors.black,
+    color: colors.white,
   },
   time: {
     ...font.small,
@@ -325,16 +325,16 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderRadius: radius.lg,
     borderWidth: 2,
-    borderColor: colors.red,
+    borderColor: colors.accent,
     maxWidth: '85%',
   },
   snapNew: {
-    backgroundColor: colors.red,
+    backgroundColor: colors.accent,
   },
   snapText: {
     ...font.body,
     fontWeight: '800',
-    color: colors.red,
+    color: colors.accent,
   },
   snapTextNew: {
     color: colors.white,

@@ -105,7 +105,7 @@ export default function ProfileScreen() {
     return (
       <View style={styles.center}>
         {header}
-        <ActivityIndicator color={colors.yellow} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }

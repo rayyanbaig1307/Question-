@@ -133,7 +133,7 @@ export default function SignUp() {
 
       <Pressable style={styles.checkRow} onPress={() => setOldEnough(!oldEnough)} accessibilityRole="checkbox">
         <View style={[styles.checkbox, oldEnough && styles.checkboxOn]}>
-          {oldEnough ? <Ionicons name="checkmark" size={18} color={colors.black} /> : null}
+          {oldEnough ? <Ionicons name="checkmark" size={18} color={colors.onAccent} /> : null}
         </View>
         <Text style={styles.checkText}>I&apos;m 13 or older</Text>
       </Pressable>
@@ -163,8 +163,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: {
-    backgroundColor: colors.yellow,
-    borderColor: colors.yellow,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   checkText: {
     ...font.body,

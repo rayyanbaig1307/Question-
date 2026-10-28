@@ -96,7 +96,7 @@ export default function Comments() {
       <Stack.Screen options={{ headerShown: true, title: 'Comments' }} />
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
         {comments === null ? (
-          <ActivityIndicator color={colors.yellow} style={styles.loading} />
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : (
           <FlatList
             data={comments}
@@ -131,7 +131,7 @@ export default function Comments() {
             placeholder="Add a comment…"
             placeholderTextColor={colors.textFaint}
             keyboardAppearance="dark"
-            selectionColor={colors.yellow}
+            selectionColor={colors.accent}
             multiline
             maxLength={500}
             style={styles.input}

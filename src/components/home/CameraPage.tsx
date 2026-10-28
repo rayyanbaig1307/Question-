@@ -16,12 +16,12 @@ import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 
-// The home screen: a full-screen camera, like Snapchat.
+// The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
 export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
-  // A friend's id: the photo goes straight to them as a snap.
+  // A friend's id: the photo goes straight to them as a peek.
   sendTo?: string;
   onOpenChat?: () => void;
   onOpenStories?: () => void;
@@ -75,7 +75,7 @@ export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
       ) : (
         <View style={styles.permission}>
           <Text style={styles.permissionEmoji}>📸</Text>
-          <Text style={styles.permissionTitle}>Let&apos;s take some snaps!</Text>
+          <Text style={styles.permissionTitle}>Let&apos;s take some photos!</Text>
           <Text style={styles.permissionText}>Peekaboo needs your camera to take photos.</Text>
           {!permission.canAskAgain ? (
             <Button title="Open Settings" icon="settings-outline" onPress={() => Linking.openSettings()} />

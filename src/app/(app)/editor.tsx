@@ -136,7 +136,7 @@ export default function Editor() {
               style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
               accessibilityRole="button">
               <Text style={styles.sendText}>{busy ? 'Saving…' : 'Send to'}</Text>
-              <Ionicons name="send" size={18} color={colors.black} />
+              <Ionicons name="send" size={18} color={colors.onAccent} />
             </Pressable>
           </SafeAreaView>
         </>
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.accent,
     paddingHorizontal: space.xl,
     paddingVertical: space.md,
     borderRadius: radius.pill,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   sendText: {
-    color: colors.black,
+    color: colors.onAccent,
     fontWeight: '900',
     fontSize: 17,
   },

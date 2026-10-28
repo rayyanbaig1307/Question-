@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   markerRing: {
     padding: 3,
     borderRadius: 30,
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.purple,
   },
   markerRingMe: {
     backgroundColor: colors.pink,

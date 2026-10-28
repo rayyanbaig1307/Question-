@@ -147,13 +147,13 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
         data={posts ?? []}
         keyExtractor={(post) => post.id}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.yellow} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
         ListHeaderComponent={<StoriesHeader rings={rings} userId={userId} onCamera={onCamera} />}
         ListEmptyComponent={
           posts === null ? (
-            <ActivityIndicator color={colors.yellow} style={styles.loading} />
+            <ActivityIndicator color={colors.accent} style={styles.loading} />
           ) : (
             <EmptyState
               emoji="📰"
@@ -163,7 +163,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
             </EmptyState>
           )
         }
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.yellow} /> : undefined}
+        ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} /> : undefined}
         renderItem={({ item }) => (
           <FeedCard
             post={item}
@@ -221,8 +221,8 @@ function StoriesHeader({ rings, userId, onCamera }: { rings: Rings | null; userI
           <Text style={styles.myStoryTitle}>My Story</Text>
           <Text style={styles.myStorySubtitle}>
             {mine
-              ? `${mine.stories.length} ${mine.stories.length === 1 ? 'snap' : 'snaps'} · ${timeLeft(mine.stories[0].expires_at)}`
-              : 'Tap to add a snap to your story'}
+              ? `${mine.stories.length} ${mine.stories.length === 1 ? 'photo' : 'photos'} · ${timeLeft(mine.stories[0].expires_at)}`
+              : 'Tap to add a photo to your story'}
           </Text>
         </View>
         {mine ? <IconButton icon="add" label="Add to story" background={colors.surface} onPress={onCamera} /> : null}
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   plus: {
-    color: colors.yellow,
+    color: colors.accent,
     fontSize: 28,
     fontWeight: '900',
   },

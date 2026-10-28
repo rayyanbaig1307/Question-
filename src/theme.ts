@@ -10,6 +10,9 @@ export const colors = {
   text: '#FFFFFF',
   textMuted: '#A6A6BD',
   textFaint: '#6E6E86',
+  // Main brand color (buttons, highlights) – pink, with white text on top.
+  accent: '#FF4F9A',
+  onAccent: '#FFFFFF',
   yellow: '#FFE14D',
   pink: '#FF4F9A',
   purple: '#9B5CFF',
@@ -60,7 +63,7 @@ export const navigationTheme: Theme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: colors.yellow,
+    primary: colors.accent,
     background: colors.bg,
     card: colors.bg,
     text: colors.text,

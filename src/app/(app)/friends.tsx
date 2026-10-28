@@ -96,7 +96,7 @@ export default function Friends() {
 
         {trimmed ? (
           searchResults === null ? (
-            <ActivityIndicator color={colors.yellow} style={styles.loading} />
+            <ActivityIndicator color={colors.accent} style={styles.loading} />
           ) : searchResults.length === 0 ? (
             <EmptyState emoji="🔍" title={`Nobody called @${trimmed}…`} message="Check the spelling and try again." />
           ) : (
@@ -113,7 +113,7 @@ export default function Friends() {
             </Section>
           )
         ) : links === null ? (
-          <ActivityIndicator color={colors.yellow} style={styles.loading} />
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : all.length === 0 ? (
           <EmptyState emoji="👋" title="Find your friends" message="Type their username above to add them." />
         ) : (

@@ -12,7 +12,7 @@ const CHAT = 0;
 const CAMERA = 1;
 const STORIES = 2;
 
-// Swipe left/right between Chat ← Camera → Stories, just like Snapchat.
+// Swipe left/right between Chat ← Camera → Stories.
 export default function Home() {
   const pager = useRef<PagerView>(null);
   const [page, setPage] = useState(CAMERA);

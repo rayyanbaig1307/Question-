@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   photoText: {
-    color: colors.yellow,
+    color: colors.accent,
     fontWeight: '800',
     fontSize: 15,
   },

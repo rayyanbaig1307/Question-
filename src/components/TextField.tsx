@@ -18,7 +18,7 @@ export function TextField({ label, error, hint, prefix, style, multiline, ...inp
         {prefix ? <Text style={styles.prefix}>{prefix}</Text> : null}
         <TextInput
           placeholderTextColor={colors.textFaint}
-          selectionColor={colors.yellow}
+          selectionColor={colors.accent}
           keyboardAppearance="dark"
           multiline={multiline}
           style={[styles.input, multiline && styles.multilineInput, style]}

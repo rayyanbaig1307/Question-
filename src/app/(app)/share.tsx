@@ -19,7 +19,7 @@ import { createStory } from '@/lib/stories';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
-// "Send to…": choose where your photo goes – your story, your profile, and/or friends as a snap.
+// "Send to…": choose where your photo goes – your story, your profile, and/or friends as a peek.
 export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   const { uri, to } = useLocalSearchParams<{ uri: string; to?: string }>();
@@ -109,10 +109,10 @@ export default function Share() {
             />
           ) : null}
 
-          <Text style={styles.sectionTitle}>💌 Send as a snap</Text>
+          <Text style={styles.sectionTitle}>💌 Send as a peek</Text>
           {friends === null ? null : friends.length === 0 ? (
             <View style={styles.noFriends}>
-              <Text style={styles.noFriendsText}>Add friends to send them snaps – they disappear once opened.</Text>
+              <Text style={styles.noFriendsText}>Add friends to send them peeks – photos that disappear once opened.</Text>
             </View>
           ) : (
             friends.map((friend) => {
@@ -132,7 +132,7 @@ export default function Share() {
                   <Ionicons
                     name={selected ? 'checkmark-circle' : 'ellipse-outline'}
                     size={28}
-                    color={selected ? colors.yellow : colors.textFaint}
+                    color={selected ? colors.accent : colors.textFaint}
                   />
                 </Pressable>
               );
@@ -154,7 +154,7 @@ function successMessage(friendCount: number, toStory: boolean, toProfile: boolea
     toStory ? 'your story' : null,
     toProfile ? 'your profile' : null,
   ].filter((place): place is string => place !== null);
-  if (places.length === 1 && friendCount > 0) return `Snap sent to ${places[0]}! 💌`;
+  if (places.length === 1 && friendCount > 0) return `Peek sent to ${places[0]}! 💌`;
   // "a", "a and b", "a, b and c"
   const list = places.length > 1 ? `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}` : places[0];
   return `Shared to ${list}! 🎉`;
@@ -181,7 +181,7 @@ function Option({ emoji, title, subtitle, selected, onPress }: {
       <Ionicons
         name={selected ? 'checkmark-circle' : 'ellipse-outline'}
         size={28}
-        color={selected ? colors.yellow : colors.textFaint}
+        color={selected ? colors.accent : colors.textFaint}
       />
     </Pressable>
   );
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   optionSelected: {
-    borderColor: colors.yellow,
+    borderColor: colors.accent,
   },
   optionPressed: {
     backgroundColor: colors.cardPressed,

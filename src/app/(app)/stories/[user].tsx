@@ -28,10 +28,10 @@ import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
 
-const SECONDS_PER_SNAP = 5;
+const SECONDS_PER_PHOTO = 5;
 
 // Watch someone's story: tap right = next, tap left = back, hold = pause.
-// `queue` lists the friends to watch next, so it flows from one friend to the next like Snapchat.
+// `queue` lists the friends to watch next, so it flows from one friend to the next.
 export default function StoryViewer() {
   const { user, queue } = useLocalSearchParams<{ user: string; queue?: string }>();
   const { userId } = useMe();
@@ -41,7 +41,7 @@ export default function StoryViewer() {
 
   const [ring, setRing] = useState<StoryRing | null | undefined>(undefined);
   const [index, setIndex] = useState(0);
-  const [round, setRound] = useState(0); // bumps to replay the current snap
+  const [round, setRound] = useState(0); // bumps to replay the current photo
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [viewers, setViewers] = useState<{ storyId: string; people: Profile[] } | null>(null);
@@ -52,7 +52,7 @@ export default function StoryViewer() {
     fetchStoryRing(userId, user)
       .then((loaded) => {
         setRing(loaded);
-        // Start at the first snap you haven't seen yet.
+        // Start at the first photo you haven't seen yet.
         if (loaded && !isMine) {
           const firstNew = loaded.stories.findIndex((story) => !loaded.seenIds.has(story.id));
           setIndex(firstNew >= 0 ? firstNew : 0);
@@ -83,7 +83,7 @@ export default function StoryViewer() {
   const next = useCallback(() => setIndex((current) => current + 1), []);
   const previous = () => (index > 0 ? setIndex(index - 1) : setRound(round + 1));
 
-  // The timer bar: restart for each new snap, run while the photo is on screen and not paused.
+  // The timer bar: restart for each new photo, run while the photo is on screen and not paused.
   const storyId = story?.id;
   useEffect(() => {
     progress.set(0);
@@ -92,7 +92,7 @@ export default function StoryViewer() {
   const running = storyId !== undefined && loadedId === storyId && !paused && !viewersOpen;
   useEffect(() => {
     if (!running) return;
-    const remaining = (1 - progress.get()) * SECONDS_PER_SNAP * 1000;
+    const remaining = (1 - progress.get()) * SECONDS_PER_PHOTO * 1000;
     progress.set(
       withTiming(1, { duration: remaining, easing: Easing.linear }, (done) => {
         'worklet';
@@ -107,7 +107,7 @@ export default function StoryViewer() {
     if (running && storyId && !isMine) markStorySeen(userId, storyId);
   }, [running, storyId, isMine, userId]);
 
-  // On your own story: who has seen this snap.
+  // On your own story: who has seen this photo.
   useEffect(() => {
     if (!isMine || !storyId) return;
     fetchStoryViewers(storyId)
@@ -115,7 +115,7 @@ export default function StoryViewer() {
       .catch(() => {});
   }, [isMine, storyId]);
 
-  // Download the next snap in advance so it appears instantly.
+  // Download the next photo in advance so it appears instantly.
   const nextUrl = ring ? urls[ring.stories[index + 1]?.media_path ?? ''] : undefined;
   useEffect(() => {
     if (nextUrl) Image.prefetch(nextUrl);
@@ -130,10 +130,10 @@ export default function StoryViewer() {
         onClose: resume,
         options: [
           {
-            label: 'Delete this snap',
+            label: 'Delete this photo',
             destructive: true,
             onPress: () =>
-              Alert.alert('Delete this snap from your story?', undefined, [
+              Alert.alert('Delete this photo from your story?', undefined, [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Delete',
@@ -141,7 +141,7 @@ export default function StoryViewer() {
                   onPress: async () => {
                     try {
                       await deleteStory(story);
-                      showToast('Snap deleted 🗑️');
+                      showToast('Photo deleted 🗑️');
                       const remaining = ring.stories.filter((s) => s.id !== story.id);
                       setRing({ ...ring, stories: remaining });
                       // (If that was the last one, the viewer closes by itself.)
@@ -171,7 +171,7 @@ export default function StoryViewer() {
   if (ring === undefined) {
     return (
       <View style={[styles.fill, styles.center]}>
-        <ActivityIndicator color={colors.yellow} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -202,7 +202,7 @@ export default function StoryViewer() {
           onLongPress={() => setPaused(true)}
           onPressOut={() => paused && setPaused(false)}
           delayLongPress={200}
-          accessibilityLabel="Previous snap"
+          accessibilityLabel="Previous photo"
         />
         <Pressable
           style={styles.nextZone}
@@ -210,7 +210,7 @@ export default function StoryViewer() {
           onLongPress={() => setPaused(true)}
           onPressOut={() => paused && setPaused(false)}
           delayLongPress={200}
-          accessibilityLabel="Next snap"
+          accessibilityLabel="Next photo"
         />
       </View>
 

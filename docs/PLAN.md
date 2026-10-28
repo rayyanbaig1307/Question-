@@ -2,8 +2,8 @@
 
 ## What we're building
 
-**Peekaboo** 👀 – a fun photo app for friends. It opens straight to the camera like Snapchat,
-and every person has a profile with a photo grid like Instagram.
+**Peekaboo** 👀 – a fun photo app for friends. It opens straight to the camera,
+and every person has a profile with a photo grid.
 ("Peekaboo" is just a placeholder name – change `name` in `app.json` whenever you like.)
 
 ## The two halves
@@ -32,13 +32,13 @@ Supabase gives us four things:
 | `likes` / `comments` | Likes and comments on posts |
 | `stories` | A photo that disappears after 24 hours |
 | `story_views` | "This friend saw this story" |
-| `messages` | A chat message or a snap (a snap disappears once opened) |
+| `messages` | A chat message or a peek (a photo that disappears once opened) |
 | `locations` | Where someone is on the friend map – only while they share it |
 
 Photos live in two storage "buckets":
 
 * `avatars` – profile pictures (anyone logged in can see them)
-* `media` – posts, stories and snaps (**private** – the app gets a short-lived link only if you're allowed to see the photo)
+* `media` – posts, stories and peeks (**private** – the app gets a short-lived link only if you're allowed to see the photo)
 
 ## Safety is built into the database
 
@@ -46,7 +46,7 @@ The rules live in the database itself (called "Row Level Security"), so even a h
 
 * Private account → only friends see your posts.
 * Stories → friends only, gone after 24 hours.
-* Snaps → only the person you sent it to, and only until they open it.
+* Peeks → only the person you sent it to, and only until they open it.
 * Chat → you can only message friends.
 * Friend map → **off by default**. Only friends can see you, only while sharing is on.
   Hiding again deletes your spot from the map instantly.
@@ -64,7 +64,7 @@ Core features, one at a time (✅ = done):
 3. ✅ Profiles (picture, name, username, bio, photo grid, full-screen photos, private account, block & report)
 4. ✅ Camera + posting (take a photo, add text and stickers, post to your story or profile)
 5. ✅ Friends (search by username, send / accept requests)
-6. ✅ Chat + snaps (1-on-1, live)
+6. ✅ Chat + peeks (1-on-1, live)
 7. ✅ Stories (tap through friends' stories)
 8. ✅ Feed (friends' posts, likes, comments)
 9. ✅ Friend map (share location, hide me)

@@ -29,7 +29,7 @@ type State =
   | { kind: 'error' }
   | { kind: 'showing'; url: string; sender: Profile | null };
 
-// Shows a snap once, for 10 seconds. After that it can never be opened again.
+// Shows a peek (a photo sent to you) once, for 10 seconds. After that it can never be opened again.
 export default function SnapViewer() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
@@ -46,7 +46,7 @@ export default function SnapViewer() {
           return;
         }
         // Get the one-minute link and download the photo BEFORE marking it opened,
-        // so a bad connection doesn't waste the snap.
+        // so a bad connection doesn't waste the peek.
         const url = await getSnapUrl(message.media_path);
         if (!url || !(await Image.prefetch(url, 'memory'))) {
           if (!cancelled) setState({ kind: 'error' });
@@ -64,7 +64,7 @@ export default function SnapViewer() {
     };
   }, [id, userId]);
 
-  // Start the 10-second timer once the snap is on screen.
+  // Start the 10-second timer once the peek is on screen.
   const showing = state.kind === 'showing';
   useEffect(() => {
     if (!showing) return;
@@ -85,17 +85,17 @@ export default function SnapViewer() {
       <SafeAreaView style={[styles.fill, styles.center]}>
         {state.kind === 'loading' ? (
           <>
-            <ActivityIndicator color={colors.yellow} size="large" />
-            <Text style={styles.loadingText}>Opening snap…</Text>
+            <ActivityIndicator color={colors.accent} size="large" />
+            <Text style={styles.loadingText}>Opening peek…</Text>
           </>
         ) : (
           <>
             <EmptyState
               emoji={state.kind === 'gone' ? '💨' : '📶'}
-              title={state.kind === 'gone' ? 'This snap is gone' : "Couldn't load the snap"}
+              title={state.kind === 'gone' ? 'This peek is gone' : "Couldn't load the peek"}
               message={
                 state.kind === 'gone'
-                  ? 'Snaps disappear once they have been opened.'
+                  ? 'Peeks disappear once they have been opened.'
                   : "Check your connection and try again – it hasn't been opened yet."
               }
             />
@@ -109,7 +109,7 @@ export default function SnapViewer() {
   const name = state.sender ? state.sender.display_name || state.sender.username : '';
 
   return (
-    <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close snap">
+    <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close peek">
       <Image source={{ uri: state.url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
       <SafeAreaView edges={['top']} style={styles.top}>
         <View style={styles.track}>

@@ -31,7 +31,7 @@ export default function Welcome() {
         <View style={styles.hero}>
           <Animated.Text style={[styles.mascot, mascotStyle]}>👀</Animated.Text>
           <Text style={styles.title}>Peekaboo</Text>
-          <Text style={styles.tagline}>Snap it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
+          <Text style={styles.tagline}>Peek it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
         </View>
         <View style={styles.buttons}>
           <Button title="Create account" onPress={() => router.push('/sign-up')} />

@@ -1,6 +1,7 @@
 # Peekaboo 👀
 
-A fun photo app for friends – Snapchat's camera-first vibe plus Instagram-style profiles.
+A fun photo app for friends: it opens straight to the camera, with stories, peeks (photos that
+disappear once opened), chat, a friend map and photo-grid profiles.
 Built with **Expo** (React Native + TypeScript) and **Supabase**.
 
 * 📖 **The plan, in simple words:** [docs/PLAN.md](docs/PLAN.md)

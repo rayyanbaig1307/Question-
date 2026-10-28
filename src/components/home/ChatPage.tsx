@@ -21,7 +21,7 @@ type ChatRow = {
   newChats: number;
 };
 
-// Left page: everyone you can chat with, most recent first – like Snapchat's chat list.
+// Left page: everyone you can chat with, most recent first.
 export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId } = useMe();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
@@ -46,7 +46,7 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
     <View style={styles.fill}>
       <PageHeader title="Chat" cameraSide="right" onCamera={onCamera} />
       {rows === null ? (
-        <ActivityIndicator color={colors.yellow} style={styles.loading} />
+        <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
         <FlatList
           data={rows}
@@ -56,7 +56,7 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
             <EmptyState
               emoji="💬"
               title="No friends to chat with yet"
-              message="Add friends and they'll show up here, ready to chat and swap snaps.">
+              message="Add friends and they'll show up here, ready to chat and swap peeks.">
               <Button title="Find friends" icon="person-add" onPress={() => router.push('/friends')} />
             </EmptyState>
           }
@@ -89,10 +89,10 @@ function describe(row: ChatRow, me: string): {
   bold: boolean;
 } {
   const { last } = row;
-  if (row.newSnaps > 0) return { icon: 'square', color: colors.red, label: 'New Snap', bold: true };
+  if (row.newSnaps > 0) return { icon: 'square', color: colors.accent, label: 'New Peek', bold: true };
   if (row.newChats > 0) return { icon: 'chatbubble', color: colors.blue, label: 'New Chat', bold: true };
   if (!last) return { icon: 'chatbubble-outline', color: colors.textFaint, label: 'Tap to chat', bold: false };
-  const color = last.kind === 'snap' ? colors.red : colors.blue;
+  const color = last.kind === 'snap' ? colors.accent : colors.blue;
   if (last.sender_id === me) {
     return { icon: last.opened_at ? 'paper-plane-outline' : 'paper-plane', color, label: last.opened_at ? 'Opened' : 'Delivered', bold: false };
   }

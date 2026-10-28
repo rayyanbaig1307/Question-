@@ -29,7 +29,7 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh }: {
       columnWrapperStyle={styles.row}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.yellow} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={styles.content}
       renderItem={({ item }) => {
         const uri = urls[item.media_path];

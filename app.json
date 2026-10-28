@@ -36,7 +36,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Peekaboo uses your camera so you can take snaps.",
+          "cameraPermission": "Peekaboo uses your camera so you can take photos.",
           "microphonePermission": false
         }
       ],

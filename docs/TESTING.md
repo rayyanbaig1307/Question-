@@ -77,7 +77,7 @@ in step 5 (friends search).
    - **My Story** (on by default) – friends can see it for 24 hours.
    - **Post to my profile** – type a caption if you want.
    - Tap **Send** → "Added to your story! ✨" and you're back on the camera.
-6. Swipe to **Stories** → **My Story** shows your photo in a colorful ring with "1 snap · 23h left".
+6. Swipe to **Stories** → **My Story** shows your photo in a colorful ring with "1 photo · 23h left".
 7. Take another photo, this time pick only **Post to my profile** with a caption → open your profile (top-left
    picture) → the photo is in your grid and the **Posts** count went up.
 8. Tap the photo in the grid → it opens **full screen** with your caption at the bottom. Tap **•••** →
@@ -114,7 +114,7 @@ person when the steps say so (Settings → Log out).
      Logged in as the blocked person: searching for you finds nothing, and your profile is gone for them.
    - Undo it in **Settings → Blocked accounts → Unblock**.
 
-## Step 6 – Chat + snaps
+## Step 6 – Chat + peeks
 
 You need **two accounts that are friends** (step 5). Two phones make this much more fun, because messages
 pop up live.
@@ -124,7 +124,7 @@ pop up live.
    - No friends yet? It says so and offers a **Find friends** button.
 
 **Messages**
-2. As **Person A**: tap Person B → type "hi 👋" → tap the blue **↑** button. Your message shows on the right in yellow,
+2. As **Person A**: tap Person B → type "hi 👋" → tap the blue **↑** button. Your message shows on the right in purple,
    with "now · Delivered".
 3. As **Person B**: the **Chat** button on the camera has a **red 1**. In the chat list, Person A shows
    **New Chat** in blue. Open it → the message is there (on the left).
@@ -133,42 +133,42 @@ pop up live.
 6. **Unsend:** press and hold your own message → **Unsend**. It disappears for both of you.
 7. **Report:** press and hold the other person's message → **Report message** → pick a reason.
 
-**Snaps**
-8. As **Person A**, in the chat with B, tap the yellow **📷** button → take a photo (add stickers if you like)
-   → **Send to** → Person B is already ticked (My Story is off) → **Send** → "Snap sent to 1 friend! 💌" and you're
-   back in the chat, which shows "You sent a snap".
+**Peeks** (photos that disappear once opened)
+8. As **Person A**, in the chat with B, tap the pink **📷** button → take a photo (add stickers if you like)
+   → **Send to** → Person B is already ticked (My Story is off) → **Send** → "Peek sent to 1 friend! 💌" and you're
+   back in the chat, which shows "You sent a peek".
 9. You can also send from the main camera: take a photo → **Send to** → tick one or more friends under
-   **💌 Send as a snap** (you can tick My Story too).
-10. As **Person B**: the chat list shows **New Snap** in red. Open the chat → tap the red
-    **"New snap · tap to view"**. It opens full screen with a bar that runs down for **10 seconds**, then closes.
+   **💌 Send as a peek** (you can tick My Story too).
+10. As **Person B**: the chat list shows **New Peek** in pink. Open the chat → tap the pink
+    **"New peek · tap to view"**. It opens full screen with a bar that runs down for **10 seconds**, then closes.
     Tap anywhere to close it sooner.
-11. Tap the same snap again → it now says **Snap opened** and can't be opened again. 💨
+11. Tap the same peek again → it now says **Peek opened** and can't be opened again. 💨
     Person A sees **Opened** under it.
-12. **No signal?** If the snap can't load, it says "Couldn't load the snap" and does **not** count as opened –
+12. **No signal?** If the peek can't load, it says "Couldn't load the peek" and does **not** count as opened –
     try again later.
 
 **Safety checks**
 13. Unfriend Person B (their profile → **Friends** → **Unfriend**). The chat screen now says
     "You need to be friends to chat." and the message box is gone.
-14. In Supabase → **Storage → media**, opened snaps get deleted the next time the sender opens that chat.
+14. In Supabase → **Storage → media**, opened peeks get deleted the next time the sender opens that chat.
 
 ## Step 7 – Stories
 
 You need **two accounts that are friends** (step 5).
 
 1. As **Person A**: take 2–3 photos and send each to **My Story**.
-2. Swipe to **Stories** (left from the camera). **My Story** shows "3 snaps · 23h left" with your latest photo.
-   The small **＋** adds another snap.
+2. Swipe to **Stories** (left from the camera). **My Story** shows "3 photos · 23h left" with your latest photo.
+   The small **＋** adds another photo.
 3. Tap **My Story** → your story plays full screen:
-   - Bars at the top fill up, one per snap, **5 seconds** each.
-   - **Tap the right side** → next snap. **Tap the left side** → previous snap.
+   - Bars at the top fill up, one per photo, **5 seconds** each.
+   - **Tap the right side** → next photo. **Tap the left side** → previous photo.
    - **Press and hold** → pauses. Let go → carries on.
    - At the bottom it says **"0 seen"**.
 4. As **Person B**: on the Stories page, Person A appears under **Friends** with a **colorful ring**. Tap it → watch.
    When it ends, it closes (or moves on to the next friend with new stories).
 5. Back on the Stories page, Person A's ring is now **grey** (seen).
 6. As **Person A**: open **My Story** → it now says **"1 seen"**. Tap it → Person B is in the list.
-7. **Delete a snap:** in your own story tap **•••** → **Delete this snap**.
+7. **Delete a photo:** in your own story tap **•••** → **Delete this photo**.
 8. **Report:** in a friend's story tap **•••** → **Report story**.
 9. **Privacy check:** someone who is **not** your friend never sees your story ring.
 10. Stories disappear by themselves **24 hours** after posting.
@@ -197,7 +197,7 @@ You need **two accounts that are friends**, ideally on two phones.
 2. Tap **Show me to my friends** → your phone asks for location permission → allow it.
    - You appear on the map as your picture with a **pink** ring, labelled **"You"**.
    - The card now says **"👀 Friends can see you"**.
-3. On your **friend's phone**, open the map → you show up with a **yellow** ring, your name and "now".
+3. On your **friend's phone**, open the map → you show up with a **purple** ring, your name and "now".
    Tap your picture → it opens your profile.
 4. Your spot updates whenever you open the app (and every few minutes while it's open).
 5. Tap **Hide me** → "🙈 You're hidden on the map". On your friend's phone you disappear from the

@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   },
   toast: {
     marginTop: space.sm,
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.accent,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radius.pill,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 6px 16px rgba(0,0,0,0.4)',
   },
   toastText: {
-    color: colors.black,
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
     textAlign: 'center',

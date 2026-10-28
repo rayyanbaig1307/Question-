@@ -38,7 +38,7 @@ export default function Blocked() {
     <View style={styles.fill}>
       <Stack.Screen options={{ headerShown: true, title: 'Blocked accounts' }} />
       {blocked === null ? (
-        <ActivityIndicator style={styles.loading} color={colors.yellow} />
+        <ActivityIndicator style={styles.loading} color={colors.accent} />
       ) : (
         <FlatList
           data={blocked}

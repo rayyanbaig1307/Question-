@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, radius, space } from '@/theme';
+import { colors, gradients, radius, space } from '@/theme';
 
 type Variant = 'primary' | 'secondary' | 'pink' | 'danger' | 'plain';
 
@@ -18,7 +19,7 @@ type Props = {
 };
 
 const backgrounds: Record<Variant, string> = {
-  primary: colors.yellow,
+  primary: colors.accent,
   secondary: colors.card,
   pink: colors.pink,
   danger: colors.red,
@@ -26,7 +27,7 @@ const backgrounds: Record<Variant, string> = {
 };
 
 const textColors: Record<Variant, string> = {
-  primary: colors.black,
+  primary: colors.onAccent,
   secondary: colors.text,
   pink: colors.white,
   danger: colors.white,
@@ -54,6 +55,14 @@ export function Button({ title, onPress, variant = 'primary', icon, loading, dis
         inactive && styles.inactive,
         style,
       ]}>
+      {variant === 'primary' ? (
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : (
@@ -75,6 +84,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
+    overflow: 'hidden',
   },
   small: {
     minHeight: 38,
