@@ -1,5 +1,5 @@
-import { useIsFocused } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 
@@ -17,8 +17,16 @@ export default function Home() {
   const pager = useRef<PagerView>(null);
   const [page, setPage] = useState(CAMERA);
   const focused = useIsFocused();
+  // Other screens can send you back here with ?page=camera to land on the camera.
+  const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
   const goTo = (index: number) => pager.current?.setPage(index);
+
+  useEffect(() => {
+    if (wantedPage !== 'camera') return;
+    pager.current?.setPage(CAMERA);
+    router.setParams({ page: undefined });
+  }, [wantedPage]);
 
   return (
     <PagerView

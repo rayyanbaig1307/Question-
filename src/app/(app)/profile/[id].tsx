@@ -170,12 +170,17 @@ export default function ProfileScreen() {
     />
   ) : isMe ? (
     <EmptyState
-      emoji="📸"
-      title="No posts yet"
-      message={'Take a photo, then pick "Post to my profile" to add it here.'}
-    />
+      emoji="🌵"
+      title="Your grid is looking a little lonely"
+      message={'Take a pic, then pick "Post to my profile" to fill it up.'}>
+      <Button
+        title="Take a photo"
+        icon="camera"
+        onPress={() => router.dismissTo({ pathname: '/', params: { page: 'camera' } })}
+      />
+    </EmptyState>
   ) : (
-    <EmptyState emoji="🌵" title="No posts yet" />
+    <EmptyState emoji="🦥" title="Nothing here yet" message={`@${profile.username} hasn't posted anything. Poke them!`} />
   );
 
   return (

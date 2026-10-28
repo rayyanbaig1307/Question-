@@ -15,6 +15,7 @@ import { friendlyError } from '@/lib/errors';
 import { FEED_PAGE_SIZE, fetchFeed, setLiked, type FeedPost } from '@/lib/feed';
 import { useMediaUrl, useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
+import { inviteFriends } from '@/lib/invite';
 import { fetchStoryRings, type StoryRing } from '@/lib/stories';
 import { timeAgo, timeLeft } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
@@ -25,7 +26,7 @@ type Rings = { mine: StoryRing | null; friends: StoryRing[] };
 
 // Right page: stories at the top, then the feed of your friends' posts.
 export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
   const [rings, setRings] = useState<Rings | null>(null);
@@ -156,10 +157,11 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
             <ActivityIndicator color={colors.accent} style={styles.loading} />
           ) : (
             <EmptyState
-              emoji="📰"
-              title="Nothing in your feed yet"
-              message={'Posts from you and your friends show up here. Take a photo and pick "Post to my profile"!'}>
-              <Button title="Find friends" icon="person-add" variant="secondary" onPress={() => router.push('/friends')} />
+              emoji="🦗"
+              title="Crickets…"
+              message="Nobody has posted yet. Be the legend who goes first, or invite friends to liven things up!">
+              <Button title="Take a photo" icon="camera" onPress={onCamera} />
+              <Button title="Invite friends" icon="paper-plane" variant="secondary" onPress={() => inviteFriends(profile?.username)} />
             </EmptyState>
           )
         }
@@ -188,6 +190,7 @@ function StoriesHeader({ rings, userId, onCamera }: { rings: Rings | null; userI
   const latest = mine?.stories[mine.stories.length - 1];
   const thumbnail = useMediaUrl(latest?.media_path);
   const friends = rings?.friends ?? [];
+  const { profile } = useMe();
 
   // Watch one friend's stories, then carry on with the next friends who have new ones.
   function openFriend(index: number) {
@@ -230,7 +233,10 @@ function StoriesHeader({ rings, userId, onCamera }: { rings: Rings | null; userI
 
       <Text style={styles.sectionTitle}>Friends&apos; stories</Text>
       {rings === null ? null : friends.length === 0 ? (
-        <Text style={styles.noStories}>No new stories from friends right now. 🌙</Text>
+        <View style={styles.noStoriesRow}>
+          <InviteBubble onPress={() => inviteFriends(profile?.username)} />
+          <Text style={styles.noStories}>No new stories right now. 🌙{'\n'}Invite friends so there&apos;s more to watch!</Text>
+        </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rings}>
           {friends.map((ring, index) => (
@@ -246,11 +252,25 @@ function StoriesHeader({ rings, userId, onCamera }: { rings: Rings | null; userI
               <Text style={styles.friendTime}>{timeAgo(ring.latestAt)}</Text>
             </Pressable>
           ))}
+          <InviteBubble onPress={() => inviteFriends(profile?.username)} />
         </ScrollView>
       )}
 
       <Text style={styles.sectionTitle}>Feed</Text>
     </View>
+  );
+}
+
+// A dashed circle with a "+" that opens the share sheet to invite friends.
+function InviteBubble({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable style={styles.friend} onPress={onPress} accessibilityRole="button" accessibilityLabel="Invite friends">
+      <View style={[styles.ring, styles.inviteRing]}>
+        <Text style={styles.plus}>＋</Text>
+      </View>
+      <Text style={styles.friendName}>Invite</Text>
+      <Text style={styles.friendTime}>friends</Text>
+    </Pressable>
   );
 }
 
@@ -322,9 +342,20 @@ const styles = StyleSheet.create({
     marginLeft: space.xs,
     marginBottom: -space.sm,
   },
+  noStoriesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
   noStories: {
     ...font.small,
-    marginLeft: space.xs,
+    flex: 1,
+    lineHeight: 19,
+  },
+  inviteRing: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.accent,
   },
   rings: {
     gap: space.lg,

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchFriends } from '@/lib/friends';
+import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
@@ -23,7 +24,7 @@ type ChatRow = {
 
 // Left page: everyone you can chat with, most recent first.
 export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
 
   useEffect(() => {
@@ -54,10 +55,11 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
-              emoji="💬"
-              title="No friends to chat with yet"
-              message="Add friends and they'll show up here, ready to chat and swap peeks.">
-              <Button title="Find friends" icon="person-add" onPress={() => router.push('/friends')} />
+              emoji="👀"
+              title="It's quiet in here… too quiet"
+              message="No friends yet. Invite your crew and start swapping peeks!">
+              <Button title="Invite friends" icon="paper-plane" onPress={() => inviteFriends(profile?.username)} />
+              <Button title="Find friends" icon="search" variant="secondary" onPress={() => router.push('/friends')} />
             </EmptyState>
           }
           renderItem={({ item }) => <ChatRowView row={item} me={userId} />}

@@ -8,6 +8,7 @@ import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
+import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
 import { updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
@@ -86,6 +87,17 @@ export default function Settings() {
             title="Blocked accounts"
             onPress={() => router.push('/blocked')}
           />
+        </Section>
+
+        <Section title="Friends">
+          <Row
+            icon="paper-plane"
+            color={colors.accent}
+            title="Invite friends"
+            subtitle="Text them a link to Peekaboo"
+            onPress={() => inviteFriends(profile?.username)}
+          />
+          <Row icon="people" color={colors.blue} title="My friends" onPress={() => router.push('/friends')} />
         </Section>
 
         <Section title="Account">
