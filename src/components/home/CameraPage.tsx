@@ -10,12 +10,12 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
-import { DareBanner } from '@/components/DareBanner';
+import { DareBanner, DareButton } from '@/components/DareBanner';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { useUnreadCount } from '@/lib/chat';
-import { useDareDone } from '@/lib/dares';
+import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
@@ -45,6 +45,10 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const unreadCount = useUnreadCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
+  // The dare banner pops up once a day (until you've done the dare), then goes away for the rest of the day.
+  const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
+  const hideBanner = () => setBannerGoneDay(todayDareDay());
+  const bannerGone = bannerGoneDay === todayDareDay();
   // A quick white flash on screen when a photo is taken.
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
@@ -133,13 +137,23 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
                 <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
                 <CountBadge count={requestCount} />
               </View>
+              <DareButton done={dareDone} />
             </View>
           ) : (
             <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
           )}
-          {/* Today's dare: tap it on the home camera; a reminder when you're taking the dare photo */}
-          {isHome ? <DareBanner done={dareDone} onPress={() => router.push('/dare')} /> : null}
-          {dare ? <DareBanner /> : null}
+          {/* Today's dare pops up for a few seconds: tap it to open the Dare screen, or swipe it up to hide it.
+              When you're taking the dare photo, it's a quick reminder of what the dare is. */}
+          {isHome && active && dareDone === false && !bannerGone ? (
+            <DareBanner
+              onDismiss={hideBanner}
+              onPress={() => {
+                hideBanner();
+                router.push('/dare');
+              }}
+            />
+          ) : null}
+          {dare && !bannerGone ? <DareBanner onDismiss={hideBanner} /> : null}
         </View>
         <View style={styles.tools}>
           {isHome ? <IconButton icon="map" label="Friend map" onPress={() => router.push('/map')} /> : null}

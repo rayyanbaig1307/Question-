@@ -235,13 +235,15 @@ You need **two accounts that are friends**, ideally on two phones.
 
 ## Step 11 – Daily Dare 🎯
 
-1. On the camera, under your picture, there's a **pink banner** with today's dare. Tap it.
+1. Open the app on the camera: today's dare **pops down** in a pink banner (only if you haven't done it yet).
+   It slides away by itself after about 6 seconds, or swipe it **up** to hide it. It won't pop up again that day.
+   Tap it (or the round **🎯** button next to the add-friend button – it has a pink dot until you've done the dare).
 2. The **Daily Dare** screen shows the dare, a live **"New dare in …"** countdown, and everyone's dare photos.
    (A new dare starts every day at 10:00 UTC = 6am New York.)
 3. Tap **Do the dare 📸** → take a photo → decorate it → **Send to**. **🎯 Today's dare** is already ticked
    (add a caption if you like) → **Send**. You see "Dare done! 🎯🔥" and land back on the Dare screen with your photo
    in the grid.
-4. The camera banner now says **DAILY DARE · DONE! ✅**.
+4. The banner no longer pops up, and the **🎯** button on the camera shows a ✅.
 5. Your dare photo also shows on your profile grid with a little 🎯, and in the feed with a pink
    **"🎯 Dare …"** tag. Tap the tag → the Dare screen.
 6. You can also tick **🎯 Today's dare** on the Send screen after taking a normal photo.

@@ -1,21 +1,73 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useEffect, useEffectEvent } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import Animated, {
+  FadeInUp,
+  FadeOutUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { Bouncy } from '@/components/Bouncy';
 import { dareFor, todayDareDay } from '@/lib/dares';
 import { colors, gradients, radius, space } from '@/theme';
 
-// The little pink banner on the camera with today's dare. Tap it to open the Dare screen.
-export function DareBanner({ onPress, done = false }: { onPress?: () => void; done?: boolean }) {
+// How long the banner stays before sliding away by itself.
+const AUTO_HIDE_MS = 6000;
+
+// Today's dare, popping down at the top of the camera like a notification.
+// It slides away by itself after a few seconds, or when you swipe it up or tap it.
+export function DareBanner({ onPress, onDismiss }: {
+  // Tapping opens the Dare screen (leave out to just show the dare as a reminder).
+  onPress?: () => void;
+  onDismiss: () => void;
+}) {
   const dare = dareFor(todayDareDay());
+  const lift = useSharedValue(0);
+  const speed = useSharedValue(0);
+
+  const dismiss = useEffectEvent(onDismiss);
+  useEffect(() => {
+    const timer = setTimeout(() => dismiss(), AUTO_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Swipe up to get rid of it (sideways swipes still move between Chat, Camera and Stories).
+  const swipe = usePanGesture({
+    activeOffsetY: [-8, 1000],
+    failOffsetX: [-20, 20],
+    onUpdate: (event) => {
+      'worklet';
+      lift.set(Math.min(0, event.translationY));
+      speed.set(event.velocityY);
+    },
+    onDeactivate: () => {
+      'worklet';
+      if (lift.get() < -30 || speed.get() < -500) {
+        lift.set(withTiming(-160, { duration: 180 }, () => scheduleOnRN(onDismiss)));
+      } else {
+        lift.set(withSpring(0));
+      }
+    },
+  });
+
+  const liftStyle = useAnimatedStyle(() => ({
+    opacity: 1 + lift.get() / 160,
+    transform: [{ translateY: lift.get() }],
+  }));
 
   const content = (
     <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.banner}>
-      <Text style={styles.emoji}>{done ? '✅' : '🎯'}</Text>
+      <Text style={styles.emoji}>🎯</Text>
       <View style={styles.text}>
-        <Text style={styles.label}>{done ? 'DAILY DARE · DONE!' : 'DAILY DARE'}</Text>
+        <Text style={styles.label}>DAILY DARE</Text>
         <Text style={styles.dare} numberOfLines={2}>
           {dare.text}
         </Text>
@@ -24,10 +76,40 @@ export function DareBanner({ onPress, done = false }: { onPress?: () => void; do
     </LinearGradient>
   );
 
-  if (!onPress) return content;
   return (
-    <Bouncy onPress={onPress} accessibilityRole="button" accessibilityLabel={`Daily dare: ${dare.text}`}>
-      {content}
+    <Animated.View entering={FadeInUp.springify().damping(14)} exiting={FadeOutUp.duration(250)}>
+      <GestureDetector gesture={swipe}>
+        <Animated.View style={liftStyle}>
+          {onPress ? (
+            <Bouncy onPress={onPress} accessibilityRole="button" accessibilityLabel={`Daily dare: ${dare.text}`}>
+              {content}
+            </Bouncy>
+          ) : (
+            content
+          )}
+        </Animated.View>
+      </GestureDetector>
+    </Animated.View>
+  );
+}
+
+// The small round 🎯 on the camera that always opens the Dare screen.
+// A pink dot means you haven't done today's dare yet; a ✅ means you have.
+export function DareButton({ done }: { done: boolean | null }) {
+  return (
+    <Bouncy
+      style={styles.button}
+      pressScale={0.85}
+      hitSlop={8}
+      onPress={() => {
+        Haptics.selectionAsync();
+        router.push('/dare');
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={done ? 'Daily dare – done' : 'Daily dare'}>
+      <Text style={styles.buttonEmoji}>🎯</Text>
+      {done === true ? <Text style={styles.buttonCheck}>✅</Text> : null}
+      {done === false ? <View style={styles.buttonDot} /> : null}
     </Bouncy>
   );
 }
@@ -68,6 +150,34 @@ const styles = StyleSheet.create({
   tagLabel: {
     color: colors.accent,
     fontWeight: '900',
+  },
+  button: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonEmoji: {
+    fontSize: 22,
+  },
+  buttonCheck: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    fontSize: 14,
+  },
+  buttonDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   banner: {
     flexDirection: 'row',

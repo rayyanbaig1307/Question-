@@ -113,8 +113,8 @@ export async function fetchDarePosts(day: string): Promise<PostWithAuthor[]> {
   return (data ?? []) as PostWithAuthor[];
 }
 
-// Have I already done today's dare? Checked whenever `enabled` turns on.
-export function useDareDone(me: string, enabled: boolean): boolean {
+// Have I already done today's dare? Checked whenever `enabled` turns on. `null` = still checking.
+export function useDareDone(me: string, enabled: boolean): boolean | null {
   const [done, setDone] = useState<{ day: string; done: boolean } | null>(null);
   useEffect(() => {
     if (!enabled) return;
@@ -128,5 +128,5 @@ export function useDareDone(me: string, enabled: boolean): boolean {
         if (!error) setDone({ day, done: (count ?? 0) > 0 });
       });
   }, [me, enabled]);
-  return done?.day === todayDareDay() && done.done;
+  return done?.day === todayDareDay() ? done.done : null;
 }
