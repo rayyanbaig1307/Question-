@@ -27,7 +27,7 @@ export default function Home() {
       initialPage={CAMERA}
       onPageSelected={(event) => setPage(event.nativeEvent.position)}>
       <View key="chat" style={styles.fill}>
-        <ChatPage onCamera={() => goTo(CAMERA)} />
+        <ChatPage visible={focused && page === CHAT} onCamera={() => goTo(CAMERA)} />
       </View>
       <View key="camera" style={styles.fill}>
         <CameraPage

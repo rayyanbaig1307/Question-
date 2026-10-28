@@ -1,20 +1,125 @@
-import { StyleSheet, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
-import { colors } from '@/theme';
+import { useMe } from '@/lib/auth';
+import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
+import { fetchFriends } from '@/lib/friends';
+import { timeAgo } from '@/lib/time';
+import type { Profile } from '@/lib/types';
+import { colors, font, space } from '@/theme';
 import { PageHeader } from './PageHeader';
 
-// Left page. Chats and snaps arrive in a later step.
-export function ChatPage({ onCamera }: { onCamera: () => void }) {
+type ChatRow = {
+  friend: Profile;
+  last: Message | null;
+  newSnaps: number;
+  newChats: number;
+};
+
+// Left page: everyone you can chat with, most recent first – like Snapchat's chat list.
+export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
+  const { userId } = useMe();
+  const [rows, setRows] = useState<ChatRow[] | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const load = async () => {
+      try {
+        const [friends, messages] = await Promise.all([fetchFriends(userId), fetchRecentMessages(userId)]);
+        setRows(buildRows(friends, messages));
+      } catch (error) {
+        console.warn('Could not load chats', error);
+        setRows((current) => current ?? []);
+      }
+    };
+    load();
+    // Refresh instantly when a message arrives or gets opened.
+    return subscribeToMyMessages(`chat-list-${userId}`, load);
+  }, [visible, userId]);
+
   return (
     <View style={styles.fill}>
       <PageHeader title="Chat" cameraSide="right" onCamera={onCamera} />
-      <EmptyState
-        emoji="💬"
-        title="Chats are coming soon!"
-        message="Chatting and sending snaps arrive in the next step. Add friends now with the 👤+ button on the camera!"
-      />
+      {rows === null ? (
+        <ActivityIndicator color={colors.yellow} style={styles.loading} />
+      ) : (
+        <FlatList
+          data={rows}
+          keyExtractor={(row) => row.friend.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <EmptyState
+              emoji="💬"
+              title="No friends to chat with yet"
+              message="Add friends and they'll show up here, ready to chat and swap snaps.">
+              <Button title="Find friends" icon="person-add" onPress={() => router.push('/friends')} />
+            </EmptyState>
+          }
+          renderItem={({ item }) => <ChatRowView row={item} me={userId} />}
+        />
+      )}
     </View>
+  );
+}
+
+function buildRows(friends: Profile[], messages: Message[]): ChatRow[] {
+  const rows = friends.map((friend) => {
+    const withFriend = messages.filter((m) => m.sender_id === friend.id || m.recipient_id === friend.id);
+    const unopened = withFriend.filter((m) => m.sender_id === friend.id && m.opened_at === null);
+    return {
+      friend,
+      last: withFriend[0] ?? null,
+      newSnaps: unopened.filter((m) => m.kind === 'snap').length,
+      newChats: unopened.filter((m) => m.kind === 'text').length,
+    };
+  });
+  // Most recent conversations first; friends you haven't talked to yet at the bottom.
+  return rows.sort((a, b) => (b.last?.created_at ?? '').localeCompare(a.last?.created_at ?? ''));
+}
+
+function describe(row: ChatRow, me: string): {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  label: string;
+  bold: boolean;
+} {
+  const { last } = row;
+  if (row.newSnaps > 0) return { icon: 'square', color: colors.red, label: 'New Snap', bold: true };
+  if (row.newChats > 0) return { icon: 'chatbubble', color: colors.blue, label: 'New Chat', bold: true };
+  if (!last) return { icon: 'chatbubble-outline', color: colors.textFaint, label: 'Tap to chat', bold: false };
+  const color = last.kind === 'snap' ? colors.red : colors.blue;
+  if (last.sender_id === me) {
+    return { icon: last.opened_at ? 'paper-plane-outline' : 'paper-plane', color, label: last.opened_at ? 'Opened' : 'Delivered', bold: false };
+  }
+  return { icon: last.kind === 'snap' ? 'square-outline' : 'chatbubble-outline', color, label: 'Received', bold: false };
+}
+
+function ChatRowView({ row, me }: { row: ChatRow; me: string }) {
+  const status = describe(row, me);
+  return (
+    <Pressable
+      onPress={() => router.push(`/chat/${row.friend.id}`)}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      <Avatar path={row.friend.avatar_path} name={row.friend.display_name || row.friend.username} size={52} />
+      <View style={styles.rowText}>
+        <Text style={styles.name} numberOfLines={1}>
+          {row.friend.display_name || row.friend.username}
+        </Text>
+        <View style={styles.status}>
+          <Ionicons name={status.icon} size={14} color={status.color} />
+          <Text style={[styles.statusText, status.bold && { color: status.color, fontWeight: '900' }]}>
+            {status.label}
+            {row.last ? ` · ${timeAgo(row.last.created_at)}` : ''}
+          </Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+    </Pressable>
   );
 }
 
@@ -22,5 +127,38 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  loading: {
+    marginTop: space.xxl,
+  },
+  list: {
+    paddingBottom: space.xxl,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+  },
+  rowPressed: {
+    backgroundColor: colors.card,
+  },
+  rowText: {
+    flex: 1,
+    gap: 3,
+  },
+  name: {
+    ...font.body,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusText: {
+    ...font.small,
   },
 });

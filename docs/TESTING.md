@@ -113,3 +113,41 @@ person when the steps say so (Settings → Log out).
    - **Block** → confirm. You go back, and they're removed from your friends.
      Logged in as the blocked person: searching for you finds nothing, and your profile is gone for them.
    - Undo it in **Settings → Blocked accounts → Unblock**.
+
+## Step 6 – Chat + snaps
+
+You need **two accounts that are friends** (step 5). Two phones make this much more fun, because messages
+pop up live.
+
+**Chat list**
+1. **Swipe right** from the camera (or tap **Chat**). Your friends are listed, newest chats first.
+   - No friends yet? It says so and offers a **Find friends** button.
+
+**Messages**
+2. As **Person A**: tap Person B → type "hi 👋" → tap the blue **↑** button. Your message shows on the right in yellow,
+   with "now · Delivered".
+3. As **Person B**: the **Chat** button on the camera has a **red 1**. In the chat list, Person A shows
+   **New Chat** in blue. Open it → the message is there (on the left).
+4. Back on Person A's phone, under your message it now says **Opened** – without refreshing.
+5. Write back and forth – new messages appear on the other phone within a second or two.
+6. **Unsend:** press and hold your own message → **Unsend**. It disappears for both of you.
+7. **Report:** press and hold the other person's message → **Report message** → pick a reason.
+
+**Snaps**
+8. As **Person A**, in the chat with B, tap the yellow **📷** button → take a photo (add stickers if you like)
+   → **Send to** → Person B is already ticked (My Story is off) → **Send** → "Snap sent to 1 friend! 👻" and you're
+   back in the chat, which shows "You sent a snap".
+9. You can also send from the main camera: take a photo → **Send to** → tick one or more friends under
+   **👻 Send as a snap** (you can tick My Story too).
+10. As **Person B**: the chat list shows **New Snap** in red. Open the chat → tap the red
+    **"New snap · tap to view"**. It opens full screen with a bar that runs down for **10 seconds**, then closes.
+    Tap anywhere to close it sooner.
+11. Tap the same snap again → it now says **Snap opened** and can't be opened again. 👻
+    Person A sees **Opened** under it.
+12. **No signal?** If the snap can't load, it says "Couldn't load the snap" and does **not** count as opened –
+    try again later.
+
+**Safety checks**
+13. Unfriend Person B (their profile → **Friends** → **Unfriend**). The chat screen now says
+    "You need to be friends to chat." and the message box is gone.
+14. In Supabase → **Storage → media**, opened snaps get deleted the next time the sender opens that chat.

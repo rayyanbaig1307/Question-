@@ -119,3 +119,13 @@ export function useIncomingRequestCount(me: string, active: boolean): number {
 
   return count;
 }
+
+// Just your friends (not pending requests), sorted by name.
+export async function fetchFriends(me: string): Promise<Profile[]> {
+  const links = await fetchMyFriendLinks(me);
+  return links
+    .filter((link) => link.status === 'accepted')
+    .map((link) => otherPerson(link, me))
+    .filter((person): person is Profile => person !== null)
+    .sort((a, b) => (a.display_name || a.username).localeCompare(b.display_name || b.username));
+}

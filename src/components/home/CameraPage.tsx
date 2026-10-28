@@ -11,16 +11,20 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { useMe } from '@/lib/auth';
+import { useUnreadCount } from '@/lib/chat';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 
 // The home screen: a full-screen camera, like Snapchat.
-export function CameraPage({ active, onOpenChat, onOpenStories }: {
+// Also used on its own (with `sendTo`) when you tap the camera inside a chat.
+export function CameraPage({ active, sendTo, onOpenChat, onOpenStories }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
-  onOpenChat: () => void;
-  onOpenStories: () => void;
+  // A friend's id: the photo goes straight to them as a snap.
+  sendTo?: string;
+  onOpenChat?: () => void;
+  onOpenStories?: () => void;
 }) {
   const { userId, profile } = useMe();
   const [permission, requestPermission] = useCameraPermissions();
@@ -28,7 +32,12 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const requestCount = useIncomingRequestCount(userId, active);
+  const isHome = !sendTo;
+  const requestCount = useIncomingRequestCount(userId, active && isHome);
+  const unreadCount = useUnreadCount(userId, active && isHome);
+
+  const openEditor = (uri: string, fit: 'cover' | 'contain') =>
+    router.push({ pathname: '/editor', params: sendTo ? { uri, fit, to: sendTo } : { uri, fit } });
 
   async function takePhoto() {
     if (!cameraRef.current || busy) return;
@@ -36,7 +45,7 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-      router.push({ pathname: '/editor', params: { uri: photo.uri, fit: 'cover' } });
+      openEditor(photo.uri, 'cover');
     } catch (error) {
       Alert.alert('Could not take photo', friendlyError(error));
     } finally {
@@ -47,7 +56,7 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
   async function pickFromGallery() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
-      router.push({ pathname: '/editor', params: { uri: result.assets[0].uri, fit: 'contain' } });
+      openEditor(result.assets[0].uri, 'contain');
     }
   }
 
@@ -78,19 +87,19 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
 
       {/* Top: your picture on the left, camera controls on the right */}
       <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
-        <View style={styles.topLeft}>
-          <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
-            <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
-          </Pressable>
-          <View>
-            <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
-            {requestCount > 0 ? (
-              <View style={styles.badge} pointerEvents="none">
-                <Text style={styles.badgeText}>{requestCount > 9 ? '9+' : requestCount}</Text>
-              </View>
-            ) : null}
+        {isHome ? (
+          <View style={styles.topLeft}>
+            <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
+              <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
+            </Pressable>
+            <View>
+              <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
+              <CountBadge count={requestCount} />
+            </View>
           </View>
-        </View>
+        ) : (
+          <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
+        )}
         <View style={styles.tools}>
           <IconButton
             icon="camera-reverse"
@@ -120,17 +129,30 @@ export function CameraPage({ active, onOpenChat, onOpenStories }: {
           </Pressable>
           <View style={styles.shutterSpacer} />
         </View>
-        <View style={styles.nav}>
-          <Pressable style={styles.navButton} onPress={onOpenChat} accessibilityRole="button">
-            <Ionicons name="chatbubble" size={20} color={colors.blue} />
-            <Text style={styles.navText}>Chat</Text>
-          </Pressable>
-          <Pressable style={styles.navButton} onPress={onOpenStories} accessibilityRole="button">
-            <Text style={styles.navText}>Stories</Text>
-            <Ionicons name="sparkles" size={20} color={colors.pink} />
-          </Pressable>
-        </View>
+        {isHome ? (
+          <View style={styles.nav}>
+            <Pressable style={styles.navButton} onPress={onOpenChat} accessibilityRole="button">
+              <Ionicons name="chatbubble" size={20} color={colors.blue} />
+              <Text style={styles.navText}>Chat</Text>
+              <CountBadge count={unreadCount} />
+            </Pressable>
+            <Pressable style={styles.navButton} onPress={onOpenStories} accessibilityRole="button">
+              <Text style={styles.navText}>Stories</Text>
+              <Ionicons name="sparkles" size={20} color={colors.pink} />
+            </Pressable>
+          </View>
+        ) : null}
       </SafeAreaView>
+    </View>
+  );
+}
+
+// Little red bubble with a number, e.g. new friend requests or unread chats.
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.badge} pointerEvents="none">
+      <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
     </View>
   );
 }

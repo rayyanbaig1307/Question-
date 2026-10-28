@@ -64,7 +64,7 @@ Core features, one at a time (✅ = done):
 3. ✅ Profiles (picture, name, username, bio, photo grid, full-screen photos, private account, block & report)
 4. ✅ Camera + posting (take a photo, add text and stickers, post to your story or profile)
 5. ✅ Friends (search by username, send / accept requests)
-6. ⬜ Chat + snaps (1-on-1, live)
+6. ✅ Chat + snaps (1-on-1, live)
 7. ⬜ Stories (tap through friends' stories)
 8. ⬜ Feed (friends' posts, likes, comments)
 9. ⬜ Friend map (share location, ghost mode)

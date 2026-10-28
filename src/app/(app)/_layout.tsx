@@ -17,6 +17,8 @@ export default function AppLayout() {
       }}>
       <Stack.Screen name="editor" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="post/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen name="snap/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

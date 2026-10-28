@@ -1,36 +1,58 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
+import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { fetchFriends } from '@/lib/friends';
 import { resizePhoto } from '@/lib/media';
 import { createPost, createStory } from '@/lib/posts';
+import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
-// "Send to…": choose where your photo goes.
+// "Send to…": choose where your photo goes – your story, your profile, and/or friends as a snap.
 export default function Share() {
-  const { uri } = useLocalSearchParams<{ uri: string }>();
+  // `to` is set when you came from a chat: that friend is already ticked.
+  const { uri, to } = useLocalSearchParams<{ uri: string; to?: string }>();
   const { userId } = useMe();
   const { showToast } = useOverlays();
 
-  const [toStory, setToStory] = useState(true);
+  const [toStory, setToStory] = useState(!to);
   const [toProfile, setToProfile] = useState(false);
   const [caption, setCaption] = useState('');
+  const [friends, setFriends] = useState<Profile[] | null>(null);
+  const [picked, setPicked] = useState<string[]>(to ? [to] : []);
   const [busy, setBusy] = useState(false);
-  // Remember what already worked, so trying again doesn't post twice.
-  const [done, setDone] = useState({ story: false, profile: false });
+  // Remember what already worked, so trying again doesn't send twice.
+  const [done, setDone] = useState({ story: false, profile: false, snaps: false });
+
+  useEffect(() => {
+    fetchFriends(userId)
+      .then(setFriends)
+      .catch(() => setFriends([]));
+  }, [userId]);
+
+  const toggleFriend = (id: string) =>
+    setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+
+  const nothingPicked = !toStory && !toProfile && picked.length === 0;
 
   async function send() {
     setBusy(true);
     try {
       const photo = await resizePhoto(uri, 1080);
+      if (picked.length > 0 && !done.snaps) {
+        await sendSnap(userId, picked, photo);
+        setDone((current) => ({ ...current, snaps: true }));
+      }
       if (toStory && !done.story) {
         await createStory(userId, photo);
         setDone((current) => ({ ...current, story: true }));
@@ -39,14 +61,9 @@ export default function Share() {
         await createPost(userId, photo, caption);
         setDone((current) => ({ ...current, profile: true }));
       }
-      showToast(
-        toStory && toProfile
-          ? 'Shared to your story and profile! 🎉'
-          : toStory
-            ? 'Added to your story! ✨'
-            : 'Posted to your profile! 🎉',
-      );
-      router.dismissTo('/');
+      showToast(successMessage(picked.length, toStory, toProfile));
+      // Back to the chat you came from, or to the camera.
+      router.dismissTo(to ? `/chat/${to}` : '/');
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
     } finally {
@@ -91,26 +108,55 @@ export default function Share() {
             />
           ) : null}
 
-          <View style={styles.friends}>
-            <Text style={styles.friendsTitle}>👯 Friends</Text>
-            <Text style={styles.friendsText}>
-              Sending snaps straight to friends arrives with the Chat step.
-            </Text>
-          </View>
+          <Text style={styles.sectionTitle}>👻 Send as a snap</Text>
+          {friends === null ? null : friends.length === 0 ? (
+            <View style={styles.noFriends}>
+              <Text style={styles.noFriendsText}>Add friends to send them snaps – they disappear once opened.</Text>
+            </View>
+          ) : (
+            friends.map((friend) => {
+              const selected = picked.includes(friend.id);
+              return (
+                <Pressable
+                  key={friend.id}
+                  onPress={() => toggleFriend(friend.id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                  style={({ pressed }) => [styles.friend, selected && styles.optionSelected, pressed && styles.optionPressed]}>
+                  <Avatar path={friend.avatar_path} name={friend.display_name || friend.username} size={40} />
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionTitle}>{friend.display_name || friend.username}</Text>
+                    <Text style={styles.optionSubtitle}>@{friend.username}</Text>
+                  </View>
+                  <Ionicons
+                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={28}
+                    color={selected ? colors.yellow : colors.textFaint}
+                  />
+                </Pressable>
+              );
+            })
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
-          <Button
-            title="Send"
-            icon="send"
-            onPress={send}
-            loading={busy}
-            disabled={!toStory && !toProfile}
-          />
+          <Button title="Send" icon="send" onPress={send} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function successMessage(friendCount: number, toStory: boolean, toProfile: boolean): string {
+  const places = [
+    friendCount > 0 ? (friendCount === 1 ? '1 friend' : `${friendCount} friends`) : null,
+    toStory ? 'your story' : null,
+    toProfile ? 'your profile' : null,
+  ].filter((place): place is string => place !== null);
+  if (places.length === 1 && friendCount > 0) return `Snap sent to ${places[0]}! 👻`;
+  // "a", "a and b", "a, b and c"
+  const list = places.length > 1 ? `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}` : places[0];
+  return `Shared to ${list}! 🎉`;
 }
 
 function Option({ emoji, title, subtitle, selected, onPress }: {
@@ -180,6 +226,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  friend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
   optionSelected: {
     borderColor: colors.yellow,
   },
@@ -200,20 +257,19 @@ const styles = StyleSheet.create({
   optionSubtitle: {
     ...font.small,
   },
-  friends: {
+  sectionTitle: {
+    ...font.label,
     marginTop: space.md,
+    marginLeft: space.xs,
+  },
+  noFriends: {
     padding: space.lg,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     borderStyle: 'dashed',
-    gap: space.xs,
   },
-  friendsTitle: {
-    ...font.body,
-    fontWeight: '800',
-  },
-  friendsText: {
+  noFriendsText: {
     ...font.small,
   },
   footer: {
