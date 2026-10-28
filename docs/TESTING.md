@@ -225,8 +225,8 @@ You need **two accounts that are friends**, ideally on two phones.
    "Crickets…" on the feed, and a lonely-grid message on the profile – each with big buttons. The emoji bobs.
 6. **Invite friends:** tap **Invite friends** (Friends screen, Settings, the dashed **＋ Invite** circle in the
    stories row, or an empty screen). Your phone's share sheet opens with a message – send it by text, WhatsApp, etc.
-   (There's no download link in it yet: the Expo Go test version only opens for the app's owner. When Peekaboo is on
-   TestFlight / the App Store, put the link in `src/lib/invite.ts` and every invite will include it.)
+   It includes the **Android download link** (installs Peekaboo directly). iPhone friends see "coming to the App
+   Store soon" – when Peekaboo is on TestFlight / the App Store, put that link in `src/lib/invite.ts`.
 7. **Animations:** buttons squish and bounce when tapped; the shutter squishes, the screen flashes white and the
    phone buzzes when you take a photo; swiping between Chat, Camera and Stories gently shrinks and dims the page
    you're leaving.
