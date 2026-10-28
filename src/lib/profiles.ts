@@ -45,3 +45,22 @@ export async function updateMyProfile(
   if (error) throw error;
   return data as Profile;
 }
+
+// Deletes your account for good: first your photo files, then your login – which also removes your profile,
+// posts, stories, chats, friends and likes (the database does that part).
+export async function deleteMyAccount(userId: string): Promise<void> {
+  const folders: { bucket: 'media' | 'avatars'; prefix: string }[] = [
+    { bucket: 'media', prefix: `${userId}/posts` },
+    { bucket: 'media', prefix: `${userId}/stories` },
+    { bucket: 'media', prefix: `${userId}/snaps` },
+    { bucket: 'media', prefix: `${userId}/blurs` },
+    { bucket: 'avatars', prefix: userId },
+  ];
+  for (const { bucket, prefix } of folders) {
+    const { data } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+    const paths = (data ?? []).filter((file) => file.id).map((file) => `${prefix}/${file.name}`);
+    if (paths.length > 0) await supabase.storage.from(bucket).remove(paths);
+  }
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+}

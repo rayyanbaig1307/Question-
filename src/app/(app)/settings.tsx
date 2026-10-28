@@ -10,7 +10,7 @@ import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
-import { updateMyProfile } from '@/lib/profiles';
+import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
 
 export default function Settings() {
@@ -38,6 +38,39 @@ export default function Settings() {
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
+  }
+
+  // Two warnings before anything is deleted – there's no undo.
+  function confirmDelete() {
+    Alert.alert(
+      'Delete your account?',
+      'Your profile, posts, stories, chats and friends will be gone forever. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('Are you really sure?', `@${profile?.username ?? 'you'} will be deleted right now.`, [
+              { text: 'Keep my account', style: 'cancel' },
+              {
+                text: 'Delete forever',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await deleteMyAccount(userId);
+                    showToast('Your account was deleted. Bye 👋');
+                    // The login no longer exists, so this just clears it from the phone.
+                    await signOut().catch(() => {});
+                  } catch (error) {
+                    Alert.alert('Could not delete your account', friendlyError(error));
+                  }
+                },
+              },
+            ]),
+        },
+      ],
+    );
   }
 
   function confirmSignOut() {
@@ -102,7 +135,8 @@ export default function Settings() {
 
         <Section title="Account">
           <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
-          <Row icon="log-out" color={colors.red} title="Log out" onPress={confirmSignOut} />
+          <Row icon="log-out" color={colors.orange} title="Log out" onPress={confirmSignOut} />
+          <Row icon="trash" color={colors.red} title="Delete account" subtitle="Gone forever – no undo" onPress={confirmDelete} />
         </Section>
 
         <Text style={styles.footer}>
