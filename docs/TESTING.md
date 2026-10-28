@@ -207,3 +207,40 @@ You need **two accounts that are friends**, ideally on two phones.
    - Someone who is **not** your friend never sees you, even with sharing on.
    - If you unfriend or block someone, you vanish from their map.
    - In Supabase → **Table Editor → locations**, your row is deleted the moment you hide.
+
+## Step 10 – Polish (fixes + feeling alive)
+
+1. **Settings gear:** it no longer floats over every screen. Open your profile (your picture, top-left on the
+   camera) → the pink/purple **⚙️** is at the top right. It only shows on *your* profile; on a friend's profile
+   you see **•••** instead.
+2. **Back buttons:** Edit profile, Friends, Settings, Chat, Comments and Send to all have a round **‹** button at
+   the top left. Nothing is cut off.
+3. **Square grid:** on your profile every photo is a perfect square, 3 per row, no black bars.
+   Pick a wide photo from your camera roll on the camera screen → instead of black bars you'll see a blurry copy of
+   the photo filling the gaps.
+4. **Change photo:** profile → **Edit profile** → tap your picture. Choose **📸 Take a photo** or
+   **🖼️ Choose from camera roll** (or **Remove photo**). Crop it, tap **Save**. The new picture shows straight away
+   on your profile, the camera screen (top-left) and the top of the Chat page.
+5. **Fun empty screens:** a new account with no friends sees "It's quiet in here… too quiet 👀" on Chat,
+   "Crickets…" on the feed, and a lonely-grid message on the profile – each with big buttons. The emoji bobs.
+6. **Invite friends:** tap **Invite friends** (Friends screen, Settings, the dashed **＋ Invite** circle in the
+   stories row, or an empty screen). Your phone's share sheet opens with a message and a link – send it by text,
+   WhatsApp, etc.
+7. **Animations:** buttons squish and bounce when tapped; the shutter squishes, the screen flashes white and the
+   phone buzzes when you take a photo; swiping between Chat, Camera and Stories gently shrinks and dims the page
+   you're leaving.
+8. **Vibrations:** taking a photo (strong tap), sending (happy double-buzz), liking a post (tap + the heart pops).
+
+## Step 11 – Daily Dare 🎯
+
+1. On the camera, under your picture, there's a **pink banner** with today's dare. Tap it.
+2. The **Daily Dare** screen shows the dare, a live **"New dare in …"** countdown, and everyone's dare photos.
+   (A new dare starts every day at 10:00 UTC = 6am New York.)
+3. Tap **Do the dare 📸** → take a photo → decorate it → **Send to**. **🎯 Today's dare** is already ticked
+   (add a caption if you like) → **Send**. You see "Dare done! 🎯🔥" and land back on the Dare screen with your photo
+   in the grid.
+4. The camera banner now says **DAILY DARE · DONE! ✅**.
+5. Your dare photo also shows on your profile grid with a little 🎯, and in the feed with a pink
+   **"🎯 Dare …"** tag. Tap the tag → the Dare screen.
+6. You can also tick **🎯 Today's dare** on the Send screen after taking a normal photo.
+7. **Privacy check:** dare photos from private accounts only show for their friends.

@@ -53,7 +53,8 @@ The rules live in the database itself (called "Row Level Security"), so even a h
 * Blocking → removes the friendship; they can't see your profile, posts, stories or message you.
 * Reports → saved in the `reports` table for you to review in the Supabase dashboard.
 
-All of this is in one file: `supabase/migrations/20261027000000_core_schema.sql`.
+All of this is in `supabase/migrations/20261027000000_core_schema.sql` (later additions, like the Daily Dare,
+are in their own dated files next to it).
 
 ## Build order
 
@@ -69,8 +70,17 @@ Core features, one at a time (✅ = done):
 8. ✅ Feed (friends' posts, likes, comments)
 9. ✅ Friend map (share location, hide me)
 
+10. ✅ Polish: in-app top bars, square grid, change photo, fun empty screens, invite friends, animations, vibrations
+
 Then the viral features, in this order, only after the core works:
-daily dare → invite to unlock → roast my profile → fit check → face swap stories → mystery match.
+
+11. ✅ Daily dare (60 dares, one per day, same for everyone – `src/lib/dares.ts`,
+    database change in `supabase/migrations/20261028000000_daily_dare.sql`)
+12. Invite to unlock
+13. Roast my profile
+14. Fit check
+15. Face swap stories
+16. Mystery match
 
 ## How the screens fit together
 
