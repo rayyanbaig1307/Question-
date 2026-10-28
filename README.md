@@ -87,3 +87,25 @@ In Supabase open **Table Editor → reports** to read them. Change `status` to `
 | `npx expo start` | Run the app (scan the QR code with your phone) |
 | `npm run typecheck` | Check the code for mistakes |
 | `npm run lint` | Check the code style |
+
+## Putting a new version online (Expo Go)
+
+The app is published with **EAS Update** to the Expo account `rbaig18`. To open it, use Expo Go and this link, which always opens the newest version:
+`exp://u.expo.dev/3c421eae-c4ec-47ea-92da-4b2d07b7d13e?channel-name=preview`
+
+To publish a new version:
+
+1. Make sure `.env` exists with your Supabase URL and publishable key (step 4 above). Never commit it.
+2. Check the code: `npm install && npm run typecheck`
+3. Publish (you must be logged in with `npx eas-cli whoami`, or have `EXPO_TOKEN` set):
+
+   ```sh
+   set -a && . ./.env && set +a
+   npx eas-cli@latest update --branch preview --message "What changed" \
+     --platform all --non-interactive --environment preview --clear-cache
+   ```
+
+   `--clear-cache` matters. Without it, an old cached build can leave out the Supabase values, and the app then shows the "Almost ready!" screen. The `set -a` line loads `.env` into the shell as a second safety net.
+4. To check that it worked, run `strings dist/_expo/static/js/ios/*.hbc | grep supabase.co`. It should show your project's URL, not `setup-needed.supabase.co`.
+
+The `preview` channel is already connected to the `preview` branch, so the link above picks up the new version by itself.
