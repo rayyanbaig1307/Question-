@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +13,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
@@ -21,11 +32,14 @@ import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import {
+  canReplay,
+  canSave,
   cleanUpOpenedSnaps,
   deleteMessage,
   fetchConversation,
   markChatRead,
   sendText,
+  setSnapSaved,
   subscribeToMyMessages,
   type Message,
 } from '@/lib/chat';
@@ -33,6 +47,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchRelation } from '@/lib/friends';
 import { fetchProfile } from '@/lib/profiles';
 import { timeAgo } from '@/lib/time';
+import { useTyping } from '@/lib/typing';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -51,11 +66,14 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
   const insets = useSafeAreaInsets();
+  const { friendTyping, onTextChange, clearFriendTyping } = useTyping(userId, friendId, areFriends);
 
   const loadMessages = useCallback(async () => {
     try {
       const list = await fetchConversation(userId, friendId);
       setMessages(list);
+      // Their message just arrived, so they're not typing any more.
+      if (list[0]?.sender_id === friendId) clearFriendTyping();
       // Opening the chat means you've read their messages.
       if (list.some((m) => m.sender_id === friendId && m.kind === 'text' && !m.opened_at)) {
         markChatRead(friendId).catch(() => {});
@@ -68,7 +86,7 @@ export default function ChatScreen() {
       console.warn('Could not load chat', error);
       setMessages((current) => current ?? []);
     }
-  }, [friendId, userId]);
+  }, [friendId, userId, clearFriendTyping]);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,6 +106,7 @@ export default function ChatScreen() {
     try {
       const sent = await sendText(userId, friendId, body);
       setText('');
+      onTextChange('');
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
     } catch (error) {
       Alert.alert('Message not sent', friendlyError(error));
@@ -96,10 +115,40 @@ export default function ChatScreen() {
     }
   }
 
+  // Save a peek in the chat (or unsave it). Either of you can.
+  async function toggleSaved(message: Message, save: boolean) {
+    try {
+      if (!(await setSnapSaved(message.id, save))) {
+        Alert.alert("Can't save this one", 'Peeks can only be saved up to a day after they were opened.');
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(save ? 'Saved in chat 📌' : 'Unsaved – it will disappear');
+      const savedAt = save ? new Date().toISOString() : null;
+      setMessages(
+        (current) =>
+          current?.map((m) => (m.id === message.id ? { ...m, saved_at: savedAt, saved_by: save ? userId : null } : m)) ??
+          null,
+      );
+    } catch (error) {
+      Alert.alert('Something went wrong', friendlyError(error));
+    }
+  }
+
+  // Press and hold a message: save/unsave a peek, unsend your own, or report theirs.
   function openMenu(message: Message) {
+    const saveOptions =
+      message.kind !== 'snap'
+        ? []
+        : message.saved_at
+          ? [{ label: 'Unsave', onPress: () => toggleSaved(message, false) }]
+          : canSave(message)
+            ? [{ label: 'Save in chat 📌', onPress: () => toggleSaved(message, true) }]
+            : [];
     if (message.sender_id === userId) {
       showOptions({
         options: [
+          ...saveOptions,
           {
             label: 'Unsend',
             destructive: true,
@@ -118,6 +167,7 @@ export default function ChatScreen() {
     } else if (friend) {
       showOptions({
         options: [
+          ...saveOptions,
           {
             label: 'Report message',
             onPress: () => report({ user: friend, contentType: 'message', contentId: message.id }),
@@ -138,9 +188,12 @@ export default function ChatScreen() {
           friend ? (
             <Pressable style={styles.headerTitle} onPress={() => router.push(`/profile/${friend.id}`)}>
               <Avatar path={friend.avatar_path} name={name} size={32} />
-              <Text style={styles.headerName} numberOfLines={1}>
-                {name}
-              </Text>
+              <View>
+                <Text style={styles.headerName} numberOfLines={1}>
+                  {name}
+                </Text>
+                {friendTyping ? <Text style={styles.headerTyping}>typing…</Text> : null}
+              </View>
             </Pressable>
           ) : null
         }
@@ -161,12 +214,17 @@ export default function ChatScreen() {
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.list}
             keyboardDismissMode="interactive"
+            // The list is upside down, so this "header" sits at the very bottom, under the newest message.
+            ListHeaderComponent={friendTyping ? <TypingBubble /> : undefined}
             renderItem={({ item }) => (
               <MessageView
                 message={item}
-                mine={item.sender_id === userId}
+                me={userId}
                 showStatus={item.id === myLatestId}
-                onLongPress={() => openMenu(item)}
+                onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  openMenu(item);
+                }}
               />
             )}
           />
@@ -183,7 +241,10 @@ export default function ChatScreen() {
             />
             <TextInput
               value={text}
-              onChangeText={setText}
+              onChangeText={(value) => {
+                setText(value);
+                onTextChange(value);
+              }}
               placeholder="Send a chat"
               placeholderTextColor={colors.textFaint}
               keyboardAppearance="dark"
@@ -207,31 +268,47 @@ export default function ChatScreen() {
   );
 }
 
-function MessageView({ message, mine, showStatus, onLongPress }: {
+function MessageView({ message, me, showStatus, onLongPress }: {
   message: Message;
-  mine: boolean;
+  me: string;
   showStatus: boolean;
   onLongPress: () => void;
 }) {
+  const mine = message.sender_id === me;
   const time = timeAgo(message.created_at);
-  const status = mine && showStatus ? ` · ${message.opened_at ? 'Opened' : 'Delivered'}` : '';
+  const seen = message.replayed_at ? 'Replayed 🔁' : message.opened_at ? 'Opened' : 'Delivered';
+  const status = mine && showStatus ? ` · ${seen}` : '';
 
   if (message.kind === 'snap') {
-    const canOpen = !mine && message.opened_at === null;
+    // What this peek looks like and does, from your side.
+    const isNew = !mine && message.opened_at === null;
+    const saved = message.saved_at !== null;
+    const replay = canReplay(message, me);
+    const look: { icon: keyof typeof Ionicons.glyphMap; text: string } = isNew
+      ? { icon: 'square', text: 'New peek · tap to view' }
+      : saved
+        ? { icon: 'bookmark', text: 'Saved peek · tap to view' }
+        : mine
+          ? { icon: 'paper-plane', text: 'You sent a peek' }
+          : replay
+            ? { icon: 'refresh', text: 'Tap to replay' }
+            : { icon: 'square-outline', text: 'Peek opened' };
+    const tappable = isNew || saved || replay;
+    const tint = saved && !isNew ? colors.purple : colors.accent;
+
     return (
       <Pressable
-        onPress={canOpen ? () => router.push(`/snap/${message.id}`) : undefined}
+        onPress={tappable ? () => router.push(`/snap/${message.id}`) : undefined}
         onLongPress={onLongPress}
-        style={[styles.snap, mine ? styles.right : styles.left, canOpen && styles.snapNew]}>
-        <Ionicons
-          name={canOpen ? 'square' : mine ? 'paper-plane' : 'square-outline'}
-          size={18}
-          color={canOpen ? colors.white : colors.accent}
-        />
-        <Text style={[styles.snapText, canOpen && styles.snapTextNew]}>
-          {mine ? 'You sent a peek' : canOpen ? 'New peek · tap to view' : 'Peek opened'}
-        </Text>
-        <Text style={[styles.time, canOpen && styles.snapTextNew]}>
+        style={[
+          styles.snap,
+          mine ? styles.right : styles.left,
+          { borderColor: tint },
+          isNew && styles.snapNew,
+        ]}>
+        <Ionicons name={look.icon} size={18} color={isNew ? colors.white : tint} />
+        <Text style={[styles.snapText, { color: tint }, isNew && styles.snapTextNew]}>{look.text}</Text>
+        <Text style={[styles.time, isNew && styles.snapTextNew]}>
           {time}
           {status}
         </Text>
@@ -252,6 +329,38 @@ function MessageView({ message, mine, showStatus, onLongPress }: {
   );
 }
 
+// Three little dots that bounce while your friend is typing.
+function TypingBubble() {
+  return (
+    <Animated.View
+      entering={FadeIn.duration(150)}
+      exiting={FadeOut.duration(150)}
+      style={[styles.bubble, styles.bubbleTheirs, styles.typing]}
+      accessibilityLabel="Typing">
+      {[0, 1, 2].map((i) => (
+        <TypingDot key={i} delay={i * 150} />
+      ))}
+    </Animated.View>
+  );
+}
+
+function TypingDot({ delay }: { delay: number }) {
+  const up = useSharedValue(0);
+  useEffect(() => {
+    up.set(
+      withDelay(
+        delay,
+        withRepeat(withSequence(withTiming(1, { duration: 300 }), withTiming(0, { duration: 300 })), -1),
+      ),
+    );
+  }, [up, delay]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.4 + up.get() * 0.6,
+    transform: [{ translateY: -up.get() * 4 }],
+  }));
+  return <Animated.View style={[styles.dot, style]} />;
+}
+
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
@@ -269,6 +378,24 @@ const styles = StyleSheet.create({
   headerName: {
     ...font.body,
     fontWeight: '800',
+  },
+  headerTyping: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  typing: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 16,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
   },
   list: {
     padding: space.lg,

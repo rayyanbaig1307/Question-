@@ -264,3 +264,19 @@ You need **two accounts that are friends**, ideally on two phones.
    blocked you).
 7. **Privacy check:** turn on **Private account** (Settings) → your posts disappear from strangers' Discover.
 8. Block someone from **•••** → their posts vanish from your Discover straight away.
+
+## Step 13 – Replay, save and "typing…" in chat
+
+You need **two accounts that are friends** (two phones is easiest).
+
+1. **Replay:** send a peek. Your friend opens it (10 seconds). In their chat it now says **🔁 Tap to replay** –
+   they tap it and see it once more. After that it says **Peek opened** for good. On your side the status under
+   your latest message says **Replayed 🔁**. (The replay is available for 24 hours after opening.)
+2. **Save in chat:** press and hold a peek in the chat → **Save in chat 📌** (the phone buzzes). It turns purple with
+   a 📌 and says **Saved peek · tap to view** – for **both** of you – and can be opened any time, with no timer.
+   You can also tap **Save** at the top right while watching a peek.
+3. **Unsave:** press and hold the saved peek → **Unsave**. It goes back to disappearing.
+4. **Typing:** start typing a message. On your friend's phone, three bouncing dots appear at the bottom of the chat
+   and **typing…** shows under your name at the top. They disappear when you stop typing for a few seconds, clear the
+   box, or send the message.
+5. **Privacy checks:** only the two people in a chat can save its peeks or see each other typing – never anyone else.
