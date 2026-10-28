@@ -1,280 +1,192 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
-import { FeedCard } from '@/components/FeedCard';
-import { IconButton } from '@/components/IconButton';
-import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
-import { friendlyError } from '@/lib/errors';
-import { FEED_PAGE_SIZE, fetchFeed, setLiked, type FeedPost } from '@/lib/feed';
-import { useMediaUrl, useMediaUrls } from '@/lib/media';
-import { deletePost } from '@/lib/posts';
 import { inviteFriends } from '@/lib/invite';
+import { useMediaUrls } from '@/lib/media';
 import { fetchStoryRings, type StoryRing } from '@/lib/stories';
-import { timeAgo, timeLeft } from '@/lib/time';
-import { useSafetyActions } from '@/lib/useSafetyActions';
+import { timeAgo } from '@/lib/time';
 import { colors, font, gradients, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
 type Rings = { mine: StoryRing | null; friends: StoryRing[] };
 
-// Right page: stories at the top, then the feed of your friends' posts.
+// Stories only: a row of circles at the top (My Story first), then bigger cards for friends' stories.
 export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const tabSpace = useTabBarSpace();
-  const { showOptions, showToast } = useOverlays();
-  const { report } = useSafetyActions();
+  const { width } = useWindowDimensions();
   const [rings, setRings] = useState<Rings | null>(null);
-  const [posts, setPosts] = useState<FeedPost[] | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const show = useCallback((loaded: Rings & { feed: FeedPost[] }) => {
-    setRings({ mine: loaded.mine, friends: loaded.friends });
-    setPosts(loaded.feed);
-    setHasMore(loaded.feed.length === FEED_PAGE_SIZE);
-  }, []);
-
   const showError = useCallback((error: unknown) => {
-    console.warn('Could not load stories and feed', error);
+    console.warn('Could not load stories', error);
     setRings((current) => current ?? { mine: null, friends: [] });
-    setPosts((current) => current ?? []);
   }, []);
 
   // Refresh whenever you swipe to this page (or come back from watching stories).
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    loadStoriesAndFeed(userId)
-      .then((loaded) => !cancelled && show(loaded))
+    fetchStoryRings(userId)
+      .then((loaded) => !cancelled && setRings(loaded))
       .catch((error) => !cancelled && showError(error));
     return () => {
       cancelled = true;
     };
-  }, [visible, userId, show, showError]);
+  }, [visible, userId, showError]);
 
   async function refresh() {
     setRefreshing(true);
     try {
-      show(await loadStoriesAndFeed(userId));
+      setRings(await fetchStoryRings(userId));
     } catch (error) {
       showError(error);
     }
     setRefreshing(false);
   }
 
-  async function loadMore() {
-    if (!posts || !hasMore || loadingMore || posts.length === 0) return;
-    setLoadingMore(true);
-    try {
-      const older = await fetchFeed(userId, posts[posts.length - 1].created_at);
-      setPosts([...posts, ...older.filter((post) => !posts.some((p) => p.id === post.id))]);
-      setHasMore(older.length === FEED_PAGE_SIZE);
-    } catch (error) {
-      console.warn('Could not load more posts', error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
-  const updatePost = (id: string, change: (post: FeedPost) => FeedPost) =>
-    setPosts((current) => current?.map((post) => (post.id === id ? change(post) : post)) ?? null);
-
-  async function like(post: FeedPost, liked: boolean) {
-    const flip = (p: FeedPost, on: boolean): FeedPost => ({
-      ...p,
-      likedByMe: on,
-      likeCount: Math.max(0, p.likeCount + (on ? 1 : -1)),
-    });
-    updatePost(post.id, (p) => flip(p, liked)); // show it straight away
-    try {
-      await setLiked(userId, post.id, liked);
-    } catch {
-      updatePost(post.id, (p) => flip(p, !liked)); // undo if it didn't work
-    }
-  }
-
-  function openMenu(post: FeedPost) {
-    if (post.user_id === userId) {
-      showOptions({
-        options: [
-          { label: 'Open full screen', onPress: () => router.push(`/post/${post.id}`) },
-          {
-            label: 'Delete post',
-            destructive: true,
-            onPress: () =>
-              Alert.alert('Delete this post?', 'It will be gone from your profile for good.', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await deletePost(post);
-                      setPosts((current) => current?.filter((p) => p.id !== post.id) ?? null);
-                      showToast('Post deleted 🗑️');
-                    } catch (error) {
-                      Alert.alert('Could not delete', friendlyError(error));
-                    }
-                  },
-                },
-              ]),
-          },
-        ],
-      });
-    } else if (post.author) {
-      const author = post.author;
-      showOptions({
-        options: [
-          { label: 'Open full screen', onPress: () => router.push(`/post/${post.id}`) },
-          { label: 'Report post', onPress: () => report({ user: author, contentType: 'post', contentId: post.id }) },
-        ],
-      });
-    }
-  }
-
-  const urls = useMediaUrls((posts ?? []).map((post) => post.media_path));
-
-  return (
-    <View style={styles.fill}>
-      <PageHeader title="Stories" cameraSide="left" onCamera={onCamera} />
-      <FlatList
-        data={posts ?? []}
-        keyExtractor={(post) => post.id}
-        contentContainerStyle={[styles.content, { paddingBottom: tabSpace + space.lg }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.6}
-        ListHeaderComponent={<StoriesHeader rings={rings} userId={userId} onCamera={onCamera} />}
-        ListEmptyComponent={
-          posts === null ? (
-            <ActivityIndicator color={colors.accent} style={styles.loading} />
-          ) : (
-            <EmptyState
-              emoji="🦗"
-              title="Crickets…"
-              message="Nobody has posted yet. Be the legend who goes first, or invite friends to liven things up!">
-              <Button title="Take a photo" icon="camera" onPress={onCamera} />
-              <Button title="Invite friends" icon="paper-plane" variant="secondary" onPress={() => inviteFriends(profile?.username)} />
-            </EmptyState>
-          )
-        }
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} /> : undefined}
-        renderItem={({ item }) => (
-          <FeedCard
-            post={item}
-            url={urls[item.media_path]}
-            onLike={(liked) => like(item, liked)}
-            onMenu={() => openMenu(item)}
-          />
-        )}
-      />
-    </View>
-  );
-}
-
-async function loadStoriesAndFeed(userId: string): Promise<Rings & { feed: FeedPost[] }> {
-  const [rings, feed] = await Promise.all([fetchStoryRings(userId), fetchFeed(userId)]);
-  return { ...rings, feed };
-}
-
-// My Story + friends' story circles, shown above the feed.
-function StoriesHeader({ rings, userId, onCamera }: { rings: Rings | null; userId: string; onCamera: () => void }) {
   const mine = rings?.mine ?? null;
-  const latest = mine?.stories[mine.stories.length - 1];
-  const thumbnail = useMediaUrl(latest?.media_path);
   const friends = rings?.friends ?? [];
-  const { profile } = useMe();
+  const latestOf = (ring: StoryRing) => ring.stories[ring.stories.length - 1];
+  const thumbs = useMediaUrls(friends.map((ring) => latestOf(ring).media_path));
 
   // Watch one friend's stories, then carry on with the next friends who have new ones.
   function openFriend(index: number) {
-    const next = friends
+    const queue = friends
       .slice(index + 1)
       .filter((ring) => !ring.allSeen)
       .map((ring) => ring.author.id);
     router.push({
       pathname: '/stories/[user]',
-      params: next.length ? { user: friends[index].author.id, queue: next.join(',') } : { user: friends[index].author.id },
+      params: queue.length ? { user: friends[index].author.id, queue: queue.join(',') } : { user: friends[index].author.id },
     });
   }
 
-  return (
-    <View style={styles.header}>
-      <Pressable
-        style={styles.myStory}
-        onPress={() => (mine ? router.push({ pathname: '/stories/[user]', params: { user: userId } }) : onCamera())}>
-        <LinearGradient colors={latest ? gradients.brand : [colors.border, colors.border]} style={styles.ring}>
-          <View style={styles.ringGap}>
-            {thumbnail && latest ? (
-              <Image source={{ uri: thumbnail, cacheKey: latest.media_path }} style={styles.thumb} contentFit="cover" />
-            ) : (
-              <View style={[styles.thumb, styles.addThumb]}>
-                <Text style={styles.plus}>＋</Text>
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-        <View style={styles.myStoryText}>
-          <Text style={styles.myStoryTitle}>My Story</Text>
-          <Text style={styles.myStorySubtitle}>
-            {mine
-              ? `${mine.stories.length} ${mine.stories.length === 1 ? 'photo' : 'photos'} · ${timeLeft(mine.stories[0].expires_at)}`
-              : 'Tap to add a photo to your story'}
-          </Text>
-        </View>
-        {mine ? <IconButton icon="add" label="Add to story" background={colors.surface} onPress={onCamera} /> : null}
-      </Pressable>
+  const openMine = () => (mine ? router.push({ pathname: '/stories/[user]', params: { user: userId } }) : onCamera());
+  const cardWidth = (width - space.lg * 2 - space.md) / 2;
+  const myName = profile?.display_name || profile?.username;
 
-      <Text style={styles.sectionTitle}>Friends&apos; stories</Text>
-      {rings === null ? null : friends.length === 0 ? (
-        <View style={styles.noStoriesRow}>
-          <InviteBubble onPress={() => inviteFriends(profile?.username)} />
-          <Text style={styles.noStories}>No new stories right now. 🌙{'\n'}Invite friends so there&apos;s more to watch!</Text>
-        </View>
-      ) : (
+  return (
+    <View style={styles.fill}>
+      <PageHeader title="Stories" cameraSide="left" onCamera={onCamera} />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabSpace + space.lg }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}>
+        {/* The row of circles, like Instagram */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rings}>
+          <Pressable style={styles.circle} onPress={openMine} accessibilityLabel={mine ? 'Watch my story' : 'Add to my story'}>
+            <Ring active={!!mine}>
+              <Avatar path={profile?.avatar_path} name={myName} size={64} />
+            </Ring>
+            <Bouncy style={styles.plus} pressScale={0.8} onPress={onCamera} accessibilityLabel="Add to my story">
+              <Text style={styles.plusText}>＋</Text>
+            </Bouncy>
+            <Text style={styles.circleName} numberOfLines={1}>
+              My Story
+            </Text>
+          </Pressable>
+
           {friends.map((ring, index) => (
-            <Pressable key={ring.author.id} style={styles.friend} onPress={() => openFriend(index)}>
-              <LinearGradient colors={ring.allSeen ? [colors.border, colors.border] : gradients.brand} style={styles.ring}>
-                <View style={styles.ringGap}>
-                  <Avatar path={ring.author.avatar_path} name={ring.author.display_name || ring.author.username} size={60} />
-                </View>
-              </LinearGradient>
-              <Text style={[styles.friendName, ring.allSeen && styles.seen]} numberOfLines={1}>
+            <Pressable key={ring.author.id} style={styles.circle} onPress={() => openFriend(index)}>
+              <Ring active={!ring.allSeen}>
+                <Avatar path={ring.author.avatar_path} name={ring.author.display_name || ring.author.username} size={64} />
+              </Ring>
+              <Text style={[styles.circleName, ring.allSeen && styles.seen]} numberOfLines={1}>
                 {ring.author.display_name || ring.author.username}
               </Text>
-              <Text style={styles.friendTime}>{timeAgo(ring.latestAt)}</Text>
             </Pressable>
           ))}
-          <InviteBubble onPress={() => inviteFriends(profile?.username)} />
-        </ScrollView>
-      )}
 
-      <Text style={styles.sectionTitle}>Feed</Text>
+          <Pressable
+            style={styles.circle}
+            onPress={() => inviteFriends(profile?.username)}
+            accessibilityRole="button"
+            accessibilityLabel="Invite friends">
+            <View style={[styles.ring, styles.inviteRing]}>
+              <Text style={styles.inviteText}>＋</Text>
+            </View>
+            <Text style={styles.circleName}>Invite</Text>
+          </Pressable>
+        </ScrollView>
+
+        {rings === null ? (
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
+        ) : friends.length === 0 ? (
+          <EmptyState
+            emoji="🌙"
+            title="No stories right now"
+            message="When your friends share a story, it shows up here for 24 hours.">
+            <Button title="Add to my story" icon="camera" onPress={onCamera} />
+            <Button title="Invite friends" icon="paper-plane" variant="secondary" onPress={() => inviteFriends(profile?.username)} />
+          </EmptyState>
+        ) : (
+          <>
+            <Text style={styles.sectionTitle}>Friends&apos; stories</Text>
+            <View style={styles.grid}>
+              {friends.map((ring, index) => {
+                const latest = latestOf(ring);
+                const thumb = thumbs[latest.media_path];
+                const name = ring.author.display_name || ring.author.username;
+                return (
+                  <Bouncy
+                    key={ring.author.id}
+                    style={[styles.card, { width: cardWidth, height: cardWidth * 1.6 }, ring.allSeen && styles.cardSeen]}
+                    pressScale={0.96}
+                    onPress={() => openFriend(index)}
+                    accessibilityLabel={`Watch ${name}'s story`}>
+                    {thumb ? (
+                      <Image source={{ uri: thumb, cacheKey: latest.media_path }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    ) : null}
+                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.cardShade} />
+                    <View style={styles.cardInfo}>
+                      <Avatar path={ring.author.avatar_path} name={name} size={28} />
+                      <View style={styles.cardText}>
+                        <Text style={styles.cardName} numberOfLines={1}>
+                          {name}
+                        </Text>
+                        <Text style={styles.cardTime}>{ring.allSeen ? 'Seen' : timeAgo(ring.latestAt)}</Text>
+                      </View>
+                    </View>
+                    {!ring.allSeen ? <View style={styles.newDot} /> : null}
+                  </Bouncy>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-// A dashed circle with a "+" that opens the share sheet to invite friends.
-function InviteBubble({ onPress }: { onPress: () => void }) {
+// The colorful ring around a story circle (grey once you've seen everything).
+function Ring({ active, children }: { active: boolean; children: ReactNode }) {
   return (
-    <Pressable style={styles.friend} onPress={onPress} accessibilityRole="button" accessibilityLabel="Invite friends">
-      <View style={[styles.ring, styles.inviteRing]}>
-        <Text style={styles.plus}>＋</Text>
-      </View>
-      <Text style={styles.friendName}>Invite</Text>
-      <Text style={styles.friendTime}>friends</Text>
-    </Pressable>
+    <LinearGradient colors={active ? gradients.brand : [colors.border, colors.border]} style={styles.ring}>
+      <View style={styles.ringGap}>{children}</View>
+    </LinearGradient>
   );
 }
+
+const RING = 76;
 
 const styles = StyleSheet.create({
   fill: {
@@ -282,93 +194,53 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    paddingHorizontal: space.lg,
-    paddingBottom: space.xxl,
+    paddingTop: space.sm,
+    gap: space.lg,
   },
   loading: {
     marginTop: space.xl,
   },
-  header: {
+  rings: {
     gap: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.xs,
   },
-  myStory: {
-    flexDirection: 'row',
+  circle: {
+    width: RING,
     alignItems: 'center',
-    gap: space.lg,
-    backgroundColor: colors.card,
-    padding: space.lg,
-    borderRadius: radius.lg,
+    gap: 6,
   },
   ring: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: RING,
+    height: RING,
+    borderRadius: RING / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringGap: {
     padding: 3,
-    borderRadius: 36,
+    borderRadius: RING / 2,
     backgroundColor: colors.bg,
   },
-  thumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  addThumb: {
-    backgroundColor: colors.surface,
+  plus: {
+    position: 'absolute',
+    top: RING - 26,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.accent,
+    borderWidth: 3,
+    borderColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plus: {
-    color: colors.accent,
-    fontSize: 28,
+  plusText: {
+    color: colors.white,
+    fontSize: 14,
     fontWeight: '900',
   },
-  myStoryText: {
-    flex: 1,
-    gap: 2,
-  },
-  myStoryTitle: {
-    ...font.heading,
-  },
-  myStorySubtitle: {
-    ...font.small,
-  },
-  sectionTitle: {
-    ...font.label,
-    textTransform: 'uppercase',
-    marginLeft: space.xs,
-    marginBottom: -space.sm,
-  },
-  noStoriesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-  },
-  noStories: {
-    ...font.small,
-    flex: 1,
-    lineHeight: 19,
-  },
-  inviteRing: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.accent,
-  },
-  rings: {
-    gap: space.lg,
-    paddingVertical: space.xs,
-  },
-  friend: {
-    width: 76,
-    alignItems: 'center',
-    gap: 4,
-  },
-  friendName: {
+  circleName: {
     ...font.small,
     color: colors.text,
     fontWeight: '700',
@@ -376,9 +248,67 @@ const styles = StyleSheet.create({
   seen: {
     color: colors.textMuted,
   },
-  friendTime: {
-    ...font.small,
-    fontSize: 11,
-    color: colors.textFaint,
+  inviteRing: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.accent,
+  },
+  inviteText: {
+    color: colors.accent,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  sectionTitle: {
+    ...font.label,
+    textTransform: 'uppercase',
+    marginHorizontal: space.lg,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.md,
+    paddingHorizontal: space.lg,
+  },
+  card: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.card,
+    justifyContent: 'flex-end',
+  },
+  cardSeen: {
+    opacity: 0.6,
+  },
+  cardShade: {
+    ...StyleSheet.absoluteFill,
+    top: '50%',
+  },
+  cardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.md,
+  },
+  cardText: {
+    flexShrink: 1,
+  },
+  cardName: {
+    color: colors.white,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  cardTime: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+  },
+  newDot: {
+    position: 'absolute',
+    top: space.md,
+    right: space.md,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.white,
   },
 });

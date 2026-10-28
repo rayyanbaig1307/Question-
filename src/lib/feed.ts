@@ -39,37 +39,37 @@ async function withLikes(me: string, rows: PostRow[]): Promise<FeedPost[]> {
   }));
 }
 
-// Newest posts from you and your friends. Pass `before` (a date) to load older ones.
-export async function fetchFeed(me: string, before?: string): Promise<FeedPost[]> {
+// Where Discover is up to: first your friends' posts (and yours), then everyone else's public posts.
+export type DiscoverCursor = { phase: 'friends' | 'everyone'; before?: string };
+export type DiscoverPost = FeedPost & { fromEveryone: boolean };
+
+const POST_FIELDS = '*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)';
+
+// Discover, Instagram-style: your friends' posts and yours, newest first – and when those run out,
+// everyone else on Peekaboo. (The database leaves out private accounts you're not friends with, and anyone
+// blocked.) Returns the next cursor, or null when there's nothing more.
+export async function fetchDiscover(
+  me: string,
+  cursor: DiscoverCursor = { phase: 'friends' },
+): Promise<{ posts: DiscoverPost[]; next: DiscoverCursor | null }> {
   const friends = await fetchFriends(me);
-  const authors = [me, ...friends.map((friend) => friend.id)];
-  let query = supabase
-    .from('posts')
-    .select('*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)')
-    .in('user_id', authors)
-    .order('created_at', { ascending: false })
-    .limit(FEED_PAGE_SIZE);
-  if (before) query = query.lt('created_at', before);
+  const circle = [me, ...friends.map((friend) => friend.id)];
+  const everyone = cursor.phase === 'everyone';
+
+  let query = supabase.from('posts').select(POST_FIELDS).order('created_at', { ascending: false }).limit(FEED_PAGE_SIZE);
+  query = everyone ? query.not('user_id', 'in', `(${circle.join(',')})`) : query.in('user_id', circle);
+  if (cursor.before) query = query.lt('created_at', cursor.before);
   const { data, error } = await query;
   if (error) throw error;
-  return withLikes(me, (data ?? []) as PostRow[]);
-}
 
-export const DISCOVER_PAGE_SIZE = 10;
-
-// Discover: newest posts from everyone – yours, public accounts and your friends.
-// (The database leaves out private accounts you're not friends with, and anyone blocked.)
-// Pass `before` (a date) to load older ones.
-export async function fetchDiscover(me: string, before?: string): Promise<FeedPost[]> {
-  let query = supabase
-    .from('posts')
-    .select('*, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)')
-    .order('created_at', { ascending: false })
-    .limit(DISCOVER_PAGE_SIZE);
-  if (before) query = query.lt('created_at', before);
-  const { data, error } = await query;
-  if (error) throw error;
-  return withLikes(me, (data ?? []) as PostRow[]);
+  const page = (await withLikes(me, (data ?? []) as PostRow[])).map((post) => ({ ...post, fromEveryone: everyone }));
+  if (page.length === FEED_PAGE_SIZE) {
+    return { posts: page, next: { phase: cursor.phase, before: page[page.length - 1].created_at } };
+  }
+  if (everyone) return { posts: page, next: null };
+  // Friends' posts ran out: carry straight on with everyone else's.
+  const rest = await fetchDiscover(me, { phase: 'everyone' });
+  return { posts: [...page, ...rest.posts], next: rest.next };
 }
 
 // Likes + comments for one post (used on the full-screen photo).
