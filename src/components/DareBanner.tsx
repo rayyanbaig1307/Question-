@@ -93,23 +93,27 @@ export function DareBanner({ onPress, onDismiss }: {
   );
 }
 
-// The small round 🎯 on the camera that always opens the Dare screen.
+// The pill at the top of the camera: "🎯 Today's dare" and the dare itself. Tap it to open the Dare screen.
 // A pink dot means you haven't done today's dare yet; a ✅ means you have.
-export function DareButton({ done }: { done: boolean | null }) {
+export function DarePill({ done }: { done: boolean | null }) {
+  const dare = dareFor(todayDareDay());
   return (
     <Bouncy
-      style={styles.button}
-      pressScale={0.85}
-      hitSlop={8}
+      style={styles.pill}
+      pressScale={0.95}
       onPress={() => {
         Haptics.selectionAsync();
         router.push('/dare');
       }}
       accessibilityRole="button"
-      accessibilityLabel={done ? 'Daily dare – done' : 'Daily dare'}>
-      <Text style={styles.buttonEmoji}>🎯</Text>
-      {done === true ? <Text style={styles.buttonCheck}>✅</Text> : null}
-      {done === false ? <View style={styles.buttonDot} /> : null}
+      accessibilityLabel={`Today's dare: ${dare.text}${done ? ' – done' : ''}`}>
+      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <Text style={styles.pillLabel}>🎯 Today&apos;s dare</Text>
+      <Text style={styles.pillText} numberOfLines={1}>
+        {dare.text}
+      </Text>
+      {done ? <Text style={styles.pillCheck}>✅</Text> : null}
+      {done === false ? <View style={styles.pillDot} /> : null}
     </Bouncy>
   );
 }
@@ -151,33 +155,41 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '900',
   },
-  button: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.overlay,
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: space.sm,
+    alignSelf: 'stretch',
+    paddingLeft: space.md,
+    paddingRight: space.lg,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
   },
-  buttonEmoji: {
-    fontSize: 22,
+  pillLabel: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '900',
   },
-  buttonCheck: {
+  pillText: {
+    flexShrink: 1,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pillCheck: {
+    fontSize: 13,
+  },
+  pillDot: {
     position: 'absolute',
-    right: -4,
-    bottom: -4,
-    fontSize: 14,
-  },
-  buttonDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.accent,
+    top: 6,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.white,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.accent,
   },
   banner: {
     flexDirection: 'row',

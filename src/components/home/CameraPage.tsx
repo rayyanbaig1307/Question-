@@ -9,7 +9,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
-import { DareBanner, DareButton } from '@/components/DareBanner';
+import { DareBanner, DarePill } from '@/components/DareBanner';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
@@ -41,7 +41,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
   const isHome = !sendTo && !dare;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
-  // The dare banner pops up once a day (until you've done the dare), then goes away for the rest of the day.
+  // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
   const bannerGone = bannerGoneDay === todayDareDay();
@@ -133,22 +133,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
                 <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
                 <CountBadge count={requestCount} />
               </View>
-              <DareButton done={dareDone} />
             </View>
           ) : (
             <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
           )}
-          {/* Today's dare pops up for a few seconds: tap it to open the Dare screen, or swipe it up to hide it.
-              When you're taking the dare photo, it's a quick reminder of what the dare is. */}
-          {isHome && active && dareDone === false && !bannerGone ? (
-            <DareBanner
-              onDismiss={hideBanner}
-              onPress={() => {
-                hideBanner();
-                router.push('/dare');
-              }}
-            />
-          ) : null}
+          {/* Today's dare, always one tap away (pink dot = not done yet) */}
+          {isHome ? <DarePill done={dareDone} /> : null}
+          {/* Taking the dare photo: a quick reminder of what the dare is */}
           {dare && !bannerGone ? <DareBanner onDismiss={hideBanner} /> : null}
         </View>
         <View style={styles.tools}>
