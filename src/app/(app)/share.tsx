@@ -2,12 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
@@ -25,6 +25,7 @@ export default function Share() {
   const { uri, to } = useLocalSearchParams<{ uri: string; to?: string }>();
   const { userId } = useMe();
   const { showToast } = useOverlays();
+  const insets = useSafeAreaInsets();
 
   const [toStory, setToStory] = useState(!to);
   const [toProfile, setToProfile] = useState(false);
@@ -73,12 +74,8 @@ export default function Share() {
   }
 
   return (
-    <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <IconButton icon="chevron-back" label="Back" background={colors.card} onPress={() => router.back()} />
-        <Text style={styles.title}>Send to…</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <View style={styles.fill}>
+      <ScreenHeader title="Send to…" />
 
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -140,11 +137,11 @@ export default function Share() {
           )}
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + space.lg }]}>
           <Button title="Send" icon="send" onPress={send} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -191,19 +188,6 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
     backgroundColor: colors.bg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  title: {
-    ...font.heading,
   },
   content: {
     padding: space.lg,

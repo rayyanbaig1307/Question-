@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { IconButton } from '@/components/IconButton';
@@ -14,6 +14,7 @@ export function PageHeader({ title, cameraSide, onCamera }: {
   onCamera: () => void;
 }) {
   const { userId, profile } = useMe();
+  const insets = useSafeAreaInsets();
 
   const camera = (
     <IconButton icon="camera" label="Back to camera" background={colors.card} size={40} onPress={onCamera} />
@@ -25,11 +26,11 @@ export function PageHeader({ title, cameraSide, onCamera }: {
   );
 
   return (
-    <SafeAreaView edges={['top']} style={styles.bar}>
+    <View style={[styles.bar, { paddingTop: insets.top }]}>
       <View style={styles.side}>{cameraSide === 'left' ? camera : me}</View>
       <Text style={styles.title}>{title}</Text>
       <View style={[styles.side, styles.right]}>{cameraSide === 'right' ? camera : me}</View>
-    </SafeAreaView>
+    </View>
   );
 }
 

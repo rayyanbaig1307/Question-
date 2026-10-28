@@ -9,9 +9,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { SafeScreen } from '@/components/SafeEdge';
 import { colors, font, space } from '@/theme';
 
 export default function Welcome() {
@@ -27,7 +27,7 @@ export default function Welcome() {
 
   return (
     <LinearGradient colors={[colors.purple, colors.pink, colors.orange]} style={styles.fill}>
-      <SafeAreaView style={styles.fill}>
+      <SafeScreen style={styles.fill}>
         <View style={styles.hero}>
           <Animated.Text style={[styles.mascot, mascotStyle]}>👀</Animated.Text>
           <Text style={styles.title}>Peekaboo</Text>
@@ -42,7 +42,7 @@ export default function Welcome() {
             onPress={() => router.push('/sign-in')}
           />
         </View>
-      </SafeAreaView>
+      </SafeScreen>
     </LinearGradient>
   );
 }

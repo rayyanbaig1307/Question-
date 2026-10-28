@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SafeScreen } from '@/components/SafeEdge';
 import { colors, radius, space } from '@/theme';
 import { TEXT_COLORS, textOn, type OverlayItem } from './stickers';
 
@@ -20,7 +20,7 @@ export function TextComposer({ initial, onDone }: {
 
   return (
     <View style={styles.backdrop}>
-      <SafeAreaView style={styles.fill}>
+      <SafeScreen style={styles.fill}>
         <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.topRow}>
             <Pressable
@@ -65,7 +65,7 @@ export function TextComposer({ initial, onDone }: {
             ))}
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </SafeScreen>
     </View>
   );
 }

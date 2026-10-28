@@ -1,4 +1,4 @@
-import { Stack, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 
@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchBlockedUsers, unblockUser, type BlockedUser } from '@/lib/safety';
@@ -36,7 +37,7 @@ export default function Blocked() {
 
   return (
     <View style={styles.fill}>
-      <Stack.Screen options={{ headerShown: true, title: 'Blocked accounts' }} />
+      <ScreenHeader title="Blocked accounts" />
       {blocked === null ? (
         <ActivityIndicator style={styles.loading} color={colors.accent} />
       ) : (

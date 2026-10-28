@@ -1,4 +1,4 @@
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -6,9 +6,9 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
-import { HeaderIconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
+import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { fetchRelation, type Relation } from '@/lib/friends';
 import { fetchUserPosts } from '@/lib/posts';
@@ -80,33 +80,32 @@ export default function ProfileScreen() {
     });
   }
 
+  // Top bar: back, @username, and – only on your own profile – the settings gear.
   const header = (
-    <Stack.Screen
-      options={{
-        headerShown: true,
-        title: profile ? `@${profile.username}` : '',
-        headerRight: () =>
-          isMe ? (
-            <HeaderIconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
-          ) : profile ? (
-            <HeaderIconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} />
-          ) : null,
-      }}
+    <ScreenHeader
+      title={profile ? `@${profile.username}` : ''}
+      right={
+        isMe ? (
+          <BrandIconButton icon="settings-sharp" label="Settings" onPress={() => router.push('/settings')} />
+        ) : profile ? (
+          <RoundIconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} />
+        ) : null
+      }
     />
   );
 
   if (!data) {
     return (
-      <View style={styles.center}>
+      <View style={styles.fill}>
         {header}
-        <ActivityIndicator color={colors.accent} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" style={styles.loading} />
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={styles.center}>
+      <View style={styles.fill}>
         {header}
         <EmptyState emoji="🤷" title="This account isn't available" message="It may have been deleted." />
       </View>
@@ -207,11 +206,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bg,
+  loading: {
+    marginTop: space.xxl,
   },
   header: {
     padding: space.lg,

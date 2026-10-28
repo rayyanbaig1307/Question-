@@ -1,14 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SafeScreen } from '@/components/SafeEdge';
 import { colors, font, gradients, radius, space } from '@/theme';
 
 // Shown instead of the app when the .env file with the Supabase details is missing.
 export function SetupNeeded() {
   return (
     <LinearGradient colors={gradients.night} style={styles.fill}>
-      <SafeAreaView style={styles.fill}>
+      <SafeScreen style={styles.fill}>
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.emoji}>🔌</Text>
           <Text style={styles.title}>Almost ready!</Text>
@@ -22,7 +22,7 @@ export function SetupNeeded() {
           </View>
           <Text style={styles.small}>Full steps are in README.md.</Text>
         </ScrollView>
-      </SafeAreaView>
+      </SafeScreen>
     </LinearGradient>
   );
 }

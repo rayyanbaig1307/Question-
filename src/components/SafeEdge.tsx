@@ -11,3 +11,9 @@ export function SafeEdge({ edge, style, ...rest }: ViewProps & { edge: 'top' | '
   const extra = typeof flat[key] === 'number' ? flat[key] : 0;
   return <View {...rest} style={[style, { [key]: insets[edge] + extra }]} />;
 }
+
+// A full screen that keeps clear of both the clock/notch and the home bar.
+export function SafeScreen({ style, ...rest }: ViewProps) {
+  const insets = useSafeAreaInsets();
+  return <View {...rest} style={[style, { paddingTop: insets.top, paddingBottom: insets.bottom }]} />;
+}

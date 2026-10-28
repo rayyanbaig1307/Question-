@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,12 +12,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import {
   cleanUpOpenedSnaps,
@@ -50,7 +50,7 @@ export default function ChatScreen() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
-  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   const loadMessages = useCallback(async () => {
     try {
@@ -132,23 +132,22 @@ export default function ChatScreen() {
   const myLatestId = messages?.find((m) => m.sender_id === userId)?.id;
 
   return (
-    <SafeAreaView style={styles.fill} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: () =>
-            friend ? (
-              <Pressable style={styles.headerTitle} onPress={() => router.push(`/profile/${friend.id}`)}>
-                <Avatar path={friend.avatar_path} name={name} size={32} />
-                <Text style={styles.headerName} numberOfLines={1}>
-                  {name}
-                </Text>
-              </Pressable>
-            ) : null,
-        }}
+    <View style={styles.fill}>
+      <ScreenHeader
+        titleContent={
+          friend ? (
+            <Pressable style={styles.headerTitle} onPress={() => router.push(`/profile/${friend.id}`)}>
+              <Avatar path={friend.avatar_path} name={name} size={32} />
+              <Text style={styles.headerName} numberOfLines={1}>
+                {name}
+              </Text>
+            </Pressable>
+          ) : null
+        }
       />
 
-      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
+      {/* The negative offset stops a gap appearing between the message box and the keyboard. */}
+      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
         {messages === null ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : messages.length === 0 ? (
@@ -174,7 +173,7 @@ export default function ChatScreen() {
         )}
 
         {areFriends ? (
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
             <IconButton
               icon="camera"
               label="Send a peek"
@@ -201,10 +200,10 @@ export default function ChatScreen() {
             />
           </View>
         ) : (
-          <Text style={styles.notFriends}>You need to be friends to chat.</Text>
+          <Text style={[styles.notFriends, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
         )}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

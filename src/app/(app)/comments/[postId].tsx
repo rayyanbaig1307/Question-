@@ -1,5 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,12 +11,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { addComment, deleteComment, fetchComments, type Comment } from '@/lib/feed';
@@ -32,7 +32,7 @@ export default function Comments() {
   const { userId } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
-  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [postOwner, setPostOwner] = useState<string | null>(null);
@@ -92,9 +92,10 @@ export default function Comments() {
   }
 
   return (
-    <SafeAreaView style={styles.fill} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: 'Comments' }} />
-      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
+    <View style={styles.fill}>
+      <ScreenHeader title="Comments" />
+      {/* The negative offset stops a gap appearing between the comment box and the keyboard. */}
+      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
         {comments === null ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : (
@@ -124,7 +125,7 @@ export default function Comments() {
           />
         )}
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
           <TextInput
             value={text}
             onChangeText={setText}
@@ -144,7 +145,7 @@ export default function Comments() {
           />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

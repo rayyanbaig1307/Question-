@@ -1,10 +1,11 @@
-import { Stack, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
 import { PersonRow } from '@/components/PersonRow';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { fetchMyFriendLinks, otherPerson, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
@@ -81,7 +82,7 @@ export default function Friends() {
 
   return (
     <View style={styles.fill}>
-      <Stack.Screen options={{ headerShown: true, title: 'Friends' }} />
+      <ScreenHeader title="Friends" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextField
           label="Find friends"

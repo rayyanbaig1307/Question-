@@ -1,9 +1,8 @@
-import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { IconButton } from '@/components/IconButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { colors, font, space } from '@/theme';
 
 // Layout for form screens: back button, big title, and fields that stay above the keyboard.
@@ -12,19 +11,16 @@ export function FormScreen({ title, subtitle, children }: {
   subtitle?: string;
   children: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+    <View style={styles.fill}>
+      <ScreenHeader />
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xl }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag">
-          <IconButton
-            icon="chevron-back"
-            label="Go back"
-            background={colors.card}
-            onPress={() => router.back()}
-          />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -32,7 +28,7 @@ export function FormScreen({ title, subtitle, children }: {
           {children}
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -42,13 +38,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    padding: space.xl,
+    paddingHorizontal: space.xl,
+    paddingTop: space.sm,
     gap: space.lg,
     flexGrow: 1,
   },
   header: {
     gap: space.xs,
-    marginTop: space.sm,
     marginBottom: space.sm,
   },
   title: {

@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useOverlays } from '@/components/Overlays';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { setLocationSharing } from '@/lib/location';
@@ -46,56 +47,57 @@ export default function Settings() {
   }
 
   return (
-    <ScrollView style={styles.fill} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ headerShown: true, title: 'Settings' }} />
+    <View style={styles.fill}>
+      <ScreenHeader title="Settings" />
+      <ScrollView style={styles.fill} contentContainerStyle={styles.content}>
+        <Section title="Privacy & safety">
+          <Row
+            icon="lock-closed"
+            color={colors.pink}
+            title="Private account"
+            subtitle="Only friends can see your posts"
+            right={
+              <Switch
+                value={profile?.is_private ?? false}
+                onValueChange={setPrivate}
+                trackColor={{ true: colors.pink, false: colors.border }}
+                thumbColor={colors.white}
+              />
+            }
+          />
+          <Row
+            icon="eye-off"
+            color={colors.purple}
+            title="Hide me on the map"
+            subtitle="When on, nobody sees where you are"
+            right={
+              <Switch
+                value={!(profile?.location_sharing ?? false)}
+                onValueChange={setHidden}
+                trackColor={{ true: colors.purple, false: colors.border }}
+                thumbColor={colors.white}
+              />
+            }
+          />
+          <Row icon="map" color={colors.green} title="Friend map" onPress={() => router.push('/map')} />
+          <Row
+            icon="hand-left"
+            color={colors.orange}
+            title="Blocked accounts"
+            onPress={() => router.push('/blocked')}
+          />
+        </Section>
 
-      <Section title="Privacy & safety">
-        <Row
-          icon="lock-closed"
-          color={colors.pink}
-          title="Private account"
-          subtitle="Only friends can see your posts"
-          right={
-            <Switch
-              value={profile?.is_private ?? false}
-              onValueChange={setPrivate}
-              trackColor={{ true: colors.pink, false: colors.border }}
-              thumbColor={colors.white}
-            />
-          }
-        />
-        <Row
-          icon="eye-off"
-          color={colors.purple}
-          title="Hide me on the map"
-          subtitle="When on, nobody sees where you are"
-          right={
-            <Switch
-              value={!(profile?.location_sharing ?? false)}
-              onValueChange={setHidden}
-              trackColor={{ true: colors.purple, false: colors.border }}
-              thumbColor={colors.white}
-            />
-          }
-        />
-        <Row icon="map" color={colors.green} title="Friend map" onPress={() => router.push('/map')} />
-        <Row
-          icon="hand-left"
-          color={colors.orange}
-          title="Blocked accounts"
-          onPress={() => router.push('/blocked')}
-        />
-      </Section>
+        <Section title="Account">
+          <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
+          <Row icon="log-out" color={colors.red} title="Log out" onPress={confirmSignOut} />
+        </Section>
 
-      <Section title="Account">
-        <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
-        <Row icon="log-out" color={colors.red} title="Log out" onPress={confirmSignOut} />
-      </Section>
-
-      <Text style={styles.footer}>
-        Peekaboo {Constants.expoConfig?.version ?? ''} · made with 💛
-      </Text>
-    </ScrollView>
+        <Text style={styles.footer}>
+          Peekaboo {Constants.expoConfig?.version ?? ''} · made with 💛
+        </Text>
+      </ScrollView>
+    </View>
   );
 }
 

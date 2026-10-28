@@ -9,13 +9,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
-import { SafeEdge } from '@/components/SafeEdge';
+import { SafeEdge, SafeScreen } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { fetchMessage, getSnapUrl, openSnap } from '@/lib/chat';
 import { fetchProfile } from '@/lib/profiles';
@@ -83,7 +82,7 @@ export default function SnapViewer() {
 
   if (state.kind !== 'showing') {
     return (
-      <SafeAreaView style={[styles.fill, styles.center]}>
+      <SafeScreen style={[styles.fill, styles.center]}>
         {state.kind === 'loading' ? (
           <>
             <ActivityIndicator color={colors.accent} size="large" />
@@ -103,7 +102,7 @@ export default function SnapViewer() {
             <Button title="Back" variant="secondary" onPress={close} />
           </>
         )}
-      </SafeAreaView>
+      </SafeScreen>
     );
   }
 

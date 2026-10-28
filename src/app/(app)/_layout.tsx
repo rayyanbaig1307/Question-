@@ -13,13 +13,9 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
+        // Every screen draws its own top bar (ScreenHeader), so they all match the app's style.
         headerShown: false,
         contentStyle: { backgroundColor: colors.bg },
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '800' },
-        headerShadowVisible: false,
-        headerBackButtonDisplayMode: 'minimal',
       }}>
       <Stack.Screen name="editor" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="post/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.black } }} />
