@@ -38,6 +38,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<CameraType>('back');
+  const lastTap = useRef(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
   const isHome = !sendTo && !dare;
@@ -66,6 +67,22 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
       Alert.alert('Could not take photo', friendlyError(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function flipCamera() {
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
+  }
+
+  // Double-tap anywhere on the camera to flip between the front and back camera.
+  function tapCamera() {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      lastTap.current = 0;
+      Haptics.selectionAsync();
+      flipCamera();
+    } else {
+      lastTap.current = now;
     }
   }
 
@@ -101,6 +118,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
         </View>
       )}
 
+      {permission?.granted ? <Pressable style={StyleSheet.absoluteFill} onPress={tapCamera} accessible={false} /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
 
       {/* Top: your picture on the left, camera controls on the right */}
@@ -128,7 +146,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, onOpenC
           <IconButton
             icon="camera-reverse"
             label="Flip camera"
-            onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+            onPress={flipCamera}
           />
           <IconButton
             icon={flash === 'on' ? 'flash' : 'flash-off'}

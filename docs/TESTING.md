@@ -230,6 +230,8 @@ You need **two accounts that are friends**, ideally on two phones.
    phone buzzes when you take a photo; swiping between Chat, Camera and Stories gently shrinks and dims the page
    you're leaving.
 8. **Vibrations:** taking a photo (strong tap), sending (happy double-buzz), liking a post (tap + the heart pops).
+9. **Double-tap to flip:** on the camera, double-tap anywhere on the picture → it switches between the front
+   (selfie) and back camera, with a little tap you can feel. Double-tap again to switch back.
 
 ## Step 11 – Daily Dare 🎯
 
