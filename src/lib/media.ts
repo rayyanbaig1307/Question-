@@ -5,7 +5,14 @@ import { useEffect, useState } from 'react';
 
 import { supabase } from './supabase';
 
-type MediaFolder = 'posts' | 'stories' | 'snaps';
+type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs';
+
+// A tiny (24 px wide) copy of a photo, shown heavily blurred until a drop is unlocked.
+export async function makeBlurPreview(uri: string): Promise<string> {
+  const rendered = await ImageManipulator.manipulate(uri).resize({ width: 24 }).renderAsync();
+  const saved = await rendered.saveAsync({ compress: 0.5, format: SaveFormat.JPEG });
+  return saved.uri;
+}
 
 // Shrinks a photo so uploads are quick (and don't eat your data plan).
 export async function resizePhoto(uri: string, maxWidth: number): Promise<string> {

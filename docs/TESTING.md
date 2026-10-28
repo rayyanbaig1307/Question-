@@ -291,3 +291,31 @@ Two friends, two phones.
    reminder that they'll see it.
 3. Screenshot notices can't be unsent (press and hold does nothing on them).
 4. Android: works on Android 14 and newer.
+
+## Step 15 – Round of fixes
+
+1. **Settings:** your profile → pink/purple ⚙️ (top right). It has Edit profile, Private account, Hide me on the map,
+   Blocked accounts, Invite friends, Log out and **Delete account** (two warnings first – it really deletes everything).
+2. **Discover** (🔥 tab) is now the photo feed: your friends' posts and yours first, then
+   **"✨ More from everyone on Peekaboo"**. It refreshes every time you open it; pull down to refresh too.
+3. **Stories** (✨ tab) is only stories: a row of circles at the top (**My Story** first – tap the pink ＋ to add one),
+   then big cards for friends' stories. No stories → a friendly message instead of an empty heading.
+4. **Full photos:** in Discover, each photo shows whole (nothing cut off) with rounded corners, then ❤️ and 💬,
+   the number of likes, and the caption.
+5. **Dare pill:** on the camera, under your picture: **"🎯 Today's dare · …"**. Tap it → Dare screen. Pink dot = not done
+   yet, ✅ = done.
+
+## Step 16 – Peekaboo Drop 👀
+
+1. The first time you open this version, allow **notifications**.
+2. Once a day, at a surprise time between 10am and 10pm (the same time for everyone), you get
+   **"Peekaboo! 👀 You have 2 minutes to show what you're doing."**
+3. Tap it → the camera opens with a big **⏱ 2:00** countdown and today's dare under it (do the dare, or just show
+   what you're doing).
+4. Take the photo → **Send to**: **👀 Today's Peekaboo drop** is ticked (tick 🎯 Today's dare too if you did the
+   dare) → **Send**. You land on Discover and see **"Drop posted · On time! 👀🔥"**.
+5. Your drop shows a green **👀 On time** badge (or **⏰ Late by 3h** if you posted later) in Discover, on the photo
+   and with a 👀 on your profile grid.
+6. Missed the notification? After the drop time, the camera shows a **"👀 Peekaboo! 1:42 left"** pill (or
+   **"Post today's drop · you're late"**) until you've posted.
+7. Only one drop a day. Trying to post a drop before today's drop time says it hasn't happened yet.

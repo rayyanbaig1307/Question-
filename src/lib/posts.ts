@@ -1,16 +1,19 @@
 import { todayDareDay } from './dares';
-import { deleteMedia, uploadMedia } from './media';
+import { timeZoneOffsetMinutes } from './drop';
+import { deleteMedia, makeBlurPreview, uploadMedia } from './media';
 import { supabase } from './supabase';
 import type { Post, PostWithAuthor } from './types';
 
 // `dare: true` tags the post as your answer to today's Daily Dare.
+// `drop: true` makes it your Peekaboo drop for today (the database works out if it was on time).
 export async function createPost(
   userId: string,
   photoUri: string,
   caption: string,
-  options: { dare?: boolean } = {},
+  options: { dare?: boolean; drop?: boolean } = {},
 ): Promise<Post> {
   const mediaPath = await uploadMedia(userId, 'posts', photoUri);
+  const blurPath = options.drop ? await uploadMedia(userId, 'blurs', await makeBlurPreview(photoUri)) : null;
   const { data, error } = await supabase
     .from('posts')
     .insert({
@@ -18,11 +21,12 @@ export async function createPost(
       media_path: mediaPath,
       caption: caption.trim(),
       ...(options.dare ? { dare_day: todayDareDay() } : {}),
+      ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
     })
     .select('*')
     .single();
   if (error) {
-    await deleteMedia([mediaPath]);
+    await deleteMedia(blurPath ? [mediaPath, blurPath] : [mediaPath]);
     throw error;
   }
   return data as Post;
@@ -51,5 +55,5 @@ export async function fetchPost(postId: string): Promise<PostWithAuthor | null> 
 export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia([post.media_path]);
+  await deleteMedia(post.blur_path ? [post.media_path, post.blur_path] : [post.media_path]);
 }

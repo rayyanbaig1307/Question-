@@ -16,6 +16,7 @@ import Animated, {
 import { Avatar } from '@/components/Avatar';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
+import { DropBadge } from '@/components/DropPill';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -71,7 +72,10 @@ export function FeedCard({ post, url, onLike, onMenu }: {
             <Text style={styles.name} numberOfLines={1}>
               {name}
             </Text>
-            <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
+            <View style={styles.meta}>
+              <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
+              {post.drop_day && post.drop_late_seconds !== null ? <DropBadge lateSeconds={post.drop_late_seconds} /> : null}
+            </View>
           </View>
         </Pressable>
         <Pressable onPress={onMenu} hitSlop={10} accessibilityLabel="More">
@@ -178,6 +182,11 @@ const styles = StyleSheet.create({
   name: {
     ...font.body,
     fontWeight: '800',
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
   },
   time: {
     ...font.small,

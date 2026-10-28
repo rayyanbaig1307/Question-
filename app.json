@@ -56,6 +56,12 @@
           "locationAlwaysPermission": false,
           "motionUsagePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF4F9A"
+        }
       ]
     ],
     "experiments": {

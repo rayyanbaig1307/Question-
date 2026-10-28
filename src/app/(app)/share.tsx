@@ -16,6 +16,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { resizePhoto } from '@/lib/media';
 import { dareFor, todayDareDay } from '@/lib/dares';
+import { lateLabel } from '@/lib/drop';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
 import type { Profile } from '@/lib/types';
@@ -25,21 +26,24 @@ import { colors, font, radius, space } from '@/theme';
 export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
-  const { uri, to, dare } = useLocalSearchParams<{ uri: string; to?: string; dare?: string }>();
+  // `drop` is set when you're posting your Peekaboo drop: "Today's drop" is already ticked.
+  const { uri, to, dare, drop } = useLocalSearchParams<{ uri: string; to?: string; dare?: string; drop?: string }>();
   const fromDare = dare === '1';
+  const fromDrop = drop === '1';
   const { userId } = useMe();
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
 
-  const [toStory, setToStory] = useState(!to && !fromDare);
+  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop);
   const [toProfile, setToProfile] = useState(false);
   const [toDare, setToDare] = useState(fromDare);
+  const [toDrop, setToDrop] = useState(fromDrop);
   const [caption, setCaption] = useState('');
   const [friends, setFriends] = useState<Profile[] | null>(null);
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
   const [busy, setBusy] = useState(false);
   // Remember what already worked, so trying again doesn't send twice.
-  const [done, setDone] = useState({ story: false, profile: false, snaps: false, dare: false });
+  const [done, setDone] = useState({ story: false, profile: false, snaps: false, post: false });
 
   useEffect(() => {
     fetchFriends(userId)
@@ -50,9 +54,9 @@ export default function Share() {
   const toggleFriend = (id: string) =>
     setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
 
-  const nothingPicked = !toStory && !toProfile && !toDare && picked.length === 0;
-  // A dare photo is a post on your profile too, so "Post to my profile" isn't needed then.
-  const postToProfile = toProfile && !toDare;
+  const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && picked.length === 0;
+  // A dare or drop photo is a post on your profile too, so "Post to my profile" isn't needed then.
+  const postToProfile = toProfile && !toDare && !toDrop;
 
   async function send() {
     setBusy(true);
@@ -70,15 +74,28 @@ export default function Share() {
         await createPost(userId, photo, caption);
         setDone((current) => ({ ...current, profile: true }));
       }
-      if (toDare && !done.dare) {
-        await createPost(userId, photo, caption, { dare: true });
-        setDone((current) => ({ ...current, dare: true }));
+      // One post can be your drop, your dare answer, or both.
+      let dropLate: number | null = null;
+      if ((toDare || toDrop) && !done.post) {
+        const post = await createPost(userId, photo, caption, { dare: toDare, drop: toDrop });
+        dropLate = post.drop_late_seconds;
+        setDone((current) => ({ ...current, post: true }));
       }
       // A happy little buzz: it's sent!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(toDare ? 'Dare done! 🎯🔥' : successMessage(picked.length, toStory, postToProfile));
-      // Back to the Dare screen, the chat you came from, or the camera.
-      router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
+      showToast(
+        toDrop && dropLate !== null
+          ? lateLabel(dropLate).onTime
+            ? 'Drop posted · On time! 👀🔥'
+            : `Drop posted · ${lateLabel(dropLate).text}`
+          : toDare
+            ? 'Dare done! 🎯🔥'
+            : successMessage(picked.length, toStory, postToProfile),
+      );
+      // After your drop: to Discover, where your friends' drops just unlocked.
+      // Otherwise back to the Dare screen, the chat you came from, or the camera.
+      if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'discover' } });
+      else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
     } finally {
@@ -94,6 +111,15 @@ export default function Share() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
 
+          {fromDrop ? (
+            <Option
+              emoji="👀"
+              title="Today's Peekaboo drop"
+              subtitle="Unlocks your friends' drops · on your profile and Discover"
+              selected={toDrop}
+              onPress={() => setToDrop(!toDrop)}
+            />
+          ) : null}
           <Option
             emoji="🎯"
             title="Today's dare"
@@ -108,7 +134,7 @@ export default function Share() {
             selected={toStory}
             onPress={() => setToStory(!toStory)}
           />
-          {toDare ? null : (
+          {toDare || toDrop ? null : (
             <Option
               emoji="🖼️"
               title="Post to my profile"
@@ -117,7 +143,7 @@ export default function Share() {
               onPress={() => setToProfile(!toProfile)}
             />
           )}
-          {postToProfile || toDare ? (
+          {postToProfile || toDare || toDrop ? (
             <TextField
               label="Caption"
               value={caption}

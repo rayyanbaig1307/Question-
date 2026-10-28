@@ -51,6 +51,11 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh, hideDare
             ) : (
               <View style={[styles.image, styles.loading]} />
             )}
+            {item.drop_day ? (
+              <View style={styles.dropBadge}>
+                <Text style={styles.dareBadgeText}>👀</Text>
+              </View>
+            ) : null}
             {item.dare_day && !hideDareBadge ? (
               <View style={styles.dareBadge}>
                 <Text style={styles.dareBadgeText}>🎯</Text>
@@ -84,6 +89,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
     width: 26,
     height: 26,
     borderRadius: 13,

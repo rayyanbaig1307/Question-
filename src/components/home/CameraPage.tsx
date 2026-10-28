@@ -10,10 +10,12 @@ import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { DareBanner, DarePill } from '@/components/DareBanner';
+import { DropPill, DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
+import { useDropDone } from '@/lib/drop';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, space } from '@/theme';
@@ -21,7 +23,7 @@ import { TAB_BAR_HEIGHT } from './HomeTabBar';
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, dare = false }: {
+export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -30,6 +32,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
   sendTo?: string;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
+  // Taking your Peekaboo drop photo (2-minute countdown at the top).
+  drop?: boolean;
 }) {
   const { userId, profile } = useMe();
   const [permission, requestPermission] = useCameraPermissions();
@@ -38,9 +42,10 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
   const lastTap = useRef(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const isHome = !sendTo && !dare;
+  const isHome = !sendTo && !dare && !drop;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
+  const dropDone = useDropDone(userId, active && isHome);
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
@@ -52,7 +57,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
   const openEditor = (uri: string, fit: 'cover' | 'contain') =>
     router.push({
       pathname: '/editor',
-      params: { uri, fit, ...(sendTo ? { to: sendTo } : {}), ...(dare ? { dare: '1' } : {}) },
+      params: {
+        uri,
+        fit,
+        ...(sendTo ? { to: sendTo } : {}),
+        ...(dare ? { dare: '1' } : {}),
+        ...(drop ? { drop: '1' } : {}),
+      },
     });
 
   async function takePhoto() {
@@ -139,6 +150,11 @@ export function CameraPage({ active, warm = false, sendTo, dare = false }: {
           )}
           {/* Today's dare, always one tap away (pink dot = not done yet) */}
           {isHome ? <DarePill done={dareDone} /> : null}
+          {/* Once today's Peekaboo drop has happened, until you've posted yours */}
+          {isHome && dropDone === false ? <DropPill /> : null}
+          {/* Taking your drop photo: the countdown, and today's dare in case you'd rather do that */}
+          {drop ? <DropTimer /> : null}
+          {drop ? <DarePill done={null} /> : null}
           {/* Taking the dare photo: a quick reminder of what the dare is */}
           {dare && !bannerGone ? <DareBanner onDismiss={hideBanner} /> : null}
         </View>

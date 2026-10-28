@@ -10,6 +10,7 @@ import Animated from 'react-native-reanimated';
 import { Avatar } from '@/components/Avatar';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
+import { DropBadge } from '@/components/DropPill';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -137,6 +138,9 @@ export default function PostViewer() {
               <Text style={styles.authorMeta}>
                 @{author.username} · {post ? timeAgo(post.created_at) : ''}
               </Text>
+              {post?.drop_day && post.drop_late_seconds !== null ? (
+                <DropBadge lateSeconds={post.drop_late_seconds} />
+              ) : null}
             </View>
           </Pressable>
         ) : (

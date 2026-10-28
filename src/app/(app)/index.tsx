@@ -30,7 +30,7 @@ export default function Home() {
   const [swiping, setSwiping] = useState(false);
   const focused = useIsFocused();
   const unread = useUnreadCount(userId, focused);
-  // Other screens can send you back here with ?page=camera to land on the camera.
+  // Other screens can send you back here with ?page=camera (or ?page=discover) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
   // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Stories, 3 = Discover (1.5 = halfway to Stories).
@@ -57,8 +57,8 @@ export default function Home() {
   const goTo = (index: number) => pager.current?.setPage(index);
 
   useEffect(() => {
-    if (wantedPage !== 'camera') return;
-    pager.current?.setPage(CAMERA);
+    if (wantedPage !== 'camera' && wantedPage !== 'discover') return;
+    pager.current?.setPage(wantedPage === 'camera' ? CAMERA : DISCOVER);
     router.setParams({ page: undefined });
   }, [wantedPage]);
 

@@ -29,6 +29,12 @@ export function friendlyError(error: unknown): string {
   if (lower.includes('profiles_username_format')) {
     return 'Usernames can only use lowercase letters, numbers, dots and underscores (3–20 characters).';
   }
+  if (lower.includes('posts_one_drop_per_day')) {
+    return "You've already posted today's Peekaboo drop. See you at tomorrow's! 👀";
+  }
+  if (lower.includes("drop hasn't happened yet")) {
+    return "Today's Peekaboo drop hasn't happened yet – wait for the notification! 👀";
+  }
   if (lower.includes('row-level security')) {
     return "You don't have permission to do that.";
   }

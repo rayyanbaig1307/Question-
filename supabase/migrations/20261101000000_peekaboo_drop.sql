@@ -1,0 +1,149 @@
+-- =====================================================================
+-- Peekaboo Drop + Peek to see
+--
+-- * Once a day, at the same clock time for everyone (somewhere between 10am and
+--   10pm in your own time zone), the drop happens. You have 2 minutes to post.
+--   The time is worked out from the date, so every phone and the database agree
+--   (the app has the same formula in src/lib/drop.ts).
+-- * A drop post remembers its day and how late it was (0–120 s = "On time").
+--   The database works this out itself, so nobody can fake "On time".
+-- * Peek to see: you can only see friends' drop photos for a day after you've
+--   posted your own drop that day. Until then you only get a tiny blurry preview.
+-- =====================================================================
+
+alter table public.posts
+  add column drop_day date,                     -- the day of the drop this post was for (empty = normal post)
+  add column drop_late_seconds integer,         -- how long after the drop it was posted
+  add column drop_offset_minutes smallint,      -- the poster's time zone (minutes ahead of UTC), sent by the app
+  add column blur_path text;                    -- tiny blurry preview shown before you unlock a drop
+
+-- One drop per person per day.
+create unique index posts_one_drop_per_day on public.posts (user_id, drop_day) where drop_day is not null;
+
+-- Minute of the day (600 = 10:00 … 1319 = 21:59) when that day's drop happens.
+-- (The day number is scrambled with a standard "hash" recipe so the times look random from day to day.)
+create or replace function private.drop_minute(day date)
+returns integer language plpgsql immutable set search_path = '' as $$
+declare
+  h bigint := day - date '1970-01-01';
+begin
+  h := h # (h >> 16);
+  h := ((h::numeric * 2246822507) % 4294967296)::bigint;
+  h := h # (h >> 13);
+  h := ((h::numeric * 3266489909) % 4294967296)::bigint;
+  h := h # (h >> 16);
+  return 600 + (h % 720)::integer;
+end;
+$$;
+
+-- Fill in drop_day and drop_late_seconds when a drop is posted (and never let them change later).
+create or replace function private.set_drop_fields()
+returns trigger language plpgsql set search_path = '' as $$
+declare
+  local_now timestamp;
+  drop_at timestamp;
+begin
+  if tg_op = 'UPDATE' then
+    new.drop_day := old.drop_day;
+    new.drop_late_seconds := old.drop_late_seconds;
+    new.drop_offset_minutes := old.drop_offset_minutes;
+    new.blur_path := old.blur_path;
+    return new;
+  end if;
+  if new.drop_offset_minutes is null then
+    new.drop_day := null;
+    new.drop_late_seconds := null;
+    return new;
+  end if;
+  if new.drop_offset_minutes not between -720 and 840 then
+    raise exception 'That time zone doesn''t look right';
+  end if;
+  local_now := (now() at time zone 'utc') + make_interval(mins => new.drop_offset_minutes);
+  new.drop_day := local_now::date;
+  drop_at := new.drop_day + make_interval(mins => private.drop_minute(new.drop_day));
+  if local_now < drop_at then
+    raise exception 'Today''s Peekaboo drop hasn''t happened yet';
+  end if;
+  new.drop_late_seconds := floor(extract(epoch from (local_now - drop_at)))::integer;
+  return new;
+end;
+$$;
+
+create trigger posts_set_drop_fields
+  before insert or update on public.posts
+  for each row execute function private.set_drop_fields();
+
+-- Posts may also carry a blurry preview, stored in your own "blurs" folder.
+drop policy "You can create your own posts" on public.posts;
+create policy "You can create your own posts"
+  on public.posts for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and media_path like (select auth.uid())::text || '/posts/%'
+    and (blur_path is null or blur_path like (select auth.uid())::text || '/blurs/%')
+  );
+
+drop policy "You can upload your own photos" on storage.objects;
+create policy "You can upload your own photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'media'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and (storage.foldername(name))[2] in ('posts', 'stories', 'snaps', 'blurs')
+  );
+
+-- Who may download a photo from the private "media" bucket? Same as before, plus:
+-- * a drop post's photo only after you've posted your own drop that day ("give a peek to get a peek");
+-- * blurry previews for anyone who can see that person's posts.
+create or replace function private.can_read_media(object_name text)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+  me uuid := auth.uid();
+  owner_text text := split_part(object_name, '/', 1);
+  kind text := split_part(object_name, '/', 2);
+  owner uuid;
+begin
+  if me is null then
+    return false;
+  end if;
+  if owner_text = me::text then
+    return true;                                      -- your own files
+  end if;
+  if owner_text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return false;
+  end if;
+  owner := owner_text::uuid;
+
+  if kind = 'posts' then
+    return private.can_see_posts(owner)
+      and not exists (
+        select 1 from public.posts p
+        where p.media_path = object_name and p.drop_day is not null
+          and not exists (
+            select 1 from public.posts mine where mine.user_id = me and mine.drop_day = p.drop_day
+          )
+      );
+  elsif kind = 'blurs' then
+    return private.can_see_posts(owner);
+  elsif kind = 'stories' then
+    return private.can_see_stories(owner)
+      and exists (
+        select 1 from public.stories s
+        where s.media_path = object_name and s.expires_at > now()
+      );
+  elsif kind = 'snaps' then
+    -- only the person it was sent to: before opening, while saved, or while the replay is unused
+    return not private.is_blocked(owner, me)
+      and exists (
+        select 1 from public.messages m
+        where m.media_path = object_name and m.recipient_id = me
+          and (
+            m.opened_at is null
+            or m.saved_at is not null
+            or (m.replayed_at is null and m.opened_at > now() - interval '24 hours')
+          )
+      );
+  end if;
+  return false;
+end;
+$$;
