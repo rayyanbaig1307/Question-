@@ -644,3 +644,15 @@ Use 2 test accounts that have matched (Part 4).
 2. Under the dare: the house rules – nobody gets hurt · no fire · clothes stay on · friends must be in on it.
 3. Old dare posts still show a 🎯 tag; because the list changed, the text on posts from before this update
    now shows the new dare for that day (only test posts are affected).
+
+## Step 35 – Camera modes 📷🎯👀🕵️
+
+1. On the Camera, the loose "🎯 Dare" and "👀 Post today's drop" pills are gone. Just above the shutter there's a
+   **mode dial**: **📷 Photo · 🎯 Dare · 👀 Drop · 🕵️ Guess Who**. Swipe it sideways or tap a mode – the one in
+   the middle is what you'll post, and the shutter's ring takes its colour (white / pink / red / yellow).
+   A pink dot on a mode means something's waiting there (dare not done yet, a drop to post).
+2. **Dare**: today's dare shows above the dial (tap it for the rules). Snap → it's your answer to the dare.
+3. **Drop**: above the dial you see the countdown ("👀 Peekaboo! 1:42 left", pulsing) or "⏰ Late by 3h · post anyway".
+   Before today's drop has happened it says so and the shutter is dimmed (nothing to post yet).
+4. **Guess Who**: "Posted without your name · friends guess who it was". Snap → posted anonymously.
+5. Photo mode keeps the screen clean. Swiping left/right **outside** the dial still moves between Chat · Camera · Home.

@@ -73,6 +73,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const dareOn = dare || (isHome && homeMode === 'dare');
   const dropOn = drop || (isHome && homeMode === 'drop');
   const guessOn = guess || (isHome && homeMode === 'guess');
+  // Drop mode before today's drop has happened: nothing to post yet, so the shutter waits too.
+  const dropNotYet = isHome && homeMode === 'drop' && dropStatus.kind === 'waiting';
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
@@ -298,11 +300,16 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             onLongPress={startRecording}
             delayLongPress={250}
             onPressOut={stopRecording}
-            disabled={!permission?.granted || (busy && !recording)}
+            disabled={!permission?.granted || (busy && !recording) || dropNotYet}
             accessibilityRole="button"
-            accessibilityLabel="Take photo, or hold to record a video"
+            accessibilityLabel={dropNotYet ? "Today's drop hasn't happened yet" : 'Take photo, or hold to record a video'}
             pressScale={0.82}
-            style={[styles.shutter, isHome && { borderColor: MODE_RING[homeMode] }, recording && styles.shutterRecording]}>
+            style={[
+              styles.shutter,
+              isHome && { borderColor: MODE_RING[homeMode] },
+              dropNotYet && styles.shutterOff,
+              recording && styles.shutterRecording,
+            ]}>
             <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
           </Bouncy>
           {isHome ? (
@@ -426,6 +433,9 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  shutterOff: {
+    opacity: 0.4,
   },
   shutterRecording: {
     borderColor: colors.red,
