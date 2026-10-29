@@ -14,6 +14,7 @@ import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from 
 import { fetchGroups, type PeekGroup } from '@/lib/groups';
 import { countUnguessed } from '@/lib/guess';
 import { inviteFriends } from '@/lib/invite';
+import { noteDropSeen } from '@/lib/peeks';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
@@ -193,10 +194,23 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
 
   // The video most in view plays; the others wait.
   const [inView, setInView] = useState<string | null>(null);
+  // Every post that's on screen right now (for Who Peeked).
+  const [onScreen, setOnScreen] = useState<string[]>([]);
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     const firstVideo = viewableItems.find((entry) => (entry.item as DiscoverPost | undefined)?.media_type === 'video');
     setInView((firstVideo?.item as DiscoverPost | undefined)?.id ?? null);
+    setOnScreen(viewableItems.map((entry) => (entry.item as DiscoverPost).id));
   }, []);
+
+  // Who Peeked: tell the database when a friend's drop is on your screen – and whether you can actually see
+  // it (unlocked and not waiting to be scratched; scratching it clear is reported by the card itself).
+  useEffect(() => {
+    for (const post of posts ?? []) {
+      if (!visible || post.drop_day === null || post.user_id === userId || !onScreen.includes(post.id)) continue;
+      const { locked } = postMedia(post, userId, myDropDays);
+      noteDropSeen(post.id, !locked && (!scratchToReveal || post.media_type === 'video'));
+    }
+  }, [visible, onScreen, posts, myDropDays, scratchToReveal, userId]);
 
   return (
     <View style={styles.fill}>
@@ -253,6 +267,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
               scratch={scratchToReveal && item.drop_day !== null && item.user_id !== userId}
               onLike={(liked) => like(item, liked)}
               onMenu={() => openMenu(item)}
+              onRevealed={() => noteDropSeen(item.id, true)}
             />
           </>
         )}

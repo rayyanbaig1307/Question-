@@ -44,6 +44,7 @@ export function FeedCard({
   scratch = false,
   onLike,
   onMenu,
+  onRevealed,
 }: {
   post: FeedPost;
   // The photo's link (for a video: its still picture) – or, while `locked`, the link of its tiny blurry preview.
@@ -60,6 +61,8 @@ export function FeedCard({
   scratch?: boolean;
   onLike: (like: boolean) => void;
   onMenu: () => void;
+  // You scratched a drop clear (for Who Peeked).
+  onRevealed?: () => void;
 }) {
   const lastTap = useRef(0);
   const locked = lock !== null;
@@ -143,6 +146,7 @@ export function FeedCard({
             onRevealed={() => {
               scratched.add(post.id);
               setRevealed(true);
+              onRevealed?.();
             }}
           />
         ) : locked ? (
@@ -262,6 +266,18 @@ export function FeedCard({
 
       <Text style={styles.likes}>{post.likeCount === 1 ? '1 like' : `${post.likeCount} likes`}</Text>
 
+      {post.peek_stats ? (
+        // Your own drop: who peeked (only you see this).
+        <Pressable
+          style={styles.peeked}
+          onPress={() => router.push(`/peekers/${post.id}`)}
+          accessibilityLabel="See who peeked">
+          <Text style={styles.peekedText}>
+            👀 {post.peek_stats.revealed} peeked · {post.peek_stats.passed} scrolled past
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
       {post.caption ? (
         <Text style={styles.caption}>
@@ -281,6 +297,23 @@ export function FeedCard({
 }
 
 const styles = StyleSheet.create({
+  peeked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.purple,
+  },
+  peekedText: {
+    ...font.small,
+    color: colors.text,
+    fontWeight: '800',
+  },
   card: {
     gap: space.sm,
     paddingBottom: space.xl,

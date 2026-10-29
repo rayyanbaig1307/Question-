@@ -35,6 +35,8 @@ export type Post = MediaFields & {
   created_at: string;
   // Asked for along with a drop post: true while a Group Peek you share with them is still waiting on someone.
   group_hold?: boolean | null;
+  // Asked for along with your own drop posts: how many friends revealed it, and how many scrolled past.
+  peek_stats?: { revealed: number; passed: number } | null;
 };
 
 export type PostWithAuthor = Post & { author: Profile | null };

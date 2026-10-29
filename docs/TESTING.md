@@ -430,3 +430,16 @@ You need at least 2 friends on Peekaboo (with 4+ friends the guessing is harder)
 5. **Block:** ••• → **Block whoever posted this** → the card disappears and that person is blocked.
 6. **Delete:** ••• on your own card → **Delete**.
 7. The real poster is always saved in Supabase → **mystery_posts** (user_id).
+
+## Step 25 – Who Peeked 👀
+
+You need a friend's phone (or a test account) for this.
+1. Post your Peekaboo drop.
+2. **On your friend's phone:** they open Discover and scroll past your drop without revealing it
+   (or before posting their own drop, so it's still locked).
+3. **On your phone:** your drop in Discover now has a purple **"👀 0 peeked · 1 scrolled past"** pill. Tap it →
+   **Who peeked**: your friend is under **💨 Scrolled past**.
+4. **Friend:** posts their own drop, then holds and scratches yours clear (or opens it full screen).
+5. **You:** pull down to refresh → **"👀 1 peeked · 0 scrolled past"**, and they move to **👀 Peeked**.
+6. The pill also shows on your drop when you open it full screen. Only **you** see it – friends never see
+   who peeked at your drop, and you never see this on anyone else's.

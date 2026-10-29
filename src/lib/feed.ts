@@ -50,7 +50,7 @@ async function withLikes(me: string, rows: PostRow[]): Promise<FeedPost[]> {
 export type DiscoverCursor = { phase: 'friends' | 'everyone'; before?: string };
 export type DiscoverPost = FeedPost & { fromEveryone: boolean };
 
-const POST_FIELDS = '*, group_hold, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)';
+const POST_FIELDS = '*, group_hold, peek_stats, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)';
 
 // Discover, Instagram-style: your friends' posts and yours, newest first – and when those run out,
 // everyone else on Peekaboo. (The database leaves out private accounts you're not friends with, and anyone

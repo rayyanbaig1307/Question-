@@ -22,6 +22,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
 import { postMedia, useMyDropDays } from '@/lib/drop';
 import { useMediaUrls } from '@/lib/media';
+import { noteDropSeen } from '@/lib/peeks';
 import { deletePost, fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
 import type { PostWithAuthor } from '@/lib/types';
@@ -44,6 +45,12 @@ export default function PostViewer() {
   const uri = files?.still ? urls[files.still] : undefined;
   const videoUri = files?.video ? urls[files.video] : undefined;
   const likeButton = usePop();
+
+  // Who Peeked: opening a friend's drop full screen counts as seeing it (if it's unlocked for you).
+  const friendsDrop = !!post && post.drop_day !== null && post.user_id !== userId;
+  useEffect(() => {
+    if (friendsDrop && myDropDays !== null) noteDropSeen(id, !locked);
+  }, [friendsDrop, myDropDays, locked, id]);
 
   useEffect(() => {
     fetchPost(id)
@@ -200,6 +207,16 @@ export default function PostViewer() {
             </View>
           ) : null}
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
+          {post.peek_stats ? (
+            <Pressable
+              style={styles.peeked}
+              onPress={() => router.push(`/peekers/${post.id}`)}
+              accessibilityLabel="See who peeked">
+              <Text style={styles.peekedText}>
+                👀 {post.peek_stats.revealed} peeked · {post.peek_stats.passed} scrolled past ›
+              </Text>
+            </Pressable>
+          ) : null}
           {stats ? (
             <View style={styles.actions}>
               <Bouncy
@@ -229,6 +246,20 @@ export default function PostViewer() {
 }
 
 const styles = StyleSheet.create({
+  peeked: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderWidth: 1,
+    borderColor: colors.purple,
+  },
+  peekedText: {
+    color: colors.white,
+    fontWeight: '800',
+    fontSize: 13,
+  },
   lockedShade: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(11,11,16,0.4)',
