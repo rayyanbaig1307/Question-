@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { PostGrid } from '@/components/PostGrid';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
-import { dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
+import { DARE_RULES, dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
 import type { PostWithAuthor } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
 
@@ -58,6 +58,7 @@ export default function DareScreen() {
           onPress={doTheDare}
           style={styles.cardButton}
         />
+        <Text style={styles.rules}>{DARE_RULES}</Text>
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
       <Text style={styles.sectionTitle}>
@@ -132,6 +133,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     lineHeight: 34,
+  },
+  rules: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: space.xs,
   },
   countdown: {
     color: colors.white,

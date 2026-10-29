@@ -635,3 +635,12 @@ Use 2 test accounts that have matched (Part 4).
    **🎯 Dare** chip (tap it for today's dare); top right = flip and flash, side by side; bottom = gallery · shutter ·
    **map**. The "Add friends" button is gone from the camera – find friends from your profile or Chat.
 6. Old habits still work: posting a drop lands you on **Home**; the Stories and Discover tabs are gone.
+
+## Step 34 – Dares with some bite 🎯
+
+1. Camera → **🎯 Dare** chip → the dare screen. Today's dare is one of **365** new ones – bold, messy and silly
+   (cannonball in your clothes, crack an egg on a friend's head, ice bucket, eat a whole lemon, sing in a shop…).
+   A new one every day at the usual time; the same dare only comes round again after a year.
+2. Under the dare: the house rules – nobody gets hurt · no fire · clothes stay on · friends must be in on it.
+3. Old dare posts still show a 🎯 tag; because the list changed, the text on posts from before this update
+   now shows the new dare for that day (only test posts are affected).
