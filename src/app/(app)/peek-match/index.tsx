@@ -239,7 +239,7 @@ export default function PeekMatch() {
         <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <Text style={styles.heroTitle}>Peek Match is on 💘</Text>
           <Text style={styles.heroText}>
-            Finding people and matching are coming in the next updates. For now, build your dating profile!
+            Look at one person at a time, like a photo or an answer, or skip. Matching is coming in the next update.
           </Text>
         </LinearGradient>
         <ProfileCard me={userId} hidden={status.member.hidden} />
@@ -315,9 +315,13 @@ function ProfileCard({ me, hidden }: { me: string; hidden: boolean }) {
       ) : (
         <Text style={styles.problem}>Not finished yet – add {missing.join(', ')}.</Text>
       )}
+      {mine && isComplete(mine) && !hidden ? (
+        <Button title="Start peeking 💘" icon="heart" onPress={() => router.push('/peek-match/discover')} />
+      ) : null}
       <Button
         title={mine?.profile ? 'Edit my dating profile' : 'Make my dating profile'}
         icon="create"
+        variant={mine && isComplete(mine) ? 'secondary' : 'primary'}
         onPress={() => router.push('/peek-match/profile')}
       />
     </View>

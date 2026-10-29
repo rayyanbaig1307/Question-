@@ -146,3 +146,60 @@ export function ageFrom(birthday: string | null | undefined): number | null {
   if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age -= 1;
   return age;
 }
+
+// ---------------------------------------------------------------------------
+// Finding people (step 3)
+// ---------------------------------------------------------------------------
+
+// Someone else's dating profile, as Peek Match shows it: only their dating id, never their normal account.
+export type DatingCard = {
+  dating_id: string;
+  name: string;
+  age: number;
+  area: string;
+  // Rough distance: 2 means "less than 2 km".
+  km: number;
+  photos: { id: string; path: string }[];
+  prompts: DatingPrompt[];
+};
+
+export function roughDistance(km: number): string {
+  return km <= 2 ? 'Less than 2 km away' : `${km} km away`;
+}
+
+export async function fetchDatingFeed(): Promise<DatingCard[]> {
+  const { data, error } = await supabase.rpc('peek_match_feed', { how_many: 10 });
+  if (error) throw error;
+  return (data ?? []) as DatingCard[];
+}
+
+// Like one photo or one prompt (with an optional comment).
+export async function likeDatingProfile(
+  target: string,
+  what: { photoId: string } | { prompt: number },
+  comment: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('peek_match_like', {
+    target,
+    liked_photo: 'photoId' in what ? what.photoId : null,
+    liked_prompt: 'prompt' in what ? what.prompt : null,
+    note: comment.trim() || null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function skipDatingProfile(target: string): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_skip', { target });
+  if (error) throw error;
+}
+
+export async function blockDatingProfile(target: string): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_block', { target });
+  if (error) throw error;
+}
+
+export async function reportDatingProfile(target: string, reason: string, what: 'profile' | 'message' = 'profile'): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_report', { target, reason, what });
+  if (error) throw error;
+}

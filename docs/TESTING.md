@@ -522,3 +522,20 @@ Testing:
 6. **Save** → back on the Peek Match screen: "✅ Ann · 4 photos · 3 prompts · ready to be seen" (or what's
    still missing). Turn on **Hide my dating profile** → it says "hidden right now".
 7. **Leave Peek Match** deletes the profile and all its photos.
+
+## Peek Match – Part 3: finding people 👀
+
+You need 2 verified test accounts in Peek Match, with finished profiles that fit each other (e.g. a woman
+looking for men and a man looking for women, ages in each other's range, within each other's distance).
+1. Peek Match screen → **Start peeking 💘** (shows once your profile is finished and not hidden).
+2. One person at a time: name, age, area and a **rough** distance ("Less than 2 km away", "5 km away"…),
+   then photos and prompts one after another.
+3. Tap the **♥ on a photo or a prompt** → a sheet shows what you're liking → add a comment if you like →
+   **Send like**. The other person gets "Someone liked your dating profile" (with push on) – it doesn't say who.
+4. Tap **✕** (bottom left) to skip. People you liked or skipped don't come round again.
+5. On the other account, the person who liked them shows up **first**.
+6. **••• → Report** (Spam / Bullying / Nudity / Something else) → saved in Supabase **reports** against their real
+   account, details "Peek Match profile". **Block** → you never see each other in Peek Match again (blocking
+   someone in the normal app does the same).
+7. People who don't fit what *both* of you are looking for never show up. Nobody can see your friends, posts,
+   stories or exact location.
