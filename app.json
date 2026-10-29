@@ -10,7 +10,10 @@
     "backgroundColor": "#0B0B10",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.rbaig18.peekaboo"
+      "bundleIdentifier": "com.rbaig18.peekaboo",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.rbaig18.peekaboo",

@@ -17,9 +17,20 @@
       "channel": "production",
       "environment": "production",
       "autoIncrement": true
+    },
+    "testflight": {
+      "channel": "preview",
+      "environment": "preview",
+      "autoIncrement": true,
+      "distribution": "store"
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "ios": {
+        "ascAppId": "FILL_IN_FROM_APP_STORE_CONNECT"
+      }
+    }
   }
 }
