@@ -3,7 +3,8 @@ import { useEffect } from 'react';
 
 import { useAuth } from '@/lib/auth';
 import { useShareLocationWhileOpen } from '@/lib/location';
-import { scheduleDropNotifications, useDropNotificationTaps } from '@/lib/notifications';
+import { fetchNotificationPrefs } from '@/lib/notificationPrefs';
+import { registerForPush, scheduleDropNotifications, useNotificationTaps } from '@/lib/notifications';
 import { colors } from '@/theme';
 
 // Every screen you can reach once you're logged in.
@@ -12,11 +13,16 @@ export default function AppLayout() {
   // If you share your location, keep your spot on the friend map fresh while the app is open.
   useShareLocationWhileOpen(userId, profile?.location_sharing ?? false);
 
-  // Peekaboo drops: set this week's drop alerts, and open the drop camera when one is tapped.
+  // Notifications: set this week's Peekaboo drop alerts (unless switched off), sign this phone up for
+  // push notifications, and open the right screen when a notification is tapped.
   useEffect(() => {
-    scheduleDropNotifications().catch((error) => console.warn('Could not schedule drop alerts', error));
-  }, []);
-  useDropNotificationTaps(true);
+    if (!userId) return;
+    fetchNotificationPrefs(userId)
+      .then((prefs) => scheduleDropNotifications(prefs.drops))
+      .catch((error) => console.warn('Could not schedule drop alerts', error))
+      .finally(() => registerForPush());
+  }, [userId]);
+  useNotificationTaps(true);
 
   return (
     <Stack

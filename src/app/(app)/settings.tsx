@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useOverlays } from '@/components/Overlays';
@@ -10,6 +10,8 @@ import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
+import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
+import { scheduleDropNotifications } from '@/lib/notifications';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
@@ -18,6 +20,38 @@ export default function Settings() {
   const { userId, profile, setProfile, signOut } = useMe();
   const { showToast } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
+  const [notify, setNotify] = useState<NotificationPrefs | null>(null);
+
+  useEffect(() => {
+    fetchNotificationPrefs(userId)
+      .then(setNotify)
+      .catch(() => setNotify(ALL_ON));
+  }, [userId]);
+
+  // Turn one type of notification on or off (saved straight away).
+  async function setNotifyType(key: keyof NotificationPrefs, on: boolean) {
+    if (!notify) return;
+    const before = notify;
+    const next = { ...notify, [key]: on };
+    setNotify(next);
+    try {
+      await saveNotificationPrefs(userId, next);
+      if (key === 'drops') await scheduleDropNotifications(on);
+    } catch (error) {
+      setNotify(before);
+      Alert.alert('Could not save', friendlyError(error));
+    }
+  }
+
+  const notifySwitch = (key: keyof NotificationPrefs) => (
+    <Switch
+      value={notify?.[key] ?? true}
+      disabled={!notify}
+      onValueChange={(on) => setNotifyType(key, on)}
+      trackColor={{ true: colors.pink, false: colors.border }}
+      thumbColor={colors.white}
+    />
+  );
 
   async function setPrivate(value: boolean) {
     try {
@@ -121,6 +155,20 @@ export default function Settings() {
             color={colors.orange}
             title="Blocked accounts"
             onPress={() => router.push('/blocked')}
+          />
+        </Section>
+
+        <Section title="Notifications">
+          <Row icon="chatbubble" color={colors.blue} title="Messages & peeks" right={notifySwitch('messages')} />
+          <Row icon="person-add" color={colors.green} title="Friend requests" right={notifySwitch('friend_requests')} />
+          <Row icon="heart" color={colors.pink} title="Likes" right={notifySwitch('likes')} />
+          <Row icon="chatbubble-ellipses" color={colors.purple} title="Comments" right={notifySwitch('comments')} />
+          <Row
+            icon="eye"
+            color={colors.accent}
+            title="Daily Peekaboo drop"
+            subtitle="The 'you have 2 minutes' alert"
+            right={notifySwitch('drops')}
           />
         </Section>
 

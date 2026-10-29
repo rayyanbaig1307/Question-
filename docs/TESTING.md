@@ -339,3 +339,23 @@ Two friends, two phones. Your friend posts today's drop first.
    buzzes. (A quick swipe still scrolls the feed.)
 3. Once most of it is clear, the rest disappears with a little **pop** and a happy buzz. It stays clear.
 4. Don't like it? **Settings → Peekaboo drops → Scratch to reveal drops** → off. Drop photos then show normally.
+
+## Step 19 – Push notifications 🔔
+
+You need two accounts that are friends, on two phones. On **iPhone**, push notifications work inside Expo Go.
+
+1. Open Peekaboo and allow notifications if asked.
+2. Close Peekaboo (or lock the phone). From the other phone:
+   - send a chat or a peek → **"Ayaan – hey!"** / **"Sent you a peek 👀"**
+   - send a friend request → **"New friend request 👋"**; accepting it → **"You have a new friend 🎉"**
+   - like your post → **"Liked your post ❤️"**; comment → **"Commented: …"**
+3. Tap a notification → Peekaboo opens on the right chat / friends screen / post / comments.
+4. **Settings → Notifications**: switch any type off (Messages & peeks, Friend requests, Likes, Comments, Daily
+   Peekaboo drop) → those stop. Switch back on → they come back.
+5. Log out → that phone stops getting that account's notifications.
+
+Where it works:
+- **iPhone in Expo Go:** ✅ everything.
+- **Android in Expo Go:** ❌ push (Expo Go on Android doesn't allow it) – the daily drop alert still works.
+- **Android download (APK):** ❌ push until a free Firebase project is connected; ✅ daily drop alert.
+- **iPhone from TestFlight / App Store:** ✅ everything (needs the Apple Developer account).
