@@ -44,3 +44,8 @@ example
 
 # Supabase settings for this app (create it from .env.example)
 .env
+
+# Apple keys pulled from Expo for the one-time iPhone setup – never commit
+.eas/.env/
+.env.asc
+*.p8

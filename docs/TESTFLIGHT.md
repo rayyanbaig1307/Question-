@@ -32,11 +32,23 @@ This key lets Expo create the signing files and send Peekaboo to TestFlight. It 
 
 ## Step 3 – Give that key to Expo (You)
 
-1. Go to **expo.dev**, sign in, open **Projects** → **peekaboo**.
-2. Left menu → **Credentials** → **iOS** → the app `com.rbaig18.peekaboo` (tap **Add** if it isn't listed yet).
-3. Find **App Store Connect API Key** → **Add a key** / **Upload**: choose the **.p8** file, type the **Key ID**
-   and the **Issuer ID** from Step 2, save.
-4. Tell the chat "the Apple key is on Expo".
+You'll also need your **Team ID**: **developer.apple.com/account** → **Membership details** → **Team ID**
+(10 letters/digits).
+
+1. Go to **expo.dev**, sign in, open **Projects** → **peekaboo** → left menu **Environment variables**.
+2. Tap **Create variable** four times and add these (Environment: **production**; Visibility: **Sensitive** –
+   not "Secret", or Expo's tool can't read it):
+
+   | Name | Value |
+   |---|---|
+   | `EXPO_ASC_API_KEY_PATH` | type **File** → upload the **.p8** file |
+   | `EXPO_ASC_KEY_ID` | the **Key ID** from Step 2 |
+   | `EXPO_ASC_ISSUER_ID` | the **Issuer ID** from Step 2 |
+   | `EXPO_APPLE_TEAM_ID` | your **Team ID** |
+
+3. Tell the chat "the Apple key is on Expo".
+
+(These stay inside Expo. They are never put into the app itself.)
 
 ## Step 4 – The first iPhone build (Done for you)
 
