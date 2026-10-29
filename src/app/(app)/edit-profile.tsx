@@ -152,7 +152,7 @@ export default function EditProfile() {
       <View style={styles.switchRow}>
         <View style={styles.switchText}>
           <Text style={styles.switchTitle}>🔒 Private account</Text>
-          <Text style={styles.switchHint}>Only your friends can see your posts, and they stay out of Discover.</Text>
+          <Text style={styles.switchHint}>Only your friends can see your posts – strangers don&apos;t see them on Home.</Text>
         </View>
         <Switch
           value={isPrivate}

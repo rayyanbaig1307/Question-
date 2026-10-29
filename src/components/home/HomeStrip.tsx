@@ -6,9 +6,9 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { counting, stillToPost, type PeekGroup } from '@/lib/groups';
 import { colors, font, radius, space } from '@/theme';
 
-// The row at the top of Discover: Guess Who (how many you can still guess), then your Group Peek groups
+// The row under the stories on Home: Guess Who (how many you can still guess), then your Group Peek groups
 // (how many have posted today). Tap one to open it.
-export function DiscoverStrip({ groups, toGuess }: { groups: PeekGroup[] | null; toGuess: number | null }) {
+export function HomeStrip({ groups, toGuess }: { groups: PeekGroup[] | null; toGuess: number | null }) {
   if (!groups) return null;
   return (
     <ScrollView
@@ -62,7 +62,6 @@ export function DiscoverStrip({ groups, toGuess }: { groups: PeekGroup[] | null;
 const styles = StyleSheet.create({
   strip: {
     marginHorizontal: -space.lg,
-    marginBottom: space.lg,
   },
   row: {
     gap: space.sm,

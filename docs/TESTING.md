@@ -498,7 +498,7 @@ Setting up the age check (once, by the app owner):
 Testing (Peek Match is now its own tab – see Step 32 below):
 1. **Under 18:** with a test account, add a birthday less than 18 years ago (Peekaboo asks once, or Settings →
    **Birthday**) → there's **no Match tab**, and Peek Match is never mentioned anywhere on that account.
-2. **18+:** with another account, add an adult birthday → a **Match 💘** tab appears at the bottom right →
+2. **18+:** with another account, add an adult birthday → a **Match 💘** tab appears at the bottom right (after Home) →
    "One quick age check 🪪".
    - Before the Stripe key is added: it says age checks aren't switched on yet.
    - After: tap **Check my age** → the Stripe page opens. In test mode you can pick a test result instead of
@@ -607,7 +607,7 @@ Use 2 test accounts that have matched (Part 4).
 
 1. **Birthday:** open Peekaboo → it asks "When's your birthday? 🎂" once (**Not now** is fine – you can add it
    later in Settings → **Birthday**, which then shows your birthday and "only you see this"). It can't be changed.
-2. **18 or older** → a 5th tab, **Match 💘**, appears at the bottom (swipe left from Discover, or tap it).
+2. **18 or older** → an extra tab, **Match 💘**, appears at the bottom (swipe left from Home, or tap it).
    Under 18 or no birthday → no Match tab at all.
 3. The Match tab walks you through it: the safety promises → **Check my age** (ID + selfie) → **Turn on Peek
    Match** → **Make my profile** → then people show up right there, one at a time (♥ to like, ✕ to skip,
@@ -615,3 +615,21 @@ Use 2 test accounts that have matched (Part 4).
 4. Top of the Match tab: **⚙** = Peek Match settings (edit profile, hide, leave) and **💬** = matches & likes.
    A pink dot on the Match tab (and a number on 💬) means someone liked you or a match sent a message.
 5. Settings no longer has a Dating section.
+
+## Step 33 – 3 tabs: Chat · Camera · Home 🏠
+
+1. The bottom bar now has **3 tabs**: 💬 **Chat** · 📷 **Camera** · 🏠 **Home** (plus 💘 **Match** for adults who
+   added their birthday). Peekaboo still opens on the **Camera**. Swipe left/right between them like Snapchat, or
+   tap a tab.
+2. **Home** is Stories + Discover in one, like Instagram's home page:
+   - **Top row:** story circles that scroll sideways – **My Story** first (pink ＋ to add one; tap the circle to
+     watch yours), then friends' stories (colorful ring = new, grey = seen, green = close friends), then an
+     **Invite** circle at the end.
+   - **Under it:** the Guess Who / Group Peek row, then the **feed**: your friends' posts (and yours) first, then
+     "✨ More from everyone on Peekaboo". ❤️, 💬 and ••• work like before; pull down to refresh.
+3. **Brand new account** (no friends' stories *and* no posts): one friendly "Welcome to Peekaboo!" message with
+   **Take a photo** and **Invite friends** – not two empty sections.
+4. **Top bars:** on **Chat** and **Home**, the 📷 button is top left and **your profile picture is top right** –
+   tap it to open your profile. On the **Camera**, your picture is top left, with the dare banner, map button,
+   flip, flash and gallery as before.
+5. Old habits still work: posting a drop lands you on **Home**; the Stories and Discover tabs are gone.

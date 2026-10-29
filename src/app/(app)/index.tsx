@@ -7,10 +7,9 @@ import PagerView from 'react-native-pager-view';
 
 import { CameraPage } from '@/components/home/CameraPage';
 import { ChatPage } from '@/components/home/ChatPage';
-import { DiscoverPage } from '@/components/home/DiscoverPage';
+import { HomePage } from '@/components/home/HomePage';
 import { HomeTabBar } from '@/components/home/HomeTabBar';
 import { MatchPage } from '@/components/home/MatchPage';
-import { StoriesPage } from '@/components/home/StoriesPage';
 import { useMe } from '@/lib/auth';
 import { useUnreadCount } from '@/lib/chat';
 import {
@@ -24,15 +23,14 @@ import { colors, isDark } from '@/theme';
 
 const CHAT = 0;
 const CAMERA = 1;
-const STORIES = 2;
-const DISCOVER = 3;
+const HOME = 2;
 // Peek Match – only there for people whose saved birthday says they're 18 or older.
-const MATCH = 4;
-const PAGES = [CHAT, CAMERA, STORIES, DISCOVER, MATCH];
+const MATCH = 3;
+const PAGES = [CHAT, CAMERA, HOME, MATCH];
 
 const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
-// Swipe left/right between Chat ← Camera → Stories → Discover (→ Match), or tap the tabs at the bottom.
+// Swipe left/right between Chat ← Camera → Home (→ Match), like Snapchat, or tap the tabs at the bottom.
 export default function Home() {
   const { userId } = useMe();
   const pager = useRef<PagerView>(null);
@@ -41,7 +39,7 @@ export default function Home() {
   const [swiping, setSwiping] = useState(false);
   const focused = useIsFocused();
   const unread = useUnreadCount(userId, focused);
-  // Other screens can send you back here with ?page=camera (or discover / match) to land on that page.
+  // Other screens can send you back here with ?page=camera (or home / match) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
   // The Match tab: shown straight away if this phone remembers you can see it, then checked again.
@@ -64,7 +62,7 @@ export default function Home() {
     };
   }, [focused, noBirthday, userId]);
 
-  // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Stories, 3 = Discover, 4 = Match (1.5 = halfway to Stories).
+  // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Home, 3 = Match (1.5 = halfway to Home).
   // Tracked on the phone's animation thread, so the pages move smoothly with your finger.
   const [swipe] = useState(() => {
     const position = new Animated.Value(CAMERA);
@@ -79,8 +77,8 @@ export default function Home() {
     }));
     return {
       pageStyles,
-      // The tab bar is see-through over the camera (and over Discover in dark mode), solid elsewhere.
-      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, 1, isDark ? 0 : 1, 1], extrapolate: 'clamp' }),
+      // The tab bar is see-through over the camera (and over Home in dark mode), solid elsewhere.
+      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, isDark ? 0 : 1, 1], extrapolate: 'clamp' }),
       onPageScroll: Animated.event([{ nativeEvent: { position, offset } }], { useNativeDriver: true }),
     };
   });
@@ -88,7 +86,7 @@ export default function Home() {
   const goTo = (index: number) => pager.current?.setPage(index);
 
   useEffect(() => {
-    const wanted = wantedPage === 'camera' ? CAMERA : wantedPage === 'discover' ? DISCOVER : wantedPage === 'match' ? MATCH : null;
+    const wanted = wantedPage === 'camera' ? CAMERA : wantedPage === 'home' ? HOME : wantedPage === 'match' ? MATCH : null;
     if (wanted === null || (wanted === MATCH && !showMatch)) return;
     pager.current?.setPage(wanted);
     router.setParams({ page: undefined });
@@ -114,13 +112,9 @@ export default function Home() {
           <CameraPage active={focused && page === CAMERA} warm={focused && swiping} />
           <Animated.View style={swipe.pageStyles[CAMERA].dim} pointerEvents="none" />
         </Animated.View>
-        <Animated.View key="stories" style={swipe.pageStyles[STORIES].page}>
-          <StoriesPage visible={focused && page === STORIES} onCamera={() => goTo(CAMERA)} />
-          <Animated.View style={swipe.pageStyles[STORIES].dim} pointerEvents="none" />
-        </Animated.View>
-        <Animated.View key="discover" style={swipe.pageStyles[DISCOVER].page}>
-          <DiscoverPage visible={focused && page === DISCOVER} onCamera={() => goTo(CAMERA)} />
-          <Animated.View style={swipe.pageStyles[DISCOVER].dim} pointerEvents="none" />
+        <Animated.View key="home" style={swipe.pageStyles[HOME].page}>
+          <HomePage visible={focused && page === HOME} onCamera={() => goTo(CAMERA)} />
+          <Animated.View style={swipe.pageStyles[HOME].dim} pointerEvents="none" />
         </Animated.View>
         {showMatch ? (
           <Animated.View key="match" style={swipe.pageStyles[MATCH].page}>

@@ -139,7 +139,7 @@ export default function Settings() {
             icon="lock-closed"
             color={colors.pink}
             title="Private account"
-            subtitle="Only friends see your posts (and they stay out of Discover)"
+            subtitle="Only friends see your posts (strangers don't see them on Home)"
             right={
               <Switch
                 value={profile?.is_private ?? false}

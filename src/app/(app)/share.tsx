@@ -139,10 +139,10 @@ export default function Share() {
             ? 'Dare done! 🎯🔥'
             : successMessage(picked.length, toStory, postToProfile),
       );
-      // After your drop: to Discover, where your friends' drops just unlocked.
+      // After your drop: to Home, where your friends' drops just unlocked.
       // Otherwise back to the Dare screen, the chat you came from, or the camera.
       if (toGuess) router.dismissTo('/guess');
-      else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'discover' } });
+      else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'home' } });
       else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
@@ -167,7 +167,7 @@ export default function Share() {
             <Option
               emoji="👀"
               title="Today's Peekaboo drop"
-              subtitle="Unlocks your friends' drops · on your profile and Discover"
+              subtitle="Unlocks your friends' drops · on your profile and Home"
               selected={toDrop}
               onPress={() => toggle(setToDrop, !toDrop)}
             />

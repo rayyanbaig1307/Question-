@@ -15,7 +15,7 @@ import { setDatingHidden, type PeekMatchStatus } from '@/lib/peekMatch';
 import { colors, font, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 
-// The Match tab: Peek Match, right in the app (only for people whose birthday says 18+).
+// The Match tab (to the right of Home): Peek Match, right in the app (only for people whose birthday says 18+).
 // Not verified yet → the age check. Verified → turn it on. Then: finish your dating profile → the feed.
 export function MatchPage({ visible, status, news, onChanged }: {
   visible: boolean;

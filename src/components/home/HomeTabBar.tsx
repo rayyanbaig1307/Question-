@@ -16,13 +16,12 @@ export function useTabBarSpace(): number {
 const TABS: { label: string; on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }[] = [
   { label: 'Chat', on: 'chatbubble', off: 'chatbubble-outline' },
   { label: 'Camera', on: 'camera', off: 'camera-outline' },
-  { label: 'Stories', on: 'sparkles', off: 'sparkles-outline' },
-  { label: 'Discover', on: 'flame', off: 'flame-outline' },
+  { label: 'Home', on: 'home', off: 'home-outline' },
   { label: 'Match', on: 'heart', off: 'heart-outline' },
 ];
 
-// The bar at the bottom of the home screen: Chat · Camera · Stories · Discover (· Match for 18+).
-// Over the camera (and Discover in dark mode) it's see-through; elsewhere it fades to solid.
+// The bar at the bottom of the home screen: Chat · Camera · Home (· Match for 18+).
+// Over the camera (and Home in dark mode) it's see-through; elsewhere it fades to solid.
 export function HomeTabBar({ page, onSelect, unread, showMatch, matchNews, solid }: {
   page: number;
   onSelect: (index: number) => void;
@@ -41,7 +40,7 @@ export function HomeTabBar({ page, onSelect, unread, showMatch, matchNews, solid
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom }]}>
       <Animated.View style={[styles.background, { opacity: solid }]} pointerEvents="none" />
-      {(showMatch ? TABS : TABS.slice(0, 4)).map((tab, index) => {
+      {(showMatch ? TABS : TABS.slice(0, 3)).map((tab, index) => {
         const active = index === page;
         return (
           <Bouncy
@@ -59,7 +58,7 @@ export function HomeTabBar({ page, onSelect, unread, showMatch, matchNews, solid
                   <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
                 </View>
               ) : null}
-              {index === 4 && matchNews > 0 ? <View style={styles.dot} /> : null}
+              {index === 3 && matchNews > 0 ? <View style={styles.dot} /> : null}
             </View>
             <Text style={[styles.label, !overCamera && styles.labelPlain, { color: active ? colors.accent : idleColor }, active && styles.labelActive]}>
               {tab.label}

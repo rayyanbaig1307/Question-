@@ -7,12 +7,9 @@ import { IconButton } from '@/components/IconButton';
 import { useMe } from '@/lib/auth';
 import { colors, font, space } from '@/theme';
 
-// Top bar for the Chat and Stories pages: your picture (→ profile), a title, and a camera button.
-export function PageHeader({ title, cameraSide, onCamera }: {
-  title: string;
-  cameraSide: 'left' | 'right';
-  onCamera: () => void;
-}) {
+// Top bar for the Chat and Home pages: a camera button on the left, a title, and your picture (→ profile)
+// on the right – so your profile is always one tap away.
+export function PageHeader({ title, onCamera }: { title: string; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const insets = useSafeAreaInsets();
 
@@ -27,9 +24,9 @@ export function PageHeader({ title, cameraSide, onCamera }: {
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
-      <View style={styles.side}>{cameraSide === 'left' ? camera : me}</View>
+      <View style={styles.side}>{camera}</View>
       <Text style={styles.title}>{title}</Text>
-      <View style={[styles.side, styles.right]}>{cameraSide === 'right' ? camera : me}</View>
+      <View style={[styles.side, styles.right]}>{me}</View>
     </View>
   );
 }

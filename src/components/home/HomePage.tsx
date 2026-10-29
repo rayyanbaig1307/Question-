@@ -18,36 +18,42 @@ import { noteDropSeen } from '@/lib/peeks';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
+import { fetchStoryRings } from '@/lib/stories';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
-import { DiscoverStrip } from './DiscoverStrip';
+import { HomeStrip } from './HomeStrip';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
+import { StoryRow, type Rings } from './StoryRow';
 
-// Discover: the photo feed. Your friends' posts (and yours) first, then everyone else's public posts.
-export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
+// Home, like Instagram: story circles along the top, then the feed – your friends' posts (and yours) first,
+// then everyone else's public posts.
+export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
   const [scratchToReveal] = useScratchToReveal();
   const tabSpace = useTabBarSpace();
+  const [rings, setRings] = useState<Rings | null>(null);
   const [posts, setPosts] = useState<DiscoverPost[] | null>(null);
   const [next, setNext] = useState<DiscoverCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
   const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
-  // Your Group Peek groups and how many Guess Who posts you can still guess, shown as a row at the top.
+  // Your Group Peek groups and how many Guess Who posts you can still guess, shown as a row under the stories.
   const [groups, setGroups] = useState<PeekGroup[] | null>(null);
   const [toGuess, setToGuess] = useState<number | null>(null);
 
   const show = useCallback(
     (loaded: {
+      rings: Rings;
       page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
       days: Set<string>;
       groups: PeekGroup[] | null;
       toGuess: number | null;
     }) => {
+      setRings(loaded.rings);
       setPosts(loaded.page.posts);
       setNext(loaded.page.next);
       setMyDropDays(loaded.days);
@@ -58,24 +64,31 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   );
 
   const loadAll = useCallback(async () => {
-    const [page, days, groups, toGuess] = await Promise.all([
+    const [rings, page, days, groups, toGuess] = await Promise.all([
+      fetchStoryRings(userId).catch((error) => {
+        console.warn('Could not load stories', error);
+        return { mine: null, friends: [] } as Rings;
+      }),
       fetchDiscover(userId),
       fetchMyDropDays(userId).catch(() => new Set<string>()),
       fetchGroups().catch(() => null),
       countUnguessed().catch(() => null),
     ]);
-    return { page, days, groups, toGuess };
+    return { rings, page, days, groups, toGuess };
   }, [userId]);
 
-  // Fresh posts every time you come to this page.
+  // Fresh stories and posts every time you come to this page.
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
     loadAll()
       .then((loaded) => !cancelled && show(loaded))
       .catch((error) => {
-        console.warn('Could not load Discover', error);
-        if (!cancelled) setPosts((current) => current ?? []);
+        console.warn('Could not load Home', error);
+        if (!cancelled) {
+          setPosts((current) => current ?? []);
+          setRings((current) => current ?? { mine: null, friends: [] });
+        }
       });
     return () => {
       cancelled = true;
@@ -99,7 +112,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
     try {
       show(await loadAll());
     } catch (error) {
-      console.warn('Could not refresh Discover', error);
+      console.warn('Could not refresh Home', error);
     }
     setRefreshing(false);
   }
@@ -212,9 +225,14 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
     }
   }, [visible, onScreen, posts, myDropDays, scratchToReveal, userId]);
 
+  const loading = posts === null || rings === null;
+  // Nothing at all yet (no friends' stories, no posts): one friendly message instead of two empty sections.
+  const nothingYet = !loading && rings.friends.length === 0 && posts.length === 0;
+  const invite = () => inviteFriends(profile?.username);
+
   return (
     <View style={styles.fill}>
-      <PageHeader title="Discover" cameraSide="left" onCamera={onCamera} />
+      <PageHeader title="Peekaboo" onCamera={onCamera} />
       <FlatList
         data={posts ?? []}
         keyExtractor={(post) => post.id}
@@ -224,22 +242,28 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
         onEndReachedThreshold={0.6}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-        ListHeaderComponent={<DiscoverStrip groups={groups} toGuess={toGuess} />}
+        ListHeaderComponent={
+          loading || nothingYet ? undefined : (
+            <View style={styles.top}>
+              <StoryRow rings={rings} onCamera={onCamera} />
+              <HomeStrip groups={groups} toGuess={toGuess} />
+            </View>
+          )
+        }
         ListEmptyComponent={
-          posts === null ? (
+          loading ? (
             <ActivityIndicator color={colors.accent} style={styles.loading} />
-          ) : (
+          ) : nothingYet ? (
             <EmptyState
-              emoji="🔭"
-              title="Nothing to scroll… yet"
-              message="Posts from your friends and everyone on Peekaboo land here. Post something or invite friends!">
+              emoji="👋"
+              title="Welcome to Peekaboo!"
+              message="Your friends' stories and posts will show up here. Take a photo to start, or invite some friends!">
               <Button title="Take a photo" icon="camera" onPress={onCamera} />
-              <Button
-                title="Invite friends"
-                icon="paper-plane"
-                variant="secondary"
-                onPress={() => inviteFriends(profile?.username)}
-              />
+              <Button title="Invite friends" icon="paper-plane" variant="secondary" onPress={invite} />
+            </EmptyState>
+          ) : (
+            <EmptyState emoji="🔭" title="No posts yet" message="Posts from your friends and everyone on Peekaboo land here.">
+              <Button title="Take a photo" icon="camera" onPress={onCamera} />
             </EmptyState>
           )
         }
@@ -285,6 +309,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     flexGrow: 1,
+  },
+  top: {
+    gap: space.lg,
+    marginBottom: space.lg,
   },
   loading: {
     marginTop: space.xl,

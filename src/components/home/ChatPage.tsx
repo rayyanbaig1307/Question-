@@ -47,7 +47,7 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   return (
     <View style={styles.fill}>
-      <PageHeader title="Chat" cameraSide="right" onCamera={onCamera} />
+      <PageHeader title="Chat" onCamera={onCamera} />
       {rows === null ? (
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
