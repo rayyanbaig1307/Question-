@@ -25,7 +25,9 @@ import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import {
+  addMatchAsFriend,
   fetchDatingMessages,
+  fetchMatchFriendId,
   fetchMatches,
   markDatingChatRead,
   photosRevealed,
@@ -109,10 +111,51 @@ export default function DatingChat() {
     }
   }
 
+  // Add your match as a normal Peekaboo friend – they have to say yes too.
+  function addFriend() {
+    if (!match) return;
+    const name = match.person.name;
+    const sayingYes = match.friendship === 'received';
+    Alert.alert(
+      sayingYes ? `Be Peekaboo friends with ${name}?` : `Add ${name} as a Peekaboo friend?`,
+      sayingYes
+        ? `You'll both see each other's normal Peekaboo profile, posts and stories – like any friend.`
+        : `This sends ${name} a friend request from your normal Peekaboo account. Once they say yes, you'll both see each other's normal profile, posts and stories – like any friend.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: sayingYes ? 'Yes, be friends' : 'Send request',
+          onPress: async () => {
+            try {
+              const result = await addMatchAsFriend(matchId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast(result === 'requested' ? `Friend request sent to ${name} 💌` : `You and ${name} are Peekaboo friends 🎉`);
+              await load();
+            } catch (error) {
+              Alert.alert('Something went wrong', friendlyError(error));
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  async function openNormalProfile() {
+    const friendId = await fetchMatchFriendId(matchId).catch(() => null);
+    if (friendId) router.push(`/profile/${friendId}`);
+  }
+
   function openMenu() {
     if (!match) return;
     const person = match.person;
+    const friendOption =
+      match.friendship === 'friends'
+        ? { label: `See ${person.name}'s Peekaboo profile`, onPress: openNormalProfile }
+        : match.friendship === 'sent'
+          ? { label: 'Friend request sent ⏳', onPress: () => showToast(`Waiting for ${person.name} to say yes`) }
+          : { label: match.friendship === 'received' ? `Say yes to ${person.name}'s friend request 🤝` : 'Add as a Peekaboo friend 🤝', onPress: addFriend };
     safety.openMenu(person, 'message', () => router.back(), [
+      friendOption,
       {
         label: `Unmatch ${person.name}`,
         destructive: true,
@@ -185,6 +228,13 @@ export default function DatingChat() {
         </View>
       )}
 
+      {match.friendship === 'received' ? (
+        <Pressable style={styles.friendCard} onPress={addFriend}>
+          <Text style={styles.friendText}>💌 {match.person.name} wants to be Peekaboo friends</Text>
+          <Text style={styles.friendButton}>Say yes</Text>
+        </Pressable>
+      ) : null}
+
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
         {messages === null ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
@@ -201,6 +251,21 @@ export default function DatingChat() {
             keyboardDismissMode="interactive"
             renderItem={({ item }) => {
               const mine = item.sender === myDatingId;
+              if (item.kind !== 'text') {
+                // Notices about becoming Peekaboo friends.
+                return (
+                  <View style={styles.notice}>
+                    <Text style={styles.noticeText}>
+                      {item.kind === 'friends'
+                        ? "🎉 You're now Peekaboo friends!"
+                        : mine
+                          ? `💌 You asked ${match.person.name} to be Peekaboo friends`
+                          : `💌 ${match.person.name} wants to be Peekaboo friends`}
+                    </Text>
+                    <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
+                  </View>
+                );
+              }
               return (
                 <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
                   <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
@@ -330,6 +395,45 @@ const styles = StyleSheet.create({
   empty: {
     flex: 1,
     justifyContent: 'center',
+  },
+  friendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.pink,
+  },
+  friendText: {
+    ...font.small,
+    color: colors.text,
+    fontWeight: '800',
+    flex: 1,
+  },
+  friendButton: {
+    color: colors.white,
+    backgroundColor: colors.pink,
+    fontWeight: '900',
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  notice: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: space.xs,
+  },
+  noticeText: {
+    ...font.small,
+    color: colors.purple,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   list: {
     padding: space.lg,

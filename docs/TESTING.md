@@ -554,3 +554,17 @@ Use the same 2 test accounts as Part 3 (they fit each other).
 6. New messages pop in live; the Matches list shows the last message and a pink dot for unread.
 7. **•••** in the chat: **Unmatch** (the chat disappears for both), **Report** (saved in **reports** as
    "Peek Match chat"), **Block** (you never see each other in Peek Match again; the chat ends).
+
+## Peek Match – Part 5: Add as friend 🤝
+
+Use 2 test accounts that have matched (Part 4).
+1. Account A, in the match chat: **••• → Add as a Peekaboo friend 🤝** → it explains that this shares your
+   normal Peekaboo profile once they say yes → **Send request**. The chat shows
+   "💌 You asked Ben to be Peekaboo friends". (Asking again doesn't send another.)
+2. Account B: the match chat shows a pink card **"💌 Ann wants to be Peekaboo friends · Say yes"** (and B also
+   gets a normal friend request in Friends, with push on).
+3. B taps **Say yes** → "🎉 You're now Peekaboo friends!" appears in the chat for both. They're now in each
+   other's normal **Friends** list, and can chat, send peeks and see stories like any friend.
+4. ••• now shows **See Ben's Peekaboo profile** → opens their normal profile.
+5. Before B says yes, neither of you can see the other's normal account. The 💌/🎉 notices don't count toward
+   the 5 messages for unblurring photos.

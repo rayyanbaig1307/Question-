@@ -219,6 +219,8 @@ export type DatingMatch = {
   their_count: number;
   unread: number;
   last: { body: string; mine: boolean; created_at: string } | null;
+  // Becoming Peekaboo friends: nobody asked yet, you asked, they asked, or you're friends.
+  friendship: 'none' | 'sent' | 'received' | 'friends';
 };
 
 export const photosRevealed = (match: Pick<DatingMatch, 'my_count' | 'their_count'>) =>
@@ -232,7 +234,16 @@ export type LikeForMe = {
   created_at: string;
 };
 
-export type DatingMessage = { id: string; match_id: string; sender: string; body: string; created_at: string; read_at: string | null };
+export type DatingMessage = {
+  id: string;
+  match_id: string;
+  sender: string;
+  body: string;
+  // 'friend_request' / 'friends' are little notices about becoming Peekaboo friends (they don't count to 5).
+  kind: 'text' | 'friend_request' | 'friends';
+  created_at: string;
+  read_at: string | null;
+};
 
 export async function fetchMatches(only?: string): Promise<DatingMatch[]> {
   const { data, error } = await supabase.rpc('peek_match_matches', only ? { only_match: only } : {});
@@ -282,4 +293,22 @@ export function subscribeToDatingChat(matchId: string, onChange: () => void): ()
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+// ---------------------------------------------------------------------------
+// "Add as friend" (step 5): sends a normal Peekaboo friend request to your match. You only become friends –
+// and see each other's normal profiles – once they say yes too.
+// ---------------------------------------------------------------------------
+
+export async function addMatchAsFriend(matchId: string): Promise<'requested' | 'friends' | 'already'> {
+  const { data, error } = await supabase.rpc('peek_match_add_friend', { match: matchId });
+  if (error) throw error;
+  return data as 'requested' | 'friends' | 'already';
+}
+
+// Their normal Peekaboo account (only once you're friends).
+export async function fetchMatchFriendId(matchId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('peek_match_friend_id', { match: matchId });
+  if (error) throw error;
+  return (data as string | null) ?? null;
 }
