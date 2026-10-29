@@ -11,11 +11,13 @@ export type LikeTarget = { photoId: string; path: string } | { prompt: number; t
 
 // A Peek Match profile, Hinge-style: photos and prompts one after another, each with a ♥ to like that one
 // thing. Shows only dating info – never anything from the person's normal Peekaboo account.
-export function DatingProfileView({ card, urls, onLike, footer }: {
+export function DatingProfileView({ card, urls, onLike, footer, blurred = false }: {
   card: DatingCard;
   urls: Record<string, string>;
   onLike?: (target: LikeTarget) => void;
   footer?: ReactNode;
+  // In a match chat, photos stay blurred until you've both sent 5 messages.
+  blurred?: boolean;
 }) {
   const [first, ...morePhotos] = card.photos;
   // Photo, prompt, photo, prompt, photo, prompt, then any extra photos.
@@ -34,7 +36,17 @@ export function DatingProfileView({ card, urls, onLike, footer }: {
       );
     }
     const photo = morePhotos[i];
-    if (photo) rest.push(<Photo key={photo.id} uri={urls[photo.path]} cacheKey={photo.path} onLike={onLike && (() => onLike({ photoId: photo.id, path: photo.path }))} />);
+    if (photo) {
+      rest.push(
+        <Photo
+          key={photo.id}
+          uri={urls[photo.path]}
+          cacheKey={photo.path}
+          blurred={blurred}
+          onLike={onLike && (() => onLike({ photoId: photo.id, path: photo.path }))}
+        />,
+      );
+    }
   }
 
   return (
@@ -48,7 +60,12 @@ export function DatingProfileView({ card, urls, onLike, footer }: {
         </Text>
       </View>
       {first ? (
-        <Photo uri={urls[first.path]} cacheKey={first.path} onLike={onLike && (() => onLike({ photoId: first.id, path: first.path }))} />
+        <Photo
+          uri={urls[first.path]}
+          cacheKey={first.path}
+          blurred={blurred}
+          onLike={onLike && (() => onLike({ photoId: first.id, path: first.path }))}
+        />
       ) : null}
       {rest}
       {footer}
@@ -56,10 +73,24 @@ export function DatingProfileView({ card, urls, onLike, footer }: {
   );
 }
 
-function Photo({ uri, cacheKey, onLike }: { uri: string | undefined; cacheKey: string; onLike?: () => void }) {
+function Photo({ uri, cacheKey, onLike, blurred }: {
+  uri: string | undefined;
+  cacheKey: string;
+  onLike?: () => void;
+  blurred: boolean;
+}) {
   return (
     <View style={styles.photo}>
-      {uri ? <Image source={{ uri, cacheKey }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} /> : null}
+      {uri ? (
+        <Image
+          source={{ uri, cacheKey }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={150}
+          blurRadius={blurred ? 40 : 0}
+        />
+      ) : null}
+      {blurred ? <Text style={styles.blurredHint}>🙈</Text> : null}
       {onLike ? <LikeButton onPress={onLike} /> : null}
     </View>
   );
@@ -110,6 +141,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
     lineHeight: 32,
+  },
+  blurredHint: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '42%',
+    fontSize: 48,
   },
   like: {
     position: 'absolute',

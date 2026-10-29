@@ -203,3 +203,83 @@ export async function reportDatingProfile(target: string, reason: string, what: 
   const { error } = await supabase.rpc('peek_match_report', { target, reason, what });
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Matches and the match chat (step 4)
+// ---------------------------------------------------------------------------
+
+// Photos in a match chat start blurred and unblur once you've both sent this many messages.
+export const UNBLUR_AFTER = 5;
+
+export type DatingMatch = {
+  match_id: string;
+  created_at: string;
+  person: DatingCard;
+  my_count: number;
+  their_count: number;
+  unread: number;
+  last: { body: string; mine: boolean; created_at: string } | null;
+};
+
+export const photosRevealed = (match: Pick<DatingMatch, 'my_count' | 'their_count'>) =>
+  match.my_count >= UNBLUR_AFTER && match.their_count >= UNBLUR_AFTER;
+
+export type LikeForMe = {
+  person: DatingCard;
+  comment: string | null;
+  liked_photo: string | null; // which of your photos they liked (its path)
+  liked_prompt: string | null; // …or which of your prompts
+  created_at: string;
+};
+
+export type DatingMessage = { id: string; match_id: string; sender: string; body: string; created_at: string; read_at: string | null };
+
+export async function fetchMatches(only?: string): Promise<DatingMatch[]> {
+  const { data, error } = await supabase.rpc('peek_match_matches', only ? { only_match: only } : {});
+  if (error) throw error;
+  return (data ?? []) as DatingMatch[];
+}
+
+export async function fetchLikesForMe(): Promise<LikeForMe[]> {
+  const { data, error } = await supabase.rpc('peek_match_likes_me');
+  if (error) throw error;
+  return (data ?? []) as LikeForMe[];
+}
+
+// Newest first.
+export async function fetchDatingMessages(matchId: string): Promise<DatingMessage[]> {
+  const { data, error } = await supabase
+    .from('dating_messages')
+    .select('*')
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []) as DatingMessage[];
+}
+
+export async function sendDatingMessage(matchId: string, message: string): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_send', { match: matchId, message: message.trim() });
+  if (error) throw error;
+}
+
+export async function markDatingChatRead(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_read', { match: matchId });
+  if (error) throw error;
+}
+
+export async function unmatch(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('peek_match_unmatch', { match: matchId });
+  if (error) throw error;
+}
+
+// Calls `onChange` when a message arrives in this match chat.
+export function subscribeToDatingChat(matchId: string, onChange: () => void): () => void {
+  const channel = supabase
+    .channel(`dating-chat-${matchId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dating_messages', filter: `match_id=eq.${matchId}` }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

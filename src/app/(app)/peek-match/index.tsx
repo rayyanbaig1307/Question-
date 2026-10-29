@@ -239,10 +239,11 @@ export default function PeekMatch() {
         <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <Text style={styles.heroTitle}>Peek Match is on 💘</Text>
           <Text style={styles.heroText}>
-            Look at one person at a time, like a photo or an answer, or skip. Matching is coming in the next update.
+            Look at one person at a time, like a photo or an answer, or skip. Like each other → it&apos;s a match!
           </Text>
         </LinearGradient>
         <ProfileCard me={userId} hidden={status.member.hidden} />
+        <Button title="Matches & likes 💬" icon="chatbubbles" onPress={() => router.push('/peek-match/matches')} />
         <View style={styles.card}>
           <View style={styles.switchRow}>
             <View style={styles.switchText}>

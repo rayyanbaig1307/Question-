@@ -129,6 +129,12 @@ function openFor(data: Record<string, unknown> | undefined) {
     case 'group':
       if (typeof data.group === 'string') router.push(`/groups/${data.group}`);
       break;
+    case 'peek-match':
+      router.push('/peek-match/matches');
+      break;
+    case 'peek-match-chat':
+      if (typeof data.match === 'string') router.push(`/peek-match/chat/${data.match}`);
+      break;
   }
 }
 

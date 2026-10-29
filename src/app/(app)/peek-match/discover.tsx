@@ -25,22 +25,16 @@ import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { SafeEdge } from '@/components/SafeEdge';
-import {
-  blockDatingProfile,
-  fetchDatingFeed,
-  likeDatingProfile,
-  reportDatingProfile,
-  skipDatingProfile,
-  type DatingCard,
-} from '@/lib/dating';
+import { fetchDatingFeed, fetchMatches, likeDatingProfile, skipDatingProfile, type DatingCard } from '@/lib/dating';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrls } from '@/lib/media';
-import { REPORT_REASONS } from '@/lib/safety';
+import { useDatingSafety } from '@/lib/useDatingSafety';
 import { colors, font, radius, space } from '@/theme';
 
 // Peek Match: one profile at a time. ♥ a photo or prompt (with a comment if you like), or ✕ to skip.
 export default function DatingDiscover() {
-  const { showOptions, showToast } = useOverlays();
+  const { showToast } = useOverlays();
+  const safety = useDatingSafety();
   const insets = useSafeAreaInsets();
   const [cards, setCards] = useState<DatingCard[] | null>(null);
   const [liking, setLiking] = useState<LikeTarget | null>(null);
@@ -87,12 +81,31 @@ export default function DatingDiscover() {
     if (!card || !liking) return;
     setSending(true);
     try {
-      await likeDatingProfile(card.dating_id, 'photoId' in liking ? { photoId: liking.photoId } : { prompt: liking.prompt }, comment);
+      const result = await likeDatingProfile(
+        card.dating_id,
+        'photoId' in liking ? { photoId: liking.photoId } : { prompt: liking.prompt },
+        comment,
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(`Like sent to ${card.name} 💘`);
       setLiking(null);
       setComment('');
+      const person = card;
       next();
+      if (result === 'match') {
+        // They'd already liked you: it's a match!
+        Alert.alert(`It's a match! 💘`, `You and ${person.name} liked each other.`, [
+          { text: 'Keep looking', style: 'cancel' },
+          {
+            text: 'Say hi 👋',
+            onPress: async () => {
+              const match = (await fetchMatches().catch(() => [])).find((m) => m.person.dating_id === person.dating_id);
+              if (match) router.push(`/peek-match/chat/${match.match_id}`);
+            },
+          },
+        ]);
+      } else {
+        showToast(`Like sent to ${person.name} 💘`);
+      }
     } catch (error) {
       Alert.alert('Could not send your like', friendlyError(error));
     } finally {
@@ -101,56 +114,7 @@ export default function DatingDiscover() {
   }
 
   function openMenu() {
-    if (!card) return;
-    const person = card;
-    const block = () =>
-      Alert.alert(`Block ${person.name}?`, "You won't see each other in Peek Match again. We won't tell them.", [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await blockDatingProfile(person.dating_id);
-              showToast(`Blocked ${person.name}`);
-              next();
-            } catch (error) {
-              Alert.alert('Could not block', friendlyError(error));
-            }
-          },
-        },
-      ]);
-    showOptions({
-      options: [
-        {
-          label: `Report ${person.name}`,
-          onPress: () =>
-            setTimeout(
-              () =>
-                showOptions({
-                  title: 'Why are you reporting this profile?',
-                  message: "Your report is private. They won't know it was you.",
-                  options: REPORT_REASONS.map((reason) => ({
-                    label: reason.label,
-                    onPress: async () => {
-                      try {
-                        await reportDatingProfile(person.dating_id, reason.code);
-                        Alert.alert('Thanks for telling us 💛', 'We will take a look. Do you also want to block them?', [
-                          { text: 'Not now', style: 'cancel' },
-                          { text: 'Block', style: 'destructive', onPress: () => setTimeout(block, 400) },
-                        ]);
-                      } catch (error) {
-                        Alert.alert('Could not send report', friendlyError(error));
-                      }
-                    },
-                  })),
-                }),
-              400,
-            ),
-        },
-        { label: `Block ${person.name}`, destructive: true, onPress: block },
-      ],
-    });
+    if (card) safety.openMenu(card, 'profile', next);
   }
 
   return (

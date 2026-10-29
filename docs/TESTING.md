@@ -539,3 +539,18 @@ looking for men and a man looking for women, ages in each other's range, within 
    someone in the normal app does the same).
 7. People who don't fit what *both* of you are looking for never show up. Nobody can see your friends, posts,
    stories or exact location.
+
+## Peek Match – Part 4: matches and the match chat 💬
+
+Use the same 2 test accounts as Part 3 (they fit each other).
+1. Account A likes B (♥ on a photo or prompt, maybe with a comment).
+2. Account B: Peek Match screen → **Matches & likes 💬** → **Likes you** shows A's photo, name and comment.
+   Tap it → "💘 A liked your answer: …" + their comment + their profile → **💘 Match** (or ✕ to skip).
+   (Or B finds A first in **Start peeking** and likes back – then B sees "It's a match! 💘" → **Say hi 👋**.)
+3. Both get "It's a match! 💘" (with push on) and the chat opens.
+4. In the chat, their picture at the top is **blurred** 🙈, with a bar: "Photos unblur when you've both sent
+   5 messages · You 2/5 · Ben 3/5". Tap their name to see their profile – photos blurred too.
+5. Send 5 messages each → a buzz, "📸 Photos unblurred! Peekaboo 👀", and everything is clear.
+6. New messages pop in live; the Matches list shows the last message and a pink dot for unread.
+7. **•••** in the chat: **Unmatch** (the chat disappears for both), **Report** (saved in **reports** as
+   "Peek Match chat"), **Block** (you never see each other in Peek Match again; the chat ends).
