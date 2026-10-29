@@ -22,6 +22,7 @@ import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
+import type { DropLock } from '@/lib/drop';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -39,7 +40,7 @@ export function FeedCard({
   videoUrl,
   overlayUrl,
   active = false,
-  locked = false,
+  lock = null,
   scratch = false,
   onLike,
   onMenu,
@@ -52,14 +53,16 @@ export function FeedCard({
   overlayUrl?: string;
   // On screen right now (videos only play then).
   active?: boolean;
-  // Peek to see: a friend's drop you can't see until you've posted your own drop today.
-  locked?: boolean;
+  // Peek to see: a friend's drop you can't see yet – until you've posted your own drop that day ('drop'),
+  // or until everyone in a Group Peek you share has posted ('group').
+  lock?: DropLock;
   // Hold to reveal: the photo starts blurred and you scratch it clear.
   scratch?: boolean;
   onLike: (like: boolean) => void;
   onMenu: () => void;
 }) {
   const lastTap = useRef(0);
+  const locked = lock !== null;
   const [shape, setShape] = useState(() => shapes.get(post.media_path) ?? 3 / 4);
   // Remember when this card goes from locked to unlocked, to play the reveal animation once.
   const [wasLocked, setWasLocked] = useState(locked);
@@ -160,17 +163,26 @@ export function FeedCard({
               />
             ) : null}
             <View style={styles.lockedShade} />
-            <View style={styles.lockedContent}>
-              <Text style={styles.lockedEmoji}>🙈</Text>
-              <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
-              <Text style={styles.lockedText}>Post your Peekaboo drop to see {name}&apos;s.</Text>
-              <Button
-                title="Open camera"
-                icon="camera"
-                small
-                onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
-              />
-            </View>
+            {lock === 'group' ? (
+              <View style={styles.lockedContent}>
+                <Text style={styles.lockedEmoji}>👯</Text>
+                <Text style={styles.lockedTitle}>Waiting on your group 👀</Text>
+                <Text style={styles.lockedText}>{name}&apos;s drop shows once everyone in your group has posted.</Text>
+                <Button title="See my groups" icon="people" small onPress={() => router.push('/groups')} />
+              </View>
+            ) : (
+              <View style={styles.lockedContent}>
+                <Text style={styles.lockedEmoji}>🙈</Text>
+                <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
+                <Text style={styles.lockedText}>Post your Peekaboo drop to see {name}&apos;s.</Text>
+                <Button
+                  title="Open camera"
+                  icon="camera"
+                  small
+                  onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+                />
+              </View>
+            )}
           </Animated.View>
         ) : isVideo && videoUrl ? (
           <Animated.View entering={justUnlocked ? ZoomIn.springify().damping(12) : undefined}>

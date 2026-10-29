@@ -33,6 +33,8 @@ export type Post = MediaFields & {
   drop_late_seconds: number | null;
   blur_path: string | null;
   created_at: string;
+  // Asked for along with a drop post: true while a Group Peek you share with them is still waiting on someone.
+  group_hold?: boolean | null;
 };
 
 export type PostWithAuthor = Post & { author: Profile | null };

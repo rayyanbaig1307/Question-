@@ -166,13 +166,20 @@ export default function Settings() {
           <Row
             icon="eye"
             color={colors.accent}
-            title="Daily Peekaboo drop"
-            subtitle="The 'you have 2 minutes' alert"
+            title="Peekaboo drops & nudges"
+            subtitle="The 'you have 2 minutes' alert, and group nudges"
             right={notifySwitch('drops')}
           />
         </Section>
 
         <Section title="Peekaboo drops">
+          <Row
+            icon="people-circle"
+            color={colors.purple}
+            title="Group Peek"
+            subtitle="Drops stay hidden until the whole group posts"
+            onPress={() => router.push('/groups')}
+          />
           <Row
             icon="finger-print"
             color={colors.accent}

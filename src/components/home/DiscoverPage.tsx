@@ -11,12 +11,14 @@ import { useMe } from '@/lib/auth';
 import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
+import { fetchGroups, type PeekGroup } from '@/lib/groups';
 import { inviteFriends } from '@/lib/invite';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
+import { GroupStrip } from './GroupStrip';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
@@ -33,16 +35,30 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   const [refreshing, setRefreshing] = useState(false);
   // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
   const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
+  // Your Group Peek groups, shown as a row at the top.
+  const [groups, setGroups] = useState<PeekGroup[] | null>(null);
 
-  const show = useCallback((loaded: { page: { posts: DiscoverPost[]; next: DiscoverCursor | null }; days: Set<string> }) => {
-    setPosts(loaded.page.posts);
-    setNext(loaded.page.next);
-    setMyDropDays(loaded.days);
-  }, []);
+  const show = useCallback(
+    (loaded: {
+      page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
+      days: Set<string>;
+      groups: PeekGroup[] | null;
+    }) => {
+      setPosts(loaded.page.posts);
+      setNext(loaded.page.next);
+      setMyDropDays(loaded.days);
+      setGroups(loaded.groups);
+    },
+    [],
+  );
 
   const loadAll = useCallback(async () => {
-    const [page, days] = await Promise.all([fetchDiscover(userId), fetchMyDropDays(userId).catch(() => new Set<string>())]);
-    return { page, days };
+    const [page, days, groups] = await Promise.all([
+      fetchDiscover(userId),
+      fetchMyDropDays(userId).catch(() => new Set<string>()),
+      fetchGroups().catch(() => null),
+    ]);
+    return { page, days, groups };
   }, [userId]);
 
   // Fresh posts every time you come to this page.
@@ -189,6 +205,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
         onEndReachedThreshold={0.6}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        ListHeaderComponent={<GroupStrip groups={groups} />}
         ListEmptyComponent={
           posts === null ? (
             <ActivityIndicator color={colors.accent} style={styles.loading} />
@@ -226,7 +243,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
               videoUrl={urls[media(item).video ?? '']}
               overlayUrl={urls[media(item).overlay ?? '']}
               active={visible && inView === item.id}
-              locked={media(item).locked}
+              lock={media(item).lock}
               // Other people's drops start blurred – hold and scratch to reveal (unless turned off in Settings).
               scratch={scratchToReveal && item.drop_day !== null && item.user_id !== userId}
               onLike={(liked) => like(item, liked)}

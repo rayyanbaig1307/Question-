@@ -36,7 +36,7 @@ export async function createPost(
 export async function fetchUserPosts(userId: string): Promise<Post[]> {
   const { data, error } = await supabase
     .from('posts')
-    .select('*')
+    .select('*, group_hold')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -46,7 +46,7 @@ export async function fetchUserPosts(userId: string): Promise<Post[]> {
 export async function fetchPost(postId: string): Promise<PostWithAuthor | null> {
   const { data, error } = await supabase
     .from('posts')
-    .select('*, author:profiles!posts_user_id_fkey(*)')
+    .select('*, group_hold, author:profiles!posts_user_id_fkey(*)')
     .eq('id', postId)
     .maybeSingle();
   if (error) throw error;

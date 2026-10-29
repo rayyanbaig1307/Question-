@@ -126,6 +126,9 @@ function openFor(data: Record<string, unknown> | undefined) {
     case 'comments':
       if (typeof data.post === 'string') router.push(`/comments/${data.post}`);
       break;
+    case 'group':
+      if (typeof data.group === 'string') router.push(`/groups/${data.group}`);
+      break;
   }
 }
 

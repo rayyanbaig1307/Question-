@@ -134,14 +134,25 @@ export default function PostViewer() {
         <View style={[styles.fill, styles.center]}>
           {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={30} /> : null}
           <View style={styles.lockedShade} />
-          <Text style={styles.lockedEmoji}>🙈</Text>
-          <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
-          <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
-          <Button
-            title="Open camera"
-            icon="camera"
-            onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
-          />
+          {files?.lock === 'group' ? (
+            <>
+              <Text style={styles.lockedEmoji}>👯</Text>
+              <Text style={styles.lockedTitle}>Waiting on your group 👀</Text>
+              <Text style={styles.lockedText}>This drop shows once everyone in your group has posted.</Text>
+              <Button title="See my groups" icon="people" onPress={() => router.push('/groups')} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.lockedEmoji}>🙈</Text>
+              <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
+              <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
+              <Button
+                title="Open camera"
+                icon="camera"
+                onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+              />
+            </>
+          )}
         </View>
       ) : videoUri ? (
         <VideoClip

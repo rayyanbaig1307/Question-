@@ -105,7 +105,7 @@ export function formatCountdown(ms: number): string {
 export async function fetchDarePosts(day: string): Promise<PostWithAuthor[]> {
   const { data, error } = await supabase
     .from('posts')
-    .select('*, author:profiles!posts_user_id_fkey(*)')
+    .select('*, group_hold, author:profiles!posts_user_id_fkey(*)')
     .eq('dare_day', day)
     .order('created_at', { ascending: false })
     .limit(120);

@@ -397,3 +397,20 @@ Where it works:
 5. **Delete account** (try with a test account!): Settings → **Delete account** → confirm twice. You're logged
    out, and the account, its photos, videos, posts, stories, chats, comments and likes are gone for good.
    Logging in with it again says the login is wrong.
+
+## Step 23 – Group Peek 👯
+
+You need 2 friends on Peekaboo (or 2 test accounts) for this.
+1. **Make a group:** Discover → tap **👯 Make a Group Peek** at the top (or Settings → Group Peek → ＋).
+   Type a name, tick your friends, tap **Make group**. Your friends get "… added you to a group 👯".
+2. The group page shows **"Waiting on …" 👀**, a progress bar, and everyone's status (✅ Posted / ⏳ Not yet).
+3. After the daily drop alert, post your drop. Back in the group: you're ✅, the others are still ⏳.
+4. Your friends' drops stay blurred with 🙈 – in the group **and** in Discover ("Waiting on your group 👀") –
+   even though you posted yours.
+5. Tap **Nudge** next to someone who hasn't posted → they get "… nudged you 👀". Tapping Nudge again
+   within 15 minutes says to give them a minute.
+6. When the last person posts → open the group: "Everyone posted! 🎉", a happy buzz, and all the drops pop
+   in one by one. They're now clear in Discover too. Tap one to open it full screen.
+7. ••• on the group page: **Edit group** (rename, add friends), **Leave group**, and – if you made it –
+   **Delete group**. If you made it, hold down on a person to remove them.
+8. The Discover row shows each group as "2/3 posted 👀" or "Everyone posted 🎉".

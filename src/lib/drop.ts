@@ -106,14 +106,27 @@ export function useDropDone(me: string, enabled: boolean): boolean | null {
   return done?.day === localDay() ? done.done : null;
 }
 
-// Peek to see: a friend's drop photo stays blurred until you've posted your own drop that day.
-// (The database enforces this too – it won't hand out the real photo before then.)
+// Why a friend's drop photo is still blurred for you (the database enforces this too):
+// - 'drop': you haven't posted your own drop that day yet ("peek to see");
+// - 'group': you're in a Group Peek together and someone in it hasn't posted that day's drop yet.
+export type DropLock = 'drop' | 'group' | null;
+
+export function dropLock(
+  post: { drop_day: string | null; user_id: string; group_hold?: boolean | null },
+  me: string,
+  myDropDays: Set<string> | null,
+): DropLock {
+  if (post.drop_day === null || post.user_id === me) return null;
+  if (!(myDropDays?.has(post.drop_day) ?? false)) return 'drop';
+  return post.group_hold ? 'group' : null;
+}
+
 export function isDropLocked(
-  post: { drop_day: string | null; user_id: string },
+  post: { drop_day: string | null; user_id: string; group_hold?: boolean | null },
   me: string,
   myDropDays: Set<string> | null,
 ): boolean {
-  return post.drop_day !== null && post.user_id !== me && !(myDropDays?.has(post.drop_day) ?? false);
+  return dropLock(post, me, myDropDays) !== null;
 }
 
 type PostFiles = {
@@ -124,6 +137,7 @@ type PostFiles = {
   poster_path: string | null;
   overlay_path: string | null;
   blur_path: string | null;
+  group_hold?: boolean | null;
 };
 
 // Which files to load for a post:
@@ -131,11 +145,13 @@ type PostFiles = {
 // - photo → the photo;
 // - video → its still picture, the video, and its text/sticker layer.
 export function postMedia(post: PostFiles, me: string, myDropDays: Set<string> | null) {
-  const locked = isDropLocked(post, me, myDropDays);
-  if (locked) return { locked, still: post.blur_path, video: null, overlay: null };
+  const lock = dropLock(post, me, myDropDays);
+  const locked = lock !== null;
+  if (locked) return { locked, lock, still: post.blur_path, video: null, overlay: null };
   const isVideo = post.media_type === 'video';
   return {
     locked,
+    lock,
     still: isVideo ? post.poster_path : post.media_path,
     video: isVideo ? post.media_path : null,
     overlay: isVideo ? post.overlay_path : null,
