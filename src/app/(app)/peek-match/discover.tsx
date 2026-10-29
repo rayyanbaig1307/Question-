@@ -29,7 +29,7 @@ import { fetchDatingFeed, fetchMatches, likeDatingProfile, skipDatingProfile, ty
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrls } from '@/lib/media';
 import { useDatingSafety } from '@/lib/useDatingSafety';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // Peek Match: one profile at a time. ♥ a photo or prompt (with a comment if you like), or ✕ to skip.
 export default function DatingDiscover() {
@@ -168,7 +168,7 @@ export default function DatingDiscover() {
                   onChangeText={setComment}
                   placeholder="Add a comment (optional)"
                   placeholderTextColor={colors.textFaint}
-                  keyboardAppearance="dark"
+                  keyboardAppearance={keyboardAppearance}
                   selectionColor={colors.accent}
                   maxLength={200}
                   multiline

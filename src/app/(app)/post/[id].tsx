@@ -6,6 +6,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
@@ -131,6 +132,7 @@ export default function PostViewer() {
 
   return (
     <View style={styles.fill}>
+      <StatusBar style="light" />
       {post === undefined ? (
         <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
       ) : post === null ? (
@@ -308,6 +310,7 @@ const styles = StyleSheet.create({
   },
   authorName: {
     ...font.body,
+    color: colors.white,
     fontWeight: '800',
   },
   authorMeta: {
@@ -335,6 +338,7 @@ const styles = StyleSheet.create({
   },
   count: {
     ...font.body,
+    color: colors.white,
     fontWeight: '800',
   },
   dareTag: {
@@ -342,6 +346,7 @@ const styles = StyleSheet.create({
   },
   caption: {
     ...font.body,
+    color: colors.white,
     fontSize: 17,
     lineHeight: 24,
     marginBottom: space.md,

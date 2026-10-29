@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SafeScreen } from '@/components/SafeEdge';
-import { colors, radius, space } from '@/theme';
+import { colors, keyboardAppearance, radius, space } from '@/theme';
 import { TEXT_COLORS, textOn, type OverlayItem } from './stickers';
 
 export type TextDraft = Pick<OverlayItem, 'content' | 'color' | 'look'>;
@@ -43,7 +43,7 @@ export function TextComposer({ initial, onDone }: {
               maxLength={120}
               placeholder="Type something…"
               placeholderTextColor="rgba(255,255,255,0.5)"
-              keyboardAppearance="dark"
+              keyboardAppearance={keyboardAppearance}
               selectionColor={colors.accent}
               style={[
                 styles.input,

@@ -44,7 +44,7 @@ import {
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrls } from '@/lib/media';
 import { fetchPeekMatchStatus } from '@/lib/peekMatch';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 type Spot = { lat: number; lng: number };
 
@@ -315,7 +315,7 @@ export default function DatingProfileEditor() {
                   }
                   placeholder="Your answer…"
                   placeholderTextColor={colors.textFaint}
-                  keyboardAppearance="dark"
+                  keyboardAppearance={keyboardAppearance}
                   selectionColor={colors.accent}
                   multiline
                   maxLength={200}

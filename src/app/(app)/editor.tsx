@@ -8,6 +8,7 @@ import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 import { scheduleOnRN } from 'react-native-worklets';
+import { StatusBar } from 'expo-status-bar';
 
 import { DraggableItem, type TrashZone } from '@/components/editor/DraggableItem';
 import { FilterLayers, FILTERS } from '@/components/editor/filters';
@@ -136,6 +137,7 @@ export default function Editor() {
 
   return (
     <View style={styles.fill}>
+      <StatusBar style="light" />
       {isVideo ? <VideoClip uri={uri} playing loop style={StyleSheet.absoluteFill} /> : null}
       <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
         {isVideo ? null : (

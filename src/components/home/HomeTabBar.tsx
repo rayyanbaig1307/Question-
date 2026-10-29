@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bouncy } from '@/components/Bouncy';
-import { colors } from '@/theme';
+import { colors, isDark } from '@/theme';
 
 // Height of the tab bar, not counting the phone's home-bar area below it.
 export const TAB_BAR_HEIGHT = 58;
@@ -30,6 +30,9 @@ export function HomeTabBar({ page, onSelect, unread, solid }: {
   solid: Animated.AnimatedInterpolation<number>;
 }) {
   const insets = useSafeAreaInsets();
+  // Over the camera the icons are white; elsewhere in light mode they use the dark text color.
+  const overCamera = page === 1;
+  const idleColor = overCamera || isDark ? colors.white : colors.text;
 
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom }]}>
@@ -46,14 +49,16 @@ export function HomeTabBar({ page, onSelect, unread, solid }: {
             accessibilityState={{ selected: active }}
             accessibilityLabel={tab.label}>
             <View>
-              <Ionicons name={active ? tab.on : tab.off} size={25} color={active ? colors.accent : colors.white} />
+              <Ionicons name={active ? tab.on : tab.off} size={25} color={active ? colors.accent : idleColor} />
               {index === 0 && unread > 0 ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
                 </View>
               ) : null}
             </View>
-            <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
+            <Text style={[styles.label, !overCamera && styles.labelPlain, { color: active ? colors.accent : idleColor }, active && styles.labelActive]}>
+              {tab.label}
+            </Text>
           </Bouncy>
         );
       })}
@@ -89,8 +94,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 4,
   },
+  labelPlain: {
+    textShadowRadius: 0,
+  },
   labelActive: {
-    color: colors.accent,
     fontWeight: '900',
   },
   badge: {

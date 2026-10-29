@@ -20,11 +20,14 @@ export function IconButton({
   icon,
   onPress,
   size = 44,
-  color = colors.white,
+  color,
   background = colors.overlay,
   label,
   style,
 }: Props) {
+  // On a plain card-colored button the icon uses the text color (so it shows in light mode too);
+  // on dark see-through or colored buttons it's white.
+  const iconColor = color ?? (background === colors.card || background === colors.surface ? colors.text : colors.white);
   return (
     <Bouncy
       accessibilityRole="button"
@@ -36,7 +39,7 @@ export function IconButton({
         onPress();
       }}
       style={[styles.base, { width: size, height: size, borderRadius: size / 2, backgroundColor: background }, style]}>
-      <Ionicons name={icon} size={size * 0.5} color={color} />
+      <Ionicons name={icon} size={size * 0.5} color={iconColor} />
     </Bouncy>
   );
 }

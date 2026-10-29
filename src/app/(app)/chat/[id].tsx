@@ -55,7 +55,7 @@ import { useTyping } from '@/lib/typing';
 import { Audio, sendVoice } from '@/lib/voice';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // A 1-on-1 chat with a friend. New messages pop in live.
 export default function ChatScreen() {
@@ -270,7 +270,7 @@ export default function ChatScreen() {
               }}
               placeholder="Send a chat"
               placeholderTextColor={colors.textFaint}
-              keyboardAppearance="dark"
+              keyboardAppearance={keyboardAppearance}
               selectionColor={colors.accent}
               multiline
               maxLength={2000}

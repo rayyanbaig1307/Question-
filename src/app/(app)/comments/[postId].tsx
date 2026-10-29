@@ -28,7 +28,7 @@ import { addComment, deleteComment, fetchComments, setCommentLiked, type Comment
 import { fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
-import { colors, font, space } from '@/theme';
+import { colors, font, keyboardAppearance, space } from '@/theme';
 
 // Comments on a post: read them, add yours, reply to one, like them, delete or report.
 export default function Comments() {
@@ -218,7 +218,7 @@ export default function Comments() {
             onChangeText={setText}
             placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
             placeholderTextColor={colors.textFaint}
-            keyboardAppearance="dark"
+            keyboardAppearance={keyboardAppearance}
             selectionColor={colors.accent}
             multiline
             maxLength={500}

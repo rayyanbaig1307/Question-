@@ -34,7 +34,7 @@ import {
   startAgeCheck,
   type PeekMatchStatus,
 } from '@/lib/peekMatch';
-import { colors, font, gradients, radius, space } from '@/theme';
+import { colors, font, gradients, keyboardAppearance, radius, space } from '@/theme';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -395,7 +395,7 @@ function DateBox({ label, value, onChange, max, placeholder, wide = false }: {
         keyboardType="number-pad"
         placeholder={placeholder}
         placeholderTextColor={colors.textFaint}
-        keyboardAppearance="dark"
+        keyboardAppearance={keyboardAppearance}
         selectionColor={colors.accent}
         maxLength={max}
         style={styles.dateInput}

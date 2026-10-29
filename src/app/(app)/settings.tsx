@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { reloadAppAsync } from 'expo';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -15,7 +16,7 @@ import { scheduleDropNotifications } from '@/lib/notifications';
 import { isBlockedFromPeekMatch } from '@/lib/peekMatch';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
 
 export default function Settings() {
   const { userId, profile, setProfile, signOut } = useMe();
@@ -232,6 +233,22 @@ export default function Settings() {
           />
         </Section>
 
+        <Section title="Appearance">
+          <View style={styles.themes}>
+            {THEMES.map((option) => (
+              <Pressable
+                key={option.key}
+                onPress={() => chooseTheme(option.key)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: themeChoice === option.key }}
+                style={[styles.theme, themeChoice === option.key && styles.themeOn]}>
+                <Text style={styles.themeEmoji}>{option.emoji}</Text>
+                <Text style={[styles.themeLabel, themeChoice === option.key && styles.themeLabelOn]}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Section>
+
         <Section title="Account">
           <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
           <Row icon="log-out" color={colors.orange} title="Log out" onPress={confirmSignOut} />
@@ -280,7 +297,53 @@ function Row({ icon, color, title, subtitle, right, onPress }: {
   );
 }
 
+const THEMES: { key: ThemeChoice; label: string; emoji: string }[] = [
+  { key: 'dark', label: 'Dark', emoji: '🌙' },
+  { key: 'light', label: 'Light', emoji: '☀️' },
+  { key: 'system', label: 'Match phone', emoji: '📱' },
+];
+
+// Switching colors restarts the app for a second, so every screen is redrawn in the new colors.
+async function chooseTheme(choice: ThemeChoice) {
+  if (choice === themeChoice) return;
+  try {
+    await saveThemeChoice(choice);
+    await reloadAppAsync();
+  } catch (error) {
+    Alert.alert('Saved!', 'Close Peekaboo and open it again to see the new colors.');
+    console.warn('Could not restart for the new theme', error);
+  }
+}
+
 const styles = StyleSheet.create({
+  themes: {
+    flexDirection: 'row',
+    gap: space.sm,
+    padding: space.sm,
+  },
+  theme: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  themeOn: {
+    borderColor: colors.accent,
+  },
+  themeEmoji: {
+    fontSize: 24,
+  },
+  themeLabel: {
+    ...font.small,
+    fontWeight: '800',
+  },
+  themeLabelOn: {
+    color: colors.text,
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,

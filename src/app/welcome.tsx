@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...font.hero,
+    color: colors.white,
     fontSize: 52,
     textShadowColor: 'rgba(0,0,0,0.25)',
     textShadowOffset: { width: 0, height: 4 },

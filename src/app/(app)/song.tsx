@@ -11,7 +11,7 @@ import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { updateMyProfile } from '@/lib/profiles';
 import { profileSong, searchSongs, songFields, type Song } from '@/lib/songs';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // Pick a song for your profile: search Apple Music, play the 30-second preview, tap Pick.
 export default function SongPicker() {
@@ -78,7 +78,7 @@ export default function SongPicker() {
               onChangeText={setQuery}
               placeholder="Search for a song or artist"
               placeholderTextColor={colors.textFaint}
-              keyboardAppearance="dark"
+              keyboardAppearance={keyboardAppearance}
               selectionColor={colors.accent}
               returnKeyType="search"
               autoCorrect={false}

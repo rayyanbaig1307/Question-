@@ -43,7 +43,7 @@ import { useMediaUrls } from '@/lib/media';
 import { fetchPeekMatchStatus } from '@/lib/peekMatch';
 import { timeAgo } from '@/lib/time';
 import { useDatingSafety } from '@/lib/useDatingSafety';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // A Peek Match chat with one match. Their photos stay blurred until you've both sent 5 messages.
 export default function DatingChat() {
@@ -283,7 +283,7 @@ export default function DatingChat() {
             onChangeText={setText}
             placeholder={`Message ${match.person.name}`}
             placeholderTextColor={colors.textFaint}
-            keyboardAppearance="dark"
+            keyboardAppearance={keyboardAppearance}
             selectionColor={colors.accent}
             multiline
             maxLength={1000}

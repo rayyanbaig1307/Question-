@@ -1,4 +1,5 @@
 import { useIsFocused, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
 import { CameraPage } from '@/components/home/CameraPage';
 
@@ -10,5 +11,10 @@ import { CameraPage } from '@/components/home/CameraPage';
 export default function SoloCamera() {
   const { to, dare, drop, guess } = useLocalSearchParams<{ to?: string; dare?: string; drop?: string; guess?: string }>();
   const focused = useIsFocused();
-  return <CameraPage active={focused} sendTo={to} dare={dare === '1'} drop={drop === '1'} guess={guess === '1'} />;
+  return (
+    <>
+      <StatusBar style="light" />
+      <CameraPage active={focused} sendTo={to} dare={dare === '1'} drop={drop === '1'} guess={guess === '1'} />
+    </>
+  );
 }

@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { StatusBar } from 'expo-status-bar';
 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
@@ -187,6 +188,7 @@ export default function SnapViewer() {
 
   return (
     <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close peek">
+      <StatusBar style="light" />
       {state.video ? (
         <VideoClip
           uri={state.url}
@@ -305,6 +307,7 @@ const styles = StyleSheet.create({
   },
   senderName: {
     ...font.body,
+    color: colors.white,
     fontWeight: '800',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 6,

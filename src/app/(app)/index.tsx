@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
@@ -11,7 +12,7 @@ import { HomeTabBar } from '@/components/home/HomeTabBar';
 import { StoriesPage } from '@/components/home/StoriesPage';
 import { useMe } from '@/lib/auth';
 import { useUnreadCount } from '@/lib/chat';
-import { colors } from '@/theme';
+import { colors, isDark } from '@/theme';
 
 const CHAT = 0;
 const CAMERA = 1;
@@ -48,8 +49,8 @@ export default function Home() {
     }));
     return {
       pageStyles,
-      // The tab bar is see-through over the camera and Discover, solid on Chat and Stories.
-      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, 1, 0], extrapolate: 'clamp' }),
+      // The tab bar is see-through over the camera (and over Discover in dark mode), solid elsewhere.
+      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, 1, isDark ? 0 : 1], extrapolate: 'clamp' }),
       onPageScroll: Animated.event([{ nativeEvent: { position, offset } }], { useNativeDriver: true }),
     };
   });
@@ -93,6 +94,8 @@ export default function Home() {
       </AnimatedPagerView>
 
       <HomeTabBar page={page} onSelect={goTo} unread={unread} solid={swipe.tabBarSolid} />
+      {/* Light status bar over the camera; elsewhere it follows the app's colors. */}
+      {focused ? <StatusBar style={page === CAMERA || isDark ? 'light' : 'dark'} /> : null}
     </View>
   );
 }

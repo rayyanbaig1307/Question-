@@ -14,6 +14,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { StatusBar } from 'expo-status-bar';
 
 import { VideoClip } from '@/components/VideoClipSafe';
 import { Avatar } from '@/components/Avatar';
@@ -207,6 +208,7 @@ export default function StoryViewer() {
 
   return (
     <View style={styles.fill}>
+      <StatusBar style="light" />
       {url && isVideo ? (
         <VideoClip
           key={story.id}
@@ -418,6 +420,7 @@ const styles = StyleSheet.create({
   },
   authorName: {
     ...font.body,
+    color: colors.white,
     fontWeight: '800',
     flexShrink: 1,
   },

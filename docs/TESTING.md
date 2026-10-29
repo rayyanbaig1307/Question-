@@ -590,3 +590,14 @@ Use 2 test accounts that have matched (Part 4).
 3. Post to **Close friends**. On a close friend's phone: Stories shows your circle with a **green ring** and a
    "⭐ Close friends" tag on your card; the story shows "⭐ Close friends" at the top. Posts show the same tag.
 4. On a friend who is **not** on your list: that story and post don't show up at all (and can't be opened).
+
+## Step 31 – Dark, Light or Match phone 🌙☀️📱
+
+1. Settings → **Appearance** → tap **☀️ Light**. Peekaboo restarts for a second and comes back in light colors
+   (soft white background, same pink/purple style).
+2. Check the main screens: Chat, Stories, Discover, profile, Settings, chats, comments, Peek Match. Text should
+   be dark on light backgrounds; the camera, full-screen photos, peeks and stories stay dark (they're photos).
+3. **📱 Match phone** → follows your phone's own light/dark setting. Switch your phone's appearance in its
+   settings and come back – Peekaboo switches too.
+4. **🌙 Dark** → back to the dark look.
+(The Android download needs the next new version for "Match phone" to follow the phone; Light and Dark work.)
