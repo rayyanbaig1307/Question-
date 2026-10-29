@@ -9,10 +9,12 @@ import { FriendButton } from '@/components/FriendButton';
 import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
 import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { SongCard } from '@/components/SongCard';
 import { useMe } from '@/lib/auth';
 import { fetchRelation, type Relation } from '@/lib/friends';
 import { fetchUserPosts } from '@/lib/posts';
 import { fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
+import { profileSong } from '@/lib/songs';
 import type { Post, Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -65,6 +67,7 @@ export default function ProfileScreen() {
   }
 
   const profile = data?.profile ?? null;
+  const song = profileSong(profile);
 
   function openMenu() {
     if (!profile) return;
@@ -135,6 +138,14 @@ export default function ProfileScreen() {
           {isFriend ? <Text style={[styles.badge, styles.friendBadge]}>👯 Friends</Text> : null}
         </View>
         {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+        {song ? (
+          <SongCard
+            song={song}
+            right={isMe ? <Button title="Change" variant="secondary" small onPress={() => router.push('/song')} /> : undefined}
+          />
+        ) : isMe ? (
+          <Button title="Add a profile song 🎵" variant="secondary" small onPress={() => router.push('/song')} />
+        ) : null}
       </View>
 
       {isMe ? (

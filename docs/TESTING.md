@@ -568,3 +568,15 @@ Use 2 test accounts that have matched (Part 4).
 4. ••• now shows **See Ben's Peekaboo profile** → opens their normal profile.
 5. Before B says yes, neither of you can see the other's normal account. The 💌/🎉 notices don't count toward
    the 5 messages for unblurring photos.
+
+## Step 29 – Profile song 🎵
+
+1. Your profile → **Add a profile song 🎵**.
+2. Type a song or artist (e.g. "Espresso") → results appear with cover art.
+3. Tap **▶** on any song → its free 30-second preview plays (the time left counts down). Tap again to pause.
+   Only one preview plays at a time.
+4. Tap **Pick** → back on your profile the song shows under your bio: cover art, name, artist, ▶ preview and
+   **Full song on Apple Music ↗** (opens Apple Music).
+5. **Change** → pick another, or **Remove song**.
+6. Friends see your song on your profile and can play the preview too.
+   (Peekaboo only saves the song's name and Apple links – never any music.)

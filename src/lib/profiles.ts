@@ -39,7 +39,22 @@ export async function fetchProfileStats(id: string): Promise<ProfileStats> {
 
 export async function updateMyProfile(
   id: string,
-  changes: Partial<Pick<Profile, 'username' | 'display_name' | 'bio' | 'avatar_path' | 'is_private' | 'location_sharing'>>,
+  changes: Partial<
+    Pick<
+      Profile,
+      | 'username'
+      | 'display_name'
+      | 'bio'
+      | 'avatar_path'
+      | 'is_private'
+      | 'location_sharing'
+      | 'song_title'
+      | 'song_artist'
+      | 'song_artwork_url'
+      | 'song_preview_url'
+      | 'song_link_url'
+    >
+  >,
 ): Promise<Profile> {
   const { data, error } = await supabase.from('profiles').update(changes).eq('id', id).select('*').single();
   if (error) throw error;

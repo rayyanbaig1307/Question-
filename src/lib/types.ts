@@ -10,6 +10,12 @@ export type Profile = {
   location_sharing: boolean;
   created_at: string;
   updated_at: string;
+  // Profile song: just its details and Apple links (a 30-second preview + the full song on Apple Music).
+  song_title?: string | null;
+  song_artist?: string | null;
+  song_artwork_url?: string | null;
+  song_preview_url?: string | null;
+  song_link_url?: string | null;
 };
 
 // Photos and videos are stored the same way. A video also has a still picture from it (poster) and, if you
