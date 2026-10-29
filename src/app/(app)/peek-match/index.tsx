@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
+import { fetchMyDating, isComplete, MIN_PHOTOS, type MyDating } from '@/lib/dating';
 import { friendlyError } from '@/lib/errors';
 import {
   AgeCheckNotSetUp,
@@ -238,9 +239,10 @@ export default function PeekMatch() {
         <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <Text style={styles.heroTitle}>Peek Match is on 💘</Text>
           <Text style={styles.heroText}>
-            Next: your dating profile – 3 to 6 photos and 3 prompts. (Coming in the next update.)
+            Finding people and matching are coming in the next updates. For now, build your dating profile!
           </Text>
         </LinearGradient>
+        <ProfileCard me={userId} hidden={status.member.hidden} />
         <View style={styles.card}>
           <View style={styles.switchRow}>
             <View style={styles.switchText}>
@@ -279,6 +281,45 @@ export default function PeekMatch() {
           {body}
         </ScrollView>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+// Your dating profile at a glance: is it ready to be shown, and what's missing.
+function ProfileCard({ me, hidden }: { me: string; hidden: boolean }) {
+  const [mine, setMine] = useState<MyDating | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyDating(me)
+        .then(setMine)
+        .catch(() => {});
+    }, [me]),
+  );
+  const missing = mine
+    ? [
+        !mine.profile && 'the basics',
+        mine.photos.length < MIN_PHOTOS && `${MIN_PHOTOS - mine.photos.length} more photo${MIN_PHOTOS - mine.photos.length === 1 ? '' : 's'}`,
+        mine.prompts.length < 3 && 'your 3 prompts',
+      ].filter((item): item is string => !!item)
+    : [];
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>My dating profile</Text>
+      {mine === null ? (
+        <ActivityIndicator color={colors.accent} />
+      ) : isComplete(mine) ? (
+        <Text style={styles.cardText}>
+          ✅ {mine.profile?.name} · {mine.photos.length} photos · 3 prompts{' '}
+          {hidden ? '· 🙈 hidden right now' : '· ready to be seen'}
+        </Text>
+      ) : (
+        <Text style={styles.problem}>Not finished yet – add {missing.join(', ')}.</Text>
+      )}
+      <Button
+        title={mine?.profile ? 'Edit my dating profile' : 'Make my dating profile'}
+        icon="create"
+        onPress={() => router.push('/peek-match/profile')}
+      />
     </View>
   );
 }

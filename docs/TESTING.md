@@ -507,3 +507,18 @@ Testing:
    - Failed → it says why, with **Try again**.
 4. **Hide my dating profile** switch, and **Leave Peek Match** (deletes all dating stuff; your age check is kept,
    so you don't pay for it twice).
+
+## Peek Match – Part 2: the dating profile 💘
+
+(You need to be through Part 1: verified and Peek Match switched on.)
+1. Settings → Peek Match → **Make my dating profile**.
+2. **Photos:** tap ＋ to add from your camera roll (3 to 6). Tap a photo → **Make this my main photo** or
+   **Remove photo**. A 7th photo isn't allowed.
+3. **The basics:** first name, age (taken from your ID check – can't be changed), I am a Woman / Man /
+   Nonbinary, and your **rough area**: tap **Use my location 📍** (allow location) – it fills in an area like
+   "East London" you can edit. Your exact spot is never saved: it's rounded to about 1 km on the phone first.
+4. **Prompts:** 3 prompts like "A dare I'd actually do…" – tap the prompt to swap it, type an answer.
+5. **Who I'd like to see:** Women / Men / Nonbinary people, an age range (18+), and a distance (5–250 km).
+6. **Save** → back on the Peek Match screen: "✅ Ann · 4 photos · 3 prompts · ready to be seen" (or what's
+   still missing). Turn on **Hide my dating profile** → it says "hidden right now".
+7. **Leave Peek Match** deletes the profile and all its photos.
