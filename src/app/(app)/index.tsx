@@ -92,6 +92,35 @@ export default function Home() {
     router.setParams({ page: undefined });
   }, [wantedPage, showMatch]);
 
+  // If the Match tab goes away while you're on it, slide back to Home.
+  useEffect(() => {
+    if (!showMatch && page === MATCH) pager.current?.setPage(HOME);
+  }, [showMatch, page]);
+
+  // The pager needs real pages only (an empty slot makes it crash), so the Match page is only added when shown.
+  const pages = [
+    <Animated.View key="chat" style={swipe.pageStyles[CHAT].page}>
+      <ChatPage visible={focused && page === CHAT} onCamera={() => goTo(CAMERA)} />
+      <Animated.View style={swipe.pageStyles[CHAT].dim} pointerEvents="none" />
+    </Animated.View>,
+    <Animated.View key="camera" style={swipe.pageStyles[CAMERA].page}>
+      <CameraPage active={focused && page === CAMERA} warm={focused && swiping} />
+      <Animated.View style={swipe.pageStyles[CAMERA].dim} pointerEvents="none" />
+    </Animated.View>,
+    <Animated.View key="home" style={swipe.pageStyles[HOME].page}>
+      <HomePage visible={focused && page === HOME} onCamera={() => goTo(CAMERA)} />
+      <Animated.View style={swipe.pageStyles[HOME].dim} pointerEvents="none" />
+    </Animated.View>,
+  ];
+  if (showMatch) {
+    pages.push(
+      <Animated.View key="match" style={swipe.pageStyles[MATCH].page}>
+        <MatchPage visible={focused && page === MATCH} status={match.status} news={match.news} onChanged={match.reload} />
+        <Animated.View style={swipe.pageStyles[MATCH].dim} pointerEvents="none" />
+      </Animated.View>,
+    );
+  }
+
   return (
     <View style={styles.fill}>
       <AnimatedPagerView
@@ -104,29 +133,7 @@ export default function Home() {
           if (event.nativeEvent.position !== page) Haptics.selectionAsync();
           setPage(event.nativeEvent.position);
         }}>
-        <Animated.View key="chat" style={swipe.pageStyles[CHAT].page}>
-          <ChatPage visible={focused && page === CHAT} onCamera={() => goTo(CAMERA)} />
-          <Animated.View style={swipe.pageStyles[CHAT].dim} pointerEvents="none" />
-        </Animated.View>
-        <Animated.View key="camera" style={swipe.pageStyles[CAMERA].page}>
-          <CameraPage active={focused && page === CAMERA} warm={focused && swiping} />
-          <Animated.View style={swipe.pageStyles[CAMERA].dim} pointerEvents="none" />
-        </Animated.View>
-        <Animated.View key="home" style={swipe.pageStyles[HOME].page}>
-          <HomePage visible={focused && page === HOME} onCamera={() => goTo(CAMERA)} />
-          <Animated.View style={swipe.pageStyles[HOME].dim} pointerEvents="none" />
-        </Animated.View>
-        {showMatch ? (
-          <Animated.View key="match" style={swipe.pageStyles[MATCH].page}>
-            <MatchPage
-              visible={focused && page === MATCH}
-              status={match.status}
-              news={match.news}
-              onChanged={match.reload}
-            />
-            <Animated.View style={swipe.pageStyles[MATCH].dim} pointerEvents="none" />
-          </Animated.View>
-        ) : null}
+        {pages}
       </AnimatedPagerView>
 
       <HomeTabBar
