@@ -46,21 +46,11 @@ export async function updateMyProfile(
   return data as Profile;
 }
 
-// Deletes your account for good: first your photo files, then your login – which also removes your profile,
-// posts, stories, chats, friends and likes (the database does that part).
-export async function deleteMyAccount(userId: string): Promise<void> {
-  const folders: { bucket: 'media' | 'avatars'; prefix: string }[] = [
-    { bucket: 'media', prefix: `${userId}/posts` },
-    { bucket: 'media', prefix: `${userId}/stories` },
-    { bucket: 'media', prefix: `${userId}/snaps` },
-    { bucket: 'media', prefix: `${userId}/blurs` },
-    { bucket: 'avatars', prefix: userId },
-  ];
-  for (const { bucket, prefix } of folders) {
-    const { data } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
-    const paths = (data ?? []).filter((file) => file.id).map((file) => `${prefix}/${file.name}`);
-    if (paths.length > 0) await supabase.storage.from(bucket).remove(paths);
-  }
-  const { error } = await supabase.rpc('delete_my_account');
+// Deletes your account for good: your photo files, your login, and with it your profile, posts, stories,
+// chats, friends and likes. Done by the "delete-account" server helper (supabase/functions/delete-account),
+// which only ever deletes the person who's logged in.
+export async function deleteMyAccount(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
   if (error) throw error;
+  if (!data?.deleted) throw new Error(data?.error ?? 'Could not delete your account');
 }

@@ -60,7 +60,7 @@ export default function Settings() {
                 style: 'destructive',
                 onPress: async () => {
                   try {
-                    await deleteMyAccount(userId);
+                    await deleteMyAccount();
                     showToast('Your account was deleted. Bye 👋');
                     // The login no longer exists, so this just clears it from the phone.
                     await signOut().catch(() => {});
