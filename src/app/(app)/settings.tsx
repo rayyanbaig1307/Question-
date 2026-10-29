@@ -12,6 +12,7 @@ import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
+import { isBlockedFromPeekMatch } from '@/lib/peekMatch';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, space } from '@/theme';
@@ -21,11 +22,16 @@ export default function Settings() {
   const { showToast } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
+  // Peek Match (18+ dating) disappears for good for anyone who said they're under 18.
+  const [peekMatchBlocked, setPeekMatchBlocked] = useState(true);
 
   useEffect(() => {
     fetchNotificationPrefs(userId)
       .then(setNotify)
       .catch(() => setNotify(ALL_ON));
+    isBlockedFromPeekMatch(userId)
+      .then(setPeekMatchBlocked)
+      .catch(() => {});
   }, [userId]);
 
   // Turn one type of notification on or off (saved straight away).
@@ -195,6 +201,18 @@ export default function Settings() {
             }
           />
         </Section>
+
+        {peekMatchBlocked ? null : (
+          <Section title="Dating">
+            <Row
+              icon="heart-circle"
+              color={colors.pink}
+              title="Peek Match (18+)"
+              subtitle="Dating, separate from the rest of Peekaboo"
+              onPress={() => router.push('/peek-match')}
+            />
+          </Section>
+        )}
 
         <Section title="Friends">
           <Row

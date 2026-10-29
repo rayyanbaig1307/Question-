@@ -34,16 +34,19 @@ Deno.serve(async (req) => {
   const userId = who.user.id;
 
   // 1. Their photo files – in their own folders, plus their Guess Who files (kept in a shared "mystery"
-  // folder so the file names don't give away who posted them).
+  // folder so the file names don't give away who posted them)…
   const { data: mystery } = await admin
     .from('mystery_posts')
     .select('media_path, poster_path, overlay_path')
     .eq('user_id', userId);
-  const mysteryPaths = (mystery ?? [])
+  const sharedFolderPaths = (mystery ?? [])
     .flatMap((row) => [row.media_path, row.poster_path, row.overlay_path])
     .filter((path): path is string => !!path);
+  // …and their Peek Match (dating) photos, kept under their separate dating id.
+  const { data: dating } = await admin.from('dating_members').select('dating_id').eq('user_id', userId).maybeSingle();
+  if (dating) sharedFolderPaths.push(...(await listAll('media', `dating/${dating.dating_id}`)));
   for (const bucket of ['media', 'avatars']) {
-    const paths = [...(await listAll(bucket, userId)), ...(bucket === 'media' ? mysteryPaths : [])];
+    const paths = [...(await listAll(bucket, userId)), ...(bucket === 'media' ? sharedFolderPaths : [])];
     for (let i = 0; i < paths.length; i += 100) {
       await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
     }

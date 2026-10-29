@@ -481,3 +481,29 @@ Works in Expo Go now. The Android download needs the next new version (voice not
 4. Their chat list says "Reacted 🔥 to your story", and with push on they get the same notification.
 5. On **your own** story you still see "👁 N seen" instead of the emoji row.
 6. Once the story is gone (after 24 hours or deleted), the reaction stays in the chat without the picture.
+
+## Peek Match (dating, 18+) – Part 1: the safety gate 💘
+
+**Use test accounts.** Your birthday can only be entered once per account.
+
+Setting up the age check (once, by the app owner):
+1. Make a free Stripe account at stripe.com. Stay in **Test mode** (the switch at the top) while testing.
+2. In Stripe: Developers → API keys → **Create restricted key**. Give it **Write** access to
+   "Identity verification sessions and reports" and **Read** access to sensitive verification results
+   (the date of birth). Copy the key.
+3. In Supabase: Edge Functions → **Secrets** → add `STRIPE_SECRET_KEY` = that key. (Never paste it in chat.)
+4. For real checks later: switch Stripe to Live mode, get Identity approved, and replace the secret with a
+   live key. Each real check costs about $1.50.
+
+Testing:
+1. Settings → **Dating** → **Peek Match (18+)** → you see what Peek Match is and how it keeps you safe.
+2. **Under 18:** with a test account, enter a birthday less than 18 years ago → "Peek Match is for adults only".
+   Go back to Settings: the Peek Match row is **gone for good** on that account.
+3. **18+:** with another account, enter an adult birthday → Step 2 "Check my age".
+   - Before the Stripe key is added: it says age checks aren't switched on yet.
+   - After: tap **Check my age** → the Stripe page opens. In test mode you can pick a test result instead of
+     using a real ID. Finish, come back to Peekaboo → it checks by itself (or tap "I'm done – check now").
+   - Passed → "You're verified ✅" → flip the **Peek Match** switch on → "Peek Match is on 💘".
+   - Failed → it says why, with **Try again**.
+4. **Hide my dating profile** switch, and **Leave Peek Match** (deletes all dating stuff; your age check is kept,
+   so you don't pay for it twice).
