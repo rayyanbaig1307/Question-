@@ -456,3 +456,17 @@ You need a friend's phone (or a test account) for this.
    🗑️ to remove it.
 4. Tap **Send to** and post it – the filter and stickers are part of the photo your friends see.
 5. Videos get stickers and text, but no filters (the swipe and dots only show for photos).
+
+## Step 27 – Voice notes 🎤
+
+Works in Expo Go now. The Android download needs the next new version (voice notes add a new phone part).
+1. Open a chat with a friend. With nothing typed, the right-hand button is a pink **🎤 mic**.
+   (Start typing and it turns back into the send arrow.)
+2. **Hold** the mic: the first time, allow the microphone, then hold again. While recording, a bar shows a red
+   dot, the time and a moving waveform. **Let go to send.**
+3. **Slide left** while holding ("‹ Slide to cancel") → the mic turns into a 🗑️ → let go to cancel.
+4. A quick tap just reminds you to hold. Recordings under a second aren't sent; they stop at 1 minute.
+5. The voice note shows in the chat as a bubble with ▶ play, its waveform and length. Tap ▶: it plays,
+   the waveform fills in and the time counts down. Tap again to pause. Only one plays at a time.
+6. Your friend gets "Sent you a voice note 🎤" (with push on), and the chat list shows "Voice note 🎤".
+7. Hold down on a voice note → Unsend (yours) or Report (theirs).

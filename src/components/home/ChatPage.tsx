@@ -79,7 +79,7 @@ function buildRows(friends: Profile[], messages: Message[]): ChatRow[] {
       friend,
       last: withFriend[0] ?? null,
       newSnaps: unopened.filter((m) => m.kind === 'snap').length,
-      newChats: unopened.filter((m) => m.kind === 'text').length,
+      newChats: unopened.filter((m) => m.kind === 'text' || m.kind === 'voice' || m.kind === 'reaction').length,
     };
   });
   // Most recent conversations first; friends you haven't talked to yet at the bottom.
@@ -104,6 +104,9 @@ function describe(row: ChatRow, me: string): {
       label: theyDidIt ? 'Took a screenshot! 📸' : 'You took a screenshot',
       bold: theyDidIt && !last.opened_at,
     };
+  }
+  if (last.kind === 'voice') {
+    return { icon: 'mic', color: colors.pink, label: last.sender_id === me ? 'You sent a voice note' : 'Voice note 🎤', bold: false };
   }
   const color = last.kind === 'snap' ? colors.accent : colors.blue;
   if (last.sender_id === me) {

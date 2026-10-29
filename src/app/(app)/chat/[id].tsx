@@ -29,6 +29,7 @@ import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import {
@@ -49,6 +50,7 @@ import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
 import { timeAgo } from '@/lib/time';
 import { useTyping } from '@/lib/typing';
+import { Audio, sendVoice } from '@/lib/voice';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -114,6 +116,18 @@ export default function ChatScreen() {
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
     } catch (error) {
       Alert.alert('Message not sent', friendlyError(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendVoiceNote(recording: Recording) {
+    setSending(true);
+    try {
+      const sent = await sendVoice(userId, friendId, recording.uri, recording.durationMs, recording.waveform);
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Voice note not sent', friendlyError(error));
     } finally {
       setSending(false);
     }
@@ -260,12 +274,17 @@ export default function ChatScreen() {
               maxLength={2000}
               style={styles.input}
             />
-            <IconButton
-              icon="arrow-up"
-              label="Send"
-              background={text.trim() ? colors.blue : colors.card}
-              onPress={send}
-            />
+            {/* Nothing typed: hold the mic for a voice note. Typing: the send button. */}
+            {text.trim() || !Audio ? (
+              <IconButton
+                icon="arrow-up"
+                label="Send"
+                background={text.trim() ? colors.blue : colors.card}
+                onPress={send}
+              />
+            ) : (
+              <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
+            )}
           </View>
         ) : (
           <Text style={[styles.notFriends, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
@@ -297,6 +316,18 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
         </Text>
         <Text style={styles.time}>{time}</Text>
       </View>
+    );
+  }
+
+  if (message.kind === 'voice') {
+    return (
+      <Pressable onLongPress={onLongPress} style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+        <VoiceBubble path={message.media_path} durationMs={message.audio_ms ?? 0} waveform={message.waveform} mine={mine} />
+        <Text style={styles.time}>
+          {time}
+          {mine && showStatus ? ` · ${message.opened_at ? 'Opened' : 'Delivered'}` : ''}
+        </Text>
+      </Pressable>
     );
   }
 

@@ -64,7 +64,8 @@
           "color": "#FF4F9A"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-audio"
     ],
     "experiments": {
       "reactCompiler": true

@@ -11,7 +11,8 @@ export type Message = {
   sender_id: string;
   recipient_id: string;
   // 'screenshot' = a notice that someone took a screenshot; body is 'chat' or 'peek'.
-  kind: 'text' | 'snap' | 'screenshot';
+  // 'voice' = a voice note (media_path is the recording); 'reaction' = an emoji sent from your story.
+  kind: 'text' | 'snap' | 'screenshot' | 'voice' | 'reaction';
   body: string | null;
   // Peeks: the photo or video (see MediaFields).
   media_path: string | null;
@@ -25,6 +26,9 @@ export type Message = {
   replayed_at: string | null;
   saved_at: string | null;
   saved_by: string | null;
+  // Voice notes: how long it is, and its waveform (bars from 0 to 100).
+  audio_ms: number | null;
+  waveform: number[] | null;
 };
 
 // How long after opening a peek it can still be replayed or saved (same as the database rule).

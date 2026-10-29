@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 import type { MediaFields } from './types';
 
 // 'mystery' is for Guess Who: those files go in a shared folder, so the file name doesn't give away who posted it.
-type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery';
+type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery' | 'voice';
 
 // What you're sending: a photo, or a video (with the text/stickers you added saved as a see-through picture).
 export type Capture = { kind: 'photo'; uri: string } | { kind: 'video'; uri: string; overlayUri?: string | null };
@@ -72,23 +72,25 @@ async function readBytes(uri: string): Promise<ArrayBuffer> {
   return new File(uri).arrayBuffer();
 }
 
-// Uploads a photo (JPEG), see-through picture (PNG) or video to the private "media" bucket.
+// Uploads a photo (JPEG), see-through picture (PNG), video or voice recording to the private "media" bucket.
 // Returns where it was saved.
 export async function uploadMedia(
   userId: string,
   folder: MediaFolder,
   localUri: string,
-  type: 'jpg' | 'png' | 'video' = 'jpg',
+  type: 'jpg' | 'png' | 'video' | 'audio' = 'jpg',
 ): Promise<string> {
   const isMov = /\.mov$/i.test(localUri);
   const [extension, contentType] =
     type === 'png'
       ? ['png', 'image/png']
-      : type === 'video'
-        ? isMov
-          ? ['mov', 'video/quicktime']
-          : ['mp4', 'video/mp4']
-        : ['jpg', 'image/jpeg'];
+      : type === 'audio'
+        ? ['m4a', 'audio/mp4']
+        : type === 'video'
+          ? isMov
+            ? ['mov', 'video/quicktime']
+            : ['mp4', 'video/mp4']
+          : ['jpg', 'image/jpeg'];
   const path = folder === 'mystery' ? `mystery/${randomUUID()}.${extension}` : `${userId}/${folder}/${randomUUID()}.${extension}`;
   const { error } = await supabase.storage.from('media').upload(path, await readBytes(localUri), { contentType });
   if (error) throw error;
