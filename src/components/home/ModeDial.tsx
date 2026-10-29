@@ -20,34 +20,39 @@ import { dareFor, todayDareDay } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { colors, gradients, radius, space } from '@/theme';
 
-// What the camera is for right now. Swipe the dial (or tap a mode) to change it, like camera modes in other apps.
+// What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
 export type CameraMode = 'photo' | 'dare' | 'drop' | 'guess';
 
-export const CAMERA_MODES: { key: CameraMode; emoji: string; label: string }[] = [
-  { key: 'photo', emoji: '📷', label: 'Photo' },
+// The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
+export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'drop', emoji: '👀', label: 'Drop' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
 
-// Every mode gets the same amount of room, so they sit evenly spaced with the chosen one in the middle.
-const SLOT_WIDTH = 96;
+// Everything on the row, including the empty spot for the plain camera at the start.
+const SLOTS: CameraMode[] = ['photo', ...CAMERA_MODES.map((item) => item.key)];
 
-// The row of modes above the shutter, like the mode row on other camera apps: plain words over the camera,
-// the chosen one bright and in the middle. Swipe it left or right, or tap a mode.
-// A pink dot on a mode means there's something waiting for you there (today's dare not done, a drop to post).
+// Every spot on the row is this wide, so the row snaps one spot at a time and the chosen one lands dead centre.
+const SLOT_WIDTH = 76;
+const BUBBLE = 46;
+const BUBBLE_ACTIVE = 54;
+
+// The row of round mode bubbles right above the shutter, like lenses on other camera apps.
+// Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
+// A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
 export function ModeDial({ mode, onChange, dots }: {
   mode: CameraMode;
   onChange: (mode: CameraMode) => void;
   dots?: Partial<Record<CameraMode, boolean>>;
 }) {
+  // The row stretches across the whole screen, so "the middle" is the middle of the screen – right over the shutter.
   const { width } = useWindowDimensions();
   const scroll = useRef<ScrollViewInstance>(null);
-  const index = CAMERA_MODES.findIndex((item) => item.key === mode);
-  // Empty room on both sides, so the first and last modes can sit in the middle of the screen too.
+  const index = SLOTS.indexOf(mode);
   const sidePadding = (width - SLOT_WIDTH) / 2;
 
-  // Picked from somewhere else (e.g. a tap on a mode): glide the row so it's in the middle.
+  // Picked from somewhere else (e.g. a tap on a bubble): glide the row so it's in the middle.
   useEffect(() => {
     scroll.current?.scrollTo({ x: index * SLOT_WIDTH, animated: true });
   }, [index]);
@@ -58,10 +63,10 @@ export function ModeDial({ mode, onChange, dots }: {
     onChange(next);
   }
 
-  // When the row stops moving, whichever mode is closest to the middle wins.
+  // When the row stops moving, whichever spot is closest to the middle wins.
   function settled(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const at = Math.round(event.nativeEvent.contentOffset.x / SLOT_WIDTH);
-    pick(CAMERA_MODES[Math.max(0, Math.min(CAMERA_MODES.length - 1, at))].key);
+    pick(SLOTS[Math.max(0, Math.min(SLOTS.length - 1, at))]);
   }
 
   return (
@@ -76,7 +81,9 @@ export function ModeDial({ mode, onChange, dots }: {
       contentOffset={{ x: index * SLOT_WIDTH, y: 0 }}
       contentContainerStyle={{ paddingHorizontal: sidePadding }}
       onMomentumScrollEnd={settled}
-      style={styles.dial}>
+      style={[styles.dial, { width }]}>
+      {/* The empty spot: plain camera, nothing to see */}
+      <Pressable style={styles.slot} onPress={() => pick('photo')} accessibilityRole="tab" accessibilityLabel="Plain camera" />
       {CAMERA_MODES.map((item) => {
         const active = item.key === mode;
         return (
@@ -87,13 +94,13 @@ export function ModeDial({ mode, onChange, dots }: {
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={`${item.label} mode`}>
-            <View>
-              <Text style={[styles.modeText, active && styles.modeTextActive]} numberOfLines={1}>
-                {item.emoji} {item.label}
-              </Text>
+            <View style={[styles.bubble, active && styles.bubbleActive]}>
+              <Text style={[styles.bubbleEmoji, active && styles.bubbleEmojiActive]}>{item.emoji}</Text>
               {dots?.[item.key] ? <View style={styles.dot} /> : null}
             </View>
-            <View style={[styles.marker, active && styles.markerActive]} />
+            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+              {item.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -101,8 +108,8 @@ export function ModeDial({ mode, onChange, dots }: {
   );
 }
 
-// One line above the dial that says what the chosen mode will do: today's dare, the drop countdown, and so on.
-// Nothing is shown in plain Photo mode, so the camera stays clean.
+// One line above the row that says what the chosen mode will do: today's dare, the drop countdown, and so on.
+// Nothing is shown on the plain camera, so it stays clean.
 export function ModeCaption({ mode, drop }: { mode: CameraMode; drop: DropStatus }) {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
   if (mode === 'photo') return null;
@@ -179,42 +186,63 @@ function usePulse(on: boolean) {
 const styles = StyleSheet.create({
   dial: {
     flexGrow: 0,
+    // The camera's bottom area has side padding; pull the row back out so it's as wide as the screen.
+    marginHorizontal: -space.lg,
   },
   slot: {
     width: SLOT_WIDTH,
+    height: BUBBLE_ACTIVE + 20,
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: space.xs,
+    justifyContent: 'flex-start',
+    gap: 4,
   },
-  modeText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    fontWeight: '800',
+  bubble: {
+    width: BUBBLE,
+    height: BUBBLE,
+    borderRadius: BUBBLE / 2,
+    // The small bubbles sit a little lower, so all the bubbles share the same middle line.
+    marginTop: (BUBBLE_ACTIVE - BUBBLE) / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  bubbleActive: {
+    width: BUBBLE_ACTIVE,
+    height: BUBBLE_ACTIVE,
+    borderRadius: BUBBLE_ACTIVE / 2,
+    marginTop: 0,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  bubbleEmoji: {
+    fontSize: 21,
+  },
+  bubbleEmojiActive: {
+    fontSize: 25,
+  },
+  label: {
+    color: 'transparent',
+    fontSize: 12,
+    fontWeight: '900',
     textShadowColor: 'rgba(0,0,0,0.7)',
     textShadowRadius: 4,
   },
-  modeTextActive: {
+  labelActive: {
     color: colors.white,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  marker: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: 'transparent',
-  },
-  markerActive: {
-    backgroundColor: colors.white,
   },
   dot: {
     position: 'absolute',
-    top: -3,
-    right: -9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: colors.pink,
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   caption: {
     alignSelf: 'center',
