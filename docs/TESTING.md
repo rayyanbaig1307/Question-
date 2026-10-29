@@ -630,6 +630,8 @@ Use 2 test accounts that have matched (Part 4).
 3. **Brand new account** (no friends' stories *and* no posts): one friendly "Welcome to Peekaboo!" message with
    **Take a photo** and **Invite friends** – not two empty sections.
 4. **Top bars:** on **Chat** and **Home**, the 📷 button is top left and **your profile picture is top right** –
-   tap it to open your profile. On the **Camera**, your picture is top left, with the dare banner, map button,
-   flip, flash and gallery as before.
-5. Old habits still work: posting a drop lands you on **Home**; the Stories and Discover tabs are gone.
+   tap it to open your profile.
+5. **The Camera is cleaner:** top left = your picture (a red number on it = new friend requests) and a small
+   **🎯 Dare** chip (tap it for today's dare); top right = flip and flash, side by side; bottom = gallery · shutter ·
+   **map**. The "Add friends" button is gone from the camera – find friends from your profile or Chat.
+6. Old habits still work: posting a drop lands you on **Home**; the Stories and Discover tabs are gone.

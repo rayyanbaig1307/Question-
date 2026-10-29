@@ -95,11 +95,12 @@ export function DareBanner({ onPress, onDismiss }: {
 
 // The pill at the top of the camera: "🎯 Today's dare" and the dare itself. Tap it to open the Dare screen.
 // A pink dot means you haven't done today's dare yet; a ✅ means you have.
-export function DarePill({ done }: { done: boolean | null }) {
+// `compact` is the small "🎯 Dare" chip for the home camera, so the screen stays clean.
+export function DarePill({ done, compact = false }: { done: boolean | null; compact?: boolean }) {
   const dare = dareFor(todayDareDay());
   return (
     <Bouncy
-      style={styles.pill}
+      style={[styles.pill, compact && styles.pillCompact]}
       pressScale={0.95}
       onPress={() => {
         Haptics.selectionAsync();
@@ -108,10 +109,12 @@ export function DarePill({ done }: { done: boolean | null }) {
       accessibilityRole="button"
       accessibilityLabel={`Today's dare: ${dare.text}${done ? ' – done' : ''}`}>
       <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <Text style={styles.pillLabel}>🎯 Today&apos;s dare</Text>
-      <Text style={styles.pillText} numberOfLines={1}>
-        {dare.text}
-      </Text>
+      <Text style={styles.pillLabel}>{compact ? '🎯 Dare' : "🎯 Today's dare"}</Text>
+      {compact ? null : (
+        <Text style={styles.pillText} numberOfLines={1}>
+          {dare.text}
+        </Text>
+      )}
       {done ? <Text style={styles.pillCheck}>✅</Text> : null}
       {done === false ? <View style={styles.pillDot} /> : null}
     </Bouncy>
@@ -165,6 +168,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.pill,
     overflow: 'hidden',
+  },
+  pillCompact: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingRight: space.lg + 4,
   },
   pillLabel: {
     color: colors.white,

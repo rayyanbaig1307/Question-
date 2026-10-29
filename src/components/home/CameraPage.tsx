@@ -230,24 +230,19 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       {permission?.granted ? <Pressable style={StyleSheet.absoluteFill} onPress={tapCamera} accessible={false} /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
 
-      {/* Top: your picture on the left, camera controls on the right */}
+      {/* Top: your picture on the left (with a count of new friend requests), flip and flash on the right */}
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
         <View style={styles.topLeftColumn} pointerEvents="box-none">
           {isHome ? (
-            <View style={styles.topLeft}>
-              <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
-                <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
-              </Pressable>
-              <View>
-                <IconButton icon="person-add" label="Add friends" onPress={() => router.push('/friends')} />
-                <CountBadge count={requestCount} />
-              </View>
-            </View>
+            <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
+              <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={44} ring />
+              <CountBadge count={requestCount} />
+            </Pressable>
           ) : (
             <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
           )}
           {/* Today's dare, always one tap away (pink dot = not done yet) */}
-          {isHome ? <DarePill done={dareDone} /> : null}
+          {isHome ? <DarePill done={dareDone} compact /> : null}
           {/* Once today's Peekaboo drop has happened, until you've posted yours */}
           {isHome && dropDone === false ? <DropPill /> : null}
           {/* Taking your drop photo: the countdown, and today's dare in case you'd rather do that */}
@@ -257,22 +252,18 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           {dare && !bannerGone ? <DareBanner onDismiss={hideBanner} /> : null}
         </View>
         <View style={styles.tools}>
-          {isHome ? <IconButton icon="map" label="Friend map" onPress={() => router.push('/map')} /> : null}
-          <IconButton
-            icon="camera-reverse"
-            label="Flip camera"
-            onPress={flipCamera}
-          />
+          <IconButton icon="camera-reverse" label="Flip camera" size={40} onPress={flipCamera} />
           <IconButton
             icon={flash === 'on' ? 'flash' : 'flash-off'}
             label="Flash"
+            size={40}
             color={flash === 'on' ? colors.yellow : colors.white}
             onPress={() => setFlash(flash === 'on' ? 'off' : 'on')}
           />
         </View>
       </SafeEdge>
 
-      {/* Bottom: gallery and the big shutter button (on the home screen, just above the tab bar) */}
+      {/* Bottom: gallery · the big shutter button · friend map (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
         {recording ? (
           <View style={styles.recordTrack} pointerEvents="none">
@@ -294,7 +285,11 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             style={[styles.shutter, recording && styles.shutterRecording]}>
             <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
           </Bouncy>
-          <View style={styles.shutterSpacer} />
+          {isHome ? (
+            <IconButton icon="map" label="Friend map" onPress={() => router.push('/map')} />
+          ) : (
+            <View style={styles.shutterSpacer} />
+          )}
         </View>
       </SafeEdge>
     </View>
@@ -354,11 +349,6 @@ const styles = StyleSheet.create({
     gap: space.md,
     marginRight: space.lg,
   },
-  topLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-  },
   badge: {
     position: 'absolute',
     top: -4,
@@ -377,7 +367,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   tools: {
-    gap: space.md,
+    flexDirection: 'row',
+    gap: space.sm,
   },
   bottom: {
     position: 'absolute',
