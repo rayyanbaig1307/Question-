@@ -372,3 +372,16 @@ Where it works:
 5. **Peeks:** a video peek plays once (and can be replayed once / saved, like photo peeks).
 6. **Profile grid:** videos show a ▶ in the corner.
 7. You can also pick a video (10 seconds or less) from your camera roll with the 🖼️ button.
+
+## Step 21 – Comments, replies and comment likes 💬
+
+1. Open a post → tap 💬 → write a comment → send. It shows at the bottom of the list.
+2. Tap **Reply** under someone's comment → a pink "Replying to …" bar shows above the box → send.
+   Your reply sits tucked in under that comment. (Replying to a reply puts it under the same comment.)
+   Tap ✕ on the bar to go back to a normal comment.
+3. Tap the 🤍 next to a comment → it turns pink ❤️ and shows "1 like". Tap again to unlike.
+4. Hold down on **your own** comment → **Delete comment** (its replies go too).
+5. On **your own post**, hold down on anyone's comment → you can delete it.
+6. Hold down on someone else's comment (not your post) → **Report comment**.
+7. With push on: the post owner gets **"Commented: …"**, the person you replied to gets **"Replied: …"**,
+   and liking a comment sends **"Liked your comment ❤️"**.

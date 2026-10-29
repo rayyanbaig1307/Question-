@@ -14,8 +14,15 @@ export type Comment = {
   user_id: string;
   body: string;
   created_at: string;
+  // The comment this one replies to (replies are only ever one level deep).
+  parent_id: string | null;
   author: Profile | null;
+  likeCount: number;
+  likedByMe: boolean;
 };
+
+type CommentRow = Omit<Comment, 'likeCount' | 'likedByMe'> & { comment_likes: { count: number }[] };
+const COMMENT_FIELDS = '*, author:profiles!comments_user_id_fkey(*), comment_likes(count)';
 
 export const FEED_PAGE_SIZE = 15;
 
@@ -94,25 +101,52 @@ export async function setLiked(me: string, postId: string, liked: boolean): Prom
   if (error) throw error;
 }
 
-export async function fetchComments(postId: string): Promise<Comment[]> {
+// All comments on a post (oldest first), with their likes.
+export async function fetchComments(me: string, postId: string): Promise<Comment[]> {
   const { data, error } = await supabase
     .from('comments')
-    .select('*, author:profiles!comments_user_id_fkey(*)')
+    .select(COMMENT_FIELDS)
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
-    .limit(200);
+    .limit(300);
   if (error) throw error;
-  return (data ?? []) as Comment[];
+  const rows = (data ?? []) as CommentRow[];
+  const liked = new Set<string>();
+  if (rows.length > 0) {
+    const { data: mine, error: likesError } = await supabase
+      .from('comment_likes')
+      .select('comment_id')
+      .eq('user_id', me)
+      .in('comment_id', rows.map((row) => row.id));
+    if (likesError) throw likesError;
+    for (const row of mine ?? []) liked.add(row.comment_id as string);
+  }
+  return rows.map(({ comment_likes, ...comment }) => ({
+    ...comment,
+    likeCount: comment_likes?.[0]?.count ?? 0,
+    likedByMe: liked.has(comment.id),
+  }));
 }
 
-export async function addComment(me: string, postId: string, body: string): Promise<Comment> {
+// Add a comment – or, with `replyTo`, a reply to another comment.
+export async function addComment(me: string, postId: string, body: string, replyTo?: string | null): Promise<Comment> {
   const { data, error } = await supabase
     .from('comments')
-    .insert({ post_id: postId, user_id: me, body: body.trim() })
-    .select('*, author:profiles!comments_user_id_fkey(*)')
+    .insert({ post_id: postId, user_id: me, body: body.trim(), parent_id: replyTo ?? null })
+    .select(COMMENT_FIELDS)
     .single();
   if (error) throw error;
-  return data as Comment;
+  const { comment_likes: _ignored, ...comment } = data as CommentRow;
+  return { ...comment, likeCount: 0, likedByMe: false };
+}
+
+export async function setCommentLiked(me: string, commentId: string, liked: boolean): Promise<void> {
+  const { error } = liked
+    ? await supabase
+        .from('comment_likes')
+        .upsert({ comment_id: commentId, user_id: me }, { onConflict: 'comment_id,user_id', ignoreDuplicates: true })
+    : await supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', me);
+  if (error) throw error;
 }
 
 export async function deleteComment(commentId: string): Promise<void> {
