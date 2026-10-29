@@ -443,3 +443,16 @@ You need a friend's phone (or a test account) for this.
 5. **You:** pull down to refresh → **"👀 1 peeked · 0 scrolled past"**, and they move to **👀 Peeked**.
 6. The pill also shows on your drop when you open it full screen. Only **you** see it – friends never see
    who peeked at your drop, and you never see this on anyone else's.
+
+## Step 26 – Filters and stickers 🎨
+
+1. Take a photo (or pick one from your camera roll). In the editor, **swipe left or right** on the photo:
+   the colors change and the filter's name flashes up – No filter, Bubblegum 🍬, Grape 🍇, Sunny ☀️,
+   Ocean 🌊, Noir 🖤, Vintage 📼. The little dots at the bottom show which one you're on.
+2. Tap the 🙂 sticker button. At the top: **Peekaboo originals 👀** – googly eyes, one big googly eye,
+   PEEKABOO 👀, a PEEK! speech bubble, an "I SEE YOU 👁️" sticky note and a CAUGHT 📸 stamp. Below: word
+   stickers and emojis (👀 🔥 and more).
+3. Stickers: **drag** with one finger, **pinch** to resize, **twist** two fingers to turn. Drag one onto the
+   🗑️ to remove it.
+4. Tap **Send to** and post it – the filter and stickers are part of the photo your friends see.
+5. Videos get stickers and text, but no filters (the swipe and dots only show for photos).

@@ -2,7 +2,8 @@ import { colors } from '@/theme';
 
 export type OverlayItem = {
   id: string;
-  kind: 'text' | 'sticker';
+  // 'special' = one of Peekaboo's own drawn stickers (content is its name, see SpecialSticker.tsx)
+  kind: 'text' | 'sticker' | 'special';
   content: string;
   color: string;
   // 'shadow' = colored text, 'pill' = text on a colored bubble

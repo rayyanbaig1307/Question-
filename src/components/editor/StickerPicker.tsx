@@ -2,14 +2,16 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { SafeEdge } from '@/components/SafeEdge';
 import { colors, font, radius, space } from '@/theme';
+import { SPECIAL_STICKERS, SpecialSticker } from './SpecialSticker';
 import { EMOJI_STICKERS, WORD_STICKERS } from './stickers';
 
 // Bottom sheet full of stickers. Tap one to drop it on your photo.
-export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord }: {
+export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord, onPickSpecial }: {
   visible: boolean;
   onClose: () => void;
   onPickEmoji: (emoji: string) => void;
   onPickWord: (word: string) => void;
+  onPickSpecial: (id: string) => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -19,6 +21,18 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord }: {
             <View style={styles.handle} />
             <Text style={styles.title}>Stickers</Text>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+              <Text style={styles.section}>Peekaboo originals 👀</Text>
+              <View style={styles.specials}>
+                {SPECIAL_STICKERS.map((id) => (
+                  <Pressable
+                    key={id}
+                    onPress={() => onPickSpecial(id)}
+                    accessibilityLabel={`${id.replace(/-/g, ' ')} sticker`}
+                    style={({ pressed }) => [styles.special, pressed && styles.pressed]}>
+                    <SpecialSticker id={id} small />
+                  </Pressable>
+                ))}
+              </View>
               <View style={styles.words}>
                 {WORD_STICKERS.map((word) => (
                   <Pressable
@@ -79,6 +93,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingBottom: space.lg,
     gap: space.lg,
+  },
+  section: {
+    ...font.label,
+    textAlign: 'center',
+  },
+  specials: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: space.sm,
+  },
+  special: {
+    width: 104,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
   },
   words: {
     flexDirection: 'row',

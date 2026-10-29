@@ -2,11 +2,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { randomUUID } from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { DraggableItem, type TrashZone } from '@/components/editor/DraggableItem';
+import { FilterLayers, FILTERS } from '@/components/editor/filters';
 import { StickerPicker } from '@/components/editor/StickerPicker';
 import { randomOffset, TEXT_COLORS, type OverlayItem } from '@/components/editor/stickers';
 import { TextComposer, type TextDraft } from '@/components/editor/TextComposer';
@@ -18,7 +22,8 @@ import { colors, radius, space } from '@/theme';
 
 const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, colors.green, colors.orange];
 
-// Decorate your photo or video: add text and stickers, move them around, then send it.
+// Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
+// around, then send it.
 export default function Editor() {
   const { uri, fit, video, to, dare, drop, guess } = useLocalSearchParams<{
     uri: string;
@@ -39,6 +44,27 @@ export default function Editor() {
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const isVideo = video === '1';
+  // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
+  const [filterIndex, setFilterIndex] = useState(0);
+  const [filterFlash, setFilterFlash] = useState(0);
+  const filter = FILTERS[filterIndex];
+
+  function changeFilter(step: number) {
+    Haptics.selectionAsync();
+    setFilterIndex((current) => (current + step + FILTERS.length) % FILTERS.length);
+    setFilterFlash((count) => count + 1);
+  }
+
+  // Swipe left/right on the photo (not on a sticker) to change the filter, like Snapchat.
+  const swipe = usePanGesture({
+    activeOffsetX: [-15, 15],
+    failOffsetY: [-20, 20],
+    onDeactivate: (event) => {
+      'worklet';
+      if (event.translationX < -40) scheduleOnRN(changeFilter, 1);
+      else if (event.translationX > 40) scheduleOnRN(changeFilter, -1);
+    },
+  });
 
   const trash: TrashZone = { top: height - 150, left: width / 2 - 70, right: width / 2 + 70 };
 
@@ -77,7 +103,7 @@ export default function Editor() {
   }
 
   function close() {
-    if (items.length === 0) {
+    if (items.length === 0 && filterIndex === 0) {
       router.back();
       return;
     }
@@ -112,16 +138,23 @@ export default function Editor() {
     <View style={styles.fill}>
       {isVideo ? <VideoClip uri={uri} playing loop style={StyleSheet.absoluteFill} /> : null}
       <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
-        {isVideo ? null : fit === 'contain' ? (
-          <>
-            {/* Photos from the camera roll keep their shape. Instead of black bars around them,
-                a blurry, zoomed-in copy of the same photo fills the empty space. */}
-            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={40} />
-            <View style={styles.dim} />
-            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-          </>
-        ) : (
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        {isVideo ? null : (
+          <GestureDetector gesture={swipe}>
+            <View style={styles.photo}>
+              {fit === 'contain' ? (
+                <>
+                  {/* Photos from the camera roll keep their shape. Instead of black bars around them,
+                      a blurry, zoomed-in copy of the same photo fills the empty space. */}
+                  <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={40} />
+                  <View style={styles.dim} />
+                  <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                </>
+              ) : (
+                <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              )}
+              <FilterLayers filter={filter} />
+            </View>
+          </GestureDetector>
         )}
         {items.map((item) => (
           <DraggableItem
@@ -155,8 +188,17 @@ export default function Editor() {
           </SafeEdge>
 
           <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
+            {isVideo ? null : (
+              <View style={styles.dots} pointerEvents="none">
+                {FILTERS.map((entry, index) => (
+                  <View key={entry.name} style={[styles.dot, index === filterIndex && styles.dotOn]} />
+                ))}
+              </View>
+            )}
             {items.length === 0 ? (
-              <Text style={styles.hint}>Add text or stickers, or just send it!</Text>
+              <Text style={styles.hint}>
+                {isVideo ? 'Add text or stickers, or just send it!' : 'Swipe ← → for filters · add text or stickers'}
+              </Text>
             ) : (
               <Text style={styles.hint}>Drag to move · pinch to resize · drop on 🗑️ to remove</Text>
             )}
@@ -171,6 +213,8 @@ export default function Editor() {
           </SafeEdge>
         </>
       ) : null}
+
+      {filterFlash > 0 && !composer ? <FilterName key={filterFlash} name={filter.name} /> : null}
 
       {dragging ? (
         <View style={[styles.trash, { top: trash.top + 20, left: width / 2 - 36 }]} pointerEvents="none">
@@ -187,6 +231,10 @@ export default function Editor() {
           setStickersOpen(false);
           addItem({ kind: 'sticker', content: emoji, color: colors.white, look: 'shadow' });
         }}
+        onPickSpecial={(id) => {
+          setStickersOpen(false);
+          addItem({ kind: 'special', content: id, color: colors.white, look: 'shadow' });
+        }}
         onPickWord={(word) => {
           setStickersOpen(false);
           const color = WORD_COLORS[Math.floor(Math.random() * WORD_COLORS.length)];
@@ -197,7 +245,54 @@ export default function Editor() {
   );
 }
 
+// The filter's name flashes up in the middle for a moment when you swipe to it.
+function FilterName({ name }: { name: string }) {
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    opacity.set(withSequence(withTiming(1, { duration: 120 }), withDelay(700, withTiming(0, { duration: 350 }))));
+  }, [opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+  return (
+    <Animated.View style={[styles.filterName, style]} pointerEvents="none">
+      <Text style={styles.filterNameText}>{name}</Text>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  photo: {
+    ...StyleSheet.absoluteFill,
+    isolation: 'isolate',
+  },
+  filterName: {
+    position: 'absolute',
+    top: '42%',
+    alignSelf: 'center',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  filterNameText: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  dots: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  dotOn: {
+    backgroundColor: colors.pink,
+    transform: [{ scale: 1.3 }],
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.black,

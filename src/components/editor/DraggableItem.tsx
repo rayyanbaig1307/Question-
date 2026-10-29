@@ -10,6 +10,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { SpecialSticker } from './SpecialSticker';
 import { textOn, type OverlayItem } from './stickers';
 
 export type TrashZone = { top: number; left: number; right: number };
@@ -92,7 +93,9 @@ export function DraggableItem({ item, trash, onDragChange, onDelete, onTap }: Pr
     <View style={styles.layer} pointerEvents="box-none">
       <GestureDetector gesture={gesture}>
         <Animated.View style={animatedStyle}>
-          {item.kind === 'sticker' ? (
+          {item.kind === 'special' ? (
+            <SpecialSticker id={item.content} />
+          ) : item.kind === 'sticker' ? (
             <Text style={styles.sticker}>{item.content}</Text>
           ) : (
             <Text
