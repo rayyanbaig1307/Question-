@@ -1,14 +1,14 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, View, type ListViewToken } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FeedCard } from '@/components/FeedCard';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
-import { fetchMyDropDays, isDropLocked, localDay, visiblePath } from '@/lib/drop';
+import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { inviteFriends } from '@/lib/invite';
@@ -159,10 +159,23 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
     }
   }
 
-  // Locked drops only get their tiny blurry preview.
+  // Locked drops only get their tiny blurry preview; videos also need the video and its text/sticker layer.
+  const media = (post: DiscoverPost) => postMedia(post, userId, myDropDays);
   const urls = useMediaUrls(
-    (posts ?? []).map((post) => visiblePath(post, userId, myDropDays)).filter((path): path is string => !!path),
+    (posts ?? [])
+      .flatMap((post) => {
+        const files = media(post);
+        return [files.still, files.video, files.overlay];
+      })
+      .filter((path): path is string => !!path),
   );
+
+  // The video most in view plays; the others wait.
+  const [inView, setInView] = useState<string | null>(null);
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+    const firstVideo = viewableItems.find((entry) => (entry.item as DiscoverPost | undefined)?.media_type === 'video');
+    setInView((firstVideo?.item as DiscoverPost | undefined)?.id ?? null);
+  }, []);
 
   return (
     <View style={styles.fill}>
@@ -174,6 +187,8 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
         ListEmptyComponent={
           posts === null ? (
             <ActivityIndicator color={colors.accent} style={styles.loading} />
@@ -207,8 +222,11 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
             ) : null}
             <FeedCard
               post={item}
-              url={urls[visiblePath(item, userId, myDropDays) ?? '']}
-              locked={isDropLocked(item, userId, myDropDays)}
+              url={urls[media(item).still ?? '']}
+              videoUrl={urls[media(item).video ?? '']}
+              overlayUrl={urls[media(item).overlay ?? '']}
+              active={visible && inView === item.id}
+              locked={media(item).locked}
               // Other people's drops start blurred – hold and scratch to reveal (unless turned off in Settings).
               scratch={scratchToReveal && item.drop_day !== null && item.user_id !== userId}
               onLike={(liked) => like(item, liked)}

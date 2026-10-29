@@ -12,16 +12,19 @@ import { randomOffset, TEXT_COLORS, type OverlayItem } from '@/components/editor
 import { TextComposer, type TextDraft } from '@/components/editor/TextComposer';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
+import { VideoClip } from '@/components/VideoClipSafe';
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
 
 const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, colors.green, colors.orange];
 
-// Decorate your photo: add text and stickers, move them around, then send it.
+// Decorate your photo or video: add text and stickers, move them around, then send it.
 export default function Editor() {
-  const { uri, fit, to, dare, drop } = useLocalSearchParams<{
+  const { uri, fit, video, to, dare, drop } = useLocalSearchParams<{
     uri: string;
     fit?: 'cover' | 'contain';
+    // '1' when it's a video
+    video?: string;
     to?: string;
     dare?: string;
     drop?: string;
@@ -34,6 +37,7 @@ export default function Editor() {
   const [composer, setComposer] = useState<{ editingId: string | null; draft: TextDraft } | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const isVideo = video === '1';
 
   const trash: TrashZone = { top: height - 150, left: width / 2 - 70, right: width / 2 + 70 };
 
@@ -85,12 +89,17 @@ export default function Editor() {
   async function next() {
     setBusy(true);
     try {
+      const extra = { ...(to ? { to } : {}), ...(dare ? { dare } : {}), ...(drop ? { drop } : {}) };
+      if (isVideo) {
+        // Videos keep their text and stickers as a see-through picture that's shown on top while it plays.
+        const overlay =
+          items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : undefined;
+        router.push({ pathname: '/share', params: { uri, video: '1', ...(overlay ? { overlay } : {}), ...extra } });
+        return;
+      }
       // Take a "screenshot" of the photo with all the text and stickers on it.
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
-      router.push({
-        pathname: '/share',
-        params: { uri: finished, ...(to ? { to } : {}), ...(dare ? { dare } : {}), ...(drop ? { drop } : {}) },
-      });
+      router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
       Alert.alert('Could not save the photo', friendlyError(error));
     } finally {
@@ -100,8 +109,9 @@ export default function Editor() {
 
   return (
     <View style={styles.fill}>
-      <View ref={canvasRef} collapsable={false} style={styles.canvas}>
-        {fit === 'contain' ? (
+      {isVideo ? <VideoClip uri={uri} playing loop style={StyleSheet.absoluteFill} /> : null}
+      <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
+        {isVideo ? null : fit === 'contain' ? (
           <>
             {/* Photos from the camera roll keep their shape. Instead of black bars around them,
                 a blurry, zoomed-in copy of the same photo fills the empty space. */}
@@ -206,6 +216,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
+  },
+  seeThrough: {
+    backgroundColor: 'transparent',
   },
   dim: {
     ...StyleSheet.absoluteFill,

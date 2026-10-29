@@ -66,7 +66,12 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
   const mine = rings?.mine ?? null;
   const friends = rings?.friends ?? [];
   const latestOf = (ring: StoryRing) => ring.stories[ring.stories.length - 1];
-  const thumbs = useMediaUrls(friends.map((ring) => latestOf(ring).media_path));
+  // The picture on each story card: the photo, or a video's still picture.
+  const thumbPath = (ring: StoryRing) => {
+    const latest = latestOf(ring);
+    return latest.media_type === 'video' ? latest.poster_path : latest.media_path;
+  };
+  const thumbs = useMediaUrls(friends.map(thumbPath).filter((path): path is string => !!path));
 
   // Watch one friend's stories, then carry on with the next friends who have new ones.
   function openFriend(index: number) {
@@ -142,8 +147,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
             <Text style={styles.sectionTitle}>Friends&apos; stories</Text>
             <View style={styles.grid}>
               {friends.map((ring, index) => {
-                const latest = latestOf(ring);
-                const thumb = thumbs[latest.media_path];
+                const thumb = thumbs[thumbPath(ring) ?? ''];
                 const name = ring.author.display_name || ring.author.username;
                 return (
                   <Bouncy
@@ -153,7 +157,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
                     onPress={() => openFriend(index)}
                     accessibilityLabel={`Watch ${name}'s story`}>
                     {thumb ? (
-                      <Image source={{ uri: thumb, cacheKey: latest.media_path }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      <Image source={{ uri: thumb, cacheKey: thumbPath(ring) ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" />
                     ) : null}
                     <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.cardShade} />
                     <View style={styles.cardInfo}>

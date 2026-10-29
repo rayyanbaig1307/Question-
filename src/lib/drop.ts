@@ -116,13 +116,35 @@ export function isDropLocked(
   return post.drop_day !== null && post.user_id !== me && !(myDropDays?.has(post.drop_day) ?? false);
 }
 
-// The photo to load for a post: the tiny blurry preview while it's locked, the real one otherwise.
-export function visiblePath(
-  post: { drop_day: string | null; user_id: string; media_path: string; blur_path: string | null },
-  me: string,
-  myDropDays: Set<string> | null,
-): string | null {
-  return isDropLocked(post, me, myDropDays) ? post.blur_path : post.media_path;
+type PostFiles = {
+  drop_day: string | null;
+  user_id: string;
+  media_path: string;
+  media_type: 'photo' | 'video';
+  poster_path: string | null;
+  overlay_path: string | null;
+  blur_path: string | null;
+};
+
+// Which files to load for a post:
+// - locked drop → only the tiny blurry preview;
+// - photo → the photo;
+// - video → its still picture, the video, and its text/sticker layer.
+export function postMedia(post: PostFiles, me: string, myDropDays: Set<string> | null) {
+  const locked = isDropLocked(post, me, myDropDays);
+  if (locked) return { locked, still: post.blur_path, video: null, overlay: null };
+  const isVideo = post.media_type === 'video';
+  return {
+    locked,
+    still: isVideo ? post.poster_path : post.media_path,
+    video: isVideo ? post.media_path : null,
+    overlay: isVideo ? post.overlay_path : null,
+  };
+}
+
+// The picture to show for a post in grids and previews (blurry preview / photo / video's still picture).
+export function visiblePath(post: PostFiles, me: string, myDropDays: Set<string> | null): string | null {
+  return postMedia(post, me, myDropDays).still;
 }
 
 // The days you've posted a drop for, loaded again whenever `refreshKey` changes. `null` = still loading

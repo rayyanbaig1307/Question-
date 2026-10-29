@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { ReactElement } from 'react';
@@ -65,6 +66,11 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh, hideDare
                 <Text style={styles.lockedEmoji}>🙈</Text>
               </View>
             ) : null}
+            {item.media_type === 'video' && !locked ? (
+              <View style={styles.playBadge} pointerEvents="none">
+                <Ionicons name="play" size={14} color={colors.white} />
+              </View>
+            ) : null}
             {item.drop_day ? (
               <View style={styles.dropBadge}>
                 <Text style={styles.dareBadgeText}>👀</Text>
@@ -118,6 +124,11 @@ const styles = StyleSheet.create({
   },
   lockedEmoji: {
     fontSize: 28,
+  },
+  playBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
   },
   dropBadge: {
     position: 'absolute',

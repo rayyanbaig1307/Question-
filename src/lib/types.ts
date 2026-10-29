@@ -12,10 +12,18 @@ export type Profile = {
   updated_at: string;
 };
 
-export type Post = {
+// Photos and videos are stored the same way. A video also has a still picture from it (poster) and, if you
+// added text or stickers, a see-through picture with them (overlay) that's shown on top while it plays.
+export type MediaFields = {
+  media_path: string;
+  media_type: 'photo' | 'video';
+  poster_path: string | null;
+  overlay_path: string | null;
+};
+
+export type Post = MediaFields & {
   id: string;
   user_id: string;
-  media_path: string;
   caption: string;
   // Set when this post was someone's answer to the Daily Dare (the day, like "2026-10-28").
   dare_day: string | null;
@@ -29,10 +37,9 @@ export type Post = {
 
 export type PostWithAuthor = Post & { author: Profile | null };
 
-export type Story = {
+export type Story = MediaFields & {
   id: string;
   user_id: string;
-  media_path: string;
   created_at: string;
   expires_at: string;
 };

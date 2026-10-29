@@ -19,6 +19,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge, SafeScreen } from '@/components/SafeEdge';
+import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { canReplay, fetchMessage, getSnapUrl, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
@@ -37,7 +38,15 @@ type State =
   | { kind: 'gone' }
   | { kind: 'error' }
   // `other` = the other person in the chat (who gets told about screenshots).
-  | { kind: 'showing'; url: string; sender: Profile | null; mode: Mode; other: string };
+  | {
+      kind: 'showing';
+      url: string;
+      // Video peeks: their still picture and text/sticker layer.
+      video: { posterUrl: string | null; overlayUrl: string | null } | null;
+      sender: Profile | null;
+      mode: Mode;
+      other: string;
+    };
 
 // Shows a peek (a photo sent in chat) for 10 seconds. You get one replay afterwards,
 // and a peek that's saved in the chat can be opened any time.
@@ -75,7 +84,11 @@ export default function SnapViewer() {
         // Get the one-minute link and download the photo BEFORE using up the view or replay,
         // so a bad connection doesn't waste it.
         const url = await getSnapUrl(message.media_path);
-        if (!url || !(await Image.prefetch(url, 'memory'))) {
+        const isVideo = message.media_type === 'video';
+        const posterUrl = isVideo && message.poster_path ? await getSnapUrl(message.poster_path) : null;
+        const overlayUrl = isVideo && message.overlay_path ? await getSnapUrl(message.overlay_path) : null;
+        const ready = isVideo ? !!url && (!posterUrl || (await Image.prefetch(posterUrl, 'memory'))) : !!url && (await Image.prefetch(url, 'memory'));
+        if (!url || !ready) {
           if (!cancelled) setState({ kind: 'error' });
           return;
         }
@@ -89,7 +102,7 @@ export default function SnapViewer() {
         if (!cancelled) {
           setSaved(mode === 'saved');
           const other = message.sender_id === userId ? message.recipient_id : message.sender_id;
-          setState({ kind: 'showing', url, sender, mode, other });
+          setState({ kind: 'showing', url, video: isVideo ? { posterUrl, overlayUrl } : null, sender, mode, other });
         }
       } catch {
         if (!cancelled) setState({ kind: 'error' });
@@ -100,19 +113,23 @@ export default function SnapViewer() {
     };
   }, [id, userId]);
 
-  // The 10-second timer runs unless the peek is saved (saving it stops the timer).
-  const timed = state.kind === 'showing' && !saved;
+  // The timer runs unless the peek is saved (saving it stops the timer): 10 seconds for a photo, the video's
+  // length for a video (it starts once the video has loaded).
+  const [videoSeconds, setVideoSeconds] = useState<number | null>(null);
+  const isVideo = state.kind === 'showing' && state.video !== null;
+  const seconds = isVideo ? Math.min(SECONDS, Math.max(1, videoSeconds ?? SECONDS)) : SECONDS;
+  const timed = state.kind === 'showing' && !saved && (!isVideo || videoSeconds !== null);
   useEffect(() => {
     if (!timed) return;
     progress.set(
-      withTiming(1, { duration: SECONDS * 1000, easing: Easing.linear }, (finished) => {
+      withTiming(1, { duration: seconds * 1000, easing: Easing.linear }, (finished) => {
         'worklet';
         if (finished) scheduleOnRN(close);
       }),
     );
     // Leaving early stops the timer, so it can't close some other screen later.
     return () => cancelAnimation(progress);
-  }, [timed, progress]);
+  }, [timed, progress, seconds]);
 
   // Screenshot it → they'll know.
   useScreenshotNotice(userId, state.kind === 'showing' ? state.other : null, 'peek', state.kind === 'showing', () =>
@@ -170,7 +187,19 @@ export default function SnapViewer() {
 
   return (
     <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close peek">
-      <Image source={{ uri: state.url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
+      {state.video ? (
+        <VideoClip
+          uri={state.url}
+          posterUri={state.video.posterUrl}
+          overlayUri={state.video.overlayUrl}
+          playing
+          loop={saved}
+          onDuration={setVideoSeconds}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <Image source={{ uri: state.url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
+      )}
       <SafeEdge edge="top" style={styles.top}>
         <View style={[styles.track, !timed && styles.hidden]}>
           <Animated.View style={[styles.bar, barStyle]} />

@@ -1,10 +1,17 @@
-import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions, type CameraType } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
@@ -20,6 +27,9 @@ import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
+
+// Videos can be up to this long.
+const MAX_VIDEO_SECONDS = 10;
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
@@ -54,12 +64,22 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
 
-  const openEditor = (uri: string, fit: 'cover' | 'contain') =>
+  // Videos: hold the shutter to record (up to 10 seconds). The camera switches to video while you hold.
+  const [mic, requestMic] = useMicrophonePermissions();
+  const [mode, setMode] = useState<'picture' | 'video'>('picture');
+  const [recording, setRecording] = useState(false);
+  const stopAsked = useRef(false);
+  const cameraReady = useRef<(() => void)[]>([]);
+  const recordProgress = useSharedValue(0);
+  const ringStyle = useAnimatedStyle(() => ({ width: `${recordProgress.get() * 100}%` }));
+
+  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false) =>
     router.push({
       pathname: '/editor',
       params: {
         uri,
         fit,
+        ...(video ? { video: '1' } : {}),
         ...(sendTo ? { to: sendTo } : {}),
         ...(dare ? { dare: '1' } : {}),
         ...(drop ? { drop: '1' } : {}),
@@ -81,6 +101,57 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     }
   }
 
+  // Wait until the camera has switched to video (or give up waiting after a moment).
+  const waitForCamera = () =>
+    new Promise<void>((resolve) => {
+      cameraReady.current.push(resolve);
+      setTimeout(resolve, 700);
+    });
+
+  async function startRecording() {
+    if (!cameraRef.current || busy || recording) return;
+    // First time: ask for the microphone (so videos have sound), then you hold again.
+    if (!mic?.granted && mic?.canAskAgain !== false) {
+      await requestMic();
+      return;
+    }
+    const withSound = mic?.granted ?? false;
+    stopAsked.current = false;
+    setBusy(true);
+    setRecording(true);
+    setMode('video');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await waitForCamera();
+    try {
+      recordProgress.set(0);
+      recordProgress.set(withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000, easing: Easing.linear }));
+      // You let go before it even started: still keep a short clip.
+      if (stopAsked.current) setTimeout(() => cameraRef.current?.stopRecording(), 300);
+      const video = await cameraRef.current?.recordAsync({
+        maxDuration: MAX_VIDEO_SECONDS,
+        ...(Platform.OS === 'ios' ? { codec: 'avc1' as const } : {}),
+      });
+      if (video?.uri) openEditor(video.uri, 'cover', true);
+      else if (!withSound) Alert.alert('No video', 'Something went wrong while recording. Try again!');
+    } catch (error) {
+      Alert.alert('Could not record', friendlyError(error));
+    } finally {
+      cancelAnimation(recordProgress);
+      recordProgress.set(0);
+      setRecording(false);
+      setMode('picture');
+      setBusy(false);
+    }
+  }
+
+  function stopRecording() {
+    stopAsked.current = true;
+    if (recording) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      cameraRef.current?.stopRecording();
+    }
+  }
+
   function flipCamera() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   }
@@ -98,10 +169,28 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   }
 
   async function pickFromGallery() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
-      openEditor(result.assets[0].uri, 'contain');
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      quality: 0.9,
+      videoMaxDuration: MAX_VIDEO_SECONDS,
+      allowsEditing: false,
+    });
+    const asset = result.canceled ? null : result.assets[0];
+    if (!asset) return;
+    if (asset.type === 'video') {
+      // Peekaboo videos are short and small, so uploads stay quick.
+      if ((asset.duration ?? 0) > (MAX_VIDEO_SECONDS + 0.5) * 1000) {
+        Alert.alert('Too long', `Pick a video of ${MAX_VIDEO_SECONDS} seconds or less.`);
+        return;
+      }
+      if ((asset.fileSize ?? 0) > 30 * 1024 * 1024) {
+        Alert.alert('Too big', 'That video is too big. Try a shorter one, or record one in Peekaboo.');
+        return;
+      }
+      openEditor(asset.uri, 'cover', true);
+      return;
     }
+    openEditor(asset.uri, 'contain');
   }
 
   return (
@@ -114,6 +203,12 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             facing={facing}
             flash={flash}
             mirror={facing === 'front'}
+            mode={mode}
+            mute={!(mic?.granted ?? false)}
+            // Small, quick-to-upload videos: 720p at a modest quality (about 3–4 MB for 10 seconds).
+            videoQuality="720p"
+            videoBitrate={2_500_000}
+            onCameraReady={() => cameraReady.current.splice(0).forEach((resolve) => resolve())}
           />
         ) : null
       ) : (
@@ -176,17 +271,25 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
       {/* Bottom: gallery and the big shutter button (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
+        {recording ? (
+          <View style={styles.recordTrack} pointerEvents="none">
+            <Animated.View style={[styles.recordBar, ringStyle]} />
+          </View>
+        ) : null}
         <View style={styles.shutterRow}>
           <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
-          {/* The big shutter button squishes when you press it */}
+          {/* The big shutter button: tap for a photo, hold for a video. It squishes when you press it. */}
           <Bouncy
             onPress={takePhoto}
-            disabled={!permission?.granted || busy}
+            onLongPress={startRecording}
+            delayLongPress={250}
+            onPressOut={stopRecording}
+            disabled={!permission?.granted || (busy && !recording)}
             accessibilityRole="button"
-            accessibilityLabel="Take photo"
+            accessibilityLabel="Take photo, or hold to record a video"
             pressScale={0.82}
-            style={styles.shutter}>
-            <View style={styles.shutterInner} />
+            style={[styles.shutter, recording && styles.shutterRecording]}>
+            <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
           </Bouncy>
           <View style={styles.shutterSpacer} />
         </View>
@@ -309,6 +412,26 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  shutterRecording: {
+    borderColor: colors.red,
+  },
+  shutterInnerRecording: {
+    backgroundColor: colors.red,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+  recordTrack: {
+    height: 6,
+    marginHorizontal: space.xl,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+  },
+  recordBar: {
+    height: 6,
+    backgroundColor: colors.red,
   },
   shutterSpacer: {
     width: 44,

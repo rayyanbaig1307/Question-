@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   FadeOut,
   useAnimatedStyle,
@@ -21,6 +21,7 @@ import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
+import { VideoClip } from '@/components/VideoClipSafe';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -32,10 +33,25 @@ const scratched = new Set<string>();
 
 // One post in the feed, Instagram-style: the whole photo (nothing cut off) with rounded corners,
 // then like + comment buttons, the number of likes and the caption. Double-tap the photo to like it.
-export function FeedCard({ post, url, locked = false, scratch = false, onLike, onMenu }: {
+export function FeedCard({
+  post,
+  url,
+  videoUrl,
+  overlayUrl,
+  active = false,
+  locked = false,
+  scratch = false,
+  onLike,
+  onMenu,
+}: {
   post: FeedPost;
-  // The photo's link – or, while `locked`, the link of its tiny blurry preview.
+  // The photo's link (for a video: its still picture) – or, while `locked`, the link of its tiny blurry preview.
   url: string | undefined;
+  // Videos: the video itself and its text/sticker layer.
+  videoUrl?: string;
+  overlayUrl?: string;
+  // On screen right now (videos only play then).
+  active?: boolean;
   // Peek to see: a friend's drop you can't see until you've posted your own drop today.
   locked?: boolean;
   // Hold to reveal: the photo starts blurred and you scratch it clear.
@@ -49,7 +65,13 @@ export function FeedCard({ post, url, locked = false, scratch = false, onLike, o
   const [wasLocked, setWasLocked] = useState(locked);
   const [justUnlocked, setJustUnlocked] = useState(false);
   const [revealed, setRevealed] = useState(() => scratched.has(post.id));
-  const scratchIt = scratch && !locked && !revealed && !!url && ScratchReveal !== null;
+  const isVideo = post.media_type === 'video';
+  // Videos start without sound; tap the speaker to hear them.
+  const [muted, setMuted] = useState(true);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const scratchIt = scratch && !isVideo && !locked && !revealed && !!url && ScratchReveal !== null;
+  // A video with text/stickers is shown in the full-screen shape it was decorated in, so they line up.
+  const cardShape = isVideo && post.overlay_path ? screenWidth / screenHeight : shape;
   if (locked !== wasLocked) {
     setWasLocked(locked);
     if (wasLocked && !locked) setJustUnlocked(true);
@@ -149,6 +171,24 @@ export function FeedCard({ post, url, locked = false, scratch = false, onLike, o
                 onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
               />
             </View>
+          </Animated.View>
+        ) : isVideo && videoUrl ? (
+          <Animated.View entering={justUnlocked ? ZoomIn.springify().damping(12) : undefined}>
+            <VideoClip
+              uri={videoUrl}
+              posterUri={url}
+              overlayUri={overlayUrl}
+              playing={active}
+              muted={muted}
+              style={[styles.photo, { aspectRatio: cardShape }]}
+            />
+            <Bouncy
+              style={styles.sound}
+              pressScale={0.85}
+              onPress={() => setMuted(!muted)}
+              accessibilityLabel={muted ? 'Turn sound on' : 'Turn sound off'}>
+              <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={18} color={colors.white} />
+            </Bouncy>
           </Animated.View>
         ) : url ? (
           <Animated.View entering={justUnlocked ? ZoomIn.springify().damping(12) : undefined}>
@@ -269,6 +309,17 @@ const styles = StyleSheet.create({
   },
   loading: {
     backgroundColor: colors.card,
+  },
+  sound: {
+    position: 'absolute',
+    right: space.md,
+    bottom: space.md,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locked: {
     backgroundColor: colors.card,

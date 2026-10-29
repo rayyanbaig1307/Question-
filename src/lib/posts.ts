@@ -1,6 +1,6 @@
 import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
-import { deleteMedia, makeBlurPreview, uploadMedia } from './media';
+import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 import type { Post, PostWithAuthor } from './types';
 
@@ -8,17 +8,18 @@ import type { Post, PostWithAuthor } from './types';
 // `drop: true` makes it your Peekaboo drop for today (the database works out if it was on time).
 export async function createPost(
   userId: string,
-  photoUri: string,
+  capture: Capture,
   caption: string,
   options: { dare?: boolean; drop?: boolean } = {},
 ): Promise<Post> {
-  const mediaPath = await uploadMedia(userId, 'posts', photoUri);
-  const blurPath = options.drop ? await uploadMedia(userId, 'blurs', await makeBlurPreview(photoUri)) : null;
+  const { fields, stillUri } = await uploadCapture(userId, 'posts', capture);
+  const blurPath =
+    options.drop && stillUri ? await uploadMedia(userId, 'blurs', await makeBlurPreview(stillUri)) : null;
   const { data, error } = await supabase
     .from('posts')
     .insert({
       user_id: userId,
-      media_path: mediaPath,
+      ...fields,
       caption: caption.trim(),
       ...(options.dare ? { dare_day: todayDareDay() } : {}),
       ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
@@ -26,7 +27,7 @@ export async function createPost(
     .select('*')
     .single();
   if (error) {
-    await deleteMedia(blurPath ? [mediaPath, blurPath] : [mediaPath]);
+    await deleteMedia(mediaFiles({ ...fields, blur_path: blurPath }));
     throw error;
   }
   return data as Post;
@@ -55,5 +56,5 @@ export async function fetchPost(postId: string): Promise<PostWithAuthor | null> 
 export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia(post.blur_path ? [post.media_path, post.blur_path] : [post.media_path]);
+  await deleteMedia(mediaFiles(post));
 }

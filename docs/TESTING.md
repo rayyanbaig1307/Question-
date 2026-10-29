@@ -359,3 +359,16 @@ Where it works:
 - **Android in Expo Go:** ❌ push (Expo Go on Android doesn't allow it) – the daily drop alert still works.
 - **Android download (APK):** ❌ push until a free Firebase project is connected; ✅ daily drop alert.
 - **iPhone from TestFlight / App Store:** ✅ everything (needs the Apple Developer account).
+
+## Step 20 – Videos 🎥
+
+1. On the camera, **hold** the shutter: it turns red and a red bar fills up – you're recording (up to 10 seconds).
+   Let go to stop. (The first time, allow the microphone – then hold again.) A quick tap still takes a photo.
+2. The video plays in the editor. Add text/stickers if you like → **Send to** → pick My Story, a post, friends
+   (as a peek), today's dare or your drop.
+3. **Discover:** videos play by themselves when they scroll into view, with no sound – tap 🔈 for sound.
+   Tap and hold → full screen with sound.
+4. **Stories:** a video story plays for its full length, then moves on.
+5. **Peeks:** a video peek plays once (and can be replayed once / saved, like photo peeks).
+6. **Profile grid:** videos show a ▶ in the corner.
+7. You can also pick a video (10 seconds or less) from your camera roll with the 🖼️ button.

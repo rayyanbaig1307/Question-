@@ -1,11 +1,57 @@
+import { requireOptionalNativeModule } from 'expo';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useEffect, useState } from 'react';
 
 import { supabase } from './supabase';
+import type { MediaFields } from './types';
 
 type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs';
+
+// What you're sending: a photo, or a video (with the text/stickers you added saved as a see-through picture).
+export type Capture = { kind: 'photo'; uri: string } | { kind: 'video'; uri: string; overlayUri?: string | null };
+
+// The still-picture maker is a native part of the app. Expo Go has it, but an app built before it was added
+// doesn't – then videos simply go without a still picture.
+const Thumbnails: typeof import('expo-video-thumbnails') | null = requireOptionalNativeModule('ExpoVideoThumbnails')
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('expo-video-thumbnails')
+  : null;
+
+// A still picture from the start of a video (shown in grids, previews and blurred drops).
+export async function makePoster(videoUri: string): Promise<string | null> {
+  if (!Thumbnails) return null;
+  try {
+    const { uri } = await Thumbnails.getThumbnailAsync(videoUri, { time: 0, quality: 0.8 });
+    return resizePhoto(uri, 720);
+  } catch {
+    return null;
+  }
+}
+
+// Uploads a photo or video (plus a video's still picture and text/sticker layer) into one of your folders.
+// Also returns the local still picture, for making a blurry drop preview.
+export async function uploadCapture(
+  userId: string,
+  folder: 'posts' | 'stories' | 'snaps',
+  capture: Capture,
+): Promise<{ fields: MediaFields; stillUri: string | null }> {
+  if (capture.kind === 'photo') {
+    const media_path = await uploadMedia(userId, folder, capture.uri);
+    return { fields: { media_path, media_type: 'photo', poster_path: null, overlay_path: null }, stillUri: capture.uri };
+  }
+  const posterUri = await makePoster(capture.uri);
+  const media_path = await uploadMedia(userId, folder, capture.uri, 'video');
+  const poster_path = posterUri ? await uploadMedia(userId, folder, posterUri) : null;
+  const overlay_path = capture.overlayUri ? await uploadMedia(userId, folder, capture.overlayUri, 'png') : null;
+  return { fields: { media_path, media_type: 'video', poster_path, overlay_path }, stillUri: posterUri };
+}
+
+// All the files that belong to one photo or video (to delete them together).
+export function mediaFiles(item: Partial<MediaFields> & { blur_path?: string | null }): string[] {
+  return [item.media_path, item.poster_path, item.overlay_path, item.blur_path].filter((path): path is string => !!path);
+}
 
 // A tiny (24 px wide) copy of a photo, shown heavily blurred until a drop is unlocked.
 export async function makeBlurPreview(uri: string): Promise<string> {
@@ -25,12 +71,25 @@ async function readBytes(uri: string): Promise<ArrayBuffer> {
   return new File(uri).arrayBuffer();
 }
 
-// Uploads a photo to the private "media" bucket. Returns where it was saved.
-export async function uploadMedia(userId: string, folder: MediaFolder, localUri: string): Promise<string> {
-  const path = `${userId}/${folder}/${randomUUID()}.jpg`;
-  const { error } = await supabase.storage
-    .from('media')
-    .upload(path, await readBytes(localUri), { contentType: 'image/jpeg' });
+// Uploads a photo (JPEG), see-through picture (PNG) or video to the private "media" bucket.
+// Returns where it was saved.
+export async function uploadMedia(
+  userId: string,
+  folder: MediaFolder,
+  localUri: string,
+  type: 'jpg' | 'png' | 'video' = 'jpg',
+): Promise<string> {
+  const isMov = /\.mov$/i.test(localUri);
+  const [extension, contentType] =
+    type === 'png'
+      ? ['png', 'image/png']
+      : type === 'video'
+        ? isMov
+          ? ['mov', 'video/quicktime']
+          : ['mp4', 'video/mp4']
+        : ['jpg', 'image/jpeg'];
+  const path = `${userId}/${folder}/${randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from('media').upload(path, await readBytes(localUri), { contentType });
   if (error) throw error;
   return path;
 }

@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { VideoClip } from '@/components/VideoClipSafe';
 import { Avatar } from '@/components/Avatar';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -21,7 +22,7 @@ import { PersonRow } from '@/components/PersonRow';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
-import { useMediaUrls } from '@/lib/media';
+import { mediaFiles, useMediaUrls } from '@/lib/media';
 import { deleteStory, fetchStoryRing, fetchStoryViewers, markStorySeen, type StoryRing } from '@/lib/stories';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
@@ -61,9 +62,14 @@ export default function StoryViewer() {
       .catch(() => setRing(null));
   }, [user, userId, isMine]);
 
-  const urls = useMediaUrls(ring?.stories.map((story) => story.media_path) ?? []);
+  const urls = useMediaUrls(ring?.stories.flatMap((story) => mediaFiles(story)) ?? []);
   const story = ring?.stories[index];
   const url = story ? urls[story.media_path] : undefined;
+  // A video story lasts as long as the video (up to 10 seconds); a photo story 5 seconds.
+  const [videoLength, setVideoLength] = useState<{ id: string; seconds: number } | null>(null);
+  const isVideo = story?.media_type === 'video';
+  const seconds =
+    isVideo && videoLength?.id === story?.id ? Math.min(10, Math.max(1, videoLength.seconds)) : SECONDS_PER_PHOTO;
 
   // Finished this person's stories (or they have none) → next friend in line, or close.
   const finished = ring === null || (ring !== undefined && index >= ring.stories.length);
@@ -92,7 +98,7 @@ export default function StoryViewer() {
   const running = storyId !== undefined && loadedId === storyId && !paused && !viewersOpen;
   useEffect(() => {
     if (!running) return;
-    const remaining = (1 - progress.get()) * SECONDS_PER_PHOTO * 1000;
+    const remaining = (1 - progress.get()) * seconds * 1000;
     progress.set(
       withTiming(1, { duration: remaining, easing: Easing.linear }, (done) => {
         'worklet';
@@ -100,7 +106,7 @@ export default function StoryViewer() {
       }),
     );
     return () => cancelAnimation(progress);
-  }, [running, storyId, round, progress, next]);
+  }, [running, storyId, round, progress, next, seconds]);
 
   // Tell your friend you saw it.
   useEffect(() => {
@@ -183,7 +189,21 @@ export default function StoryViewer() {
 
   return (
     <View style={styles.fill}>
-      {url ? (
+      {url && isVideo ? (
+        <VideoClip
+          key={story.id}
+          uri={url}
+          posterUri={story.poster_path ? urls[story.poster_path] : undefined}
+          overlayUri={story.overlay_path ? urls[story.overlay_path] : undefined}
+          playing={running}
+          loop={false}
+          onDuration={(length) => {
+            setVideoLength({ id: story.id, seconds: length });
+            setLoadedId(story.id);
+          }}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : url ? (
         <Image
           key={story.id}
           source={{ uri: url, cacheKey: story.media_path }}

@@ -9,6 +9,7 @@ import Animated from 'react-native-reanimated';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { VideoClip } from '@/components/VideoClipSafe';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
@@ -19,8 +20,8 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
-import { isDropLocked, useMyDropDays, visiblePath } from '@/lib/drop';
-import { useMediaUrl } from '@/lib/media';
+import { postMedia, useMyDropDays } from '@/lib/drop';
+import { useMediaUrls } from '@/lib/media';
 import { deletePost, fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
 import type { PostWithAuthor } from '@/lib/types';
@@ -37,8 +38,11 @@ export default function PostViewer() {
   const [stats, setStats] = useState<PostStats | null>(null);
   // A friend's drop stays blurry until you've posted your own drop that day ("peek to see").
   const myDropDays = useMyDropDays(userId, post);
-  const locked = post ? isDropLocked(post, userId, myDropDays) : false;
-  const uri = useMediaUrl(post ? visiblePath(post, userId, myDropDays) : null);
+  const files = post ? postMedia(post, userId, myDropDays) : null;
+  const locked = files?.locked ?? false;
+  const urls = useMediaUrls([files?.still, files?.video, files?.overlay].filter((path): path is string => !!path));
+  const uri = files?.still ? urls[files.still] : undefined;
+  const videoUri = files?.video ? urls[files.video] : undefined;
   const likeButton = usePop();
 
   useEffect(() => {
@@ -139,6 +143,15 @@ export default function PostViewer() {
             onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
           />
         </View>
+      ) : videoUri ? (
+        <VideoClip
+          uri={videoUri}
+          posterUri={uri}
+          overlayUri={files?.overlay ? urls[files.overlay] : undefined}
+          contentFit={post.overlay_path ? 'cover' : 'contain'}
+          playing
+          style={styles.fill}
+        />
       ) : uri ? (
         <Image source={{ uri, cacheKey: post.media_path }} style={styles.fill} contentFit="contain" transition={200} />
       ) : (

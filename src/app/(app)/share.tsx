@@ -9,12 +9,13 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { VideoClip } from '@/components/VideoClipSafe';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
-import { resizePhoto } from '@/lib/media';
+import { resizePhoto, type Capture } from '@/lib/media';
 import { dareFor, todayDareDay } from '@/lib/dares';
 import { lateLabel } from '@/lib/drop';
 import { createPost } from '@/lib/posts';
@@ -27,7 +28,16 @@ export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
   // `drop` is set when you're posting your Peekaboo drop: "Today's drop" is already ticked.
-  const { uri, to, dare, drop } = useLocalSearchParams<{ uri: string; to?: string; dare?: string; drop?: string }>();
+  // `video` is '1' for a video; `overlay` is its text/sticker layer (if any).
+  const { uri, video, overlay, to, dare, drop } = useLocalSearchParams<{
+    uri: string;
+    video?: string;
+    overlay?: string;
+    to?: string;
+    dare?: string;
+    drop?: string;
+  }>();
+  const isVideo = video === '1';
   const fromDare = dare === '1';
   const fromDrop = drop === '1';
   const { userId } = useMe();
@@ -61,7 +71,10 @@ export default function Share() {
   async function send() {
     setBusy(true);
     try {
-      const photo = await resizePhoto(uri, 1080);
+      // Photos are shrunk first so they upload quickly; videos were already recorded small.
+      const photo: Capture = isVideo
+        ? { kind: 'video', uri, overlayUri: overlay ?? null }
+        : { kind: 'photo', uri: await resizePhoto(uri, 1080) };
       if (picked.length > 0 && !done.snaps) {
         await sendSnap(userId, picked, photo);
         setDone((current) => ({ ...current, snaps: true }));
@@ -109,7 +122,11 @@ export default function Share() {
 
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
+          {isVideo ? (
+            <VideoClip uri={uri} overlayUri={overlay} playing muted loop style={styles.preview} />
+          ) : (
+            <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
+          )}
 
           {fromDrop ? (
             <Option

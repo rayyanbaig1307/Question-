@@ -1,4 +1,4 @@
-import { deleteMedia, uploadMedia } from './media';
+import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
 import { supabase } from './supabase';
 import type { Profile, Story } from './types';
 
@@ -13,15 +13,15 @@ export type StoryRing = {
   latestAt: string;
 };
 
-export async function createStory(userId: string, photoUri: string): Promise<Story> {
-  const mediaPath = await uploadMedia(userId, 'stories', photoUri);
+export async function createStory(userId: string, capture: Capture): Promise<Story> {
+  const { fields } = await uploadCapture(userId, 'stories', capture);
   const { data, error } = await supabase
     .from('stories')
-    .insert({ user_id: userId, media_path: mediaPath })
+    .insert({ user_id: userId, ...fields })
     .select('*')
     .single();
   if (error) {
-    await deleteMedia([mediaPath]);
+    await deleteMedia(mediaFiles(fields));
     throw error;
   }
   return data as Story;
@@ -30,7 +30,7 @@ export async function createStory(userId: string, photoUri: string): Promise<Sto
 export async function deleteStory(story: Story): Promise<void> {
   const { error } = await supabase.from('stories').delete().eq('id', story.id);
   if (error) throw error;
-  await deleteMedia([story.media_path]);
+  await deleteMedia(mediaFiles(story));
 }
 
 // Stories that haven't expired yet. The privacy rules only return yours and your friends'.

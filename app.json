@@ -39,7 +39,8 @@
         "expo-camera",
         {
           "cameraPermission": "Peekaboo uses your camera so you can take photos.",
-          "microphonePermission": false
+          "microphonePermission": "Peekaboo uses your microphone so your videos have sound.",
+          "recordAudioAndroid": true
         }
       ],
       [
@@ -62,7 +63,8 @@
         {
           "color": "#FF4F9A"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "reactCompiler": true

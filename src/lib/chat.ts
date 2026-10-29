@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { deleteMedia, uploadMedia } from './media';
+import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
+import type { MediaFields } from './types';
 import { supabase } from './supabase';
 
 // A "peek" is a photo sent in chat that disappears once opened (stored with kind 'snap').
@@ -12,7 +13,11 @@ export type Message = {
   // 'screenshot' = a notice that someone took a screenshot; body is 'chat' or 'peek'.
   kind: 'text' | 'snap' | 'screenshot';
   body: string | null;
+  // Peeks: the photo or video (see MediaFields).
   media_path: string | null;
+  media_type: MediaFields['media_type'];
+  poster_path: string | null;
+  overlay_path: string | null;
   created_at: string;
   // When the other person read the message / opened the peek.
   opened_at: string | null;
@@ -100,14 +105,14 @@ export async function sendScreenshotNotice(me: string, friend: string, what: 'ch
   if (error) throw error;
 }
 
-// One photo, sent as a peek to one or more friends.
-export async function sendSnap(me: string, friendIds: string[], photoUri: string): Promise<void> {
-  const mediaPath = await uploadMedia(me, 'snaps', photoUri);
+// One photo or video, sent as a peek to one or more friends.
+export async function sendSnap(me: string, friendIds: string[], capture: Capture): Promise<void> {
+  const { fields } = await uploadCapture(me, 'snaps', capture);
   const { error } = await supabase
     .from('messages')
-    .insert(friendIds.map((friend) => ({ sender_id: me, recipient_id: friend, kind: 'snap', media_path: mediaPath })));
+    .insert(friendIds.map((friend) => ({ sender_id: me, recipient_id: friend, kind: 'snap', ...fields })));
   if (error) {
-    await deleteMedia([mediaPath]);
+    await deleteMedia(mediaFiles(fields));
     throw error;
   }
 }
@@ -147,7 +152,7 @@ export async function markChatRead(friend: string): Promise<void> {
 export async function deleteMessage(message: Message): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('id', message.id);
   if (error) throw error;
-  if (message.media_path) await cleanUpSnapFile(message.sender_id, message.media_path);
+  if (message.media_path) await cleanUpSnapFile(message.sender_id, message);
 }
 
 // A peek's photo is no longer needed once it was opened over a day ago (no replay or save left) and isn't saved.
@@ -156,27 +161,29 @@ const photoNoLongerNeeded = (row: Pick<Message, 'opened_at' | 'saved_at'>) =>
   row.saved_at === null &&
   Date.now() - new Date(row.opened_at).getTime() >= KEEP_AFTER_OPENING_MS;
 
-// Deletes a peek photo you sent once nobody you sent it to needs it any more (or it was unsent).
-async function cleanUpSnapFile(me: string, mediaPath: string): Promise<void> {
+// Deletes a peek's files you sent once nobody you sent it to needs them any more (or it was unsent).
+async function cleanUpSnapFile(me: string, peek: Pick<Message, 'media_path' | 'poster_path' | 'overlay_path'>): Promise<void> {
+  if (!peek.media_path) return;
   const { data } = await supabase
     .from('messages')
     .select('opened_at, saved_at')
     .eq('sender_id', me)
-    .eq('media_path', mediaPath);
+    .eq('media_path', peek.media_path);
   if ((data ?? []).every(photoNoLongerNeeded)) {
-    await deleteMedia([mediaPath]);
+    await deleteMedia(mediaFiles({ ...peek, media_path: peek.media_path }));
   }
 }
 
 // Called when you open a chat: tidies up photos of your peeks that nobody needs any more.
 export async function cleanUpOpenedSnaps(me: string, messages: Message[]): Promise<void> {
-  const paths = new Set(
-    messages
-      .filter((message) => message.sender_id === me && message.kind === 'snap' && message.media_path && photoNoLongerNeeded(message))
-      .map((message) => message.media_path as string),
-  );
-  for (const path of paths) {
-    await cleanUpSnapFile(me, path).catch(() => {});
+  const peeks = new Map<string, Message>();
+  for (const message of messages) {
+    if (message.sender_id === me && message.kind === 'snap' && message.media_path && photoNoLongerNeeded(message)) {
+      peeks.set(message.media_path, message);
+    }
+  }
+  for (const peek of peeks.values()) {
+    await cleanUpSnapFile(me, peek).catch(() => {});
   }
 }
 
