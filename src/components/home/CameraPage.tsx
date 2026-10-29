@@ -17,19 +17,28 @@ import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { DareBanner, DarePill } from '@/components/DareBanner';
-import { DropPill, DropTimer } from '@/components/DropPill';
+import { DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
-import { useDropDone } from '@/lib/drop';
+import { useDropDone, useDropStatus } from '@/lib/drop';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
+import { ModeCaption, ModeDial, type CameraMode } from './ModeDial';
 
 // Videos can be up to this long.
 const MAX_VIDEO_SECONDS = 10;
+
+// The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
+const MODE_RING: Record<CameraMode, string> = {
+  photo: colors.white,
+  dare: colors.pink,
+  drop: colors.accent,
+  guess: colors.yellow,
+};
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
@@ -58,6 +67,12 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
+  // On the home camera you pick what you're posting with the mode dial above the shutter.
+  const [homeMode, setHomeMode] = useState<CameraMode>('photo');
+  const dropStatus = useDropStatus();
+  const dareOn = dare || (isHome && homeMode === 'dare');
+  const dropOn = drop || (isHome && homeMode === 'drop');
+  const guessOn = guess || (isHome && homeMode === 'guess');
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
@@ -83,9 +98,9 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         fit,
         ...(video ? { video: '1' } : {}),
         ...(sendTo ? { to: sendTo } : {}),
-        ...(dare ? { dare: '1' } : {}),
-        ...(drop ? { drop: '1' } : {}),
-        ...(guess ? { guess: '1' } : {}),
+        ...(dareOn ? { dare: '1' } : {}),
+        ...(dropOn ? { drop: '1' } : {}),
+        ...(guessOn ? { guess: '1' } : {}),
       },
     });
 
@@ -241,10 +256,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           ) : (
             <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
           )}
-          {/* Today's dare, always one tap away (pink dot = not done yet) */}
-          {isHome ? <DarePill done={dareDone} compact /> : null}
-          {/* Once today's Peekaboo drop has happened, until you've posted yours */}
-          {isHome && dropDone === false ? <DropPill /> : null}
           {/* Taking your drop photo: the countdown, and today's dare in case you'd rather do that */}
           {drop ? <DropTimer /> : null}
           {drop ? <DarePill done={null} /> : null}
@@ -265,6 +276,15 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
       {/* Bottom: gallery · the big shutter button · friend map (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
+        {/* Home camera: what you're posting (Photo · Dare · Drop · Guess Who). Swipe the dial or tap a mode. */}
+        {isHome && !recording ? <ModeCaption mode={homeMode} drop={dropStatus} /> : null}
+        {isHome ? (
+          <ModeDial
+            mode={homeMode}
+            onChange={setHomeMode}
+            dots={{ dare: dareDone === false, drop: dropDone === false && dropStatus.kind !== 'waiting' }}
+          />
+        ) : null}
         {recording ? (
           <View style={styles.recordTrack} pointerEvents="none">
             <Animated.View style={[styles.recordBar, ringStyle]} />
@@ -282,7 +302,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             accessibilityRole="button"
             accessibilityLabel="Take photo, or hold to record a video"
             pressScale={0.82}
-            style={[styles.shutter, recording && styles.shutterRecording]}>
+            style={[styles.shutter, isHome && { borderColor: MODE_RING[homeMode] }, recording && styles.shutterRecording]}>
             <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
           </Bouncy>
           {isHome ? (
