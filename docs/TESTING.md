@@ -580,3 +580,13 @@ Use 2 test accounts that have matched (Part 4).
 5. **Change** → pick another, or **Remove song**.
 6. Friends see your song on your profile and can play the preview too.
    (Peekaboo only saves the song's name and Apple links – never any music.)
+
+## Step 30 – Close friends ⭐
+
+1. Settings → **Close friends** → tap the ⭐ next to friends to add them (tap again to remove). Only you see
+   this list.
+2. Take a photo → **Send to…** → tick My Story and/or Post to my profile → **Who can see your story?**
+   **🌍 Everyone** or **⭐ Close friends**.
+3. Post to **Close friends**. On a close friend's phone: Stories shows your circle with a **green ring** and a
+   "⭐ Close friends" tag on your card; the story shows "⭐ Close friends" at the top. Posts show the same tag.
+4. On a friend who is **not** on your list: that story and post don't show up at all (and can't be opened).

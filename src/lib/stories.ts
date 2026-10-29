@@ -1,6 +1,6 @@
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
 import { supabase } from './supabase';
-import type { Profile, Story } from './types';
+import type { Audience, Profile, Story } from './types';
 
 export type StoryWithAuthor = Story & { author: Profile | null };
 
@@ -11,13 +11,15 @@ export type StoryRing = {
   seenIds: Set<string>;
   allSeen: boolean;
   latestAt: string;
+  // Has close-friends stories (shown with a green ring).
+  closeFriends: boolean;
 };
 
-export async function createStory(userId: string, capture: Capture): Promise<Story> {
+export async function createStory(userId: string, capture: Capture, audience: Audience = 'everyone'): Promise<Story> {
   const { fields } = await uploadCapture(userId, 'stories', capture);
   const { data, error } = await supabase
     .from('stories')
-    .insert({ user_id: userId, ...fields })
+    .insert({ user_id: userId, ...fields, audience })
     .select('*')
     .single();
   if (error) {
@@ -67,8 +69,10 @@ function groupIntoRings(stories: StoryWithAuthor[], seen: Set<string>): StoryRin
       seenIds: seen,
       allSeen: true,
       latestAt: story.created_at,
+      closeFriends: false,
     };
     ring.stories.push(story);
+    if (story.audience === 'close_friends') ring.closeFriends = true;
     ring.latestAt = story.created_at;
     if (!seen.has(story.id)) ring.allSeen = false;
     byUser.set(story.user_id, ring);

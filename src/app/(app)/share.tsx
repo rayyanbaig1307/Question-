@@ -21,7 +21,7 @@ import { lateLabel } from '@/lib/drop';
 import { postMystery } from '@/lib/guess';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
-import type { Profile } from '@/lib/types';
+import type { Audience, Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
 // "Send to…": choose where your photo goes – your story, your profile, and/or friends as a peek.
@@ -51,6 +51,8 @@ export default function Share() {
   const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess);
   // Guess Who goes nowhere else (otherwise the same photo on your story would give you away).
   const [toGuess, setToGuess] = useState(fromGuess);
+  // Your story and profile post: for everyone, or just your close friends.
+  const [audience, setAudience] = useState<Audience>('everyone');
   const [toProfile, setToProfile] = useState(false);
   const [toDare, setToDare] = useState(fromDare);
   const [toDrop, setToDrop] = useState(fromDrop);
@@ -110,11 +112,11 @@ export default function Share() {
         setDone((current) => ({ ...current, snaps: true }));
       }
       if (toStory && !done.story) {
-        await createStory(userId, photo);
+        await createStory(userId, photo, audience);
         setDone((current) => ({ ...current, story: true }));
       }
       if (postToProfile && !done.profile) {
-        await createPost(userId, photo, caption);
+        await createPost(userId, photo, caption, { audience });
         setDone((current) => ({ ...current, profile: true }));
       }
       // One post can be your drop, your dare answer, or both.
@@ -200,6 +202,25 @@ export default function Share() {
               onPress={() => toggle(setToProfile, !toProfile)}
             />
           )}
+          {toStory || postToProfile ? (
+            <View style={styles.audience}>
+              <Text style={styles.audienceLabel}>Who can see your {toStory && postToProfile ? 'story and post' : toStory ? 'story' : 'post'}?</Text>
+              <View style={styles.audienceRow}>
+                {(['everyone', 'close_friends'] as const).map((choice) => (
+                  <Pressable
+                    key={choice}
+                    onPress={() => setAudience(choice)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: audience === choice }}
+                    style={[styles.audienceChip, audience === choice && (choice === 'close_friends' ? styles.closeOn : styles.everyoneOn)]}>
+                    <Text style={[styles.audienceText, audience === choice && styles.audienceTextOn]}>
+                      {choice === 'everyone' ? '🌍 Everyone' : '⭐ Close friends'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
           {postToProfile || toDare || toDrop || toGuess ? (
             <TextField
               label="Caption"
@@ -351,6 +372,40 @@ const styles = StyleSheet.create({
     ...font.label,
     marginTop: space.md,
     marginLeft: space.xs,
+  },
+  audience: {
+    gap: space.sm,
+  },
+  audienceLabel: {
+    ...font.label,
+    marginLeft: space.xs,
+  },
+  audienceRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  audienceChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  everyoneOn: {
+    borderColor: colors.accent,
+  },
+  closeOn: {
+    borderColor: colors.green,
+  },
+  audienceText: {
+    ...font.body,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
+  audienceTextOn: {
+    color: colors.text,
   },
   noFriends: {
     padding: space.lg,

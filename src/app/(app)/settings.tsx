@@ -223,6 +223,13 @@ export default function Settings() {
             onPress={() => inviteFriends(profile?.username)}
           />
           <Row icon="people" color={colors.blue} title="My friends" onPress={() => router.push('/friends')} />
+          <Row
+            icon="star"
+            color={colors.green}
+            title="Close friends"
+            subtitle="Share stories and posts with just them"
+            onPress={() => router.push('/close-friends')}
+          />
         </Section>
 
         <Section title="Account">

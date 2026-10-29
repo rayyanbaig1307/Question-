@@ -127,6 +127,7 @@ export function FeedCard({
             <View style={styles.meta}>
               <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
               {post.drop_day && post.drop_late_seconds !== null ? <DropBadge lateSeconds={post.drop_late_seconds} /> : null}
+              {post.audience === 'close_friends' ? <Text style={styles.closeTag}>⭐ Close friends</Text> : null}
             </View>
           </View>
         </Pressable>
@@ -297,6 +298,16 @@ export function FeedCard({
 }
 
 const styles = StyleSheet.create({
+  closeTag: {
+    paddingHorizontal: space.sm,
+    paddingVertical: 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.green,
+    color: colors.black,
+    fontSize: 11,
+    fontWeight: '900',
+    overflow: 'hidden',
+  },
   peeked: {
     flexDirection: 'row',
     alignItems: 'center',

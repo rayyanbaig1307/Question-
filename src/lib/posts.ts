@@ -2,7 +2,7 @@ import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
-import type { Post, PostWithAuthor } from './types';
+import type { Audience, Post, PostWithAuthor } from './types';
 
 // `dare: true` tags the post as your answer to today's Daily Dare.
 // `drop: true` makes it your Peekaboo drop for today (the database works out if it was on time).
@@ -10,7 +10,7 @@ export async function createPost(
   userId: string,
   capture: Capture,
   caption: string,
-  options: { dare?: boolean; drop?: boolean } = {},
+  options: { dare?: boolean; drop?: boolean; audience?: Audience } = {},
 ): Promise<Post> {
   const { fields, stillUri } = await uploadCapture(userId, 'posts', capture);
   const blurPath =
@@ -21,6 +21,7 @@ export async function createPost(
       user_id: userId,
       ...fields,
       caption: caption.trim(),
+      audience: options.audience ?? 'everyone',
       ...(options.dare ? { dare_day: todayDareDay() } : {}),
       ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
     })

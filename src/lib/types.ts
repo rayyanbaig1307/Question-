@@ -20,6 +20,9 @@ export type Profile = {
 
 // Photos and videos are stored the same way. A video also has a still picture from it (poster) and, if you
 // added text or stickers, a see-through picture with them (overlay) that's shown on top while it plays.
+// Who a story or post is for: everyone who can normally see it, or only your close friends.
+export type Audience = 'everyone' | 'close_friends';
+
 export type MediaFields = {
   media_path: string;
   media_type: 'photo' | 'video';
@@ -38,6 +41,7 @@ export type Post = MediaFields & {
   drop_day: string | null;
   drop_late_seconds: number | null;
   blur_path: string | null;
+  audience?: Audience;
   created_at: string;
   // Asked for along with a drop post: true while a Group Peek you share with them is still waiting on someone.
   group_hold?: boolean | null;
@@ -50,6 +54,7 @@ export type PostWithAuthor = Post & { author: Profile | null };
 export type Story = MediaFields & {
   id: string;
   user_id: string;
+  audience?: Audience;
   created_at: string;
   expires_at: string;
 };

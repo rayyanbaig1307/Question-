@@ -98,7 +98,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
         {/* The row of circles, like Instagram */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rings}>
           <Pressable style={styles.circle} onPress={openMine} accessibilityLabel={mine ? 'Watch my story' : 'Add to my story'}>
-            <Ring active={!!mine}>
+            <Ring active={!!mine} close={!!mine?.closeFriends}>
               <Avatar path={profile?.avatar_path} name={myName} size={64} />
             </Ring>
             <Bouncy style={styles.plus} pressScale={0.8} onPress={onCamera} accessibilityLabel="Add to my story">
@@ -111,7 +111,7 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
 
           {friends.map((ring, index) => (
             <Pressable key={ring.author.id} style={styles.circle} onPress={() => openFriend(index)}>
-              <Ring active={!ring.allSeen}>
+              <Ring active={!ring.allSeen} close={ring.closeFriends}>
                 <Avatar path={ring.author.avatar_path} name={ring.author.display_name || ring.author.username} size={64} />
               </Ring>
               <Text style={[styles.circleName, ring.allSeen && styles.seen]} numberOfLines={1}>
@@ -169,7 +169,8 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
                         <Text style={styles.cardTime}>{ring.allSeen ? 'Seen' : timeAgo(ring.latestAt)}</Text>
                       </View>
                     </View>
-                    {!ring.allSeen ? <View style={styles.newDot} /> : null}
+                    {!ring.allSeen ? <View style={[styles.newDot, ring.closeFriends && styles.closeDot]} /> : null}
+                    {ring.closeFriends ? <Text style={styles.closeTag}>⭐ Close friends</Text> : null}
                   </Bouncy>
                 );
               })}
@@ -181,10 +182,11 @@ export function StoriesPage({ visible, onCamera }: { visible: boolean; onCamera:
   );
 }
 
-// The colorful ring around a story circle (grey once you've seen everything).
-function Ring({ active, children }: { active: boolean; children: ReactNode }) {
+// The colorful ring around a story circle (green for close-friends stories, grey once you've seen everything).
+function Ring({ active, close = false, children }: { active: boolean; close?: boolean; children: ReactNode }) {
+  const ringColors = !active ? ([colors.border, colors.border] as const) : close ? ([colors.green, colors.green] as const) : gradients.brand;
   return (
-    <LinearGradient colors={active ? gradients.brand : [colors.border, colors.border]} style={styles.ring}>
+    <LinearGradient colors={ringColors} style={styles.ring}>
       <View style={styles.ringGap}>{children}</View>
     </LinearGradient>
   );
@@ -303,6 +305,22 @@ const styles = StyleSheet.create({
   cardTime: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 12,
+  },
+  closeDot: {
+    backgroundColor: colors.green,
+  },
+  closeTag: {
+    position: 'absolute',
+    top: space.md,
+    left: space.md,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.green,
+    color: colors.black,
+    fontSize: 11,
+    fontWeight: '900',
+    overflow: 'hidden',
   },
   newDot: {
     position: 'absolute',

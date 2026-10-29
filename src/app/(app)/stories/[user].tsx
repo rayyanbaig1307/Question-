@@ -266,6 +266,7 @@ export default function StoryViewer() {
               {isMine ? 'My Story' : name}
             </Text>
             <Text style={styles.time}>{timeAgo(story.created_at)}</Text>
+            {story.audience === 'close_friends' ? <Text style={styles.closeTag}>⭐ Close friends</Text> : null}
           </Pressable>
           <IconButton icon="ellipsis-horizontal" label="More" size={38} onPress={openMenu} />
           <IconButton icon="close" label="Close" size={38} onPress={() => router.back()} />
@@ -460,6 +461,16 @@ const styles = StyleSheet.create({
   floating: {
     position: 'absolute',
     fontSize: 44,
+  },
+  closeTag: {
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.green,
+    color: colors.black,
+    fontSize: 11,
+    fontWeight: '900',
+    overflow: 'hidden',
   },
   viewersButton: {
     flexDirection: 'row',
