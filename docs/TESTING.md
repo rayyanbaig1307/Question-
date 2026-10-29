@@ -495,23 +495,23 @@ Setting up the age check (once, by the app owner):
 4. For real checks later: switch Stripe to Live mode, get Identity approved, and replace the secret with a
    live key. Each real check costs about $1.50.
 
-Testing:
-1. Settings → **Dating** → **Peek Match (18+)** → you see what Peek Match is and how it keeps you safe.
-2. **Under 18:** with a test account, enter a birthday less than 18 years ago → "Peek Match is for adults only".
-   Go back to Settings: the Peek Match row is **gone for good** on that account.
-3. **18+:** with another account, enter an adult birthday → Step 2 "Check my age".
+Testing (Peek Match is now its own tab – see Step 32 below):
+1. **Under 18:** with a test account, add a birthday less than 18 years ago (Peekaboo asks once, or Settings →
+   **Birthday**) → there's **no Match tab**, and Peek Match is never mentioned anywhere on that account.
+2. **18+:** with another account, add an adult birthday → a **Match 💘** tab appears at the bottom right →
+   "One quick age check 🪪".
    - Before the Stripe key is added: it says age checks aren't switched on yet.
    - After: tap **Check my age** → the Stripe page opens. In test mode you can pick a test result instead of
      using a real ID. Finish, come back to Peekaboo → it checks by itself (or tap "I'm done – check now").
-   - Passed → "You're verified ✅" → flip the **Peek Match** switch on → "Peek Match is on 💘".
+   - Passed → "You're verified ✅" → **Turn on Peek Match** → "Peek Match is on 💘".
    - Failed → it says why, with **Try again**.
-4. **Hide my dating profile** switch, and **Leave Peek Match** (deletes all dating stuff; your age check is kept,
-   so you don't pay for it twice).
+3. ⚙ (top left of the Match tab) → **Hide my dating profile** switch, and **Leave Peek Match** (deletes all
+   dating stuff; your age check is kept, so you don't pay for it twice).
 
 ## Peek Match – Part 2: the dating profile 💘
 
 (You need to be through Part 1: verified and Peek Match switched on.)
-1. Settings → Peek Match → **Make my dating profile**.
+1. Match tab → **Make my profile** (or ⚙ → **Edit my dating profile**).
 2. **Photos:** tap ＋ to add from your camera roll (3 to 6). Tap a photo → **Make this my main photo** or
    **Remove photo**. A 7th photo isn't allowed.
 3. **The basics:** first name, age (taken from your ID check – can't be changed), I am a Woman / Man /
@@ -519,22 +519,23 @@ Testing:
    "East London" you can edit. Your exact spot is never saved: it's rounded to about 1 km on the phone first.
 4. **Prompts:** 3 prompts like "A dare I'd actually do…" – tap the prompt to swap it, type an answer.
 5. **Who I'd like to see:** Women / Men / Nonbinary people, an age range (18+), and a distance (5–250 km).
-6. **Save** → back on the Peek Match screen: "✅ Ann · 4 photos · 3 prompts · ready to be seen" (or what's
-   still missing). Turn on **Hide my dating profile** → it says "hidden right now".
-7. **Leave Peek Match** deletes the profile and all its photos.
+6. **Save** → back on the Match tab: once it's finished, people start showing up. ⚙ shows "✅ Ann · 4 photos ·
+   3 prompts · showing" (or what's still missing). Turn on **Hide my dating profile** → the Match tab says
+   "Your dating profile is hidden" with **Show me again**.
+7. **Leave Peek Match** (in ⚙) deletes the profile and all its photos.
 
 ## Peek Match – Part 3: finding people 👀
 
 You need 2 verified test accounts in Peek Match, with finished profiles that fit each other (e.g. a woman
 looking for men and a man looking for women, ages in each other's range, within each other's distance).
-1. Peek Match screen → **Start peeking 💘** (shows once your profile is finished and not hidden).
+1. Open the **Match 💘** tab – people show up once your profile is finished and not hidden.
 2. One person at a time: name, age, area and a **rough** distance ("Less than 2 km away", "5 km away"…),
    then photos and prompts one after another.
 3. Tap the **♥ on a photo or a prompt** → a sheet shows what you're liking → add a comment if you like →
    **Send like**. The other person gets "Someone liked your dating profile" (with push on) – it doesn't say who.
 4. Tap **✕** (bottom left) to skip. People you liked or skipped don't come round again.
 5. On the other account, the person who liked them shows up **first**.
-6. **••• → Report** (Spam / Bullying / Nudity / Something else) → saved in Supabase **reports** against their real
+6. **•••** (next to their name) **→ Report** (Spam / Bullying / Nudity / Something else) → saved in Supabase **reports** against their real
    account, details "Peek Match profile". **Block** → you never see each other in Peek Match again (blocking
    someone in the normal app does the same).
 7. People who don't fit what *both* of you are looking for never show up. Nobody can see your friends, posts,
@@ -544,9 +545,9 @@ looking for men and a man looking for women, ages in each other's range, within 
 
 Use the same 2 test accounts as Part 3 (they fit each other).
 1. Account A likes B (♥ on a photo or prompt, maybe with a comment).
-2. Account B: Peek Match screen → **Matches & likes 💬** → **Likes you** shows A's photo, name and comment.
+2. Account B: Match tab → **💬** (top right, with a number when something's new) → **Likes you** shows A's photo, name and comment.
    Tap it → "💘 A liked your answer: …" + their comment + their profile → **💘 Match** (or ✕ to skip).
-   (Or B finds A first in **Start peeking** and likes back – then B sees "It's a match! 💘" → **Say hi 👋**.)
+   (Or B finds A first on the Match tab and likes back – then B sees "It's a match! 💘" → **Say hi 👋**.)
 3. Both get "It's a match! 💘" (with push on) and the chat opens.
 4. In the chat, their picture at the top is **blurred** 🙈, with a bar: "Photos unblur when you've both sent
    5 messages · You 2/5 · Ben 3/5". Tap their name to see their profile – photos blurred too.
@@ -601,3 +602,16 @@ Use 2 test accounts that have matched (Part 4).
    settings and come back – Peekaboo switches too.
 4. **🌙 Dark** → back to the dark look.
 (The Android download needs the next new version for "Match phone" to follow the phone; Light and Dark work.)
+
+## Step 32 – Peek Match is part of the app now 💘
+
+1. **Birthday:** open Peekaboo → it asks "When's your birthday? 🎂" once (**Not now** is fine – you can add it
+   later in Settings → **Birthday**, which then shows your birthday and "only you see this"). It can't be changed.
+2. **18 or older** → a 5th tab, **Match 💘**, appears at the bottom (swipe left from Discover, or tap it).
+   Under 18 or no birthday → no Match tab at all.
+3. The Match tab walks you through it: the safety promises → **Check my age** (ID + selfie) → **Turn on Peek
+   Match** → **Make my profile** → then people show up right there, one at a time (♥ to like, ✕ to skip,
+   ••• next to the name to report/block).
+4. Top of the Match tab: **⚙** = Peek Match settings (edit profile, hide, leave) and **💬** = matches & likes.
+   A pink dot on the Match tab (and a number on 💬) means someone liked you or a match sent a message.
+5. Settings no longer has a Dating section.

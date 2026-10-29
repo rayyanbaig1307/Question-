@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { reloadAppAsync } from 'expo';
 import Constants from 'expo-constants';
-import { router } from 'expo-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { formatBirthday } from '@/components/match/BirthdayForm';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
@@ -13,7 +14,7 @@ import { inviteFriends } from '@/lib/invite';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
-import { isBlockedFromPeekMatch } from '@/lib/peekMatch';
+import { fetchMyBirthday } from '@/lib/peekMatch';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
@@ -23,17 +24,23 @@ export default function Settings() {
   const { showToast } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
-  // Peek Match (18+ dating) disappears for good for anyone who said they're under 18.
-  const [peekMatchBlocked, setPeekMatchBlocked] = useState(true);
+  // Your birthday: undefined while loading, null if you haven't added it yet.
+  const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     fetchNotificationPrefs(userId)
       .then(setNotify)
       .catch(() => setNotify(ALL_ON));
-    isBlockedFromPeekMatch(userId)
-      .then(setPeekMatchBlocked)
-      .catch(() => {});
   }, [userId]);
+
+  // Fresh each time you come back here (e.g. right after adding your birthday).
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyBirthday(userId)
+        .then(setBirthday)
+        .catch(() => {});
+    }, [userId]),
+  );
 
   // Turn one type of notification on or off (saved straight away).
   async function setNotifyType(key: keyof NotificationPrefs, on: boolean) {
@@ -203,18 +210,6 @@ export default function Settings() {
           />
         </Section>
 
-        {peekMatchBlocked ? null : (
-          <Section title="Dating">
-            <Row
-              icon="heart-circle"
-              color={colors.pink}
-              title="Peek Match (18+)"
-              subtitle="Dating, separate from the rest of Peekaboo"
-              onPress={() => router.push('/peek-match')}
-            />
-          </Section>
-        )}
-
         <Section title="Friends">
           <Row
             icon="paper-plane"
@@ -251,6 +246,19 @@ export default function Settings() {
 
         <Section title="Account">
           <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
+          <Row
+            icon="gift"
+            color={colors.pink}
+            title="Birthday"
+            subtitle={
+              birthday === undefined
+                ? undefined
+                : birthday
+                  ? `🎂 ${formatBirthday(birthday)} · only you see this`
+                  : 'Add your birthday – only you see it'
+            }
+            onPress={birthday === null ? () => router.push('/birthday') : undefined}
+          />
           <Row icon="log-out" color={colors.orange} title="Log out" onPress={confirmSignOut} />
           <Row icon="trash" color={colors.red} title="Delete account" subtitle="Gone forever – no undo" onPress={confirmDelete} />
         </Section>

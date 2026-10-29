@@ -11,11 +11,13 @@ export type LikeTarget = { photoId: string; path: string } | { prompt: number; t
 
 // A Peek Match profile, Hinge-style: photos and prompts one after another, each with a ♥ to like that one
 // thing. Shows only dating info – never anything from the person's normal Peekaboo account.
-export function DatingProfileView({ card, urls, onLike, footer, blurred = false }: {
+export function DatingProfileView({ card, urls, onLike, footer, headerRight, blurred = false }: {
   card: DatingCard;
   urls: Record<string, string>;
   onLike?: (target: LikeTarget) => void;
   footer?: ReactNode;
+  // Next to the name (e.g. the ••• for report / block).
+  headerRight?: ReactNode;
   // In a match chat, photos stay blurred until you've both sent 5 messages.
   blurred?: boolean;
 }) {
@@ -51,13 +53,16 @@ export function DatingProfileView({ card, urls, onLike, footer, blurred = false 
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Text style={styles.name}>
-          {card.name}, {card.age}
-        </Text>
-        <Text style={styles.where}>
-          📍 {card.area} · {roughDistance(card.km)}
-        </Text>
+      <View style={styles.headerRow}>
+        <View style={styles.header}>
+          <Text style={styles.name}>
+            {card.name}, {card.age}
+          </Text>
+          <Text style={styles.where}>
+            📍 {card.area} · {roughDistance(card.km)}
+          </Text>
+        </View>
+        {headerRight}
       </View>
       {first ? (
         <Photo
@@ -108,7 +113,13 @@ const styles = StyleSheet.create({
   wrap: {
     gap: space.lg,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
   header: {
+    flex: 1,
     gap: 2,
   },
   name: {

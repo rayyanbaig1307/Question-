@@ -111,7 +111,7 @@ export default function DatingMatches() {
             emoji="💘"
             title="No matches yet"
             message="When you and someone both like each other, you'll match and can chat here.">
-            <Button title="Start peeking" icon="heart" onPress={() => router.push('/peek-match/discover')} />
+            <Button title="Start peeking" icon="heart" onPress={() => router.dismissTo({ pathname: '/', params: { page: 'match' } })} />
           </EmptyState>
         ) : (
           matches.map((match) => {

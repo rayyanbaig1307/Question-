@@ -18,14 +18,18 @@ const TABS: { label: string; on: keyof typeof Ionicons.glyphMap; off: keyof type
   { label: 'Camera', on: 'camera', off: 'camera-outline' },
   { label: 'Stories', on: 'sparkles', off: 'sparkles-outline' },
   { label: 'Discover', on: 'flame', off: 'flame-outline' },
+  { label: 'Match', on: 'heart', off: 'heart-outline' },
 ];
 
-// The bar at the bottom of the home screen: Chat · Camera · Stories · Discover.
-// Over the camera and Discover it's see-through; on Chat and Stories it fades to solid.
-export function HomeTabBar({ page, onSelect, unread, solid }: {
+// The bar at the bottom of the home screen: Chat · Camera · Stories · Discover (· Match for 18+).
+// Over the camera (and Discover in dark mode) it's see-through; elsewhere it fades to solid.
+export function HomeTabBar({ page, onSelect, unread, showMatch, matchNews, solid }: {
   page: number;
   onSelect: (index: number) => void;
   unread: number;
+  showMatch: boolean;
+  // Likes waiting + match chats with unread messages.
+  matchNews: number;
   // 0 = see-through, 1 = solid (follows your finger while swiping).
   solid: Animated.AnimatedInterpolation<number>;
 }) {
@@ -37,7 +41,7 @@ export function HomeTabBar({ page, onSelect, unread, solid }: {
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom }]}>
       <Animated.View style={[styles.background, { opacity: solid }]} pointerEvents="none" />
-      {TABS.map((tab, index) => {
+      {(showMatch ? TABS : TABS.slice(0, 4)).map((tab, index) => {
         const active = index === page;
         return (
           <Bouncy
@@ -55,6 +59,7 @@ export function HomeTabBar({ page, onSelect, unread, solid }: {
                   <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
                 </View>
               ) : null}
+              {index === 4 && matchNews > 0 ? <View style={styles.dot} /> : null}
             </View>
             <Text style={[styles.label, !overCamera && styles.labelPlain, { color: active ? colors.accent : idleColor }, active && styles.labelActive]}>
               {tab.label}
@@ -111,6 +116,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.red,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dot: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.pink,
+    borderWidth: 1.5,
+    borderColor: colors.bg,
   },
   badgeText: {
     color: colors.white,

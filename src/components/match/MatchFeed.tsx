@@ -16,14 +16,13 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { DatingProfileView, type LikeTarget } from '@/components/DatingProfileView';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
-import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { RoundIconButton } from '@/components/ScreenHeader';
 import { SafeEdge } from '@/components/SafeEdge';
 import { fetchDatingFeed, fetchMatches, likeDatingProfile, skipDatingProfile, type DatingCard } from '@/lib/dating';
 import { friendlyError } from '@/lib/errors';
@@ -31,30 +30,32 @@ import { useMediaUrls } from '@/lib/media';
 import { useDatingSafety } from '@/lib/useDatingSafety';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
-// Peek Match: one profile at a time. ♥ a photo or prompt (with a comment if you like), or ✕ to skip.
-export default function DatingDiscover() {
+// One profile at a time. ♥ a photo or prompt (with a comment if you like), or ✕ to skip.
+// `bottomSpace` keeps the ✕ button above the tab bar.
+export function MatchFeed({ visible, bottomSpace }: { visible: boolean; bottomSpace: number }) {
   const { showToast } = useOverlays();
   const safety = useDatingSafety();
-  const insets = useSafeAreaInsets();
   const [cards, setCards] = useState<DatingCard[] | null>(null);
   const [liking, setLiking] = useState<LikeTarget | null>(null);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Fetch people; keeps the ones you're already looking at if there are any.
   const load = useCallback(
-    () =>
+    (replace: boolean) =>
       fetchDatingFeed()
-        .then(setCards)
+        .then((fresh) => setCards((current) => (!replace && current && current.length > 0 ? current : fresh)))
         .catch((error) => {
           setCards((current) => current ?? []);
-          Alert.alert('Could not load Peek Match', friendlyError(error));
+          console.warn('Could not load Peek Match', error);
         }),
     [],
   );
 
+  // Each time you come to the Match tab (so new people show up if you'd run out).
   useEffect(() => {
-    load();
-  }, [load]);
+    if (visible) load(false);
+  }, [visible, load]);
 
   const card = cards?.[0] ?? null;
   const urls = useMediaUrls(card ? card.photos.map((photo) => photo.path) : []);
@@ -67,10 +68,10 @@ export default function DatingDiscover() {
       return;
     }
     setCards(null);
-    load();
+    load(true);
   }
 
-  async function skip() {
+  function skip() {
     if (!card) return;
     Haptics.selectionAsync();
     next();
@@ -113,46 +114,54 @@ export default function DatingDiscover() {
     }
   }
 
-  function openMenu() {
-    if (card) safety.openMenu(card, 'profile', next);
+  if (cards === null) return <ActivityIndicator color={colors.accent} style={styles.loading} />;
+
+  if (!card) {
+    return (
+      <ScrollView contentContainerStyle={[styles.emptyWrap, { paddingBottom: bottomSpace }]}>
+        <EmptyState
+          emoji="👀"
+          title="No one new right now"
+          message="Check back later – or widen who you'd like to see (ages, distance) in your dating profile.">
+          <Button
+            title="Look again"
+            icon="refresh"
+            variant="secondary"
+            onPress={() => {
+              setCards(null);
+              load(true);
+            }}
+          />
+          <Button title="Edit my dating profile" icon="create" variant="secondary" onPress={() => router.push('/peek-match/profile')} />
+        </EmptyState>
+      </ScrollView>
+    );
   }
 
   return (
     <View style={styles.fill}>
-      <ScreenHeader
-        title="Peek Match 💘"
-        right={card ? <RoundIconButton icon="ellipsis-horizontal" label="Report or block" onPress={openMenu} /> : undefined}
-      />
-      {cards === null ? (
-        <ActivityIndicator color={colors.accent} style={styles.loading} />
-      ) : !card ? (
-        <EmptyState
-          emoji="👀"
-          title="No one new right now"
-          message="Check back later – or widen who you'd like to see (ages, distance). Your profile needs to be finished and showing, too.">
-          <Button title="Edit my dating profile" icon="create" onPress={() => router.push('/peek-match/profile')} />
-        </EmptyState>
-      ) : (
-        <>
-          <Animated.View key={card.dating_id} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={styles.fill}>
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 110 }]}>
-              <DatingProfileView card={card} urls={urls} onLike={setLiking} />
-            </ScrollView>
-          </Animated.View>
-          <SafeEdge edge="bottom" style={styles.skipWrap} pointerEvents="box-none">
-            <Bouncy style={styles.skip} pressScale={0.85} onPress={skip} accessibilityLabel={`Skip ${card.name}`}>
-              <Ionicons name="close" size={34} color={colors.text} />
-            </Bouncy>
-          </SafeEdge>
-        </>
-      )}
+      <Animated.View key={card.dating_id} entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={styles.fill}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + 100 }]}>
+          <DatingProfileView
+            card={card}
+            urls={urls}
+            onLike={setLiking}
+            headerRight={
+              <RoundIconButton icon="ellipsis-horizontal" label="Report or block" onPress={() => safety.openMenu(card, 'profile', next)} />
+            }
+          />
+        </ScrollView>
+      </Animated.View>
+      <Bouncy style={[styles.skip, { bottom: bottomSpace + space.md }]} pressScale={0.85} onPress={skip} accessibilityLabel={`Skip ${card.name}`}>
+        <Ionicons name="close" size={34} color={colors.text} />
+      </Bouncy>
 
       <Modal visible={!!liking} transparent animationType="slide" onRequestClose={() => setLiking(null)}>
         <KeyboardAvoidingView style={styles.fill} behavior="padding">
           <Pressable style={styles.backdrop} onPress={() => setLiking(null)}>
             <SafeEdge edge="bottom" style={styles.sheet}>
               <Pressable style={styles.sheetInner}>
-                <Text style={styles.sheetTitle}>Like {card?.name}&apos;s {liking && 'photoId' in liking ? 'photo' : 'answer'} 💘</Text>
+                <Text style={styles.sheetTitle}>Like {card.name}&apos;s {liking && 'photoId' in liking ? 'photo' : 'answer'} 💘</Text>
                 {liking && 'photoId' in liking ? (
                   urls[liking.path] ? (
                     <Image source={{ uri: urls[liking.path] }} style={styles.likedPhoto} contentFit="cover" />
@@ -187,20 +196,22 @@ export default function DatingDiscover() {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: colors.bg,
   },
   loading: {
     marginTop: space.xxl,
   },
-  content: {
+  emptyWrap: {
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: space.lg,
   },
-  skipWrap: {
-    position: 'absolute',
-    left: space.lg,
-    bottom: space.lg,
+  content: {
+    padding: space.lg,
+    paddingTop: space.sm,
   },
   skip: {
+    position: 'absolute',
+    left: space.lg,
     width: 64,
     height: 64,
     borderRadius: 32,

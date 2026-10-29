@@ -1,5 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { File, Paths } from 'expo-file-system';
+import { useCallback, useEffect, useState } from 'react';
 
+import { fetchLikesForMe, fetchMatches } from './dating';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -31,10 +35,77 @@ export async function fetchPeekMatchStatus(me: string): Promise<PeekMatchStatus>
   return { ageCheck: ageCheck.data as AgeCheck | null, member: member.data as DatingMembership | null };
 }
 
-// Is this person blocked from Peek Match (said they're under 18)? Used to hide it in Settings.
-export async function isBlockedFromPeekMatch(me: string): Promise<boolean> {
-  const { data } = await supabase.from('age_checks').select('blocked').eq('user_id', me).maybeSingle();
-  return data?.blocked === true;
+// The Match tab only exists for people whose saved birthday says they're 18 or older.
+// No birthday yet, or under 18 → no tab, and Peek Match is never mentioned.
+export const canSeePeekMatch = (status: PeekMatchStatus) => !!status.ageCheck && !status.ageCheck.blocked;
+
+// This phone remembers who can see the Match tab, so it's there the moment Peekaboo opens.
+const MATCH_TAB_FILE = 'peekaboo-match-tab.txt';
+
+export function rememberedMatchTab(me: string): boolean {
+  try {
+    const file = new File(Paths.document, MATCH_TAB_FILE);
+    return file.exists && file.textSync().trim() === me;
+  } catch {
+    return false;
+  }
+}
+
+function rememberMatchTab(me: string, on: boolean) {
+  try {
+    const file = new File(Paths.document, MATCH_TAB_FILE);
+    if (!file.exists) file.create();
+    file.writeSync(on ? me : '');
+  } catch {
+    // Not remembered – the tab just shows up a moment later next time.
+  }
+}
+
+// Your Peek Match status, fetched each time `active` turns on. `news` = likes waiting for you + chats with
+// unread messages (for the dot on the Match tab).
+export function usePeekMatchStatus(me: string, active: boolean) {
+  const [status, setStatus] = useState<PeekMatchStatus | null>(null);
+  const [news, setNews] = useState(0);
+
+  const reload = useCallback(
+    () =>
+      fetchPeekMatchStatus(me)
+        .then((loaded) => {
+          setStatus(loaded);
+          rememberMatchTab(me, canSeePeekMatch(loaded));
+          if (!loaded.member) return 0;
+          return Promise.all([fetchLikesForMe(), fetchMatches()]).then(
+            ([likes, matches]) => likes.length + matches.filter((match) => match.unread > 0).length,
+          );
+        })
+        .then(setNews)
+        .catch((error) => console.warn('Could not load Peek Match', error)),
+    [me],
+  );
+
+  useEffect(() => {
+    if (active) reload();
+  }, [active, reload]);
+
+  return { status, news, reload };
+}
+
+// Your saved birthday ('YYYY-MM-DD'), or null if you haven't added it.
+export async function fetchMyBirthday(me: string): Promise<string | null> {
+  const { data, error } = await supabase.from('age_checks').select('birthday').eq('user_id', me).maybeSingle();
+  if (error) throw error;
+  return data?.birthday ?? null;
+}
+
+// We ask for your birthday once when you open Peekaboo (you can also add it in Settings).
+const birthdayAskedKey = (me: string) => `peekaboo-birthday-asked:${me}`;
+
+export async function wasAskedForBirthday(me: string): Promise<boolean> {
+  return (await AsyncStorage.getItem(birthdayAskedKey(me)).catch(() => null)) === 'yes';
+}
+
+export function markAskedForBirthday(me: string) {
+  AsyncStorage.setItem(birthdayAskedKey(me), 'yes').catch(() => {});
 }
 
 // Saves your birthday (once, for good). Returns 'blocked' if you're under 18.
