@@ -6,8 +6,9 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { counting, stillToPost, type PeekGroup } from '@/lib/groups';
 import { colors, font, radius, space } from '@/theme';
 
-// A row of your Group Peek groups at the top of Discover: how many have posted today, tap to open.
-export function GroupStrip({ groups }: { groups: PeekGroup[] | null }) {
+// The row at the top of Discover: Guess Who (how many you can still guess), then your Group Peek groups
+// (how many have posted today). Tap one to open it.
+export function DiscoverStrip({ groups, toGuess }: { groups: PeekGroup[] | null; toGuess: number | null }) {
   if (!groups) return null;
   return (
     <ScrollView
@@ -15,6 +16,18 @@ export function GroupStrip({ groups }: { groups: PeekGroup[] | null }) {
       showsHorizontalScrollIndicator={false}
       style={styles.strip}
       contentContainerStyle={styles.row}>
+      <Bouncy
+        style={[styles.chip, styles.guessChip]}
+        pressScale={0.94}
+        onPress={() => router.push('/guess')}
+        accessibilityLabel="Open Guess Who">
+        <Text style={styles.guessEmoji}>🕵️</Text>
+        <View>
+          <Text style={styles.name}>Guess Who</Text>
+          <Text style={styles.count}>{toGuess ? `${toGuess} to guess 👀` : 'Post one 🤫'}</Text>
+        </View>
+        {toGuess ? <View style={styles.dot} /> : null}
+      </Bouncy>
       {groups.map((group) => {
         const total = counting(group).length;
         const left = stillToPost(group).length;
@@ -79,6 +92,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: colors.textMuted,
+  },
+  guessChip: {
+    borderColor: colors.yellow,
+  },
+  guessEmoji: {
+    fontSize: 20,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.pink,
   },
   newChip: {
     borderStyle: 'dashed',

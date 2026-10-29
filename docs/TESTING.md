@@ -414,3 +414,19 @@ You need 2 friends on Peekaboo (or 2 test accounts) for this.
 7. ••• on the group page: **Edit group** (rename, add friends), **Leave group**, and – if you made it –
    **Delete group**. If you made it, hold down on a person to remove them.
 8. The Discover row shows each group as "2/3 posted 👀" or "Everyone posted 🎉".
+
+## Step 24 – Guess Who 🕵️
+
+You need at least 2 friends on Peekaboo (with 4+ friends the guessing is harder).
+1. **Post one:** Discover → tap **🕵️ Guess Who** at the top → ＋ (or take a photo/video and, on **Send to…**,
+   pick **🕵️ Guess Who**). Picking Guess Who un-ticks everything else, so the photo can't give you away.
+   Add a hint if you like → **Send**. It lasts 24 hours.
+2. On your own card: "Your Guess Who 🤫" and, later, "3 guessed · 1 got it · 2 fooled 😈".
+3. **On a friend's phone:** Discover → **🕵️ Guess Who · 1 to guess** → the card says "Who posted this?" with
+   up to 4 names. Tap one → the real poster's picture pops in with flying emojis:
+   "You got it! 🎉" or "Nope! It was … 😜". Only the first guess counts.
+4. **Report:** ••• on a friend's card → **Report** → pick a reason. It's saved in Supabase → **reports**
+   against the real poster (details say "Guess Who (anonymous) post") – the reporter isn't told who it was.
+5. **Block:** ••• → **Block whoever posted this** → the card disappears and that person is blocked.
+6. **Delete:** ••• on your own card → **Delete**.
+7. The real poster is always saved in Supabase → **mystery_posts** (user_id).

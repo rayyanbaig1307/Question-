@@ -18,6 +18,7 @@ import { fetchFriends } from '@/lib/friends';
 import { resizePhoto, type Capture } from '@/lib/media';
 import { dareFor, todayDareDay } from '@/lib/dares';
 import { lateLabel } from '@/lib/drop';
+import { postMystery } from '@/lib/guess';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
 import type { Profile } from '@/lib/types';
@@ -28,23 +29,28 @@ export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
   // `drop` is set when you're posting your Peekaboo drop: "Today's drop" is already ticked.
+  // `guess` is set when you came from Guess Who: "Guess Who" is already ticked.
   // `video` is '1' for a video; `overlay` is its text/sticker layer (if any).
-  const { uri, video, overlay, to, dare, drop } = useLocalSearchParams<{
+  const { uri, video, overlay, to, dare, drop, guess } = useLocalSearchParams<{
     uri: string;
     video?: string;
     overlay?: string;
     to?: string;
     dare?: string;
     drop?: string;
+    guess?: string;
   }>();
   const isVideo = video === '1';
   const fromDare = dare === '1';
   const fromDrop = drop === '1';
+  const fromGuess = guess === '1';
   const { userId } = useMe();
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
 
-  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop);
+  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess);
+  // Guess Who goes nowhere else (otherwise the same photo on your story would give you away).
+  const [toGuess, setToGuess] = useState(fromGuess);
   const [toProfile, setToProfile] = useState(false);
   const [toDare, setToDare] = useState(fromDare);
   const [toDrop, setToDrop] = useState(fromDrop);
@@ -53,7 +59,7 @@ export default function Share() {
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
   const [busy, setBusy] = useState(false);
   // Remember what already worked, so trying again doesn't send twice.
-  const [done, setDone] = useState({ story: false, profile: false, snaps: false, post: false });
+  const [done, setDone] = useState({ story: false, profile: false, snaps: false, post: false, guess: false });
 
   useEffect(() => {
     fetchFriends(userId)
@@ -61,10 +67,30 @@ export default function Share() {
       .catch(() => setFriends([]));
   }, [userId]);
 
-  const toggleFriend = (id: string) =>
+  const toggleFriend = (id: string) => {
+    setToGuess(false);
     setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  };
 
-  const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && picked.length === 0;
+  // Picking anything else turns Guess Who off, and picking Guess Who turns everything else off.
+  const toggle = (set: (on: boolean) => void, on: boolean) => {
+    setToGuess(false);
+    set(on);
+  };
+  function toggleGuess() {
+    if (toGuess) {
+      setToGuess(false);
+      return;
+    }
+    setToGuess(true);
+    setToStory(false);
+    setToProfile(false);
+    setToDare(false);
+    setToDrop(false);
+    setPicked([]);
+  }
+
+  const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && !toGuess && picked.length === 0;
   // A dare or drop photo is a post on your profile too, so "Post to my profile" isn't needed then.
   const postToProfile = toProfile && !toDare && !toDrop;
 
@@ -75,6 +101,10 @@ export default function Share() {
       const photo: Capture = isVideo
         ? { kind: 'video', uri, overlayUri: overlay ?? null }
         : { kind: 'photo', uri: await resizePhoto(uri, 1080) };
+      if (toGuess && !done.guess) {
+        await postMystery(userId, photo, caption);
+        setDone((current) => ({ ...current, guess: true }));
+      }
       if (picked.length > 0 && !done.snaps) {
         await sendSnap(userId, picked, photo);
         setDone((current) => ({ ...current, snaps: true }));
@@ -97,7 +127,9 @@ export default function Share() {
       // A happy little buzz: it's sent!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(
-        toDrop && dropLate !== null
+        toGuess
+          ? "Guess Who posted 🕵️ Let's see who figures it out!"
+          : toDrop && dropLate !== null
           ? lateLabel(dropLate).onTime
             ? 'Drop posted · On time! 👀🔥'
             : `Drop posted · ${lateLabel(dropLate).text}`
@@ -107,7 +139,8 @@ export default function Share() {
       );
       // After your drop: to Discover, where your friends' drops just unlocked.
       // Otherwise back to the Dare screen, the chat you came from, or the camera.
-      if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'discover' } });
+      if (toGuess) router.dismissTo('/guess');
+      else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'discover' } });
       else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
@@ -134,7 +167,7 @@ export default function Share() {
               title="Today's Peekaboo drop"
               subtitle="Unlocks your friends' drops · on your profile and Discover"
               selected={toDrop}
-              onPress={() => setToDrop(!toDrop)}
+              onPress={() => toggle(setToDrop, !toDrop)}
             />
           ) : null}
           <Option
@@ -142,14 +175,21 @@ export default function Share() {
             title="Today's dare"
             subtitle={`"${dareFor(todayDareDay()).text}" · everyone sees it on the Dare page`}
             selected={toDare}
-            onPress={() => setToDare(!toDare)}
+            onPress={() => toggle(setToDare, !toDare)}
           />
           <Option
             emoji="✨"
             title="My Story"
             subtitle="Friends can see it for 24 hours"
             selected={toStory}
-            onPress={() => setToStory(!toStory)}
+            onPress={() => toggle(setToStory, !toStory)}
+          />
+          <Option
+            emoji="🕵️"
+            title="Guess Who"
+            subtitle="Posted without your name – friends guess who it was (24 hours)"
+            selected={toGuess}
+            onPress={toggleGuess}
           />
           {toDare || toDrop ? null : (
             <Option
@@ -157,16 +197,16 @@ export default function Share() {
               title="Post to my profile"
               subtitle="Stays on your profile grid"
               selected={toProfile}
-              onPress={() => setToProfile(!toProfile)}
+              onPress={() => toggle(setToProfile, !toProfile)}
             />
           )}
-          {postToProfile || toDare || toDrop ? (
+          {postToProfile || toDare || toDrop || toGuess ? (
             <TextField
               label="Caption"
               value={caption}
               onChangeText={setCaption}
-              placeholder="Write a caption… (optional)"
-              maxLength={300}
+              placeholder={toGuess ? 'A hint… (optional – careful, don\'t give yourself away! 🤫)' : 'Write a caption… (optional)'}
+              maxLength={toGuess ? 200 : 300}
               multiline
             />
           ) : null}

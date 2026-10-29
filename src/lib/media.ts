@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import type { MediaFields } from './types';
 
-type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs';
+// 'mystery' is for Guess Who: those files go in a shared folder, so the file name doesn't give away who posted it.
+type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery';
 
 // What you're sending: a photo, or a video (with the text/stickers you added saved as a see-through picture).
 export type Capture = { kind: 'photo'; uri: string } | { kind: 'video'; uri: string; overlayUri?: string | null };
@@ -34,7 +35,7 @@ export async function makePoster(videoUri: string): Promise<string | null> {
 // Also returns the local still picture, for making a blurry drop preview.
 export async function uploadCapture(
   userId: string,
-  folder: 'posts' | 'stories' | 'snaps',
+  folder: 'posts' | 'stories' | 'snaps' | 'mystery',
   capture: Capture,
 ): Promise<{ fields: MediaFields; stillUri: string | null }> {
   if (capture.kind === 'photo') {
@@ -88,7 +89,7 @@ export async function uploadMedia(
           ? ['mov', 'video/quicktime']
           : ['mp4', 'video/mp4']
         : ['jpg', 'image/jpeg'];
-  const path = `${userId}/${folder}/${randomUUID()}.${extension}`;
+  const path = folder === 'mystery' ? `mystery/${randomUUID()}.${extension}` : `${userId}/${folder}/${randomUUID()}.${extension}`;
   const { error } = await supabase.storage.from('media').upload(path, await readBytes(localUri), { contentType });
   if (error) throw error;
   return path;

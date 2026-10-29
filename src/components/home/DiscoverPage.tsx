@@ -12,13 +12,14 @@ import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { fetchGroups, type PeekGroup } from '@/lib/groups';
+import { countUnguessed } from '@/lib/guess';
 import { inviteFriends } from '@/lib/invite';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
-import { GroupStrip } from './GroupStrip';
+import { DiscoverStrip } from './DiscoverStrip';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
@@ -35,30 +36,34 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
   const [refreshing, setRefreshing] = useState(false);
   // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
   const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
-  // Your Group Peek groups, shown as a row at the top.
+  // Your Group Peek groups and how many Guess Who posts you can still guess, shown as a row at the top.
   const [groups, setGroups] = useState<PeekGroup[] | null>(null);
+  const [toGuess, setToGuess] = useState<number | null>(null);
 
   const show = useCallback(
     (loaded: {
       page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
       days: Set<string>;
       groups: PeekGroup[] | null;
+      toGuess: number | null;
     }) => {
       setPosts(loaded.page.posts);
       setNext(loaded.page.next);
       setMyDropDays(loaded.days);
       setGroups(loaded.groups);
+      setToGuess(loaded.toGuess);
     },
     [],
   );
 
   const loadAll = useCallback(async () => {
-    const [page, days, groups] = await Promise.all([
+    const [page, days, groups, toGuess] = await Promise.all([
       fetchDiscover(userId),
       fetchMyDropDays(userId).catch(() => new Set<string>()),
       fetchGroups().catch(() => null),
+      countUnguessed().catch(() => null),
     ]);
-    return { page, days, groups };
+    return { page, days, groups, toGuess };
   }, [userId]);
 
   // Fresh posts every time you come to this page.
@@ -205,7 +210,7 @@ export function DiscoverPage({ visible, onCamera }: { visible: boolean; onCamera
         onEndReachedThreshold={0.6}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-        ListHeaderComponent={<GroupStrip groups={groups} />}
+        ListHeaderComponent={<DiscoverStrip groups={groups} toGuess={toGuess} />}
         ListEmptyComponent={
           posts === null ? (
             <ActivityIndicator color={colors.accent} style={styles.loading} />

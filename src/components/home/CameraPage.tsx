@@ -33,7 +33,7 @@ const MAX_VIDEO_SECONDS = 10;
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false }: {
+export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false, guess = false }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -44,6 +44,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   dare?: boolean;
   // Taking your Peekaboo drop photo (2-minute countdown at the top).
   drop?: boolean;
+  // Taking a photo for Guess Who (posted anonymously).
+  guess?: boolean;
 }) {
   const { userId, profile } = useMe();
   const [permission, requestPermission] = useCameraPermissions();
@@ -52,7 +54,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const lastTap = useRef(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const isHome = !sendTo && !dare && !drop;
+  const isHome = !sendTo && !dare && !drop && !guess;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
@@ -83,6 +85,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         ...(sendTo ? { to: sendTo } : {}),
         ...(dare ? { dare: '1' } : {}),
         ...(drop ? { drop: '1' } : {}),
+        ...(guess ? { guess: '1' } : {}),
       },
     });
 
