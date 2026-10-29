@@ -105,6 +105,15 @@ function describe(row: ChatRow, me: string): {
       bold: theyDidIt && !last.opened_at,
     };
   }
+  if (last.kind === 'reaction') {
+    const theyDidIt = last.sender_id !== me;
+    return {
+      icon: 'happy',
+      color: colors.pink,
+      label: theyDidIt ? `Reacted ${last.body} to your story` : `You reacted ${last.body}`,
+      bold: theyDidIt && !last.opened_at,
+    };
+  }
   if (last.kind === 'voice') {
     return { icon: 'mic', color: colors.pink, label: last.sender_id === me ? 'You sent a voice note' : 'Voice note 🎤', bold: false };
   }

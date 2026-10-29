@@ -29,7 +29,13 @@ export type Message = {
   // Voice notes: how long it is, and its waveform (bars from 0 to 100).
   audio_ms: number | null;
   waveform: number[] | null;
+  // Reactions: the story it was for (empty once the story is gone), and – in a chat – a little bit of it to show.
+  story_id: string | null;
+  story?: Pick<MediaFields, 'media_path' | 'media_type' | 'poster_path'> | null;
 };
+
+// The emojis you can send while watching a friend's story.
+export const STORY_REACTIONS = ['😂', '🔥', '😍', '😮', '👀'] as const;
 
 // How long after opening a peek it can still be replayed or saved (same as the database rule).
 const KEEP_AFTER_OPENING_MS = 24 * 60 * 60 * 1000;
@@ -65,7 +71,7 @@ const pairFilter = (me: string, friend: string) =>
 export async function fetchConversation(me: string, friend: string, limit = 100): Promise<Message[]> {
   const { data, error } = await supabase
     .from('messages')
-    .select('*')
+    .select('*, story:stories(media_path, media_type, poster_path)')
     .or(pairFilter(me, friend))
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -99,6 +105,14 @@ export async function sendText(me: string, friend: string, body: string): Promis
     .single();
   if (error) throw error;
   return data as Message;
+}
+
+// A reaction to a friend's story. It shows up in your chat with them.
+export async function sendReaction(me: string, friend: string, emoji: string, storyId: string): Promise<void> {
+  const { error } = await supabase
+    .from('messages')
+    .insert({ sender_id: me, recipient_id: friend, kind: 'reaction', body: emoji, story_id: storyId });
+  if (error) throw error;
 }
 
 // Lets your friend know you took a screenshot of the chat or of their peek.

@@ -470,3 +470,14 @@ Works in Expo Go now. The Android download needs the next new version (voice not
    the waveform fills in and the time counts down. Tap again to pause. Only one plays at a time.
 6. Your friend gets "Sent you a voice note 🎤" (with push on), and the chat list shows "Voice note 🎤".
 7. Hold down on a voice note → Unsend (yours) or Report (theirs).
+
+## Step 28 – Reactions on stories 😂🔥😍😮👀
+
+1. Open a friend's story. At the bottom there's a row: 😂 🔥 😍 😮 👀.
+2. Tap one → a little buzz, a bunch of that emoji floats up the screen, and "Sent 🔥 to Sam" pops up.
+   You can send more than one.
+3. **Your friend's chat with you** now shows a bubble with a tiny picture of the story, the big emoji and
+   "Reacted to your story" (you see "You reacted to Sam's story").
+4. Their chat list says "Reacted 🔥 to your story", and with push on they get the same notification.
+5. On **your own** story you still see "👁 N seen" instead of the emoji row.
+6. Once the story is gone (after 24 hours or deleted), the reaction stays in the chat without the picture.

@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { router, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -45,6 +46,7 @@ import {
   type Message,
 } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
 import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
@@ -319,6 +321,21 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
     );
   }
 
+  if (message.kind === 'reaction') {
+    return (
+      <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+        <Pressable onLongPress={onLongPress} style={[styles.reaction, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+          {message.story ? <StoryThumb story={message.story} /> : null}
+          <Text style={styles.reactionEmoji}>{message.body}</Text>
+          <Text style={[styles.reactionText, mine && styles.bubbleTextMine]}>
+            {mine ? `You reacted to ${friendName || 'their'}'s story` : 'Reacted to your story'}
+          </Text>
+        </Pressable>
+        <Text style={styles.time}>{time}</Text>
+      </View>
+    );
+  }
+
   if (message.kind === 'voice') {
     return (
       <Pressable onLongPress={onLongPress} style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
@@ -377,6 +394,17 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
         {time}
         {status}
       </Text>
+    </View>
+  );
+}
+
+// A tiny picture of the story a reaction was for (while the story is still up).
+function StoryThumb({ story }: { story: NonNullable<Message['story']> }) {
+  const path = story.media_type === 'video' ? story.poster_path : story.media_path;
+  const url = useMediaUrl(path);
+  return (
+    <View style={styles.storyThumb}>
+      {url ? <Image source={{ uri: url, cacheKey: path ?? undefined }} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
     </View>
   );
 }
@@ -501,6 +529,30 @@ const styles = StyleSheet.create({
   },
   bubbleTextMine: {
     color: colors.white,
+  },
+  reaction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.lg,
+  },
+  reactionEmoji: {
+    fontSize: 34,
+  },
+  reactionText: {
+    ...font.small,
+    color: colors.text,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  storyThumb: {
+    width: 36,
+    height: 56,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
   },
   time: {
     ...font.small,

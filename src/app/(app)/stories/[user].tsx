@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,11 +17,13 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { VideoClip } from '@/components/VideoClipSafe';
 import { Avatar } from '@/components/Avatar';
+import { Bouncy } from '@/components/Bouncy';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
+import { sendReaction, STORY_REACTIONS } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { mediaFiles, useMediaUrls } from '@/lib/media';
 import { deleteStory, fetchStoryRing, fetchStoryViewers, markStorySeen, type StoryRing } from '@/lib/stories';
@@ -47,6 +50,8 @@ export default function StoryViewer() {
   const [paused, setPaused] = useState(false);
   const [viewers, setViewers] = useState<{ storyId: string; people: Profile[] } | null>(null);
   const [viewersOpen, setViewersOpen] = useState(false);
+  // The last reaction you sent (its counter restarts the flying-emoji animation).
+  const [burst, setBurst] = useState<{ count: number; emoji: string } | null>(null);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -126,6 +131,19 @@ export default function StoryViewer() {
   useEffect(() => {
     if (nextUrl) Image.prefetch(nextUrl);
   }, [nextUrl]);
+
+  // React to a friend's story: the emoji flies up, and it lands in your chat with them.
+  async function react(emoji: string) {
+    if (!ring || !story) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBurst((current) => ({ count: (current?.count ?? 0) + 1, emoji }));
+    try {
+      await sendReaction(userId, ring.author.id, emoji, story.id);
+      showToast(`Sent ${emoji} to ${ring.author.display_name || ring.author.username}`);
+    } catch (error) {
+      Alert.alert('Could not send your reaction', friendlyError(error));
+    }
+  }
 
   function openMenu() {
     if (!ring || !story) return;
@@ -261,7 +279,23 @@ export default function StoryViewer() {
             <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
           </Pressable>
         </SafeEdge>
-      ) : null}
+      ) : (
+        <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
+          <View style={styles.reactions}>
+            {STORY_REACTIONS.map((emoji) => (
+              <Bouncy
+                key={emoji}
+                style={styles.reactionButton}
+                pressScale={0.75}
+                onPress={() => react(emoji)}
+                accessibilityLabel={`React ${emoji}`}>
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+              </Bouncy>
+            ))}
+          </View>
+        </SafeEdge>
+      )}
+      {burst ? <ReactionBurst key={burst.count} emoji={burst.emoji} /> : null}
 
       <Modal visible={viewersOpen} transparent animationType="slide" onRequestClose={() => setViewersOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setViewersOpen(false)}>
@@ -282,6 +316,34 @@ export default function StoryViewer() {
       </Modal>
     </View>
   );
+}
+
+// A handful of the emoji you tapped float up the screen and fade away.
+function ReactionBurst({ emoji }: { emoji: string }) {
+  return (
+    <View style={styles.burst} pointerEvents="none">
+      {[0, 1, 2, 3, 4, 5].map((index) => (
+        <FloatingEmoji key={index} emoji={emoji} index={index} />
+      ))}
+    </View>
+  );
+}
+
+function FloatingEmoji({ emoji, index }: { emoji: string; index: number }) {
+  const rise = useSharedValue(0);
+  useEffect(() => {
+    rise.set(withTiming(1, { duration: 1100 + index * 120, easing: Easing.out(Easing.quad) }));
+  }, [rise, index]);
+  const drift = (index - 2.5) * 28;
+  const style = useAnimatedStyle(() => ({
+    opacity: 1 - rise.get(),
+    transform: [
+      { translateX: drift * rise.get() },
+      { translateY: -320 * rise.get() - index * 12 },
+      { scale: 0.8 + rise.get() * (index === 0 ? 1.4 : 0.6) },
+    ],
+  }));
+  return <Animated.Text style={[styles.floating, style]}>{emoji}</Animated.Text>;
 }
 
 function ProgressBar({ state, progress }: { state: 'full' | 'current' | 'empty'; progress: SharedValue<number> }) {
@@ -369,6 +431,35 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     paddingBottom: space.lg,
+  },
+  reactions: {
+    flexDirection: 'row',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.overlayStrong,
+  },
+  reactionButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionEmoji: {
+    fontSize: 32,
+  },
+  burst: {
+    position: 'absolute',
+    bottom: 120,
+    alignSelf: 'center',
+    width: 1,
+    height: 1,
+    alignItems: 'center',
+  },
+  floating: {
+    position: 'absolute',
+    fontSize: 44,
   },
   viewersButton: {
     flexDirection: 'row',
