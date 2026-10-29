@@ -1,15 +1,12 @@
 import { supabase } from './supabase';
 import type { Profile, ReportContentType } from './types';
 
+// What you can pick when reporting something. The short code is what's saved.
 export const REPORT_REASONS = [
-  'Bullying or harassment',
-  'Nudity or sexual content',
-  'Hate speech',
-  'Violence or threats',
-  'Spam or scam',
-  'Pretending to be someone else',
-  "They're under 13",
-  'Something else',
+  { code: 'spam', label: 'Spam 🗑️' },
+  { code: 'bullying', label: 'Bullying 😢' },
+  { code: 'nudity', label: 'Nudity 🔞' },
+  { code: 'other', label: 'Something else 🤔' },
 ] as const;
 
 export async function reportContent(params: {

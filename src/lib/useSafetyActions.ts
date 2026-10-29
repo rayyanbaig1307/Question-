@@ -44,14 +44,14 @@ export function useSafetyActions() {
       title: 'Why are you reporting this?',
       message: "Your report is private. They won't know it was you.",
       options: REPORT_REASONS.map((reason) => ({
-        label: reason,
+        label: reason.label,
         onPress: async () => {
           try {
             await reportContent({
               reportedUserId: params.user.id,
               contentType: params.contentType,
               contentId: params.contentId,
-              reason,
+              reason: reason.code,
             });
             Alert.alert('Thanks for telling us 💛', 'We will take a look. Do you also want to block them?', [
               { text: 'Not now', style: 'cancel' },

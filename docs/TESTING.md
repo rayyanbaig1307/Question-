@@ -385,3 +385,15 @@ Where it works:
 6. Hold down on someone else's comment (not your post) → **Report comment**.
 7. With push on: the post owner gets **"Commented: …"**, the person you replied to gets **"Replied: …"**,
    and liking a comment sends **"Liked your comment ❤️"**.
+
+## Step 22 – Report and Delete account 🚩
+
+1. **Report a post:** on Discover tap ••• on someone else's post → **Report post** → pick
+   **Spam / Bullying / Nudity / Something else** → "Thanks for telling us 💛" (you can also block them).
+2. **Report a story:** open a friend's story → ••• → **Report story** → pick a reason.
+3. **Report a comment:** hold down on someone else's comment → **Report comment** → pick a reason.
+4. Reports are saved privately (the person never finds out). They show up in Supabase → Table editor →
+   **reports** (reason = spam / bullying / nudity / other).
+5. **Delete account** (try with a test account!): Settings → **Delete account** → confirm twice. You're logged
+   out, and the account, its photos, videos, posts, stories, chats, comments and likes are gone for good.
+   Logging in with it again says the login is wrong.
