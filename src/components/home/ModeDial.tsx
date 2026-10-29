@@ -3,9 +3,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import {
-  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -28,10 +30,11 @@ export const CAMERA_MODES: { key: CameraMode; emoji: string; label: string }[] =
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
 
-// Each mode chip is this wide, so the dial can snap one chip at a time and keep the chosen one in the middle.
-const CHIP_WIDTH = 104;
+// Every mode gets the same amount of room, so they sit evenly spaced with the chosen one in the middle.
+const SLOT_WIDTH = 96;
 
-// The row of modes above the shutter. Swipe it left or right; the one in the middle is what you'll post.
+// The row of modes above the shutter, like the mode row on other camera apps: plain words over the camera,
+// the chosen one bright and in the middle. Swipe it left or right, or tap a mode.
 // A pink dot on a mode means there's something waiting for you there (today's dare not done, a drop to post).
 export function ModeDial({ mode, onChange, dots }: {
   mode: CameraMode;
@@ -39,14 +42,14 @@ export function ModeDial({ mode, onChange, dots }: {
   dots?: Partial<Record<CameraMode, boolean>>;
 }) {
   const { width } = useWindowDimensions();
-  const list = useRef<FlatList<(typeof CAMERA_MODES)[number]>>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const index = CAMERA_MODES.findIndex((item) => item.key === mode);
-  // So the first and last chips can still sit in the middle of the screen.
-  const sidePadding = (width - CHIP_WIDTH) / 2;
+  // Empty room on both sides, so the first and last modes can sit in the middle of the screen too.
+  const sidePadding = (width - SLOT_WIDTH) / 2;
 
-  // Picked from somewhere else (e.g. a tap on a chip): glide the dial to it.
+  // Picked from somewhere else (e.g. a tap on a mode): glide the row so it's in the middle.
   useEffect(() => {
-    list.current?.scrollToOffset({ offset: index * CHIP_WIDTH, animated: true });
+    scroll.current?.scrollTo({ x: index * SLOT_WIDTH, animated: true });
   }, [index]);
 
   function pick(next: CameraMode) {
@@ -55,50 +58,46 @@ export function ModeDial({ mode, onChange, dots }: {
     onChange(next);
   }
 
-  // When the dial stops moving, whichever chip is closest to the middle wins.
+  // When the row stops moving, whichever mode is closest to the middle wins.
   function settled(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const at = Math.round(event.nativeEvent.contentOffset.x / CHIP_WIDTH);
-    const next = CAMERA_MODES[Math.max(0, Math.min(CAMERA_MODES.length - 1, at))];
-    pick(next.key);
+    const at = Math.round(event.nativeEvent.contentOffset.x / SLOT_WIDTH);
+    pick(CAMERA_MODES[Math.max(0, Math.min(CAMERA_MODES.length - 1, at))].key);
   }
 
   return (
-    <FlatList
-      ref={list}
+    <ScrollView
+      ref={scroll}
       horizontal
-      data={CAMERA_MODES}
-      keyExtractor={(item) => item.key}
       showsHorizontalScrollIndicator={false}
-      // Swiping sideways here moves the dial, not the Chat / Camera / Home pages underneath.
+      // Swiping sideways here moves the row, not the Chat / Camera / Home pages underneath.
       nestedScrollEnabled
-      snapToInterval={CHIP_WIDTH}
+      snapToInterval={SLOT_WIDTH}
       decelerationRate="fast"
-      initialScrollIndex={index}
-      getItemLayout={(_, i) => ({ length: CHIP_WIDTH, offset: CHIP_WIDTH * i, index: i })}
+      contentOffset={{ x: index * SLOT_WIDTH, y: 0 }}
       contentContainerStyle={{ paddingHorizontal: sidePadding }}
       onMomentumScrollEnd={settled}
-      style={styles.dial}
-      renderItem={({ item }) => {
+      style={styles.dial}>
+      {CAMERA_MODES.map((item) => {
         const active = item.key === mode;
         return (
-          <View style={styles.slot}>
-            <Bouncy
-              style={[styles.chip, active && styles.chipActive]}
-              pressScale={0.92}
-              onPress={() => pick(item.key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${item.label} mode`}>
-              <Text style={styles.chipEmoji}>{item.emoji}</Text>
-              <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                {item.label}
+          <Pressable
+            key={item.key}
+            style={styles.slot}
+            onPress={() => pick(item.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${item.label} mode`}>
+            <View>
+              <Text style={[styles.modeText, active && styles.modeTextActive]} numberOfLines={1}>
+                {item.emoji} {item.label}
               </Text>
               {dots?.[item.key] ? <View style={styles.dot} /> : null}
-            </Bouncy>
-          </View>
+            </View>
+            <View style={[styles.marker, active && styles.markerActive]} />
+          </Pressable>
         );
-      }}
-    />
+      })}
+    </ScrollView>
   );
 }
 
@@ -182,42 +181,40 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   slot: {
-    width: CHIP_WIDTH,
+    width: SLOT_WIDTH,
     alignItems: 'center',
+    gap: 5,
+    paddingVertical: space.xs,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: space.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  chipActive: {
-    backgroundColor: colors.white,
-  },
-  chipEmoji: {
-    fontSize: 16,
-  },
-  chipText: {
-    color: colors.white,
+  modeText: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 13,
     fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowRadius: 4,
   },
-  chipTextActive: {
-    color: colors.black,
+  modeTextActive: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  marker: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'transparent',
+  },
+  markerActive: {
+    backgroundColor: colors.white,
   },
   dot: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    top: -3,
+    right: -9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.pink,
-    borderWidth: 2,
-    borderColor: colors.white,
   },
   caption: {
     alignSelf: 'center',
