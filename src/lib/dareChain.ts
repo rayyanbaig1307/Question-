@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Share } from 'react-native';
 
 import { dareFor, todayDareDay } from './dares';
+import { fetchFriends } from './friends';
 import { withAppLink } from './invite';
 import { supabase } from './supabase';
 import type { Profile } from './types';
@@ -130,4 +131,53 @@ export async function fetchForfeits(): Promise<Forfeit[]> {
 export async function giveForfeit(nominationId: string, key: string): Promise<void> {
   const { error } = await supabase.rpc('give_forfeit', { nomination: nominationId, choice: key });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Dare streaks 🔥: you and a friend both do the daily dare, day after day.
+// ---------------------------------------------------------------------------
+
+export type Streak = {
+  friend: Profile;
+  // Days in a row you've both done the dare (counting today if you both have, else up to yesterday).
+  streak: number;
+  me_today: boolean;
+  them_today: boolean;
+};
+
+// Streaks with every friend, biggest first (friends with no streak and nothing today are left out).
+export async function fetchDareStreaks(me: string): Promise<Streak[]> {
+  const [{ data, error }, friends] = await Promise.all([supabase.rpc('dare_streaks'), fetchFriends(me)]);
+  if (error) throw error;
+  const byId = new Map(friends.map((friend) => [friend.id, friend]));
+  const rows = (data ?? []) as { friend_id: string; streak: number; me_today: boolean; them_today: boolean }[];
+  return rows
+    .flatMap((row) => {
+      const friend = byId.get(row.friend_id);
+      return friend ? [{ friend, streak: row.streak, me_today: row.me_today, them_today: row.them_today }] : [];
+    })
+    .filter((s) => s.streak > 0 || s.them_today)
+    .sort((a, b) => b.streak - a.streak);
+}
+
+// A streak is "at risk" when it's alive from yesterday but you haven't done today's dare yet.
+export const streakAtRisk = (s: Streak) => s.streak > 0 && !s.me_today;
+
+// The best streak you're about to lose today, as a one-line nudge for the camera. `null` = nothing at risk.
+export function useStreakNudge(me: string, enabled: boolean): string | null {
+  const [nudge, setNudge] = useState<{ day: string; text: string | null } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const day = todayDareDay();
+    fetchDareStreaks(me)
+      .then((streaks) => {
+        const best = streaks.find(streakAtRisk);
+        setNudge({
+          day,
+          text: best ? `🔥 Keep your ${best.streak}-day streak with ${best.friend.display_name || best.friend.username}` : null,
+        });
+      })
+      .catch(() => {});
+  }, [me, enabled]);
+  return nudge?.day === todayDareDay() ? nudge.text : null;
 }

@@ -11,13 +11,16 @@ import { Avatar } from '@/components/Avatar';
 import { useMe } from '@/lib/auth';
 import {
   fetchDareChain,
+  fetchDareStreaks,
   fetchForfeits,
   MAX_DARES_PER_DAY,
   nominationState,
+  streakAtRisk,
   timeLeft,
   type DareChain,
   type Forfeit,
   type Nomination,
+  type Streak,
 } from '@/lib/dareChain';
 import { DARE_RULES, dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
 import type { PostWithAuthor } from '@/lib/types';
@@ -32,19 +35,23 @@ export default function DareScreen() {
   const [chain, setChain] = useState<DareChain>({ received: [], sent: [] });
   // Forfeits you owe and forfeits you handed out.
   const [forfeits, setForfeits] = useState<Forfeit[]>([]);
+  // Streaks with friends: days in a row you both did the dare.
+  const [streaks, setStreaks] = useState<Streak[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const dare = dareFor(day);
 
   const load = useCallback(async () => {
     try {
-      const [list, loadedChain, loadedForfeits] = await Promise.all([
+      const [list, loadedChain, loadedForfeits, loadedStreaks] = await Promise.all([
         fetchDarePosts(day),
         fetchDareChain(userId, day).catch(() => null),
         fetchForfeits().catch(() => null),
+        fetchDareStreaks(userId).catch(() => null),
       ]);
       setPosts({ day, list });
       if (loadedChain) setChain(loadedChain);
       if (loadedForfeits) setForfeits(loadedForfeits);
+      if (loadedStreaks) setStreaks(loadedStreaks);
     } catch (error) {
       console.warn('Could not load dare posts', error);
       setPosts((current) => current ?? { day, list: [] });
@@ -89,6 +96,34 @@ export default function DareScreen() {
         <Text style={styles.rules}>{DARE_RULES}</Text>
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
+
+      {/* Streaks: you and a friend both doing the dare, day after day */}
+      {streaks.length > 0 ? (
+        <View style={styles.chainBox}>
+          <Text style={styles.chainTitle}>🔥 Dare streaks</Text>
+          {streaks.map((s) => {
+            const name = s.friend.display_name || s.friend.username;
+            const status =
+              s.me_today && s.them_today
+                ? '✅ Both done today'
+                : s.me_today
+                  ? `⏳ ${name} still has to`
+                  : s.them_today
+                    ? streakAtRisk(s) ? '⚠️ Your turn – or it ends' : `⏳ Your turn`
+                    : streakAtRisk(s) ? '⚠️ Both of you, today' : '⏳ Both still to do';
+            return (
+              <Pressable key={s.friend.id} style={styles.chainRow} onPress={() => router.push(`/profile/${s.friend.id}`)}>
+                <Avatar path={s.friend.avatar_path} name={name} size={36} />
+                <Text style={styles.chainName} numberOfLines={1}>
+                  {s.streak > 0 ? `🔥 ${s.streak} with ${name}` : `${name} did today's – match it to start a streak`}
+                </Text>
+                <Text style={[styles.chainStatus, s.me_today && s.them_today && styles.chainDone]}>{status}</Text>
+              </Pressable>
+            );
+          })}
+          <Text style={styles.chainHint}>A streak counts every day you BOTH do the dare. Miss a day and it&apos;s back to zero.</Text>
+        </View>
+      ) : null}
 
       {/* Dares you were given: who dared you and how long you've got */}
       {chain.received.length > 0 ? (

@@ -684,3 +684,12 @@ it today, ask the chat to shorten one in the database (or wait a day).
 4. The post shows on B's profile and in Home with a purple **💀 Forfeit · …** tag. A gets a push "💀 Forfeit paid"
    and on A's Dare screen it says **✅ Paid** (tap to see the post).
 5. You can't pick a forfeit early, for someone who did the dare, twice, or pay the same one twice.
+
+## Step 38 – Dare streaks 🔥
+
+Use 2 friend accounts (A and B).
+1. Both do today's dare. On both Dare screens a **🔥 Dare streaks** box appears: "🔥 1 with B · ✅ Both done today".
+2. Tomorrow, if only A does it: A sees "🔥 1 with B · ⏳ B still has to"; B's camera (Dare mode) shows
+   "🔥 Keep your 1-day streak with A" under the dare, and B's Dare screen says "⚠️ Your turn – or it ends".
+3. Both do it → 🔥 2. Miss a day (either of you) → back to 0 and the row disappears until you both do one again.
+4. Streaks are worked out from your dare posts, so deleting a dare post can lower a streak.

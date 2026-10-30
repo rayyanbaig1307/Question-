@@ -21,7 +21,7 @@ import { DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
-import { timeLeft, useOpenDaresForMe } from '@/lib/dareChain';
+import { timeLeft, useOpenDaresForMe, useStreakNudge } from '@/lib/dareChain';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
 import { useIncomingRequestCount } from '@/lib/friends';
@@ -76,10 +76,14 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const dropStatus = useDropStatus();
   // Friends who dared you today (and the clock's still ticking).
   const openDares = useOpenDaresForMe(userId, active && isHome);
+  // …or a streak with a friend that ends today unless you do the dare.
+  const streakNudge = useStreakNudge(userId, active && isHome);
   const dareNudge =
     openDares && openDares.length > 0 && dareDone === false
       ? `😈 ${openDares[0].from.display_name || openDares[0].from.username}${openDares.length > 1 ? ` +${openDares.length - 1}` : ''} dared you · ${timeLeft(openDares[0])}`
-      : null;
+      : dareDone === false
+        ? streakNudge
+        : null;
   const dareOn = dare || (isHome && homeMode === 'dare');
   const dropOn = drop || (isHome && homeMode === 'drop');
   const guessOn = guess || (isHome && homeMode === 'guess');
