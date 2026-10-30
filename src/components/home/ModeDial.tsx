@@ -16,7 +16,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Bouncy } from '@/components/Bouncy';
-import { dareFor, todayDareDay } from '@/lib/dares';
+import { todayDareDay, useDare } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { colors, gradients, radius, space } from '@/theme';
 
@@ -117,10 +117,10 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   dareNudge?: string | null;
 }) {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
+  const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
 
   if (mode === 'dare') {
-    const dare = dareFor(todayDareDay());
     return (
       <Bouncy
         style={styles.caption}

@@ -16,7 +16,7 @@ import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { resizePhoto, type Capture } from '@/lib/media';
-import { dareFor, todayDareDay } from '@/lib/dares';
+import { todayDareDay, useDare } from '@/lib/dares';
 import { lateLabel } from '@/lib/drop';
 import { postMystery } from '@/lib/guess';
 import { createPost } from '@/lib/posts';
@@ -50,6 +50,7 @@ export default function Share() {
   const { userId } = useMe();
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
+  const todaysDare = useDare(todayDareDay());
 
   const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess && !fromForfeit);
   const [toForfeit, setToForfeit] = useState(fromForfeit);
@@ -199,7 +200,7 @@ export default function Share() {
           <Option
             emoji="🎯"
             title="Today's dare"
-            subtitle={`"${dareFor(todayDareDay()).text}" · everyone sees it on the Dare page`}
+            subtitle={`"${todaysDare.text}" · everyone sees it on the Dare page`}
             selected={toDare}
             onPress={() => toggle(setToDare, !toDare)}
           />

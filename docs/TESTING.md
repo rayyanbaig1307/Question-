@@ -693,3 +693,15 @@ Use 2 friend accounts (A and B).
    "🔥 Keep your 1-day streak with A" under the dare, and B's Dare screen says "⚠️ Your turn – or it ends".
 3. Both do it → 🔥 2. Miss a day (either of you) → back to 0 and the row disappears until you both do one again.
 4. Streaks are worked out from your dare posts, so deleting a dare post can lower a streak.
+
+## Step 39 – Community dares 💡
+
+1. Dare screen → **💡 Suggest a dare · vote on ideas** → the Ideas screen. Type an idea (10–120 letters) → **Suggest**.
+   One idea a day each. Dangerous words (fire, knife, roof, alcohol, nudity…) are refused by the database with
+   "Keep it silly, not dangerous".
+2. Everyone sees the ideas under **Top** / **New** with the suggester's @name. Tap 🔥 to vote (tap again to take it back).
+   ••• on someone's idea → **Report** (3 reports from different people hide it); on your own → **Delete**.
+3. At the next dare change (10:00 UTC), the top idea with **at least 3 🔥** that hasn't run yet becomes everyone's
+   dare: the Dare screen card says **💡 COMMUNITY DARE · by @name**, and the camera's Dare mode shows it too.
+   Dare posts from that day get a tag "🎯 Dare … · by @name".
+4. No idea with 3 votes → the built-in list runs as usual. An idea only ever runs once.

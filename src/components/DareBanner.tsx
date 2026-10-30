@@ -16,7 +16,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Bouncy } from '@/components/Bouncy';
-import { dareFor, todayDareDay } from '@/lib/dares';
+import { todayDareDay, useDare } from '@/lib/dares';
 import { colors, gradients, radius, space } from '@/theme';
 
 // How long the banner stays before sliding away by itself.
@@ -29,7 +29,7 @@ export function DareBanner({ onPress, onDismiss }: {
   onPress?: () => void;
   onDismiss: () => void;
 }) {
-  const dare = dareFor(todayDareDay());
+  const dare = useDare(todayDareDay());
   const lift = useSharedValue(0);
   const speed = useSharedValue(0);
 
@@ -97,7 +97,7 @@ export function DareBanner({ onPress, onDismiss }: {
 // A pink dot means you haven't done today's dare yet; a ✅ means you have.
 // `compact` is the small "🎯 Dare" chip for the home camera, so the screen stays clean.
 export function DarePill({ done, compact = false }: { done: boolean | null; compact?: boolean }) {
-  const dare = dareFor(todayDareDay());
+  const dare = useDare(todayDareDay());
   return (
     <Bouncy
       style={[styles.pill, compact && styles.pillCompact]}
@@ -137,6 +137,7 @@ export function ForfeitTag({ text }: { text: string }) {
 // Tapping it on today's dare opens the Dare screen.
 export function DareTag({ day }: { day: string }) {
   const isToday = day === todayDareDay();
+  const dare = useDare(day);
   return (
     <Bouncy
       style={styles.tag}
@@ -145,7 +146,8 @@ export function DareTag({ day }: { day: string }) {
       accessibilityRole={isToday ? 'button' : 'text'}>
       <Text style={styles.tagText} numberOfLines={2}>
         <Text style={styles.tagLabel}>🎯 Dare </Text>
-        {dareFor(day).text}
+        {dare.text}
+        {dare.author ? <Text style={styles.tagAuthor}> · by {dare.author}</Text> : null}
       </Text>
     </Bouncy>
   );
@@ -173,6 +175,10 @@ const styles = StyleSheet.create({
   tagLabel: {
     color: colors.accent,
     fontWeight: '900',
+  },
+  tagAuthor: {
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   pill: {
     flexDirection: 'row',

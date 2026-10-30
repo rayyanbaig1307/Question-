@@ -1,7 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { supabase } from './supabase';
 import type { PostWithAuthor } from './types';
+
+// Community dares that replaced the built-in dare on a given day (filled in by lib/communityDares).
+// Screens that show a dare use `useDare(day)`, so they redraw the moment one arrives.
+const overrides = new Map<string, { text: string; author: string }>();
+const listeners = new Set<() => void>();
+let version = 0;
+
+export function setDareOverride(day: string, dare: { text: string; author: string }) {
+  const current = overrides.get(day);
+  if (current && current.text === dare.text && current.author === dare.author) return;
+  overrides.set(day, dare);
+  version += 1;
+  listeners.forEach((listener) => listener());
+}
+
+export function allDareOverrides(): Record<string, { text: string; author: string }> {
+  return Object.fromEntries(overrides);
+}
 
 // One dare per day, the same for everyone. Bold, messy and funny – but never actually dangerous.
 // The list is a year long, so a dare only comes round again after 365 days.
@@ -407,11 +425,33 @@ export function todayDareDay(now = Date.now()): string {
   return new Date(now - NEW_DARE_HOUR_UTC * HOUR).toISOString().slice(0, 10);
 }
 
-// The dare for a given day: its number in the list and the text.
-export function dareFor(day: string): { number: number; text: string } {
+export type Dare = {
+  number: number;
+  text: string;
+  // Set when a community idea ran that day: the @username of whoever suggested it.
+  author?: string;
+};
+
+// The dare for a given day: a community dare if one ran, otherwise its number in the list and the text.
+export function dareFor(day: string): Dare {
   const daysSince1970 = Math.round(Date.parse(`${day}T00:00:00Z`) / DAY);
   const index = ((daysSince1970 % DARES.length) + DARES.length) % DARES.length;
+  const override = overrides.get(day);
+  if (override) return { number: index + 1, text: override.text, author: override.author };
   return { number: index + 1, text: DARES[index] };
+}
+
+// The same, for screens: redraws when a community dare for that day shows up.
+export function useDare(day: string): Dare {
+  // Subscribing here makes the screen redraw whenever an override arrives.
+  useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    () => version,
+  );
+  return dareFor(day);
 }
 
 // When the next dare starts after the given dare day (in milliseconds since 1970).

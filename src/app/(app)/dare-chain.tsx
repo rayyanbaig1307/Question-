@@ -10,7 +10,7 @@ import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { dareFriends, fetchDareChain, inviteToDare, MAX_DARES_PER_DAY } from '@/lib/dareChain';
-import { dareFor, todayDareDay } from '@/lib/dares';
+import { todayDareDay, useDare } from '@/lib/dares';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import type { Profile } from '@/lib/types';
@@ -21,7 +21,7 @@ export default function DareChain() {
   const { post } = useLocalSearchParams<{ post?: string }>();
   const { userId, profile } = useMe();
   const { showToast } = useOverlays();
-  const dare = dareFor(todayDareDay());
+  const dare = useDare(todayDareDay());
   const [friends, setFriends] = useState<Profile[] | null>(null);
   // Friends you already dared today (can't be dared twice).
   const [alreadyDared, setAlreadyDared] = useState<Set<string>>(new Set());

@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
 import { useAuth } from '@/lib/auth';
+import { syncCommunityDares } from '@/lib/communityDares';
 import { useShareLocationWhileOpen } from '@/lib/location';
 import { fetchNotificationPrefs } from '@/lib/notificationPrefs';
 import { registerForPush, scheduleDropNotifications, useNotificationTaps } from '@/lib/notifications';
@@ -23,6 +24,12 @@ export default function AppLayout() {
       .finally(() => registerForPush());
   }, [userId]);
   useNotificationTaps(true);
+
+  // Today's dare might be a community one: find out as soon as you're in (and keep last month's for old posts).
+  useEffect(() => {
+    if (!userId) return;
+    syncCommunityDares().catch((error) => console.warn('Could not load community dares', error));
+  }, [userId]);
 
   return (
     <Stack

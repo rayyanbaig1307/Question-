@@ -22,7 +22,8 @@ import {
   type Nomination,
   type Streak,
 } from '@/lib/dareChain';
-import { DARE_RULES, dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
+import { syncCommunityDares } from '@/lib/communityDares';
+import { DARE_RULES, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay, useDare } from '@/lib/dares';
 import type { PostWithAuthor } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
 
@@ -38,16 +39,20 @@ export default function DareScreen() {
   // Streaks with friends: days in a row you both did the dare.
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const dare = dareFor(day);
+  const dare = useDare(day);
 
   const load = useCallback(async () => {
     try {
       const [list, loadedChain, loadedForfeits, loadedStreaks] = await Promise.all([
         fetchDarePosts(day),
+        // (also asks for today's community dare, in case one just got picked)
+        syncCommunityDares().catch(() => null).then(() => null),
+      ]).then(([list]) => Promise.all([
+        Promise.resolve(list),
         fetchDareChain(userId, day).catch(() => null),
         fetchForfeits().catch(() => null),
         fetchDareStreaks(userId).catch(() => null),
-      ]);
+      ]));
       setPosts({ day, list });
       if (loadedChain) setChain(loadedChain);
       if (loadedForfeits) setForfeits(loadedForfeits);
@@ -84,7 +89,7 @@ export default function DareScreen() {
   const header = (
     <View style={styles.header}>
       <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
-        <Text style={styles.label}>🎯 DARE #{dare.number} · TODAY</Text>
+        <Text style={styles.label}>{dare.author ? `💡 COMMUNITY DARE · by ${dare.author}` : `🎯 DARE #${dare.number} · TODAY`}</Text>
         <Text style={styles.dare}>{dare.text}</Text>
         <Countdown day={day} onNewDare={() => setDay(todayDareDay())} />
         <Button
@@ -96,6 +101,9 @@ export default function DareScreen() {
         <Text style={styles.rules}>{DARE_RULES}</Text>
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
+
+      {/* Community dares: suggest one, vote, and the top one becomes everyone's dare with your name on it */}
+      <Button title="💡 Suggest a dare · vote on ideas" variant="secondary" onPress={() => router.push('/dare-ideas')} />
 
       {/* Streaks: you and a friend both doing the dare, day after day */}
       {streaks.length > 0 ? (
