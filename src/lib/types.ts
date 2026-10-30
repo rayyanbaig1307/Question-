@@ -41,6 +41,9 @@ export type Post = MediaFields & {
   drop_day: string | null;
   drop_late_seconds: number | null;
   blur_path: string | null;
+  // Set when this post pays a forfeit (a dare that ran out of time); the words are copied here.
+  forfeit_id?: string | null;
+  forfeit_text?: string | null;
   audience?: Audience;
   created_at: string;
   // Asked for along with a drop post: true while a Group Peek you share with them is still waiting on someone.

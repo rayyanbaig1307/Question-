@@ -9,7 +9,16 @@ import { PostGrid } from '@/components/PostGrid';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Avatar } from '@/components/Avatar';
 import { useMe } from '@/lib/auth';
-import { fetchDareChain, MAX_DARES_PER_DAY, nominationState, timeLeft, type DareChain, type Nomination } from '@/lib/dareChain';
+import {
+  fetchDareChain,
+  fetchForfeits,
+  MAX_DARES_PER_DAY,
+  nominationState,
+  timeLeft,
+  type DareChain,
+  type Forfeit,
+  type Nomination,
+} from '@/lib/dareChain';
 import { DARE_RULES, dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
 import type { PostWithAuthor } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
@@ -21,14 +30,21 @@ export default function DareScreen() {
   const [posts, setPosts] = useState<{ day: string; list: PostWithAuthor[] } | null>(null);
   // Dares you were given and dares you gave today.
   const [chain, setChain] = useState<DareChain>({ received: [], sent: [] });
+  // Forfeits you owe and forfeits you handed out.
+  const [forfeits, setForfeits] = useState<Forfeit[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const dare = dareFor(day);
 
   const load = useCallback(async () => {
     try {
-      const [list, loadedChain] = await Promise.all([fetchDarePosts(day), fetchDareChain(userId, day).catch(() => null)]);
+      const [list, loadedChain, loadedForfeits] = await Promise.all([
+        fetchDarePosts(day),
+        fetchDareChain(userId, day).catch(() => null),
+        fetchForfeits().catch(() => null),
+      ]);
       setPosts({ day, list });
       if (loadedChain) setChain(loadedChain);
+      if (loadedForfeits) setForfeits(loadedForfeits);
     } catch (error) {
       console.warn('Could not load dare posts', error);
       setPosts((current) => current ?? { day, list: [] });
@@ -53,6 +69,10 @@ export default function DareScreen() {
   const doTheDare = () => router.push({ pathname: '/camera', params: { dare: '1' } });
   const openForMe = chain.received.filter((n) => nominationState(n) === 'open');
   const canDareMore = iDidIt && chain.sent.length < MAX_DARES_PER_DAY;
+  const forfeitFor = (n: Nomination) => forfeits.find((f) => f.nomination_id === n.id) ?? null;
+  const iOwe = forfeits.filter((f) => f.to_user === userId && !f.done_at);
+  const iGave = forfeits.filter((f) => f.from_user === userId);
+  const payForfeit = (f: Forfeit) => router.push({ pathname: '/camera', params: { forfeit: f.id, ftext: f.forfeit_text } });
 
   const header = (
     <View style={styles.header}>
@@ -83,12 +103,50 @@ export default function DareScreen() {
         </View>
       ) : null}
 
+      {/* Forfeits: what you owe (pay it with a photo) and what friends owe you */}
+      {iOwe.length > 0 || iGave.length > 0 ? (
+        <View style={styles.chainBox}>
+          <Text style={styles.chainTitle}>💀 Forfeits</Text>
+          {iOwe.map((f) => (
+            <View key={f.id} style={styles.forfeitRow}>
+              <Text style={styles.forfeitText}>
+                You owe {f.from.display_name || f.from.username}: {f.forfeit_text}
+              </Text>
+              <Button title="Pay it 📸" small onPress={() => payForfeit(f)} />
+            </View>
+          ))}
+          {iGave.map((f) => (
+            <Pressable
+              key={f.id}
+              style={styles.chainRow}
+              disabled={!f.done_post_id}
+              onPress={() => router.push(`/post/${f.done_post_id}`)}
+              accessibilityLabel={`${f.to.display_name || f.to.username} owes you: ${f.forfeit_text}`}>
+              <Avatar path={f.to.avatar_path} name={f.to.display_name || f.to.username} size={36} />
+              <Text style={styles.chainName} numberOfLines={2}>
+                {f.to.display_name || f.to.username} owes you: {f.forfeit_text}
+              </Text>
+              <Text style={[styles.chainStatus, f.done_at && styles.chainDone]}>{f.done_at ? '✅ Paid' : '⏳ Owes'}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       {/* Dares you gave, and the button to give more */}
       {chain.sent.length > 0 || canDareMore ? (
         <View style={styles.chainBox}>
           <Text style={styles.chainTitle}>🔗 Your dare chain</Text>
           {chain.sent.map((n) => (
-            <ChainRow key={n.id} person={n.to} nomination={n} mine />
+            <ChainRow
+              key={n.id}
+              person={n.to}
+              nomination={n}
+              mine
+              forfeit={forfeitFor(n)}
+              onPickForfeit={() =>
+                router.push({ pathname: '/forfeit/[nomination]', params: { nomination: n.id, name: n.to.display_name || n.to.username } })
+              }
+            />
           ))}
           {canDareMore ? (
             <Button
@@ -130,19 +188,40 @@ export default function DareScreen() {
 }
 
 // One person in your dare chain: who, and where their dare stands (ticking clock, done, or ran out).
-function ChainRow({ person, nomination, mine }: { person: Nomination['from']; nomination: Nomination; mine: boolean }) {
+function ChainRow({ person, nomination, mine, forfeit = null, onPickForfeit }: {
+  person: Nomination['from'];
+  nomination: Nomination;
+  mine: boolean;
+  // The forfeit already picked for this dare, if any.
+  forfeit?: Forfeit | null;
+  onPickForfeit?: () => void;
+}) {
   const state = nominationState(nomination);
   const name = person.display_name || person.username;
   const status =
-    state === 'done' ? '✅ Did it' : state === 'open' ? `⏳ ${timeLeft(nomination)}` : mine ? '💀 Ran out of time' : '💀 You ran out of time';
+    state === 'done'
+      ? '✅ Did it'
+      : state === 'open'
+        ? `⏳ ${timeLeft(nomination)}`
+        : forfeit
+          ? '💀 Forfeit'
+          : mine
+            ? '💀 Ran out of time'
+            : '💀 You ran out of time';
   return (
-    <Pressable style={styles.chainRow} onPress={() => router.push(`/profile/${person.id}`)} accessibilityLabel={`${name}: ${status}`}>
-      <Avatar path={person.avatar_path} name={name} size={36} />
-      <Text style={styles.chainName} numberOfLines={1}>
-        {mine ? `You dared ${name}` : `${name} dared you`}
-      </Text>
-      <Text style={[styles.chainStatus, state === 'done' && styles.chainDone, state === 'expired' && styles.chainExpired]}>{status}</Text>
-    </Pressable>
+    <View style={styles.chainRow}>
+      <Pressable style={styles.chainPerson} onPress={() => router.push(`/profile/${person.id}`)} accessibilityLabel={`${name}: ${status}`}>
+        <Avatar path={person.avatar_path} name={name} size={36} />
+        <Text style={styles.chainName} numberOfLines={1}>
+          {mine ? `You dared ${name}` : `${name} dared you`}
+        </Text>
+      </Pressable>
+      {mine && state === 'expired' && !forfeit && onPickForfeit ? (
+        <Button title="Pick a forfeit 💀" small variant="secondary" onPress={onPickForfeit} />
+      ) : (
+        <Text style={[styles.chainStatus, state === 'done' && styles.chainDone, state === 'expired' && styles.chainExpired]}>{status}</Text>
+      )}
+    </View>
   );
 }
 
@@ -216,9 +295,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.sm,
   },
+  chainPerson: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
   chainName: {
     ...font.body,
     flex: 1,
+    fontWeight: '700',
+  },
+  forfeitRow: {
+    gap: space.sm,
+    paddingVertical: space.xs,
+  },
+  forfeitText: {
+    ...font.body,
     fontWeight: '700',
   },
   chainStatus: {

@@ -87,3 +87,47 @@ export function useOpenDaresForMe(me: string, enabled: boolean): Nomination[] | 
   }, [me, enabled]);
   return open?.day === todayDareDay() ? open.list : null;
 }
+
+// ---------------------------------------------------------------------------
+// Forfeits 💀: a dare that ran out of time → the friend who dared you picks one from a safe list.
+// ---------------------------------------------------------------------------
+
+export type ForfeitOption = { key: string; text: string; position: number };
+
+export type Forfeit = {
+  id: string;
+  nomination_id: string;
+  from_user: string;
+  to_user: string;
+  forfeit_key: string;
+  forfeit_text: string;
+  created_at: string;
+  done_post_id: string | null;
+  done_at: string | null;
+  from: Profile;
+  to: Profile;
+};
+
+export async function fetchForfeitOptions(): Promise<ForfeitOption[]> {
+  const { data, error } = await supabase.from('forfeit_options').select('*').order('position');
+  if (error) throw error;
+  return (data ?? []) as ForfeitOption[];
+}
+
+// Forfeits you owe and forfeits you handed out (open ones first, then the last week's paid ones).
+export async function fetchForfeits(): Promise<Forfeit[]> {
+  const since = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+  const { data, error } = await supabase
+    .from('forfeits')
+    .select('*, from:profiles!forfeits_from_user_fkey(*), to:profiles!forfeits_to_user_fkey(*)')
+    .or(`done_at.is.null,created_at.gte.${since}`)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Forfeit[];
+}
+
+// Pick a forfeit for a friend whose dare ran out of time.
+export async function giveForfeit(nominationId: string, key: string): Promise<void> {
+  const { error } = await supabase.rpc('give_forfeit', { nomination: nominationId, choice: key });
+  if (error) throw error;
+}

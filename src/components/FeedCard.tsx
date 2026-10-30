@@ -18,7 +18,7 @@ import Animated, {
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
-import { DareTag } from '@/components/DareBanner';
+import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
@@ -280,6 +280,7 @@ export function FeedCard({
         </Pressable>
       ) : null}
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
+      {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
       {post.caption ? (
         <Text style={styles.caption}>
           <Text style={styles.captionName}>{name} </Text>

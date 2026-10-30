@@ -670,3 +670,17 @@ Use 2 test accounts that are friends (A and B).
    "You dared B ✅", plus **Dare more friends (2 left)**.
 4. You can only dare after doing the dare yourself, only friends, max 3 a day, and not someone who already did it.
 5. If B doesn't do it within 24 hours it shows **💀 Ran out of time** (forfeits come in the next step).
+
+## Step 37 – Forfeits 💀
+
+Use the 2 friend test accounts from Step 36. A dare only becomes a forfeit after the 24 hours run out, so to test
+it today, ask the chat to shorten one in the database (or wait a day).
+1. **A** dared **B** and B didn't do it in time. On A's Dare screen, under **🔗 Your dare chain**, B's row now shows
+   **Pick a forfeit 💀** → a list of 40 forfeits (nobody can type their own) → tap one → **Give this one**.
+2. **B** gets a push "💀 You owe a forfeit – A picked yours: …". B's Dare screen shows **💀 Forfeits · You owe A: …**
+   with **Pay it 📸**.
+3. **Pay it 📸** opens the camera with "💀 YOUR FORFEIT" at the top. Snap → **Send to…** has **💀 Pay my forfeit**
+   ticked → **Send** → "Forfeit paid 💀✅ Respect."
+4. The post shows on B's profile and in Home with a purple **💀 Forfeit · …** tag. A gets a push "💀 Forfeit paid"
+   and on A's Dare screen it says **✅ Paid** (tap to see the post).
+5. You can't pick a forfeit early, for someone who did the dare, twice, or pay the same one twice.

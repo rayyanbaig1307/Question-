@@ -10,7 +10,7 @@ export async function createPost(
   userId: string,
   capture: Capture,
   caption: string,
-  options: { dare?: boolean; drop?: boolean; audience?: Audience } = {},
+  options: { dare?: boolean; drop?: boolean; forfeit?: string; audience?: Audience } = {},
 ): Promise<Post> {
   const { fields, stillUri } = await uploadCapture(userId, 'posts', capture);
   const blurPath =
@@ -24,6 +24,7 @@ export async function createPost(
       audience: options.audience ?? 'everyone',
       ...(options.dare ? { dare_day: todayDareDay() } : {}),
       ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
+      ...(options.forfeit ? { forfeit_id: options.forfeit } : {}),
     })
     .select('*')
     .single();

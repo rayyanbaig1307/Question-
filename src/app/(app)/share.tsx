@@ -31,7 +31,7 @@ export default function Share() {
   // `drop` is set when you're posting your Peekaboo drop: "Today's drop" is already ticked.
   // `guess` is set when you came from Guess Who: "Guess Who" is already ticked.
   // `video` is '1' for a video; `overlay` is its text/sticker layer (if any).
-  const { uri, video, overlay, to, dare, drop, guess } = useLocalSearchParams<{
+  const { uri, video, overlay, to, dare, drop, guess, forfeit } = useLocalSearchParams<{
     uri: string;
     video?: string;
     overlay?: string;
@@ -39,16 +39,20 @@ export default function Share() {
     dare?: string;
     drop?: string;
     guess?: string;
+    forfeit?: string;
   }>();
   const isVideo = video === '1';
   const fromDare = dare === '1';
   const fromDrop = drop === '1';
   const fromGuess = guess === '1';
+  // `forfeit` is the forfeit you're paying with this photo.
+  const fromForfeit = !!forfeit;
   const { userId } = useMe();
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
 
-  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess);
+  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess && !fromForfeit);
+  const [toForfeit, setToForfeit] = useState(fromForfeit);
   // Guess Who goes nowhere else (otherwise the same photo on your story would give you away).
   const [toGuess, setToGuess] = useState(fromGuess);
   // Your story and profile post: for everyone, or just your close friends.
@@ -92,9 +96,9 @@ export default function Share() {
     setPicked([]);
   }
 
-  const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && !toGuess && picked.length === 0;
-  // A dare or drop photo is a post on your profile too, so "Post to my profile" isn't needed then.
-  const postToProfile = toProfile && !toDare && !toDrop;
+  const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && !toGuess && !toForfeit && picked.length === 0;
+  // A dare, drop or forfeit photo is a post on your profile too, so "Post to my profile" isn't needed then.
+  const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
   async function send() {
     setBusy(true);
@@ -122,8 +126,12 @@ export default function Share() {
       // One post can be your drop, your dare answer, or both.
       let dropLate: number | null = null;
       let darePostId: string | null = null;
-      if ((toDare || toDrop) && !done.post) {
-        const post = await createPost(userId, photo, caption, { dare: toDare, drop: toDrop });
+      if ((toDare || toDrop || toForfeit) && !done.post) {
+        const post = await createPost(userId, photo, caption, {
+          dare: toDare,
+          drop: toDrop,
+          forfeit: toForfeit && forfeit ? forfeit : undefined,
+        });
         dropLate = post.drop_late_seconds;
         if (toDare) darePostId = post.id;
         setDone((current) => ({ ...current, post: true }));
@@ -131,7 +139,9 @@ export default function Share() {
       // A happy little buzz: it's sent!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(
-        toGuess
+        toForfeit
+          ? 'Forfeit paid 💀✅ Respect.'
+          : toGuess
           ? "Guess Who posted 🕵️ Let's see who figures it out!"
           : toDrop && dropLate !== null
           ? lateLabel(dropLate).onTime
@@ -144,6 +154,7 @@ export default function Share() {
       // After your drop: to Home, where your friends' drops just unlocked.
       // Otherwise back to the Dare screen, the chat you came from, or the camera.
       if (toGuess) router.dismissTo('/guess');
+      else if (fromForfeit) router.dismissTo('/dare');
       else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'home' } });
       else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
       // You did the dare: now dare your friends (they get 24 hours).
@@ -176,6 +187,15 @@ export default function Share() {
               onPress={() => toggle(setToDrop, !toDrop)}
             />
           ) : null}
+          {fromForfeit ? (
+            <Option
+              emoji="💀"
+              title="Pay my forfeit"
+              subtitle="Goes on your profile with a 💀 tag · the friend who picked it gets told"
+              selected={toForfeit}
+              onPress={() => toggle(setToForfeit, !toForfeit)}
+            />
+          ) : null}
           <Option
             emoji="🎯"
             title="Today's dare"
@@ -197,7 +217,7 @@ export default function Share() {
             selected={toGuess}
             onPress={toggleGuess}
           />
-          {toDare || toDrop ? null : (
+          {toDare || toDrop || toForfeit ? null : (
             <Option
               emoji="🖼️"
               title="Post to my profile"
@@ -225,7 +245,7 @@ export default function Share() {
               </View>
             </View>
           ) : null}
-          {postToProfile || toDare || toDrop || toGuess ? (
+          {postToProfile || toDare || toDrop || toGuess || toForfeit ? (
             <TextField
               label="Caption"
               value={caption}

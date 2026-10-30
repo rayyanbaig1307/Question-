@@ -26,7 +26,7 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, dare, drop, guess } = useLocalSearchParams<{
+  const { uri, fit, video, to, dare, drop, guess, forfeit } = useLocalSearchParams<{
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -35,6 +35,7 @@ export default function Editor() {
     dare?: string;
     drop?: string;
     guess?: string;
+    forfeit?: string;
   }>();
   const { width, height } = useWindowDimensions();
   const canvasRef = useRef<ComponentRef<typeof View>>(null);
@@ -117,7 +118,13 @@ export default function Editor() {
   async function next() {
     setBusy(true);
     try {
-      const extra = { ...(to ? { to } : {}), ...(dare ? { dare } : {}), ...(drop ? { drop } : {}), ...(guess ? { guess } : {}) };
+      const extra = {
+        ...(to ? { to } : {}),
+        ...(dare ? { dare } : {}),
+        ...(drop ? { drop } : {}),
+        ...(guess ? { guess } : {}),
+        ...(forfeit ? { forfeit } : {}),
+      };
       if (isVideo) {
         // Videos keep their text and stickers as a see-through picture that's shown on top while it plays.
         const overlay =

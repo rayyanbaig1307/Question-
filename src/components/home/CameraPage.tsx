@@ -26,7 +26,7 @@ import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
-import { colors, font, space } from '@/theme';
+import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import { ModeCaption, ModeDial, type CameraMode } from './ModeDial';
 
@@ -43,7 +43,7 @@ const MODE_RING: Record<CameraMode, string> = {
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false, guess = false }: {
+export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -56,6 +56,9 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   drop?: boolean;
   // Taking a photo for Guess Who (posted anonymously).
   guess?: boolean;
+  // Paying a forfeit: its id and words.
+  forfeit?: string;
+  forfeitText?: string;
 }) {
   const { userId, profile } = useMe();
   const [permission, requestPermission] = useCameraPermissions();
@@ -64,7 +67,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const lastTap = useRef(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const isHome = !sendTo && !dare && !drop && !guess;
+  const isHome = !sendTo && !dare && !drop && !guess && !forfeit;
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
@@ -110,6 +113,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
         ...(guessOn ? { guess: '1' } : {}),
+        ...(forfeit ? { forfeit } : {}),
       },
     });
 
@@ -265,6 +269,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           ) : (
             <IconButton icon="close" label="Close camera" onPress={() => router.back()} />
           )}
+          {/* Paying a forfeit: a reminder of what you owe */}
+          {forfeit ? (
+            <View style={styles.forfeitNote}>
+              <Text style={styles.forfeitLabel}>💀 YOUR FORFEIT</Text>
+              <Text style={styles.forfeitText}>{forfeitText}</Text>
+            </View>
+          ) : null}
           {/* Taking your drop photo: the countdown, and today's dare in case you'd rather do that */}
           {drop ? <DropTimer /> : null}
           {drop ? <DarePill done={null} /> : null}
@@ -382,6 +393,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: space.md,
     marginRight: space.lg,
+  },
+  forfeitNote: {
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: 2,
+  },
+  forfeitLabel: {
+    color: colors.purple,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  forfeitText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   badge: {
     position: 'absolute',

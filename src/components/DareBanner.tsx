@@ -121,6 +121,18 @@ export function DarePill({ done, compact = false }: { done: boolean | null; comp
   );
 }
 
+// The "💀 Forfeit" tag on a photo that paid a forfeit (a dare that ran out of time).
+export function ForfeitTag({ text }: { text: string }) {
+  return (
+    <View style={[styles.tag, styles.forfeitTag]} accessibilityRole="text">
+      <Text style={styles.tagText} numberOfLines={2}>
+        <Text style={styles.tagLabel}>💀 Forfeit </Text>
+        {text}
+      </Text>
+    </View>
+  );
+}
+
 // The "🎯 Dare" tag on a photo that was someone's answer to a Daily Dare.
 // Tapping it on today's dare opens the Dare screen.
 export function DareTag({ day }: { day: string }) {
@@ -148,6 +160,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: space.md,
     paddingVertical: 6,
+  },
+  forfeitTag: {
+    backgroundColor: 'rgba(155,92,255,0.18)',
+    borderColor: 'rgba(155,92,255,0.6)',
   },
   tagText: {
     color: colors.white,

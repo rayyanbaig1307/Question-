@@ -12,7 +12,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { Bouncy, usePop } from '@/components/Bouncy';
-import { DareTag } from '@/components/DareBanner';
+import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
@@ -206,6 +206,11 @@ export default function PostViewer() {
           {post.dare_day ? (
             <View style={styles.dareTag}>
               <DareTag day={post.dare_day} />
+            </View>
+          ) : null}
+          {post.forfeit_text ? (
+            <View style={styles.dareTag}>
+              <ForfeitTag text={post.forfeit_text} />
             </View>
           ) : null}
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
