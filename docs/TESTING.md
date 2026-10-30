@@ -656,3 +656,17 @@ Use 2 test accounts that have matched (Part 4).
    Before today's drop has happened it says so and the shutter is dimmed (nothing to post yet).
 4. **Guess Who**: "Posted without your name · friends guess who it was". Snap → posted anonymously.
 5. Photo mode keeps the screen clean. Swiping left/right **outside** the dial still moves between Chat · Camera · Home.
+
+## Step 36 – Dare chains 😈 ("I dare YOU")
+
+Use 2 test accounts that are friends (A and B).
+1. **A** does today's dare (Camera → Dare mode → snap → Send). Right after, a new screen: **Dare your friends 😈**.
+   Tick B (up to 3 friends) → **Dare 1 friend** → "😈 Dared 1 friend – they have 24 hours".
+   (**Dare someone who isn't on Peekaboo** opens the share sheet with the dare + download links.)
+2. **B** gets a push: "🎯 You've been dared! A dared you to do today's dare. You have 24 hours ⏳". Tapping it opens the
+   Dare screen, which shows **😈 Dared you today · A dared you · ⏳ 23h left**. On B's camera in Dare mode the line under
+   the dare says "😈 A dared you · 23h left".
+3. **B** does the dare → on both phones it flips to **✅ Did it**. A's Dare screen shows **🔗 Your dare chain** with
+   "You dared B ✅", plus **Dare more friends (2 left)**.
+4. You can only dare after doing the dare yourself, only friends, max 3 a day, and not someone who already did it.
+5. If B doesn't do it within 24 hours it shows **💀 Ran out of time** (forfeits come in the next step).

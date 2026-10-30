@@ -110,7 +110,12 @@ export function ModeDial({ mode, onChange, dots }: {
 
 // One line above the row that says what the chosen mode will do: today's dare, the drop countdown, and so on.
 // Nothing is shown on the plain camera, so it stays clean.
-export function ModeCaption({ mode, drop }: { mode: CameraMode; drop: DropStatus }) {
+export function ModeCaption({ mode, drop, dareNudge }: {
+  mode: CameraMode;
+  drop: DropStatus;
+  // "@sam dared you · 5h left" – shown under today's dare when a friend dared you.
+  dareNudge?: string | null;
+}) {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
   if (mode === 'photo') return null;
 
@@ -127,7 +132,7 @@ export function ModeCaption({ mode, drop }: { mode: CameraMode; drop: DropStatus
         <Text style={styles.captionText} numberOfLines={2}>
           🎯 {dare.text}
         </Text>
-        <Text style={styles.captionHint}>Tap for the rules · snap it to do the dare</Text>
+        <Text style={styles.captionHint}>{dareNudge ?? 'Tap for the rules · snap it to do the dare'}</Text>
       </Bouncy>
     );
   }

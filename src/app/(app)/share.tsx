@@ -121,9 +121,11 @@ export default function Share() {
       }
       // One post can be your drop, your dare answer, or both.
       let dropLate: number | null = null;
+      let darePostId: string | null = null;
       if ((toDare || toDrop) && !done.post) {
         const post = await createPost(userId, photo, caption, { dare: toDare, drop: toDrop });
         dropLate = post.drop_late_seconds;
+        if (toDare) darePostId = post.id;
         setDone((current) => ({ ...current, post: true }));
       }
       // A happy little buzz: it's sent!
@@ -144,6 +146,8 @@ export default function Share() {
       if (toGuess) router.dismissTo('/guess');
       else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'home' } });
       else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
+      // You did the dare: now dare your friends (they get 24 hours).
+      if (toDare && darePostId) router.push({ pathname: '/dare-chain', params: { post: darePostId } });
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
     } finally {

@@ -1,13 +1,15 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { PostGrid } from '@/components/PostGrid';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { Avatar } from '@/components/Avatar';
 import { useMe } from '@/lib/auth';
+import { fetchDareChain, MAX_DARES_PER_DAY, nominationState, timeLeft, type DareChain, type Nomination } from '@/lib/dareChain';
 import { DARE_RULES, dareFor, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay } from '@/lib/dares';
 import type { PostWithAuthor } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
@@ -17,17 +19,21 @@ export default function DareScreen() {
   const { userId } = useMe();
   const [day, setDay] = useState(todayDareDay);
   const [posts, setPosts] = useState<{ day: string; list: PostWithAuthor[] } | null>(null);
+  // Dares you were given and dares you gave today.
+  const [chain, setChain] = useState<DareChain>({ received: [], sent: [] });
   const [refreshing, setRefreshing] = useState(false);
   const dare = dareFor(day);
 
   const load = useCallback(async () => {
     try {
-      setPosts({ day, list: await fetchDarePosts(day) });
+      const [list, loadedChain] = await Promise.all([fetchDarePosts(day), fetchDareChain(userId, day).catch(() => null)]);
+      setPosts({ day, list });
+      if (loadedChain) setChain(loadedChain);
     } catch (error) {
       console.warn('Could not load dare posts', error);
       setPosts((current) => current ?? { day, list: [] });
     }
-  }, [day]);
+  }, [day, userId]);
 
   // Load when the screen opens, and again when you come back after posting.
   useFocusEffect(
@@ -45,6 +51,8 @@ export default function DareScreen() {
   const list = posts?.day === day ? posts.list : null;
   const iDidIt = list?.some((post) => post.user_id === userId) ?? false;
   const doTheDare = () => router.push({ pathname: '/camera', params: { dare: '1' } });
+  const openForMe = chain.received.filter((n) => nominationState(n) === 'open');
+  const canDareMore = iDidIt && chain.sent.length < MAX_DARES_PER_DAY;
 
   const header = (
     <View style={styles.header}>
@@ -61,6 +69,37 @@ export default function DareScreen() {
         <Text style={styles.rules}>{DARE_RULES}</Text>
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
+
+      {/* Dares you were given: who dared you and how long you've got */}
+      {chain.received.length > 0 ? (
+        <View style={styles.chainBox}>
+          <Text style={styles.chainTitle}>😈 Dared you today</Text>
+          {chain.received.map((n) => (
+            <ChainRow key={n.id} person={n.from} nomination={n} mine={false} />
+          ))}
+          {openForMe.length > 0 && !iDidIt ? (
+            <Text style={styles.chainHint}>Do the dare before the clock runs out – or it&apos;s a forfeit 💀</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Dares you gave, and the button to give more */}
+      {chain.sent.length > 0 || canDareMore ? (
+        <View style={styles.chainBox}>
+          <Text style={styles.chainTitle}>🔗 Your dare chain</Text>
+          {chain.sent.map((n) => (
+            <ChainRow key={n.id} person={n.to} nomination={n} mine />
+          ))}
+          {canDareMore ? (
+            <Button
+              title={chain.sent.length > 0 ? `Dare more friends (${MAX_DARES_PER_DAY - chain.sent.length} left)` : 'Dare your friends 😈'}
+              icon="flame"
+              small
+              onPress={() => router.push('/dare-chain')}
+            />
+          ) : null}
+        </View>
+      ) : null}
       <Text style={styles.sectionTitle}>
         Everyone&apos;s dares today{list && list.length > 0 ? ` (${list.length})` : ''}
       </Text>
@@ -87,6 +126,23 @@ export default function DareScreen() {
         }
       />
     </View>
+  );
+}
+
+// One person in your dare chain: who, and where their dare stands (ticking clock, done, or ran out).
+function ChainRow({ person, nomination, mine }: { person: Nomination['from']; nomination: Nomination; mine: boolean }) {
+  const state = nominationState(nomination);
+  const name = person.display_name || person.username;
+  const status =
+    state === 'done' ? '✅ Did it' : state === 'open' ? `⏳ ${timeLeft(nomination)}` : mine ? '💀 Ran out of time' : '💀 You ran out of time';
+  return (
+    <Pressable style={styles.chainRow} onPress={() => router.push(`/profile/${person.id}`)} accessibilityLabel={`${name}: ${status}`}>
+      <Avatar path={person.avatar_path} name={name} size={36} />
+      <Text style={styles.chainName} numberOfLines={1}>
+        {mine ? `You dared ${name}` : `${name} dared you`}
+      </Text>
+      <Text style={[styles.chainStatus, state === 'done' && styles.chainDone, state === 'expired' && styles.chainExpired]}>{status}</Text>
+    </Pressable>
   );
 }
 
@@ -140,6 +196,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: space.xs,
+  },
+  chainBox: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: space.md,
+    gap: space.sm,
+  },
+  chainTitle: {
+    ...font.label,
+    textTransform: 'uppercase',
+  },
+  chainHint: {
+    ...font.small,
+    fontSize: 12,
+  },
+  chainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  chainName: {
+    ...font.body,
+    flex: 1,
+    fontWeight: '700',
+  },
+  chainStatus: {
+    ...font.small,
+    fontWeight: '800',
+    color: colors.orange,
+  },
+  chainDone: {
+    color: colors.green,
+  },
+  chainExpired: {
+    color: colors.red,
   },
   countdown: {
     color: colors.white,

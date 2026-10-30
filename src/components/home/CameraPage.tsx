@@ -21,6 +21,7 @@ import { DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
+import { timeLeft, useOpenDaresForMe } from '@/lib/dareChain';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
 import { useIncomingRequestCount } from '@/lib/friends';
@@ -70,6 +71,12 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   // On the home camera you pick what you're posting with the mode dial above the shutter.
   const [homeMode, setHomeMode] = useState<CameraMode>('photo');
   const dropStatus = useDropStatus();
+  // Friends who dared you today (and the clock's still ticking).
+  const openDares = useOpenDaresForMe(userId, active && isHome);
+  const dareNudge =
+    openDares && openDares.length > 0 && dareDone === false
+      ? `😈 ${openDares[0].from.display_name || openDares[0].from.username}${openDares.length > 1 ? ` +${openDares.length - 1}` : ''} dared you · ${timeLeft(openDares[0])}`
+      : null;
   const dareOn = dare || (isHome && homeMode === 'dare');
   const dropOn = drop || (isHome && homeMode === 'drop');
   const guessOn = guess || (isHome && homeMode === 'guess');
@@ -279,7 +286,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       {/* Bottom: gallery · the big shutter button · friend map (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
         {/* Home camera: what you're posting (Photo · Dare · Drop · Guess Who). Swipe the dial or tap a mode. */}
-        {isHome && !recording ? <ModeCaption mode={homeMode} drop={dropStatus} /> : null}
+        {isHome && !recording ? <ModeCaption mode={homeMode} drop={dropStatus} dareNudge={dareNudge} /> : null}
         {isHome ? (
           <ModeDial
             mode={homeMode}
