@@ -61,7 +61,12 @@ export function ModeDial({ mode, onChange, dots }: {
   }, [index]);
 
   function pick(next: CameraMode) {
-    if (next === mode) return;
+    if (next === mode) {
+      // No words on the camera: tap the chosen bubble again to see what it's about.
+      if (next === 'dare') router.push('/dare');
+      if (next === 'guess') router.push('/guess');
+      return;
+    }
     Haptics.selectionAsync();
     onChange(next);
   }
@@ -101,9 +106,6 @@ export function ModeDial({ mode, onChange, dots }: {
               <Text style={[styles.bubbleEmoji, active && styles.bubbleEmojiActive]}>{item.emoji}</Text>
               {dots?.[item.key] ? <View style={styles.dot} /> : null}
             </View>
-            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
-              {item.label}
-            </Text>
           </Pressable>
         );
       })}

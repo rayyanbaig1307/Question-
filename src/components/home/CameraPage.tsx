@@ -21,7 +21,6 @@ import { DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
-import { timeLeft, useOpenDaresForMe, useStreakNudge } from '@/lib/dareChain';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE, type EyePair } from '@/lib/faceLens';
@@ -30,7 +29,7 @@ import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
-import { ModeCaption, ModeDial, type CameraMode } from './ModeDial';
+import { ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
 const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_LENS_AVAILABLE
@@ -83,16 +82,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   // On the home camera you pick what you're posting with the mode dial above the shutter.
   const [homeMode, setHomeMode] = useState<CameraMode>('photo');
   const dropStatus = useDropStatus();
-  // Friends who dared you today (and the clock's still ticking).
-  const openDares = useOpenDaresForMe(userId, active && isHome);
-  // …or a streak with a friend that ends today unless you do the dare.
-  const streakNudge = useStreakNudge(userId, active && isHome);
-  const dareNudge =
-    openDares && openDares.length > 0 && dareDone === false
-      ? `😈 ${openDares[0].from.display_name || openDares[0].from.username}${openDares.length > 1 ? ` +${openDares.length - 1}` : ''} dared you · ${timeLeft(openDares[0])}`
-      : dareDone === false
-        ? streakNudge
-        : null;
   const dareOn = dare || (isHome && homeMode === 'dare');
   const dropOn = drop || (isHome && homeMode === 'drop');
   const guessOn = guess || (isHome && homeMode === 'guess');
@@ -329,8 +318,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
       {/* Bottom: gallery · the big shutter button · friend map (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
-        {/* Home camera: what you're posting (Photo · Dare · Drop · Guess Who). Swipe the dial or tap a mode. */}
-        {isHome && !recording ? <ModeCaption mode={homeMode} drop={dropStatus} dareNudge={dareNudge} /> : null}
+        {/* Home camera: what you're posting (Dare · Drop · Googly · Guess Who). Swipe the bubbles or tap one – no words on screen. */}
         {isHome ? (
           <ModeDial
             mode={homeMode}
