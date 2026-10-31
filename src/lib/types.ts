@@ -50,6 +50,8 @@ export type Post = MediaFields & {
   group_hold?: boolean | null;
   // Asked for along with your own drop posts: how many friends revealed it, and how many scrolled past.
   peek_stats?: { revealed: number; passed: number } | null;
+  // Asked for along with dare and forfeit posts: "Legit or cap?" totals and your own vote.
+  dare_verdict?: { legit: number; cap: number; mine: boolean | null } | null;
 };
 
 export type PostWithAuthor = Post & { author: Profile | null };

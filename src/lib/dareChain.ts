@@ -181,3 +181,16 @@ export function useStreakNudge(me: string, enabled: boolean): string | null {
   }, [me, enabled]);
   return nudge?.day === todayDareDay() ? nudge.text : null;
 }
+
+// ---------------------------------------------------------------------------
+// Legit or cap? 🔥/🧢: friends vote on whether you really did the dare. Anonymous – only totals are shown.
+// ---------------------------------------------------------------------------
+
+// Comes with dare and forfeit posts (`dare_verdict`): the totals and your own vote (null = you haven't voted).
+export type DareVerdict = { legit: number; cap: number; mine: boolean | null };
+
+// Vote 🔥 (true) or 🧢 (false), or take your vote back (null).
+export async function voteDare(postId: string, legit: boolean | null): Promise<void> {
+  const { error } = await supabase.rpc('vote_dare', { post: postId, legit });
+  if (error) throw error;
+}

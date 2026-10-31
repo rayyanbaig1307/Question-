@@ -720,3 +720,16 @@ Use 2 friend accounts (A and B).
 5. **Dare screen:** the house-rules line under today's dare now ends with **Full rules** (tap → Dare Safety Rules).
 6. **Report** anything → the pop-up says "We review every report within 24 hours".
 7. In Supabase → Table Editor → **legal_acceptances**: one row per person per document, with the date it happened.
+
+## Step 41 – Legit or cap? 🔥🧢
+
+Use 2 friend accounts (A and B) and one account that isn't friends with A (C).
+1. **A** does today's dare (or pays a forfeit). On **B's** Home feed, A's post shows a row under the 🎯 tag:
+   **Legit or cap?  [🔥 Legit 0]  [🧢 Cap 0]**.
+2. **B** taps 🧢 → it fills purple and counts 1. Tap it again → vote taken back. Tap 🔥 → switches to legit.
+3. **A** gets a push the first time anyone votes 🧢: "Someone called cap on your dare 🧢" (only the first one, so
+   no spam). On A's own post the row shows just the totals – you can't vote on yourself.
+4. Votes are **anonymous**: everyone sees the totals, nobody sees who voted what.
+5. After **3 votes** the label becomes a verdict: **🔥 Certified legit** or **🧢 Friends say cap**.
+6. The same row is on the full-screen post. **C** (not a friend) sees the totals but can't vote.
+7. Only dare and forfeit posts have it; normal posts don't.

@@ -13,6 +13,7 @@ import { Button } from '@/components/Button';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
+import { LegitOrCap } from '@/components/LegitOrCap';
 import { DropBadge } from '@/components/DropPill';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
@@ -21,6 +22,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
+import { fetchRelation } from '@/lib/friends';
 import { postMedia, useMyDropDays } from '@/lib/drop';
 import { useMediaUrls } from '@/lib/media';
 import { noteDropSeen } from '@/lib/peeks';
@@ -58,6 +60,17 @@ export default function PostViewer() {
       .then(setPost)
       .catch(() => setPost(null));
   }, [id]);
+
+  // "Legit or cap?": only the poster's friends can vote on a dare.
+  const [isFriend, setIsFriend] = useState(false);
+  const posterId = post?.user_id ?? null;
+  const hasVerdict = !!post?.dare_verdict;
+  useEffect(() => {
+    if (!posterId || posterId === userId || !hasVerdict) return;
+    fetchRelation(userId, posterId)
+      .then((relation) => setIsFriend(relation.kind === 'friends'))
+      .catch(() => {});
+  }, [posterId, userId, hasVerdict]);
 
   // Likes and comment count – refreshed when you come back from the comments.
   useFocusEffect(
@@ -211,6 +224,17 @@ export default function PostViewer() {
           {post.forfeit_text ? (
             <View style={styles.dareTag}>
               <ForfeitTag text={post.forfeit_text} />
+            </View>
+          ) : null}
+          {post.dare_verdict ? (
+            <View style={styles.dareTag}>
+              <LegitOrCap
+                key={`${isFriend}`}
+                postId={post.id}
+                verdict={post.dare_verdict}
+                canVote={isFriend && post.user_id !== userId}
+                onDark
+              />
             </View>
           ) : null}
           {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}

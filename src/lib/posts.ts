@@ -48,7 +48,7 @@ export async function fetchUserPosts(userId: string): Promise<Post[]> {
 export async function fetchPost(postId: string): Promise<PostWithAuthor | null> {
   const { data, error } = await supabase
     .from('posts')
-    .select('*, group_hold, peek_stats, author:profiles!posts_user_id_fkey(*)')
+    .select('*, group_hold, peek_stats, dare_verdict, author:profiles!posts_user_id_fkey(*)')
     .eq('id', postId)
     .maybeSingle();
   if (error) throw error;

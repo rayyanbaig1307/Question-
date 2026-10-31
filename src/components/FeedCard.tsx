@@ -20,6 +20,7 @@ import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
+import { LegitOrCap } from '@/components/LegitOrCap';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
 import type { DropLock } from '@/lib/drop';
@@ -45,6 +46,7 @@ export function FeedCard({
   onLike,
   onMenu,
   onRevealed,
+  canVote = false,
 }: {
   post: FeedPost;
   // The photo's link (for a video: its still picture) – or, while `locked`, the link of its tiny blurry preview.
@@ -63,6 +65,8 @@ export function FeedCard({
   onMenu: () => void;
   // You scratched a drop clear (for Who Peeked).
   onRevealed?: () => void;
+  // "Legit or cap?" on a friend's dare: you can vote (not on your own, not on strangers').
+  canVote?: boolean;
 }) {
   const lastTap = useRef(0);
   const locked = lock !== null;
@@ -281,6 +285,15 @@ export function FeedCard({
       ) : null}
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
       {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
+      {post.dare_verdict ? (
+        <LegitOrCap
+          // Fresh numbers from the server start it over.
+          key={`${post.dare_verdict.legit}-${post.dare_verdict.cap}-${post.dare_verdict.mine}`}
+          postId={post.id}
+          verdict={post.dare_verdict}
+          canVote={canVote}
+        />
+      ) : null}
       {post.caption ? (
         <Text style={styles.caption}>
           <Text style={styles.captionName}>{name} </Text>
