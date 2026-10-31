@@ -200,7 +200,7 @@ export default function ChatScreen() {
   }
 
   const name = friend ? friend.display_name || friend.username : '';
-  // Show "Delivered / Opened" under your most recent message only.
+  // Show "Delivered / Seen" under your most recent message (peeks always show theirs).
   const myLatestId = messages?.find((m) => m.sender_id === userId && m.kind !== 'screenshot')?.id;
 
   return (
@@ -305,8 +305,8 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
 }) {
   const mine = message.sender_id === me;
   const time = timeAgo(message.created_at);
-  const seen = message.replayed_at ? 'Replayed 🔁' : message.opened_at ? 'Opened' : 'Delivered';
-  const status = mine && showStatus ? ` · ${seen}` : '';
+  const statusLine = (show: boolean) =>
+    mine && show ? <MessageStatus message={message} /> : null;
 
   if (message.kind === 'screenshot') {
     const who = mine ? 'You' : friendName || 'They';
@@ -340,10 +340,10 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
     return (
       <Pressable onLongPress={onLongPress} style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
         <VoiceBubble path={message.media_path} durationMs={message.audio_ms ?? 0} waveform={message.waveform} mine={mine} />
-        <Text style={styles.time}>
-          {time}
-          {mine && showStatus ? ` · ${message.opened_at ? 'Opened' : 'Delivered'}` : ''}
-        </Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.time}>{time}</Text>
+          {statusLine(showStatus)}
+        </View>
       </Pressable>
     );
   }
@@ -366,22 +366,32 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
     const tint = saved && !isNew ? colors.purple : colors.accent;
 
     return (
-      <Pressable
-        onPress={tappable ? () => router.push(`/snap/${message.id}`) : undefined}
-        onLongPress={onLongPress}
-        style={[
-          styles.snap,
-          mine ? styles.right : styles.left,
-          { borderColor: tint },
-          isNew && styles.snapNew,
-        ]}>
-        <Ionicons name={look.icon} size={18} color={isNew ? colors.white : tint} />
-        <Text style={[styles.snapText, { color: tint }, isNew && styles.snapTextNew]}>{look.text}</Text>
-        <Text style={[styles.time, isNew && styles.snapTextNew]}>
-          {time}
-          {status}
-        </Text>
-      </Pressable>
+      <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+        <Pressable
+          onPress={tappable ? () => router.push(`/snap/${message.id}`) : undefined}
+          onLongPress={onLongPress}
+          accessibilityRole={tappable ? 'button' : undefined}
+          accessibilityLabel={look.text}
+          style={({ pressed }) => [
+            styles.snap,
+            mine ? styles.snapMine : styles.snapTheirs,
+            { borderColor: tint },
+            isNew && styles.snapNew,
+            pressed && tappable && styles.snapPressed,
+          ]}>
+          <View style={[styles.snapIcon, { backgroundColor: isNew ? colors.white : tint }]}>
+            <Ionicons name={look.icon} size={15} color={isNew ? colors.accent : colors.white} />
+          </View>
+          <Text style={[styles.snapText, { color: tint }, isNew && styles.snapTextNew]} numberOfLines={1}>
+            {look.text}
+          </Text>
+        </Pressable>
+        <View style={styles.metaRow}>
+          <Text style={styles.time}>{time}</Text>
+          {/* Every peek you send shows whether it was opened. */}
+          {statusLine(true)}
+        </View>
+      </View>
     );
   }
 
@@ -390,10 +400,34 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
       <Pressable onLongPress={onLongPress} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
         <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{message.body}</Text>
       </Pressable>
-      <Text style={styles.time}>
-        {time}
-        {status}
-      </Text>
+      <View style={styles.metaRow}>
+        <Text style={styles.time}>{time}</Text>
+        {statusLine(showStatus)}
+      </View>
+    </View>
+  );
+}
+
+// Under your own messages: ✓ Delivered (sent, not looked at yet) or 👁 Seen (Opened / Replayed for peeks).
+function MessageStatus({ message }: { message: Message }) {
+  const opened = message.opened_at !== null;
+  const label = message.replayed_at
+    ? 'Replayed'
+    : !opened
+      ? 'Delivered'
+      : message.kind === 'snap'
+        ? 'Opened'
+        : 'Seen';
+  const color = opened ? colors.accent : colors.textFaint;
+  return (
+    <View style={styles.status} accessibilityLabel={label}>
+      <Text style={styles.time}>·</Text>
+      <Ionicons
+        name={message.replayed_at ? 'refresh' : opened ? 'eye' : 'checkmark'}
+        size={12}
+        color={color}
+      />
+      <Text style={[styles.time, styles.statusText, { color }]}>{label}</Text>
     </View>
   );
 }
@@ -559,16 +593,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textFaint,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  statusText: {
+    fontWeight: '700',
+  },
+  // A peek looks like a message bubble (same shape and corner), with a round icon and a coloured outline.
   snap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
+    paddingLeft: space.sm,
+    paddingRight: space.lg,
+    paddingVertical: space.sm,
     borderRadius: radius.lg,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.accent,
-    maxWidth: '85%',
+    backgroundColor: colors.card,
+  },
+  snapMine: {
+    borderBottomRightRadius: 6,
+  },
+  snapTheirs: {
+    borderBottomLeftRadius: 6,
+  },
+  snapPressed: {
+    opacity: 0.7,
+  },
+  snapIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   snapNew: {
     backgroundColor: colors.accent,
