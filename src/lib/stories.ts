@@ -119,3 +119,10 @@ export async function fetchStoryViewers(storyId: string): Promise<Profile[]> {
     .map((row) => (row as unknown as { viewer: Profile | null }).viewer)
     .filter((viewer): viewer is Profile => viewer !== null);
 }
+
+// One of your stories, by id (for "Add to my profile").
+export async function fetchStory(storyId: string): Promise<Story | null> {
+  const { data, error } = await supabase.from('stories').select('*').eq('id', storyId).maybeSingle();
+  if (error) throw error;
+  return data as Story | null;
+}

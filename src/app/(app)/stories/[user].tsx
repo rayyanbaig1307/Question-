@@ -155,6 +155,11 @@ export default function StoryViewer() {
         onClose: resume,
         options: [
           {
+            // Keep it on your profile grid after the story disappears (write a caption first).
+            label: 'Add to my profile',
+            onPress: () => router.push({ pathname: '/post-compose', params: { story: story.id } }),
+          },
+          {
             label: 'Delete this photo',
             destructive: true,
             onPress: () =>

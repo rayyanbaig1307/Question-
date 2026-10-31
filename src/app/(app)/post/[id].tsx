@@ -55,11 +55,14 @@ export default function PostViewer() {
     if (friendsDrop && myDropDays !== null) noteDropSeen(id, !locked);
   }, [friendsDrop, myDropDays, locked, id]);
 
-  useEffect(() => {
-    fetchPost(id)
-      .then(setPost)
-      .catch(() => setPost(null));
-  }, [id]);
+  // Loaded again when you come back to it (e.g. after editing the caption).
+  useFocusEffect(
+    useCallback(() => {
+      fetchPost(id)
+        .then(setPost)
+        .catch(() => setPost(null));
+    }, [id]),
+  );
 
   // "Legit or cap?": only the poster's friends can vote on a dare.
   const [isFriend, setIsFriend] = useState(false);
@@ -108,6 +111,10 @@ export default function PostViewer() {
     if (isMine) {
       showOptions({
         options: [
+          {
+            label: 'Edit caption',
+            onPress: () => router.push({ pathname: '/post-compose', params: { post: post.id } }),
+          },
           {
             label: 'Delete post',
             destructive: true,

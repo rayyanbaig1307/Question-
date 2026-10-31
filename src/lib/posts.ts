@@ -2,7 +2,7 @@ import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
-import type { Audience, Post, PostWithAuthor } from './types';
+import type { Audience, Post, PostWithAuthor, Story } from './types';
 
 // `dare: true` tags the post as your answer to today's Daily Dare.
 // `drop: true` makes it your Peekaboo drop for today (the database works out if it was on time).
@@ -59,4 +59,42 @@ export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
   await deleteMedia(mediaFiles(post));
+}
+
+// Change the caption of one of your own posts (after it's posted).
+export async function updatePostCaption(postId: string, caption: string): Promise<void> {
+  const { error } = await supabase.from('posts').update({ caption: caption.trim() }).eq('id', postId);
+  if (error) throw error;
+}
+
+// Put one of your stories on your profile grid for good: its photo/video is copied, so the post stays
+// after the story disappears.
+export async function postFromStory(userId: string, story: Story, caption: string, audience: Audience): Promise<Post> {
+  const copied: string[] = [];
+  const copy = async (path: string | null) => {
+    if (!path) return null;
+    const target = `${userId}/posts/${path.split('/').pop()}`;
+    const { error } = await supabase.storage.from('media').copy(path, target);
+    if (error) throw error;
+    copied.push(target);
+    return target;
+  };
+  try {
+    const fields = {
+      media_path: (await copy(story.media_path)) as string,
+      media_type: story.media_type,
+      poster_path: await copy(story.poster_path),
+      overlay_path: await copy(story.overlay_path),
+    };
+    const { data, error } = await supabase
+      .from('posts')
+      .insert({ user_id: userId, ...fields, caption: caption.trim(), audience })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as Post;
+  } catch (error) {
+    await deleteMedia(copied);
+    throw error;
+  }
 }

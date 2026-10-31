@@ -2,13 +2,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { DareRulesSheet } from '@/components/DareRulesSheet';
 import { useOverlays } from '@/components/Overlays';
+import { PostPreview } from '@/components/PostPreview';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { TextField } from '@/components/TextField';
@@ -49,8 +50,10 @@ export default function Share() {
   const fromGuess = guess === '1';
   // `forfeit` is the forfeit you're paying with this photo.
   const fromForfeit = !!forfeit;
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
   const { showToast } = useOverlays();
+  // "Post to my profile" first shows how the post will look, with the caption still editable.
+  const [previewOpen, setPreviewOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const todaysDare = useDare(todayDareDay());
   // Dares, drops and forfeits need the one-time "Before your first dare" agreement.
@@ -111,6 +114,15 @@ export default function Share() {
       setRulesOpen(true);
       return;
     }
+    if (postToProfile && !done.profile) {
+      setPreviewOpen(true);
+      return;
+    }
+    await sendNow();
+  }
+
+  async function sendNow() {
+    setPreviewOpen(false);
     setBusy(true);
     try {
       // Photos are shrunk first so they upload quickly; videos were already recorded small.
@@ -182,11 +194,18 @@ export default function Share() {
 
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {isVideo ? (
-            <VideoClip uri={uri} overlayUri={overlay} playing muted loop style={styles.preview} />
-          ) : (
-            <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
-          )}
+          <View>
+            {isVideo ? (
+              <VideoClip uri={uri} overlayUri={overlay} playing muted loop style={styles.preview} />
+            ) : (
+              <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
+            )}
+            {/* Back to the editor (text, stickers, filters stay as you left them) */}
+            <Pressable style={styles.editChip} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Edit photo">
+              <Ionicons name="pencil" size={14} color={colors.white} />
+              <Text style={styles.editChipText}>Edit</Text>
+            </Pressable>
+          </View>
 
           {fromDrop ? (
             <Option
@@ -301,6 +320,32 @@ export default function Share() {
           <Button title="Send" icon="send" onPress={send} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
+      <Modal visible={previewOpen} transparent animationType="slide" onRequestClose={() => setPreviewOpen(false)}>
+        <KeyboardAvoidingView style={styles.previewBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.previewSheet, { paddingBottom: insets.bottom + space.lg }]}>
+            <Text style={styles.previewTitle}>This is how it&apos;ll look on your profile</Text>
+            <PostPreview
+              uri={isVideo ? null : uri}
+              isVideo={isVideo}
+              caption={caption}
+              name={profile?.display_name || profile?.username || 'You'}
+              avatarPath={profile?.avatar_path}
+            />
+            <TextField
+              label="Caption"
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="Write a caption… (optional)"
+              maxLength={300}
+              multiline
+            />
+            <Button title="Post" icon="send" onPress={sendNow} loading={busy} />
+            <Pressable onPress={() => setPreviewOpen(false)} style={styles.keepEditing} accessibilityRole="button">
+              <Text style={styles.keepEditingText}>Keep editing</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
       <DareRulesSheet
         visible={rulesOpen}
         onClose={() => setRulesOpen(false)}
@@ -353,6 +398,48 @@ function Option({ emoji, title, subtitle, selected, onPress }: {
 }
 
 const styles = StyleSheet.create({
+  editChip: {
+    position: 'absolute',
+    top: space.sm,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  editChipText: {
+    ...font.small,
+    color: colors.white,
+    fontWeight: '800',
+  },
+  previewBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  previewSheet: {
+    gap: space.md,
+    padding: space.lg,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  previewTitle: {
+    ...font.heading,
+    textAlign: 'center',
+  },
+  keepEditing: {
+    alignItems: 'center',
+    paddingVertical: space.sm,
+  },
+  keepEditingText: {
+    ...font.body,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,
