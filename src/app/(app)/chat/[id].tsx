@@ -374,14 +374,10 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
           accessibilityLabel={look.text}
           style={({ pressed }) => [
             styles.snap,
-            mine ? styles.snapMine : styles.snapTheirs,
-            { borderColor: tint },
             isNew && styles.snapNew,
             pressed && tappable && styles.snapPressed,
           ]}>
-          <View style={[styles.snapIcon, { backgroundColor: isNew ? colors.white : tint }]}>
-            <Ionicons name={look.icon} size={15} color={isNew ? colors.accent : colors.white} />
-          </View>
+          <Ionicons name={look.icon} size={16} color={isNew ? colors.white : tint} />
           <Text style={[styles.snapText, { color: tint }, isNew && styles.snapTextNew]} numberOfLines={1}>
             {look.text}
           </Text>
@@ -606,41 +602,25 @@ const styles = StyleSheet.create({
   statusText: {
     fontWeight: '700',
   },
-  // A peek looks like a message bubble (same shape and corner), with a round icon and a coloured outline.
+  // A peek is a small, quiet pill: an icon and a few words. A new one you haven't opened is filled pink.
   snap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingLeft: space.sm,
-    paddingRight: space.lg,
-    paddingVertical: space.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
+    gap: 6,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
     backgroundColor: colors.card,
-  },
-  snapMine: {
-    borderBottomRightRadius: 6,
-  },
-  snapTheirs: {
-    borderBottomLeftRadius: 6,
-  },
-  snapPressed: {
-    opacity: 0.7,
-  },
-  snapIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   snapNew: {
     backgroundColor: colors.accent,
   },
+  snapPressed: {
+    opacity: 0.7,
+  },
   snapText: {
-    ...font.body,
-    fontWeight: '800',
+    ...font.small,
+    fontWeight: '700',
     color: colors.accent,
   },
   snapTextNew: {
