@@ -3,7 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { FormScreen } from '@/components/FormScreen';
-import { BirthdayForm } from '@/components/match/BirthdayForm';
+import { BirthdayForm } from '@/components/BirthdayForm';
 import { useOverlays } from '@/components/Overlays';
 import { font } from '@/theme';
 

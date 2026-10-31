@@ -1,18 +1,22 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
+import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
+import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
-import { colors, font, space } from '@/theme';
+import { useSafetyActions } from '@/lib/useSafetyActions';
+import { colors, font, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
@@ -23,8 +27,13 @@ type ChatRow = {
   newChats: number;
 };
 
-// Left page: everyone you can chat with, most recent first.
-export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
+// Left page: hit ups waiting for you at the top, then everyone you can chat with, most recent first.
+export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
+  visible: boolean;
+  onCamera: () => void;
+  hitUps: HitUp[];
+  onHitUpsChanged: () => void;
+}) {
   const { userId, profile } = useMe();
   const tabSpace = useTabBarSpace();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
@@ -55,6 +64,16 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
           data={rows}
           keyExtractor={(row) => row.friend.id}
           contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
+          ListHeaderComponent={
+            hitUps.length > 0 ? (
+              <View style={styles.hitUps}>
+                <Text style={styles.hitUpsTitle}>Hit ups 👋</Text>
+                {hitUps.map((hitUp) => (
+                  <HitUpRow key={hitUp.id} hitUp={hitUp} onDone={onHitUpsChanged} />
+                ))}
+              </View>
+            ) : undefined
+          }
           ListEmptyComponent={
             <EmptyState
               emoji="👀"
@@ -67,6 +86,87 @@ export function ChatPage({ visible, onCamera }: { visible: boolean; onCamera: ()
           renderItem={({ item }) => <ChatRowView row={item} me={userId} />}
         />
       )}
+    </View>
+  );
+}
+
+// Someone hit you up: Hit back (friends + the chat opens with their message) or Ignore (they're never told).
+function HitUpRow({ hitUp, onDone }: { hitUp: HitUp; onDone: () => void }) {
+  const { showOptions, showToast } = useOverlays();
+  const { report, confirmBlock } = useSafetyActions();
+  const [busy, setBusy] = useState<'back' | 'ignore' | null>(null);
+  const sender = hitUp.sender;
+  const name = sender.display_name || sender.username;
+
+  async function respond(hitBack: boolean) {
+    setBusy(hitBack ? 'back' : 'ignore');
+    try {
+      await respondToHitUp(hitUp.id, hitBack);
+      onDone();
+      if (hitBack) {
+        showToast(`You and ${name} can chat now 🎉`);
+        router.push(`/chat/${sender.id}`);
+      } else {
+        showToast("Ignored – they won't be told");
+      }
+    } catch (error) {
+      Alert.alert('Oops', friendlyError(error));
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openMenu() {
+    showOptions({
+      title: `@${sender.username}`,
+      options: [
+        { label: 'See profile', onPress: () => router.push(`/profile/${sender.id}`) },
+        { label: 'Report', onPress: () => report({ user: sender, contentType: 'user', contentId: sender.id, onBlocked: onDone }) },
+        { label: 'Block', destructive: true, onPress: () => confirmBlock(sender, onDone) },
+      ],
+    });
+  }
+
+  return (
+    <View style={styles.hitUp}>
+      <View style={styles.hitUpTop}>
+        <Pressable onPress={() => router.push(`/profile/${sender.id}`)} accessibilityLabel={`See ${name}'s profile`}>
+          <Avatar path={sender.avatar_path} name={name} size={48} />
+        </Pressable>
+        <View style={styles.rowText}>
+          <Text style={styles.name} numberOfLines={1}>
+            {name}
+          </Text>
+          <Text style={styles.statusText}>
+            @{sender.username} · {timeAgo(hitUp.created_at)}
+          </Text>
+        </View>
+        <Pressable onPress={openMenu} hitSlop={10} accessibilityLabel="Report or block">
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
+        </Pressable>
+      </View>
+      <Text style={styles.hitUpMessage}>{hitUp.message ? `“${hitUp.message}”` : '👋 Hit you up'}</Text>
+      <View style={styles.hitUpButtons}>
+        <Button
+          title="Hit back"
+          icon="hand-right"
+          small
+          style={styles.hitUpButton}
+          loading={busy === 'back'}
+          disabled={busy !== null}
+          onPress={() => respond(true)}
+        />
+        <Button
+          title="Ignore"
+          variant="secondary"
+          small
+          style={styles.hitUpButton}
+          loading={busy === 'ignore'}
+          disabled={busy !== null}
+          onPress={() => respond(false)}
+        />
+      </View>
     </View>
   );
 }
@@ -185,5 +285,36 @@ const styles = StyleSheet.create({
   },
   statusText: {
     ...font.small,
+  },
+  hitUps: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.md,
+    gap: space.sm,
+  },
+  hitUpsTitle: {
+    ...font.label,
+  },
+  hitUp: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: space.md,
+    gap: space.sm,
+  },
+  hitUpTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  hitUpMessage: {
+    ...font.body,
+    fontWeight: '700',
+  },
+  hitUpButtons: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  hitUpButton: {
+    flex: 1,
   },
 });

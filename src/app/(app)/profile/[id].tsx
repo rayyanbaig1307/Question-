@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
+import { HitUpButton } from '@/components/HitUpButton';
 import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
 import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
@@ -168,7 +169,10 @@ export default function ProfileScreen() {
           />
         </View>
       ) : (
-        <FriendButton person={profile} relation={data.relation} onChanged={load} />
+        <View style={styles.personActions}>
+          <FriendButton person={profile} relation={data.relation} onChanged={load} />
+          {isFriend ? null : <HitUpButton person={profile} onConnected={load} />}
+        </View>
       )}
     </View>
   );
@@ -290,5 +294,8 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1,
+  },
+  personActions: {
+    gap: space.sm,
   },
 });

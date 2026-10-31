@@ -53,6 +53,7 @@ export async function updateMyProfile(
       | 'song_artwork_url'
       | 'song_preview_url'
       | 'song_link_url'
+      | 'hit_ups_from'
     >
   >,
 ): Promise<Profile> {

@@ -9,28 +9,20 @@ import { CameraPage } from '@/components/home/CameraPage';
 import { ChatPage } from '@/components/home/ChatPage';
 import { HomePage } from '@/components/home/HomePage';
 import { HomeTabBar } from '@/components/home/HomeTabBar';
-import { MatchPage } from '@/components/home/MatchPage';
 import { useMe } from '@/lib/auth';
+import { fetchMyBirthday, markAskedForBirthday, wasAskedForBirthday } from '@/lib/birthday';
 import { useUnreadCount } from '@/lib/chat';
-import {
-  canSeePeekMatch,
-  markAskedForBirthday,
-  rememberedMatchTab,
-  usePeekMatchStatus,
-  wasAskedForBirthday,
-} from '@/lib/peekMatch';
+import { useHitUps } from '@/lib/hitups';
 import { colors, isDark } from '@/theme';
 
 const CHAT = 0;
 const CAMERA = 1;
 const HOME = 2;
-// Peek Match – only there for people whose saved birthday says they're 18 or older.
-const MATCH = 3;
-const PAGES = [CHAT, CAMERA, HOME, MATCH];
+const PAGES = [CHAT, CAMERA, HOME];
 
 const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
-// Swipe left/right between Chat ← Camera → Home (→ Match), like Snapchat, or tap the tabs at the bottom.
+// Swipe left/right between Chat ← Camera → Home, like Snapchat, or tap the tabs at the bottom.
 export default function Home() {
   const { userId } = useMe();
   const pager = useRef<PagerView>(null);
@@ -39,30 +31,28 @@ export default function Home() {
   const [swiping, setSwiping] = useState(false);
   const focused = useIsFocused();
   const unread = useUnreadCount(userId, focused);
-  // Other screens can send you back here with ?page=camera (or home / match) to land on that page.
+  // Hit ups waiting for you (shown at the top of Chat, and counted on the Chat tab).
+  const { hitUps, reload: reloadHitUps } = useHitUps(userId, focused);
+  // Other screens can send you back here with ?page=camera (or chat / home) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
-  // The Match tab: shown straight away if this phone remembers you can see it, then checked again.
-  const match = usePeekMatchStatus(userId, focused);
-  const [rememberedMatch] = useState(() => rememberedMatchTab(userId));
-  const showMatch = match.status ? canSeePeekMatch(match.status) : rememberedMatch;
-
   // No birthday saved yet → ask once (you can also add it later in Settings).
-  const noBirthday = match.status !== null && match.status.ageCheck === null;
   useEffect(() => {
-    if (!focused || !noBirthday) return;
+    if (!focused) return;
     let cancelled = false;
-    wasAskedForBirthday(userId).then((asked) => {
-      if (asked || cancelled) return;
-      markAskedForBirthday(userId);
-      router.push('/birthday');
-    });
+    wasAskedForBirthday(userId)
+      .then(async (asked) => {
+        if (asked || cancelled || (await fetchMyBirthday(userId)) !== null || cancelled) return;
+        markAskedForBirthday(userId);
+        router.push('/birthday');
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [focused, noBirthday, userId]);
+  }, [focused, userId]);
 
-  // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Home, 3 = Match (1.5 = halfway to Home).
+  // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Home (1.5 = halfway to Home).
   // Tracked on the phone's animation thread, so the pages move smoothly with your finger.
   const [swipe] = useState(() => {
     const position = new Animated.Value(CAMERA);
@@ -78,7 +68,7 @@ export default function Home() {
     return {
       pageStyles,
       // The tab bar is see-through over the camera (and over Home in dark mode), solid elsewhere.
-      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, isDark ? 0 : 1, 1], extrapolate: 'clamp' }),
+      tabBarSolid: progress.interpolate({ inputRange: PAGES, outputRange: [1, 0, isDark ? 0 : 1], extrapolate: 'clamp' }),
       onPageScroll: Animated.event([{ nativeEvent: { position, offset } }], { useNativeDriver: true }),
     };
   });
@@ -86,21 +76,22 @@ export default function Home() {
   const goTo = (index: number) => pager.current?.setPage(index);
 
   useEffect(() => {
-    const wanted = wantedPage === 'camera' ? CAMERA : wantedPage === 'home' ? HOME : wantedPage === 'match' ? MATCH : null;
-    if (wanted === null || (wanted === MATCH && !showMatch)) return;
+    const wanted = wantedPage === 'camera' ? CAMERA : wantedPage === 'home' ? HOME : wantedPage === 'chat' ? CHAT : null;
+    if (wanted === null) return;
     pager.current?.setPage(wanted);
     router.setParams({ page: undefined });
-  }, [wantedPage, showMatch]);
+    if (wanted === CHAT) reloadHitUps();
+  }, [wantedPage, reloadHitUps]);
 
-  // If the Match tab goes away while you're on it, slide back to Home.
-  useEffect(() => {
-    if (!showMatch && page === MATCH) pager.current?.setPage(HOME);
-  }, [showMatch, page]);
-
-  // The pager needs real pages only (an empty slot makes it crash), so the Match page is only added when shown.
+  // The pager needs real pages only (an empty slot makes it crash).
   const pages = [
     <Animated.View key="chat" style={swipe.pageStyles[CHAT].page}>
-      <ChatPage visible={focused && page === CHAT} onCamera={() => goTo(CAMERA)} />
+      <ChatPage
+        visible={focused && page === CHAT}
+        onCamera={() => goTo(CAMERA)}
+        hitUps={hitUps}
+        onHitUpsChanged={reloadHitUps}
+      />
       <Animated.View style={swipe.pageStyles[CHAT].dim} pointerEvents="none" />
     </Animated.View>,
     <Animated.View key="camera" style={swipe.pageStyles[CAMERA].page}>
@@ -112,14 +103,6 @@ export default function Home() {
       <Animated.View style={swipe.pageStyles[HOME].dim} pointerEvents="none" />
     </Animated.View>,
   ];
-  if (showMatch) {
-    pages.push(
-      <Animated.View key="match" style={swipe.pageStyles[MATCH].page}>
-        <MatchPage visible={focused && page === MATCH} status={match.status} news={match.news} onChanged={match.reload} />
-        <Animated.View style={swipe.pageStyles[MATCH].dim} pointerEvents="none" />
-      </Animated.View>,
-    );
-  }
 
   return (
     <View style={styles.fill}>
@@ -139,9 +122,7 @@ export default function Home() {
       <HomeTabBar
         page={page}
         onSelect={goTo}
-        unread={unread}
-        showMatch={showMatch}
-        matchNews={match.news}
+        unread={unread + hitUps.length}
         solid={swipe.tabBarSolid}
       />
       {/* Light status bar over the camera; elsewhere it follows the app's colors. */}

@@ -9,7 +9,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 
 - We collect what you give us (account, profile, photos, videos, messages, location if you turn it on) so the app can work.
 - We do **not** sell your data, show ads, or use advertising trackers.
-- Your content is shown only to the people you choose (friends, close friends, a group, a match), except Guess Who posts and Discover, which the app explains when you post.
+- Your content is shown only to the people you choose (friends, close friends, a group), except Guess Who posts and Discover, which the app explains when you post.
 - You can delete your account in Settings at any time; that deletes your data.
 - Data is stored on Supabase servers in the **United States (AWS, us-east-1)**.
 
@@ -22,8 +22,8 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 | **Content you post** | Photos, videos (up to 10 s), captions, stickers/filters applied, stories (24 h), Peekaboo drops and whether they were on time, dares you did, Guess Who posts (shown without your name until guessed), group posts, comments, replies, likes, story reactions, dare ideas and votes. | To deliver your content to the people you chose and run those features. | Contract |
 | **Messages** | Text messages, peeks (photos/videos sent in chat), voice notes, when a message was opened, whether a peek was replayed or saved, and screenshot notices (we record that a screenshot of a chat or peek happened, not the screenshot itself). | To deliver chats and the features inside them. | Contract |
 | **Friends and safety** | Friend requests and friendships, close-friends list, groups, blocks, reports you make or that are made about you, forfeits given and received, dare chains and streaks. | To run the social features and keep people safe. | Contract; legitimate interest (safety) |
-| **Location** | Precise GPS position **only while you have the friend map's location sharing turned on**. Turning on ghost mode deletes your stored position. For Peek Match, your position rounded to about 1 km. | Friend map; showing how far away a match is. | Consent (phone permission + in-app switch) |
-| **Peek Match (18+)** | Birthday you typed; the result of the Stripe Identity age check (verified date of birth, status, Stripe's session ID); dating profile (photos, prompts, bio, preferences); likes, matches and match messages; dating blocks. | To run Peek Match and keep it adults-only. | Contract; legal obligation / legitimate interest (age verification) |
+| **Location** | Precise GPS position **only while you have the friend map's location sharing turned on**. Turning on ghost mode deletes your stored position. | Friend map. | Consent (phone permission + in-app switch) |
+| **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups between people of the same age group (under 18 / 18+), limit them to 10 a day, and run the feature. | Contract; legitimate interest (safety) |
 | **Device and technical data** | Push-notification token for your device, device type and app version, the IP address and timestamps of requests to our servers (kept in server logs), crash-free operation data from Expo's update service (device platform, app runtime version, when the app checked for updates). | To send notifications, keep the app updated, secure the service and fix problems. | Legitimate interest |
 | **Support** | Anything you send us by email. | To help you. | Legitimate interest |
 
@@ -38,7 +38,7 @@ We do **not** collect: contacts/address book, health data, financial information
 - **Peeks and messages:** only the person you sent them to.
 - **Profile:** your username, display name, photo, bio, song and friend count are visible to other users who find you.
 - **Location:** friends only, only while sharing is on.
-- **Peek Match profile:** other verified adults in Peek Match, filtered by your preferences and distance. Your Peekaboo friends do not see it unless you match and choose to add them.
+- **Hit ups:** the person you hit up sees your profile and your message. If they ignore it, you are not told. Your birthday is never shown to anyone.
 - **Who Peeked:** the owner of a drop can see which friends revealed it or scrolled past.
 
 ## 4. Who we share data with (service providers)
@@ -48,7 +48,6 @@ We share data only with companies that help run Peekaboo, under contracts that l
 | Provider | What they do | Where |
 | --- | --- | --- |
 | **Supabase, Inc.** | Database, file storage, login/authentication, server functions and server logs. | United States (AWS us-east-1) |
-| **Stripe, Inc. (Stripe Identity)** | Verifies ID and age for Peek Match. Stripe receives the ID photo and selfie directly; we store only the result. | United States / Ireland (see Stripe's policy) |
 | **Expo (650 Industries, Inc.)** | Delivers app updates and routes push notifications to Apple and Google. | United States |
 | **Apple Inc.** | App Store, push notifications on iPhone, iTunes Search for profile-song previews (your search words are sent to Apple). | United States and worldwide |
 | **Google LLC** | Google Play, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google). | United States and worldwide |
@@ -69,11 +68,11 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 | Posts, peeks, messages, voice notes, comments, likes | Until you delete them, or your account. |
 | Location | Replaced each time it updates; deleted when you turn on ghost mode or stop sharing; deleted with your account. |
 | Reports and blocks | For as long as needed to keep people safe, then deleted with the account. |
-| Age-check result | Kept while your account exists (so you do not have to pay for a new check if you leave and rejoin Peek Match); Stripe keeps ID images under its own policy. |
+| Birthday and hit ups | Kept while your account exists (so the same-age-group rule and the daily limit keep working). |
 | Server logs | Up to 90 days. |
 | Everything else | Deleted when you delete your account (see below). |
 
-**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, dating profile and all your files right away. Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things that can outlive the deletion.
+**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, hit ups and all your files right away. Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things that can outlive the deletion.
 
 ## 7. Your rights
 
@@ -86,7 +85,7 @@ Wherever you live, you can: see the data we hold about you; correct it (most of 
 
 ## 8. Children
 
-Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email [CONTACT EMAIL] and we will delete it. Users aged 13–17 need a parent's or guardian's permission; Peek Match is only for verified adults.
+Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email [CONTACT EMAIL] and we will delete it. Users aged 13–17 need a parent's or guardian's permission; Hit ups only connect people under 18 with other people under 18, and adults with adults.
 
 ## 9. Security
 

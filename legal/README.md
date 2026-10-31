@@ -4,7 +4,7 @@ These are the documents Peekaboo needs before it goes on the App Store or Google
 
 | File | What it is | Where it must appear |
 | --- | --- | --- |
-| `TERMS_OF_SERVICE.md` | The agreement between you (the operator) and every user. Includes the dare waiver, the Peek Match rules, limits on liability and Apple's required terms. | Link at sign-up (must be accepted), in Settings, and on the App Store listing. |
+| `TERMS_OF_SERVICE.md` | The agreement between you (the operator) and every user. Includes the dare waiver, the hit-up rules, limits on liability and Apple's required terms. | Link at sign-up (must be accepted), in Settings, and on the App Store listing. |
 | `PRIVACY_POLICY.md` | What data the app collects, why, where it is stored, who sees it, and how people delete it. Written to match what the app actually does. | Public web page (Apple and Google both require a URL), link at sign-up, in Settings, and in the App Store "Privacy Policy" field. |
 | `COMMUNITY_GUIDELINES.md` | The rules for what people may post and how they treat each other. | In Settings and on the Report screen. |
 | `DARE_SAFETY_RULES.md` | The short safety rules and the "I understand" text people must accept before their first dare, Drop or forfeit. | Shown in the app before the first dare (one-time) and reachable from the Dare screen. |

@@ -9,9 +9,9 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 1.1 You must be **at least 13 years old**. If you are under 13, you may not create an account, and we delete accounts we learn belong to children under 13.
 
-1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app. Some features are not available to you (see section 6).
+1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app. Hit ups only connect you with other people under 18 (see section 6).
 
-1.3 **Peek Match (dating) is for adults only (18+)** and requires a government-ID age check (section 6).
+1.3 **Hit ups are only between people of the same age group**: people under 18 can only hit up, and be hit up by, other people under 18, and adults only by adults. This is based on the birthday you give us (section 6).
 
 1.4 You may not use Peekaboo if we have previously banned you, or if the law where you live does not allow you to use it.
 
@@ -27,7 +27,7 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 ## 3. Your content
 
-3.1 "Content" means anything you post or send on Peekaboo: photos, videos, voice notes, stories, peeks, drops, dares, Guess Who posts, captions, comments, messages, reactions, dating profiles, dare ideas and votes.
+3.1 "Content" means anything you post or send on Peekaboo: photos, videos, voice notes, stories, peeks, drops, dares, Guess Who posts, captions, comments, messages, reactions, hit ups, dare ideas and votes.
 
 3.2 **You own your content.** You give us a worldwide, non-exclusive, royalty-free licence to host, store, copy, display, transmit and adapt (for example resize or compress) your content, only so that Peekaboo can work as designed: showing it to the people you chose, delivering it to their devices, making thumbnails, and keeping backups. The licence ends when you delete the content or your account, except for copies that the people you sent it to have already received, screenshots or saves they have made, and backups we delete in the normal course of business.
 
@@ -69,15 +69,15 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 5.3 We may report serious matters (for example threats, child-safety concerns or imminent danger) to the police or other authorities.
 
-## 6. Peek Match (dating) and age verification
+## 6. Hit ups and your birthday
 
-6.1 Peek Match is off by default and only available to verified adults. To join, you must type your birthday and pass an identity and age check run by **Stripe Identity** (a photo of your government ID and a selfie). Stripe processes those images under its own terms and privacy policy; Peekaboo receives only the result of the check and the date of birth on the ID.
+6.1 A **hit up** lets you reach out to someone you are not friends with yet, with an optional short message. They can **hit back** (you become friends and can chat) or **ignore** it (we do not tell you). You cannot send them anything else until they hit back.
 
-6.2 If you are under 18, or your check fails or does not match your profile, you cannot use Peek Match. Trying to cheat the age check is a serious breach and leads to a permanent ban.
+6.2 To use hit ups you must give your **real birthday**. It is saved once, only you can see it, and it cannot be changed. Giving a false birthday to reach people of a different age group is a serious breach and leads to a permanent ban.
 
-6.3 Peek Match connects you with other adults; **we do not vet them beyond the age check**. Meeting someone from the internet carries risk. Meet in public places, tell a friend, and never send money. We are not responsible for what other users do, online or offline.
+6.3 You can send up to **10 hit ups a day**, and one per person. You choose who can hit you up in **Settings → Who can hit me up** (everyone, friends of friends, or nobody). Blocking someone stops all hit ups between you, and every hit up can be reported.
 
-6.4 Adding a match as a Peekaboo friend shares your normal Peekaboo content with them, like any other friend.
+6.4 Hit ups are for making friends. Do not use them to harass, spam, pressure or flirt with anyone who has not shown interest, or to send sexual content. **We do not check identities or ages beyond the birthday people give us**, and people online may not be who they say they are. Never send money, never share private information with someone you don't know, and if you meet someone in person, meet in a public place and tell someone you trust. We are not responsible for what other users do, online or offline.
 
 ## 7. Location, notifications and device features
 
@@ -95,7 +95,7 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 ## 9. Third-party services
 
-Peekaboo runs on services provided by others, including Supabase (database, file storage and login), Expo (app updates and push notifications), Stripe (identity checks), Apple (iTunes song previews, App Store, push notifications) and Google (Android map, Google Play, push notifications). Their terms apply to their services. We are not responsible for their availability or actions.
+Peekaboo runs on services provided by others, including Supabase (database, file storage and login), Expo (app updates and push notifications), Apple (iTunes song previews, App Store, push notifications) and Google (Android map, Google Play, push notifications). Their terms apply to their services. We are not responsible for their availability or actions.
 
 ## 10. Indemnity
 

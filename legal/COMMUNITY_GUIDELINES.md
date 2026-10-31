@@ -17,20 +17,20 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 
 ## Keep it clean
 
-- **No nudity or sexual content.** This includes "almost" nudity, sexual acts, and sexual solicitation. Peek Match is for meeting people, not for explicit content. Any sexual content involving a minor is reported to the authorities immediately and permanently banned.
+- **No nudity or sexual content.** This includes "almost" nudity, sexual acts, and sexual solicitation. Hit ups are for making friends, not for sexual messages. Any sexual content involving a minor is reported to the authorities immediately and permanently banned.
 - **No gore or graphic violence.**
 - **No spam, scams or fake accounts.** No bots, no impersonation, no mass friend-requesting, no selling, no phishing.
-- **Be honest in Guess Who and Peek Match.** Don't pretend to be someone else or use someone else's photos.
+- **Be honest in Guess Who and hit ups.** Don't pretend to be someone else or use someone else's photos.
 
 ## Respect the law and the app
 
 - Nothing illegal: no theft, trespass, vandalism, fraud, or content that infringes copyright or trademarks.
 - Don't try to break, scrape, overload or hack Peekaboo, or get around a block or a ban.
-- Don't cheat the Peek Match age check. It's a permanent ban.
+- Don't give a fake birthday to reach people outside your age group. It's a permanent ban.
 
 ## Reporting and blocking
 
-- Every post, story, peek, comment, profile, Guess Who post and Peek Match profile has **Report** (with a reason: spam, bullying, nudity, other). Reports are confidential.
+- Every post, story, peek, comment, profile, Guess Who post and hit up has **Report** (with a reason: spam, bullying, nudity, other). Reports are confidential.
 - You can **block** anyone from their profile. Blocked people can't see your content, message you, or find you on the map, and you won't see them.
 - We review reports and act on objectionable content **within 24 hours**, removing content and the people who post it where needed.
 - Emergencies: if someone is in immediate danger, contact your local emergency services first.

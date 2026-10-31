@@ -16,7 +16,11 @@ export type Profile = {
   song_artwork_url?: string | null;
   song_preview_url?: string | null;
   song_link_url?: string | null;
+  // Who can hit you up 👋 (Settings → Who can hit me up).
+  hit_ups_from?: HitUpsFrom;
 };
+
+export type HitUpsFrom = 'everyone' | 'friends_of_friends' | 'nobody';
 
 // Photos and videos are stored the same way. A video also has a still picture from it (poster) and, if you
 // added text or stickers, a see-through picture with them (overlay) that's shown on top while it plays.

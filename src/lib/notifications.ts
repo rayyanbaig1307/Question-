@@ -132,13 +132,20 @@ function openFor(data: Record<string, unknown> | undefined) {
     case 'dare':
       router.push('/dare');
       break;
-    case 'peek-match':
-      router.push('/peek-match/matches');
-      break;
-    case 'peek-match-chat':
-      if (typeof data.match === 'string') router.push(`/peek-match/chat/${data.match}`);
+    case 'hitups':
+      // Hit ups are at the top of Chat.
+      router.dismissTo({ pathname: '/', params: { page: 'chat' } });
       break;
   }
+}
+
+// Calls `onArrive` when a notification of this type comes in while Peekaboo is open.
+export function onNotificationArrived(type: string, onArrive: () => void): () => void {
+  if (!Notifications) return () => {};
+  const subscription = Notifications.addNotificationReceivedListener((notification) => {
+    if ((notification.request.content.data as Record<string, unknown> | undefined)?.type === type) onArrive();
+  });
+  return () => subscription.remove();
 }
 
 export function useNotificationTaps(enabled: boolean) {

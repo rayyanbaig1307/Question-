@@ -5,10 +5,11 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { formatBirthday } from '@/components/match/BirthdayForm';
+import { formatBirthday } from '@/components/BirthdayForm';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
+import { fetchMyBirthday } from '@/lib/birthday';
 import { friendlyError } from '@/lib/errors';
 import { inviteFriends } from '@/lib/invite';
 import { contactEmail, type LegalPage } from '@/lib/legal';
@@ -16,14 +17,14 @@ import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
-import { fetchMyBirthday } from '@/lib/peekMatch';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
+import type { HitUpsFrom } from '@/lib/types';
 import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
 
 export default function Settings() {
   const { userId, profile, setProfile, signOut } = useMe();
-  const { showToast } = useOverlays();
+  const { showToast, showOptions } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
@@ -76,6 +77,24 @@ export default function Settings() {
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
+  }
+
+  function chooseHitUps() {
+    showOptions({
+      title: 'Who can hit you up? 👋',
+      message: 'Hit ups are only ever between people your age (teens with teens, adults with adults).',
+      options: HIT_UPS_FROM.map((option) => ({
+        label: `${option.label}${profile?.hit_ups_from === option.key ? ' ✓' : ''}`,
+        onPress: async () => {
+          try {
+            setProfile(await updateMyProfile(userId, { hit_ups_from: option.key }));
+            showToast(`Hit ups: ${option.label.toLowerCase()}`);
+          } catch (error) {
+            Alert.alert('Could not save', friendlyError(error));
+          }
+        },
+      })),
+    });
   }
 
   async function setHidden(hidden: boolean) {
@@ -164,6 +183,13 @@ export default function Settings() {
                 thumbColor={colors.white}
               />
             }
+          />
+          <Row
+            icon="hand-right"
+            color={colors.accent}
+            title="Who can hit me up"
+            subtitle={HIT_UPS_FROM.find((option) => option.key === (profile?.hit_ups_from ?? 'everyone'))?.label}
+            onPress={chooseHitUps}
           />
           <Row icon="map" color={colors.green} title="Friend map" onPress={() => router.push('/map')} />
           <Row
@@ -282,6 +308,12 @@ export default function Settings() {
     </View>
   );
 }
+
+const HIT_UPS_FROM: { key: HitUpsFrom; label: string }[] = [
+  { key: 'everyone', label: 'Everyone' },
+  { key: 'friends_of_friends', label: 'Friends of friends' },
+  { key: 'nobody', label: 'Nobody' },
+];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

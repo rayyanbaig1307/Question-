@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 // ---------------------------------------------------------------------------
 
 // Bump a version when a change needs everyone to agree again – they're asked on their next open.
-export const TERMS_VERSION = '2026-10-31';
+export const TERMS_VERSION = '2026-10-31.2';
 export const DARE_RULES_VERSION = '2026-10-31';
 
 // The documents you can open in the app (/legal/<key>).

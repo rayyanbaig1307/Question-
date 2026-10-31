@@ -482,94 +482,6 @@ Works in Expo Go now. The Android download needs the next new version (voice not
 5. On **your own** story you still see "👁 N seen" instead of the emoji row.
 6. Once the story is gone (after 24 hours or deleted), the reaction stays in the chat without the picture.
 
-## Peek Match (dating, 18+) – Part 1: the safety gate 💘
-
-**Use test accounts.** Your birthday can only be entered once per account.
-
-Setting up the age check (once, by the app owner):
-1. Make a free Stripe account at stripe.com. Stay in **Test mode** (the switch at the top) while testing.
-2. In Stripe: Developers → API keys → **Create restricted key**. Give it **Write** access to
-   "Identity verification sessions and reports" and **Read** access to sensitive verification results
-   (the date of birth). Copy the key.
-3. In Supabase: Edge Functions → **Secrets** → add `STRIPE_SECRET_KEY` = that key. (Never paste it in chat.)
-4. For real checks later: switch Stripe to Live mode, get Identity approved, and replace the secret with a
-   live key. Each real check costs about $1.50.
-
-Testing (Peek Match is now its own tab – see Step 32 below):
-1. **Under 18:** with a test account, add a birthday less than 18 years ago (Peekaboo asks once, or Settings →
-   **Birthday**) → there's **no Match tab**, and Peek Match is never mentioned anywhere on that account.
-2. **18+:** with another account, add an adult birthday → a **Match 💘** tab appears at the bottom right (after Home) →
-   "One quick age check 🪪".
-   - Before the Stripe key is added: it says age checks aren't switched on yet.
-   - After: tap **Check my age** → the Stripe page opens. In test mode you can pick a test result instead of
-     using a real ID. Finish, come back to Peekaboo → it checks by itself (or tap "I'm done – check now").
-   - Passed → "You're verified ✅" → **Turn on Peek Match** → "Peek Match is on 💘".
-   - Failed → it says why, with **Try again**.
-3. ⚙ (top left of the Match tab) → **Hide my dating profile** switch, and **Leave Peek Match** (deletes all
-   dating stuff; your age check is kept, so you don't pay for it twice).
-
-## Peek Match – Part 2: the dating profile 💘
-
-(You need to be through Part 1: verified and Peek Match switched on.)
-1. Match tab → **Make my profile** (or ⚙ → **Edit my dating profile**).
-2. **Photos:** tap ＋ to add from your camera roll (3 to 6). Tap a photo → **Make this my main photo** or
-   **Remove photo**. A 7th photo isn't allowed.
-3. **The basics:** first name, age (taken from your ID check – can't be changed), I am a Woman / Man /
-   Nonbinary, and your **rough area**: tap **Use my location 📍** (allow location) – it fills in an area like
-   "East London" you can edit. Your exact spot is never saved: it's rounded to about 1 km on the phone first.
-4. **Prompts:** 3 prompts like "A dare I'd actually do…" – tap the prompt to swap it, type an answer.
-5. **Who I'd like to see:** Women / Men / Nonbinary people, an age range (18+), and a distance (5–250 km).
-6. **Save** → back on the Match tab: once it's finished, people start showing up. ⚙ shows "✅ Ann · 4 photos ·
-   3 prompts · showing" (or what's still missing). Turn on **Hide my dating profile** → the Match tab says
-   "Your dating profile is hidden" with **Show me again**.
-7. **Leave Peek Match** (in ⚙) deletes the profile and all its photos.
-
-## Peek Match – Part 3: finding people 👀
-
-You need 2 verified test accounts in Peek Match, with finished profiles that fit each other (e.g. a woman
-looking for men and a man looking for women, ages in each other's range, within each other's distance).
-1. Open the **Match 💘** tab – people show up once your profile is finished and not hidden.
-2. One person at a time: name, age, area and a **rough** distance ("Less than 2 km away", "5 km away"…),
-   then photos and prompts one after another.
-3. Tap the **♥ on a photo or a prompt** → a sheet shows what you're liking → add a comment if you like →
-   **Send like**. The other person gets "Someone liked your dating profile" (with push on) – it doesn't say who.
-4. Tap **✕** (bottom left) to skip. People you liked or skipped don't come round again.
-5. On the other account, the person who liked them shows up **first**.
-6. **•••** (next to their name) **→ Report** (Spam / Bullying / Nudity / Something else) → saved in Supabase **reports** against their real
-   account, details "Peek Match profile". **Block** → you never see each other in Peek Match again (blocking
-   someone in the normal app does the same).
-7. People who don't fit what *both* of you are looking for never show up. Nobody can see your friends, posts,
-   stories or exact location.
-
-## Peek Match – Part 4: matches and the match chat 💬
-
-Use the same 2 test accounts as Part 3 (they fit each other).
-1. Account A likes B (♥ on a photo or prompt, maybe with a comment).
-2. Account B: Match tab → **💬** (top right, with a number when something's new) → **Likes you** shows A's photo, name and comment.
-   Tap it → "💘 A liked your answer: …" + their comment + their profile → **💘 Match** (or ✕ to skip).
-   (Or B finds A first on the Match tab and likes back – then B sees "It's a match! 💘" → **Say hi 👋**.)
-3. Both get "It's a match! 💘" (with push on) and the chat opens.
-4. In the chat, their picture at the top is **blurred** 🙈, with a bar: "Photos unblur when you've both sent
-   5 messages · You 2/5 · Ben 3/5". Tap their name to see their profile – photos blurred too.
-5. Send 5 messages each → a buzz, "📸 Photos unblurred! Peekaboo 👀", and everything is clear.
-6. New messages pop in live; the Matches list shows the last message and a pink dot for unread.
-7. **•••** in the chat: **Unmatch** (the chat disappears for both), **Report** (saved in **reports** as
-   "Peek Match chat"), **Block** (you never see each other in Peek Match again; the chat ends).
-
-## Peek Match – Part 5: Add as friend 🤝
-
-Use 2 test accounts that have matched (Part 4).
-1. Account A, in the match chat: **••• → Add as a Peekaboo friend 🤝** → it explains that this shares your
-   normal Peekaboo profile once they say yes → **Send request**. The chat shows
-   "💌 You asked Ben to be Peekaboo friends". (Asking again doesn't send another.)
-2. Account B: the match chat shows a pink card **"💌 Ann wants to be Peekaboo friends · Say yes"** (and B also
-   gets a normal friend request in Friends, with push on).
-3. B taps **Say yes** → "🎉 You're now Peekaboo friends!" appears in the chat for both. They're now in each
-   other's normal **Friends** list, and can chat, send peeks and see stories like any friend.
-4. ••• now shows **See Ben's Peekaboo profile** → opens their normal profile.
-5. Before B says yes, neither of you can see the other's normal account. The 💌/🎉 notices don't count toward
-   the 5 messages for unblurring photos.
-
 ## Step 29 – Profile song 🎵
 
 1. Your profile → **Add a profile song 🎵**.
@@ -596,30 +508,18 @@ Use 2 test accounts that have matched (Part 4).
 
 1. Settings → **Appearance** → tap **☀️ Light**. Peekaboo restarts for a second and comes back in light colors
    (soft white background, same pink/purple style).
-2. Check the main screens: Chat, Stories, Discover, profile, Settings, chats, comments, Peek Match. Text should
+2. Check the main screens: Chat, Stories, Discover, profile, Settings, chats, comments. Text should
    be dark on light backgrounds; the camera, full-screen photos, peeks and stories stay dark (they're photos).
 3. **📱 Match phone** → follows your phone's own light/dark setting. Switch your phone's appearance in its
    settings and come back – Peekaboo switches too.
 4. **🌙 Dark** → back to the dark look.
 (The Android download needs the next new version for "Match phone" to follow the phone; Light and Dark work.)
 
-## Step 32 – Peek Match is part of the app now 💘
-
-1. **Birthday:** open Peekaboo → it asks "When's your birthday? 🎂" once (**Not now** is fine – you can add it
-   later in Settings → **Birthday**, which then shows your birthday and "only you see this"). It can't be changed.
-2. **18 or older** → an extra tab, **Match 💘**, appears at the bottom (swipe left from Home, or tap it).
-   Under 18 or no birthday → no Match tab at all.
-3. The Match tab walks you through it: the safety promises → **Check my age** (ID + selfie) → **Turn on Peek
-   Match** → **Make my profile** → then people show up right there, one at a time (♥ to like, ✕ to skip,
-   ••• next to the name to report/block).
-4. Top of the Match tab: **⚙** = Peek Match settings (edit profile, hide, leave) and **💬** = matches & likes.
-   A pink dot on the Match tab (and a number on 💬) means someone liked you or a match sent a message.
-5. Settings no longer has a Dating section.
+## Step 32 – (Peek Match was here – it's been removed and replaced by Hit ups, see Step 43)
 
 ## Step 33 – 3 tabs: Chat · Camera · Home 🏠
 
-1. The bottom bar now has **3 tabs**: 💬 **Chat** · 📷 **Camera** · 🏠 **Home** (plus 💘 **Match** for adults who
-   added their birthday). Peekaboo still opens on the **Camera**. Swipe left/right between them like Snapchat, or
+1. The bottom bar now has **3 tabs**: 💬 **Chat** · 📷 **Camera** · 🏠 **Home**. Peekaboo still opens on the **Camera**. Swipe left/right between them like Snapchat, or
    tap a tab.
 2. **Home** is Stories + Discover in one, like Instagram's home page:
    - **Top row:** story circles that scroll sideways – **My Story** first (pink ＋ to add one; tap the circle to
@@ -746,3 +646,34 @@ Needs the **new Android download (v9)** – it has the face tracking built in. E
 4. In this mode the shutter takes photos only (hold does nothing).
 5. In **Expo Go** (or an older download) the 🤪 bubble shows "The googly lens works in the Peekaboo app download"
    and the camera stays normal. Your iPhone gets the lens once TestFlight is set up.
+
+## Step 43 – Hit ups 👋 (Peek Match is gone)
+
+You need 2 test accounts that **aren't friends**, both with a birthday saved, both 18+ (or both under 18).
+1. **The dating part is gone:** no Match tab, no dating profiles, no ID check, no Stripe. The bottom bar is just
+   Chat · Camera · Home.
+2. **Birthday:** if an account has none, Peekaboo asks once when it opens (or Settings → **Birthday**). Saved
+   once, only you see it, can't be changed.
+3. **Hit up:** on account A, open B's profile (search in Friends, or tap them on Home) → under **Add friend**
+   there's **👋 Hit up**. Tap it → write a message if you want (up to 150 letters) → **Send hit up** → "Hit up
+   sent 👋", and the button now says **Hit up sent ✓**.
+4. **B gets it:** a notification "👋 A hit you up" (with push on – it uses the Friend requests switch). Tapping
+   it opens **Chat**, where a **Hit ups 👋** box at the top shows A's picture, name and message. The Chat tab
+   has a red number for it too.
+5. **Hit back:** B taps **Hit back** → "You and A can chat now 🎉" → the chat opens with A's message already in
+   it. They're friends now. A gets "👋 B hit you back!" (and **not** the usual "new friend" alert).
+6. **Ignore** (try with a third account): the hit up disappears for B. A is **never told** – A's button keeps
+   saying **Hit up sent ✓**.
+7. **No messages until they hit back:** before B hits back, B isn't in A's Chat list and nothing else can be sent.
+8. **Both hit each other up** → you're connected straight away (B sees **👋 Hit back – A hit you up** on A's
+   profile).
+9. **Safety rules:**
+   - A teen (13–17) and an adult (18+) never see a Hit up button on each other's profiles.
+   - No birthday → tapping **👋 Hit up** says "Add your birthday first".
+   - 10 hit ups a day; the 11th says "You've used your 10 hit ups for today".
+   - Settings → **Who can hit me up**: **Everyone** / **Friends of friends** (only people who share a friend
+     with you) / **Nobody** (the button disappears for everyone).
+   - Blocked (either way) → no button.
+   - **•••** on every hit up in Chat → See profile · **Report** · **Block**.
+10. **New Terms:** because the Terms changed (dating removed, hit up rules added), everyone sees "Our Terms"
+    once more and taps agree.

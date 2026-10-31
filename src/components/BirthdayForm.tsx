@@ -3,7 +3,7 @@ import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { friendlyError } from '@/lib/errors';
-import { setBirthday } from '@/lib/peekMatch';
+import { setBirthday } from '@/lib/birthday';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
