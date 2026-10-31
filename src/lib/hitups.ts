@@ -23,7 +23,8 @@ export type HitUp = {
 };
 
 // What the Hit up button on someone's profile shows.
-export type HitUpStatus = 'can' | 'sent' | 'theirs' | 'friends' | 'self' | 'no_birthday' | 'unavailable';
+// 'their_birthday' = they haven't added their birthday yet, so they can't get hit ups until they do.
+export type HitUpStatus = 'can' | 'sent' | 'theirs' | 'friends' | 'self' | 'no_birthday' | 'their_birthday' | 'unavailable';
 
 // Hit ups waiting for you, newest first.
 export async function fetchHitUpsForMe(me: string): Promise<HitUp[]> {

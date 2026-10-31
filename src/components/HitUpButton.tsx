@@ -69,6 +69,21 @@ export function HitUpButton({ person, onConnected }: {
     );
   }
 
+  if (status === 'their_birthday') {
+    return (
+      <Button
+        title="👋 Hit up"
+        variant="secondary"
+        onPress={() =>
+          Alert.alert(
+            `${name} can't get hit ups yet`,
+            "They haven't added their birthday – hit ups are only between people the same age. They can add it in Settings → Birthday. You can still add them as a friend.",
+          )
+        }
+      />
+    );
+  }
+
   if (status === 'sent') {
     return (
       <Button

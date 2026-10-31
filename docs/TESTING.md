@@ -670,6 +670,8 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 9. **Safety rules:**
    - A teen (13–17) and an adult (18+) never see a Hit up button on each other's profiles.
    - No birthday → tapping **👋 Hit up** says "Add your birthday first".
+   - **They** have no birthday → tapping **👋 Hit up** says "<name> can't get hit ups yet" (they add it in Settings →
+     Birthday, then it works).
    - 10 hit ups a day; the 11th says "You've used your 10 hit ups for today".
    - Settings → **Who can hit me up**: **Everyone** / **Friends of friends** (only people who share a friend
      with you) / **Nobody** (the button disappears for everyone).
