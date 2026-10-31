@@ -677,3 +677,12 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    - **•••** on every hit up in Chat → See profile · **Report** · **Block**.
 10. **New Terms:** because the Terms changed (dating removed, hit up rules added), everyone sees "Our Terms"
     once more and taps agree.
+
+## Step 44 – Your story from your profile 📸
+
+1. Post something to **your story**, then open your profile (your picture, top right of Chat or Home).
+2. Your profile picture now has the colorful ring → **tap it** → your story plays.
+3. At the bottom of your own story: **👁 N seen** and **🗑 Delete**. Delete asks first, then removes that photo or
+   video for everyone (••• → **Delete from my story** works too).
+4. No story up → no ring, and tapping the picture does nothing. On a friend's profile, the ring means they have
+   a story up – tap it to watch.

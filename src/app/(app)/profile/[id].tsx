@@ -16,6 +16,7 @@ import { fetchRelation, type Relation } from '@/lib/friends';
 import { fetchUserPosts } from '@/lib/posts';
 import { fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
 import { profileSong } from '@/lib/songs';
+import { fetchStoryRing } from '@/lib/stories';
 import type { Post, Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -25,6 +26,8 @@ type Loaded = {
   stats: ProfileStats;
   posts: Post[];
   relation: Relation;
+  // They have a story up right now that you can see (tap their picture to watch it).
+  hasStory: boolean;
 };
 
 export default function ProfileScreen() {
@@ -39,17 +42,19 @@ export default function ProfileScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [profile, stats, posts, relation] = await Promise.all([
+      const [profile, stats, posts, relation, story] = await Promise.all([
         fetchProfile(id),
         fetchProfileStats(id),
         fetchUserPosts(id),
         isMe ? Promise.resolve<Relation>({ kind: 'none' }) : fetchRelation(userId, id),
+        fetchStoryRing(userId, id).catch(() => null),
       ]);
-      setData({ profile, stats, posts, relation });
+      setData({ profile, stats, posts, relation, hasStory: !!story && story.stories.length > 0 });
     } catch (error) {
       console.warn('Could not load profile', error);
       setData(
-        (previous) => previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], relation: { kind: 'none' } },
+        (previous) =>
+          previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], relation: { kind: 'none' }, hasStory: false },
       );
     }
   }, [id, isMe, userId]);
@@ -122,7 +127,14 @@ export default function ProfileScreen() {
   const profileHeader = (
     <View style={styles.header}>
       <View style={styles.topRow}>
-        <Avatar path={profile.avatar_path} name={profile.display_name || profile.username} size={92} ring />
+        {/* A colorful ring = they have a story up: tap to watch it (on your own, you can delete from there). */}
+        <Pressable
+          disabled={!data.hasStory}
+          onPress={() => router.push({ pathname: '/stories/[user]', params: { user: profile.id } })}
+          accessibilityRole="button"
+          accessibilityLabel={isMe ? 'See my story' : `See ${profile.username}'s story`}>
+          <Avatar path={profile.avatar_path} name={profile.display_name || profile.username} size={92} ring={data.hasStory} />
+        </Pressable>
         <View style={styles.stats}>
           <Stat number={data.stats.posts} label={data.stats.posts === 1 ? 'Post' : 'Posts'} />
           <Pressable disabled={!isMe} onPress={() => router.push('/friends')} accessibilityLabel="My friends">

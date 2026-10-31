@@ -146,6 +146,40 @@ export default function StoryViewer() {
     }
   }
 
+  // Delete the one you're looking at from your story (asks first).
+  function confirmDelete(onCancel?: () => void) {
+    if (!ring || !story) return;
+    setPaused(true);
+    Alert.alert('Delete this from your story?', "It's gone for everyone right away.", [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+        onPress: () => {
+          setPaused(false);
+          onCancel?.();
+        },
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteStory(story);
+            showToast('Deleted from your story 🗑️');
+            const remaining = ring.stories.filter((s) => s.id !== story.id);
+            setRing({ ...ring, stories: remaining });
+            // (If that was the last one, the viewer closes by itself.)
+            setIndex(Math.min(index, Math.max(0, remaining.length - 1)));
+          } catch (error) {
+            Alert.alert('Could not delete', friendlyError(error));
+          } finally {
+            setPaused(false);
+          }
+        },
+      },
+    ]);
+  }
+
   function openMenu() {
     if (!ring || !story) return;
     setPaused(true);
@@ -159,30 +193,7 @@ export default function StoryViewer() {
             label: 'Add to my profile',
             onPress: () => router.push({ pathname: '/post-compose', params: { story: story.id } }),
           },
-          {
-            label: 'Delete this photo',
-            destructive: true,
-            onPress: () =>
-              Alert.alert('Delete this photo from your story?', undefined, [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await deleteStory(story);
-                      showToast('Photo deleted 🗑️');
-                      const remaining = ring.stories.filter((s) => s.id !== story.id);
-                      setRing({ ...ring, stories: remaining });
-                      // (If that was the last one, the viewer closes by itself.)
-                      setIndex(Math.min(index, Math.max(0, remaining.length - 1)));
-                    } catch (error) {
-                      Alert.alert('Could not delete', friendlyError(error));
-                    }
-                  },
-                },
-              ]),
-          },
+          { label: 'Delete from my story', destructive: true, onPress: () => confirmDelete() },
         ],
       });
     } else {
@@ -282,10 +293,16 @@ export default function StoryViewer() {
 
       {isMine ? (
         <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
-          <Pressable style={styles.viewersButton} onPress={() => setViewersOpen(true)}>
-            <Ionicons name="eye" size={18} color={colors.white} />
-            <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
-          </Pressable>
+          <View style={styles.myButtons}>
+            <Pressable style={styles.viewersButton} onPress={() => setViewersOpen(true)}>
+              <Ionicons name="eye" size={18} color={colors.white} />
+              <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
+            </Pressable>
+            <Pressable style={styles.viewersButton} onPress={() => confirmDelete()} accessibilityLabel="Delete from my story">
+              <Ionicons name="trash" size={18} color={colors.white} />
+              <Text style={styles.viewersText}>Delete</Text>
+            </Pressable>
+          </View>
         </SafeEdge>
       ) : (
         <SafeEdge edge="bottom" style={styles.bottom} pointerEvents="box-none">
@@ -479,6 +496,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     overflow: 'hidden',
+  },
+  myButtons: {
+    flexDirection: 'row',
+    gap: space.sm,
   },
   viewersButton: {
     flexDirection: 'row',
