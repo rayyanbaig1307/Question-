@@ -11,6 +11,7 @@ import { DareRulesSheet } from '@/components/DareRulesSheet';
 import { useOverlays } from '@/components/Overlays';
 import { PostPreview } from '@/components/PostPreview';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { StoryPreview } from '@/components/StoryPreview';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
@@ -54,6 +55,9 @@ export default function Share() {
   const { showToast } = useOverlays();
   // "Post to my profile" first shows how the post will look, with the caption still editable.
   const [previewOpen, setPreviewOpen] = useState(false);
+  // "My Story" first shows the story full screen, with Edit (back to the editor) or Share to story.
+  const [storyPreviewOpen, setStoryPreviewOpen] = useState(false);
+  const [storyChecked, setStoryChecked] = useState(false);
   const insets = useSafeAreaInsets();
   const todaysDare = useDare(todayDareDay());
   // Dares, drops and forfeits need the one-time "Before your first dare" agreement.
@@ -109,9 +113,13 @@ export default function Share() {
   // A dare, drop or forfeit photo is a post on your profile too, so "Post to my profile" isn't needed then.
   const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
-  async function send() {
+  async function send(storyOk = storyChecked) {
     if ((toDare || toDrop || toForfeit) && !dareRules.accepted) {
       setRulesOpen(true);
+      return;
+    }
+    if (toStory && !done.story && !storyOk) {
+      setStoryPreviewOpen(true);
       return;
     }
     if (postToProfile && !done.profile) {
@@ -119,6 +127,20 @@ export default function Share() {
       return;
     }
     await sendNow();
+  }
+
+  // From the story preview: carry on (the profile-post preview comes next if that's picked too).
+  function shareStory() {
+    setStoryChecked(true);
+    setStoryPreviewOpen(false);
+    // Let the story preview slide away before anything else opens.
+    setTimeout(() => send(true), Platform.OS === 'ios' ? 500 : 250);
+  }
+
+  // From the story preview: back to the editor, with your text and stickers as you left them.
+  function editStory() {
+    setStoryPreviewOpen(false);
+    setTimeout(() => router.back(), Platform.OS === 'ios' ? 500 : 250);
   }
 
   async function sendNow() {
@@ -317,7 +339,7 @@ export default function Share() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.lg }]}>
-          <Button title="Send" icon="send" onPress={send} loading={busy} disabled={nothingPicked} />
+          <Button title="Send" icon="send" onPress={() => send()} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
       <Modal visible={previewOpen} transparent animationType="slide" onRequestClose={() => setPreviewOpen(false)}>
@@ -346,6 +368,19 @@ export default function Share() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <StoryPreview
+        visible={storyPreviewOpen}
+        uri={uri}
+        isVideo={isVideo}
+        overlayUri={overlay}
+        audience={audience}
+        avatarPath={profile?.avatar_path}
+        name={profile?.display_name || profile?.username || 'You'}
+        busy={busy}
+        onEdit={editStory}
+        onShare={shareStory}
+        onClose={() => setStoryPreviewOpen(false)}
+      />
       <DareRulesSheet
         visible={rulesOpen}
         onClose={() => setRulesOpen(false)}

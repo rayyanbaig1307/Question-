@@ -686,3 +686,13 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    video for everyone (••• → **Delete from my story** works too).
 4. No story up → no ring, and tapping the picture does nothing. On a friend's profile, the ring means they have
    a story up – tap it to watch.
+
+## Step 45 – See your story before you post it ✨
+
+1. Take a photo (or video) → add text, stickers or a filter if you like → **Send to**.
+2. Leave **My Story** ticked → **Send**. Your story now opens **full screen, exactly how friends will see it**
+   ("This is how your story will look"), with **⭐ Close friends** at the top if you picked that.
+3. **✏️ Edit** → back to the editor with your text and stickers still there. Change anything → **Send to** →
+   **Send** → the preview again.
+4. **Share to story** → it's posted. (If **Post to my profile** is ticked too, the profile preview comes next.)
+5. **✕** at the top closes the preview without posting.
