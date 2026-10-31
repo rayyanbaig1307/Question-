@@ -696,3 +696,16 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    **Send** → the preview again.
 4. **Share to story** → it's posted. (If **Post to my profile** is ticked too, the profile preview comes next.)
 5. **✕** at the top closes the preview without posting.
+
+## Step 46 – A simpler "Send to…" screen 📤
+
+1. Take a photo → **Send to**. At the top: your photo, **"Where should it go?"**, a one-line hint and an **✏️ Edit**
+   button (back to the editor).
+2. Just two groups:
+   - **📣 Post it:** ✨ **My Story** (ticked already) and 🖼️ **My Profile**. When either is ticked, one switch
+     appears: **⭐ Close friends only** (off = all your friends see it). A caption box shows for My Profile.
+   - **💌 Send to friends:** tick friends to send it just to them (it disappears after they open it).
+3. The big button at the bottom **says what will happen**: "Send to My Story", "Send to My Story + Sam",
+   "Send to My Story + 2 more"… With nothing ticked it says "Pick where it goes" and can't be tapped.
+4. **Today's dare**, **Guess Who**, **drop** and **forfeit** only show up when you took the photo for one of
+   those (the 🎯 / 🕵️ / 👀 bubbles on the camera, or the Dare page) – and then they're already ticked.

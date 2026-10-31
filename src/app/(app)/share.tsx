@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
@@ -29,6 +29,8 @@ import type { Audience, Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
 // "Send to…": choose where your photo goes – your story, your profile, and/or friends as a peek.
+// Kept simple: "Post it" (story / profile) and "Send to friends". Dare, drop, forfeit and Guess Who only show up
+// when you took the photo for one of those (from the camera's mode bubbles or the Dare page).
 export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
@@ -210,30 +212,51 @@ export default function Share() {
     }
   }
 
+  // What the Send button will do, in plain words ("Send to My Story + Sam").
+  const friendName = (id: string) => {
+    const friend = friends?.find((f) => f.id === id);
+    return friend ? friend.display_name || friend.username : '1 friend';
+  };
+  const places = [
+    toForfeit ? 'my forfeit' : null,
+    toDrop ? 'my drop' : null,
+    toDare ? "today's dare" : null,
+    toGuess ? 'Guess Who' : null,
+    toStory ? 'My Story' : null,
+    postToProfile ? 'my profile' : null,
+    picked.length === 1 ? friendName(picked[0]) : picked.length > 1 ? `${picked.length} friends` : null,
+  ].filter((place): place is string => place !== null);
+  const sendTitle =
+    places.length === 0
+      ? 'Pick where it goes'
+      : `Send to ${places.length <= 2 ? places.join(' + ') : `${places[0]} + ${places.length - 1} more`}`;
+
   return (
     <View style={styles.fill}>
       <ScreenHeader title="Send to…" />
 
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View>
+          {/* Your photo, a one-line "what to do", and Edit (back to the editor – text and stickers stay). */}
+          <View style={styles.intro}>
             {isVideo ? (
               <VideoClip uri={uri} overlayUri={overlay} playing muted loop style={styles.preview} />
             ) : (
               <Image source={{ uri }} style={styles.preview} resizeMode="cover" />
             )}
-            {/* Back to the editor (text, stickers, filters stay as you left them) */}
-            <Pressable style={styles.editChip} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Edit photo">
-              <Ionicons name="pencil" size={14} color={colors.white} />
-              <Text style={styles.editChipText}>Edit</Text>
-            </Pressable>
+            <View style={styles.introText}>
+              <Text style={styles.introTitle}>Where should it go?</Text>
+              <Text style={styles.introHint}>Tap the places you want, then tap the button at the bottom.</Text>
+              <Button title="Edit" icon="pencil" variant="secondary" small onPress={() => router.back()} style={styles.editButton} />
+            </View>
           </View>
 
+          <Text style={styles.sectionTitle}>📣 Post it</Text>
           {fromDrop ? (
             <Option
               emoji="👀"
-              title="Today's Peekaboo drop"
-              subtitle="Unlocks your friends' drops · on your profile and Home"
+              title="Today's drop"
+              subtitle="Unlocks your friends' drops"
               selected={toDrop}
               onPress={() => toggle(setToDrop, !toDrop)}
             />
@@ -242,58 +265,59 @@ export default function Share() {
             <Option
               emoji="💀"
               title="Pay my forfeit"
-              subtitle="Goes on your profile with a 💀 tag · the friend who picked it gets told"
+              subtitle="Goes on your profile – your friend gets told"
               selected={toForfeit}
               onPress={() => toggle(setToForfeit, !toForfeit)}
             />
           ) : null}
-          <Option
-            emoji="🎯"
-            title="Today's dare"
-            subtitle={`"${todaysDare.text}" · everyone sees it on the Dare page`}
-            selected={toDare}
-            onPress={() => toggle(setToDare, !toDare)}
-          />
+          {fromDare ? (
+            <Option
+              emoji="🎯"
+              title="Today's dare"
+              subtitle={`"${todaysDare.text}"`}
+              selected={toDare}
+              onPress={() => toggle(setToDare, !toDare)}
+            />
+          ) : null}
+          {fromGuess ? (
+            <Option
+              emoji="🕵️"
+              title="Guess Who"
+              subtitle="No name on it – friends guess it's you"
+              selected={toGuess}
+              onPress={toggleGuess}
+            />
+          ) : null}
           <Option
             emoji="✨"
             title="My Story"
-            subtitle="Friends can see it for 24 hours"
+            subtitle="Your friends see it for 24 hours"
             selected={toStory}
             onPress={() => toggle(setToStory, !toStory)}
-          />
-          <Option
-            emoji="🕵️"
-            title="Guess Who"
-            subtitle="Posted without your name – friends guess who it was (24 hours)"
-            selected={toGuess}
-            onPress={toggleGuess}
           />
           {toDare || toDrop || toForfeit ? null : (
             <Option
               emoji="🖼️"
-              title="Post to my profile"
-              subtitle="Stays on your profile grid"
+              title="My Profile"
+              subtitle="Stays on your profile"
               selected={toProfile}
               onPress={() => toggle(setToProfile, !toProfile)}
             />
           )}
           {toStory || postToProfile ? (
-            <View style={styles.audience}>
-              <Text style={styles.audienceLabel}>Who can see your {toStory && postToProfile ? 'story and post' : toStory ? 'story' : 'post'}?</Text>
-              <View style={styles.audienceRow}>
-                {(['everyone', 'close_friends'] as const).map((choice) => (
-                  <Pressable
-                    key={choice}
-                    onPress={() => setAudience(choice)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: audience === choice }}
-                    style={[styles.audienceChip, audience === choice && (choice === 'close_friends' ? styles.closeOn : styles.everyoneOn)]}>
-                    <Text style={[styles.audienceText, audience === choice && styles.audienceTextOn]}>
-                      {choice === 'everyone' ? '🌍 Everyone' : '⭐ Close friends'}
-                    </Text>
-                  </Pressable>
-                ))}
+            <View style={styles.closeRow}>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>⭐ Close friends only</Text>
+                <Text style={styles.optionSubtitle}>
+                  {audience === 'close_friends' ? 'Only your close friends will see it' : 'Off – all your friends will see it'}
+                </Text>
               </View>
+              <Switch
+                value={audience === 'close_friends'}
+                onValueChange={(on) => setAudience(on ? 'close_friends' : 'everyone')}
+                trackColor={{ true: colors.green, false: colors.border }}
+                thumbColor={colors.white}
+              />
             </View>
           ) : null}
           {postToProfile || toDare || toDrop || toGuess || toForfeit ? (
@@ -307,39 +331,43 @@ export default function Share() {
             />
           ) : null}
 
-          <Text style={styles.sectionTitle}>💌 Send as a peek</Text>
-          {friends === null ? null : friends.length === 0 ? (
-            <View style={styles.noFriends}>
-              <Text style={styles.noFriendsText}>Add friends to send them peeks – photos that disappear once opened.</Text>
-            </View>
-          ) : (
-            friends.map((friend) => {
-              const selected = picked.includes(friend.id);
-              return (
-                <Pressable
-                  key={friend.id}
-                  onPress={() => toggleFriend(friend.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected }}
-                  style={({ pressed }) => [styles.friend, selected && styles.optionSelected, pressed && styles.optionPressed]}>
-                  <Avatar path={friend.avatar_path} name={friend.display_name || friend.username} size={40} />
-                  <View style={styles.optionText}>
-                    <Text style={styles.optionTitle}>{friend.display_name || friend.username}</Text>
-                    <Text style={styles.optionSubtitle}>@{friend.username}</Text>
-                  </View>
-                  <Ionicons
-                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={28}
-                    color={selected ? colors.accent : colors.textFaint}
-                  />
-                </Pressable>
-              );
-            })
+          {toGuess ? null : (
+            <>
+              <Text style={styles.sectionTitle}>💌 Send to friends</Text>
+              <Text style={styles.sectionHint}>Only they see it, and it disappears after they open it.</Text>
+              {friends === null ? null : friends.length === 0 ? (
+                <View style={styles.noFriends}>
+                  <Text style={styles.noFriendsText}>No friends yet – add some to send them photos.</Text>
+                </View>
+              ) : (
+                friends.map((friend) => {
+                  const selected = picked.includes(friend.id);
+                  return (
+                    <Pressable
+                      key={friend.id}
+                      onPress={() => toggleFriend(friend.id)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      style={({ pressed }) => [styles.friend, selected && styles.optionSelected, pressed && styles.optionPressed]}>
+                      <Avatar path={friend.avatar_path} name={friend.display_name || friend.username} size={40} />
+                      <Text style={[styles.optionTitle, styles.friendName]} numberOfLines={1}>
+                        {friend.display_name || friend.username}
+                      </Text>
+                      <Ionicons
+                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={28}
+                        color={selected ? colors.accent : colors.textFaint}
+                      />
+                    </Pressable>
+                  );
+                })
+              )}
+            </>
           )}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.lg }]}>
-          <Button title="Send" icon="send" onPress={() => send()} loading={busy} disabled={nothingPicked} />
+          <Button title={sendTitle} icon="send" onPress={() => send()} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
       <Modal visible={previewOpen} transparent animationType="slide" onRequestClose={() => setPreviewOpen(false)}>
@@ -421,7 +449,9 @@ function Option({ emoji, title, subtitle, selected, onPress }: {
       <Text style={styles.optionEmoji}>{emoji}</Text>
       <View style={styles.optionText}>
         <Text style={styles.optionTitle}>{title}</Text>
-        <Text style={styles.optionSubtitle}>{subtitle}</Text>
+        <Text style={styles.optionSubtitle} numberOfLines={2}>
+          {subtitle}
+        </Text>
       </View>
       <Ionicons
         name={selected ? 'checkmark-circle' : 'ellipse-outline'}
@@ -433,23 +463,6 @@ function Option({ emoji, title, subtitle, selected, onPress }: {
 }
 
 const styles = StyleSheet.create({
-  editChip: {
-    position: 'absolute',
-    top: space.sm,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  editChipText: {
-    ...font.small,
-    color: colors.white,
-    fontWeight: '800',
-  },
   previewBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -483,13 +496,32 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
   },
+  intro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+  },
+  introText: {
+    flex: 1,
+    gap: space.xs,
+  },
+  introTitle: {
+    ...font.heading,
+    fontSize: 22,
+  },
+  introHint: {
+    ...font.small,
+    lineHeight: 19,
+  },
+  editButton: {
+    alignSelf: 'flex-start',
+    marginTop: space.sm,
+  },
   preview: {
-    alignSelf: 'center',
-    width: 140,
-    height: 250,
+    width: 90,
+    height: 160,
     borderRadius: radius.md,
     backgroundColor: colors.card,
-    marginBottom: space.sm,
   },
   option: {
     flexDirection: 'row',
@@ -497,7 +529,8 @@ const styles = StyleSheet.create({
     gap: space.md,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    padding: space.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -533,43 +566,28 @@ const styles = StyleSheet.create({
     ...font.small,
   },
   sectionTitle: {
-    ...font.label,
+    ...font.body,
+    fontWeight: '900',
+    fontSize: 17,
     marginTop: space.md,
     marginLeft: space.xs,
   },
-  audience: {
-    gap: space.sm,
-  },
-  audienceLabel: {
-    ...font.label,
+  sectionHint: {
+    ...font.small,
+    marginTop: -space.sm,
     marginLeft: space.xs,
   },
-  audienceRow: {
+  closeRow: {
     flexDirection: 'row',
-    gap: space.sm,
-  },
-  audienceChip: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: space.md,
-    borderRadius: radius.pill,
+    gap: space.md,
     backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderRadius: radius.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
-  everyoneOn: {
-    borderColor: colors.accent,
-  },
-  closeOn: {
-    borderColor: colors.green,
-  },
-  audienceText: {
-    ...font.body,
-    fontWeight: '800',
-    color: colors.textMuted,
-  },
-  audienceTextOn: {
-    color: colors.text,
+  friendName: {
+    flex: 1,
   },
   noFriends: {
     padding: space.lg,
