@@ -11,7 +11,6 @@ import { useMe } from '@/lib/auth';
 import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
-import { fetchGroups, type PeekGroup } from '@/lib/groups';
 import { countUnguessed } from '@/lib/guess';
 import { inviteFriends } from '@/lib/invite';
 import { noteDropSeen } from '@/lib/peeks';
@@ -21,7 +20,6 @@ import { useScratchToReveal } from '@/lib/preferences';
 import { fetchStoryRings } from '@/lib/stories';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
-import { HomeStrip } from './HomeStrip';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 import { StoryRow, type Rings } from './StoryRow';
@@ -41,40 +39,36 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   const [refreshing, setRefreshing] = useState(false);
   // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
   const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
-  // Your Group Peek groups and how many Guess Who posts you can still guess, shown as a row under the stories.
-  const [groups, setGroups] = useState<PeekGroup[] | null>(null);
-  const [toGuess, setToGuess] = useState<number | null>(null);
+  // How many Guess Who posts you can still guess (a number on the Guess Who circle).
+  const [toGuess, setToGuess] = useState(0);
 
   const show = useCallback(
     (loaded: {
       rings: Rings;
       page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
       days: Set<string>;
-      groups: PeekGroup[] | null;
-      toGuess: number | null;
+      toGuess: number;
     }) => {
       setRings(loaded.rings);
       setPosts(loaded.page.posts);
       setNext(loaded.page.next);
       setMyDropDays(loaded.days);
-      setGroups(loaded.groups);
       setToGuess(loaded.toGuess);
     },
     [],
   );
 
   const loadAll = useCallback(async () => {
-    const [rings, page, days, groups, toGuess] = await Promise.all([
+    const [rings, page, days, toGuess] = await Promise.all([
       fetchStoryRings(userId).catch((error) => {
         console.warn('Could not load stories', error);
         return { mine: null, friends: [] } as Rings;
       }),
       fetchDiscover(userId),
       fetchMyDropDays(userId).catch(() => new Set<string>()),
-      fetchGroups().catch(() => null),
-      countUnguessed().catch(() => null),
+      countUnguessed().catch(() => 0),
     ]);
-    return { rings, page, days, groups, toGuess };
+    return { rings, page, days, toGuess };
   }, [userId]);
 
   // Fresh stories and posts every time you come to this page.
@@ -245,8 +239,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
         ListHeaderComponent={
           loading || nothingYet ? undefined : (
             <View style={styles.top}>
-              <StoryRow rings={rings} onCamera={onCamera} />
-              <HomeStrip groups={groups} toGuess={toGuess} />
+              <StoryRow rings={rings} toGuess={toGuess} onCamera={onCamera} />
             </View>
           )
         }

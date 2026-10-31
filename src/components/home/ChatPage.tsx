@@ -6,11 +6,13 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
+import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
@@ -27,7 +29,8 @@ type ChatRow = {
   newChats: number;
 };
 
-// Left page: hit ups waiting for you at the top, then everyone you can chat with, most recent first.
+// Left page: hit ups waiting for you at the top, then your Group Peek groups, then everyone you can chat with,
+// most recent first.
 export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   visible: boolean;
   onCamera: () => void;
@@ -37,9 +40,13 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   const { userId, profile } = useMe();
   const tabSpace = useTabBarSpace();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
+  const [groups, setGroups] = useState<PeekGroup[]>([]);
 
   useEffect(() => {
     if (!visible) return;
+    fetchGroups()
+      .then(setGroups)
+      .catch(() => {});
     const load = async () => {
       try {
         const [friends, messages] = await Promise.all([fetchFriends(userId), fetchRecentMessages(userId)]);
@@ -65,14 +72,22 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
           keyExtractor={(row) => row.friend.id}
           contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
           ListHeaderComponent={
-            hitUps.length > 0 ? (
-              <View style={styles.hitUps}>
-                <Text style={styles.hitUpsTitle}>Hit ups 👋</Text>
-                {hitUps.map((hitUp) => (
-                  <HitUpRow key={hitUp.id} hitUp={hitUp} onDone={onHitUpsChanged} />
-                ))}
-              </View>
-            ) : undefined
+            <>
+              {hitUps.length > 0 ? (
+                <View style={styles.hitUps}>
+                  <Text style={styles.hitUpsTitle}>Hit ups 👋</Text>
+                  {hitUps.map((hitUp) => (
+                    <HitUpRow key={hitUp.id} hitUp={hitUp} onDone={onHitUpsChanged} />
+                  ))}
+                </View>
+              ) : null}
+              {rows.length > 0 ? (
+                <>
+                  <GroupsSection groups={groups} />
+                  <Text style={styles.sectionTitle}>💬 Chats</Text>
+                </>
+              ) : null}
+            </>
           }
           ListEmptyComponent={
             <EmptyState
@@ -87,6 +102,61 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
         />
       )}
     </View>
+  );
+}
+
+// Group Peek: your groups (how many posted today's drop), or one row to start your first group.
+function GroupsSection({ groups }: { groups: PeekGroup[] }) {
+  return (
+    <>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>👯 Group Peeks</Text>
+        {groups.length > 0 ? (
+          <Pressable onPress={() => router.push('/groups/new')} hitSlop={10} accessibilityRole="button">
+            <Text style={styles.sectionAction}>＋ New</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {groups.length === 0 ? (
+        <Pressable
+          onPress={() => router.push('/groups/new')}
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          accessibilityRole="button">
+          <View style={styles.groupIcon}>
+            <Text style={styles.groupEmoji}>👯</Text>
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.name}>Make a group</Text>
+            <Text style={styles.statusText}>Your group&apos;s drops stay hidden until everyone posts</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+        </Pressable>
+      ) : (
+        groups.map((group) => {
+          const total = counting(group).length;
+          const left = stillToPost(group).length;
+          return (
+            <Pressable
+              key={group.id}
+              onPress={() => router.push(`/groups/${group.id}`)}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+              <View style={styles.groupIcon}>
+                <GroupFaces members={group.members} size={24} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {group.name}
+                </Text>
+                <Text style={[styles.statusText, left === 0 && styles.groupDone]}>
+                  {left === 0 ? "Everyone posted today's drop 🎉" : `${total - left} of ${total} posted today's drop`}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+            </Pressable>
+          );
+        })
+      )}
+    </>
   );
 }
 
@@ -285,6 +355,39 @@ const styles = StyleSheet.create({
   },
   statusText: {
     ...font.small,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: space.lg,
+  },
+  sectionTitle: {
+    ...font.label,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.xs,
+  },
+  sectionAction: {
+    ...font.small,
+    color: colors.accent,
+    fontWeight: '800',
+    paddingTop: space.md,
+  },
+  groupIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupEmoji: {
+    fontSize: 26,
+  },
+  groupDone: {
+    color: colors.green,
+    fontWeight: '800',
   },
   hitUps: {
     paddingHorizontal: space.lg,

@@ -709,3 +709,13 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    "Send to My Story + 2 more"… With nothing ticked it says "Pick where it goes" and can't be tapped.
 4. **Today's dare**, **Guess Who**, **drop** and **forfeit** only show up when you took the photo for one of
    those (the 🎯 / 🕵️ / 👀 bubbles on the camera, or the Dare page) – and then they're already ticked.
+
+## Step 47 – A cleaner Home 🏠
+
+1. **Home** now has just the **story circles** on top, then the feed. The Guess Who / Group Peek buttons under
+   the stories are gone.
+2. **🕵️ Guess Who** is a circle in the story row, right after **My Story**. A red number = posts you can still
+   guess (with a colorful ring); grey = nothing new. Tap it → the Guess Who page (＋ top right to post one).
+3. **👯 Group Peeks** moved to **Chat**, above your chats: each group shows "2 of 4 posted today's drop" (green
+   when everyone has). Tap one to open it; **＋ New** makes another. No groups yet → one **Make a group** row.
+   (Settings → Group Peek still works too.)

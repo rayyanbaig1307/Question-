@@ -13,8 +13,9 @@ import { colors, font, gradients, space } from '@/theme';
 export type Rings = { mine: StoryRing | null; friends: StoryRing[] };
 
 // The row of story circles at the top of Home, like Instagram: My Story first (tap ＋ to add one),
-// then friends' stories (colorful ring = new, grey = seen, green = close friends), then an Invite circle.
-export function StoryRow({ rings, onCamera }: { rings: Rings; onCamera: () => void }) {
+// then Guess Who (anonymous posts from friends – a number when there are some to guess), then friends'
+// stories (colorful ring = new, grey = seen, green = close friends), then an Invite circle.
+export function StoryRow({ rings, toGuess, onCamera }: { rings: Rings; toGuess: number; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const { mine, friends } = rings;
   const myName = profile?.display_name || profile?.username;
@@ -44,6 +45,22 @@ export function StoryRow({ rings, onCamera }: { rings: Rings; onCamera: () => vo
         </Bouncy>
         <Text style={styles.name} numberOfLines={1}>
           My Story
+        </Text>
+      </Pressable>
+
+      <Pressable style={styles.circle} onPress={() => router.push('/guess')} accessibilityLabel="Guess Who">
+        <Ring active={toGuess > 0}>
+          <View style={styles.guess}>
+            <Text style={styles.guessEmoji}>🕵️</Text>
+          </View>
+        </Ring>
+        {toGuess > 0 ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{toGuess > 9 ? '9+' : toGuess}</Text>
+          </View>
+        ) : null}
+        <Text style={[styles.name, toGuess === 0 && styles.seen]} numberOfLines={1}>
+          Guess Who
         </Text>
       </Pressable>
 
@@ -136,6 +153,36 @@ const styles = StyleSheet.create({
   },
   seen: {
     color: colors.textMuted,
+  },
+  guess: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guessEmoji: {
+    fontSize: 30,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 5,
+    backgroundColor: colors.red,
+    borderWidth: 2,
+    borderColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '900',
   },
   inviteRing: {
     borderWidth: 2,
