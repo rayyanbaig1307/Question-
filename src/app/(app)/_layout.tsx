@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
+import { TermsGate } from '@/components/TermsGate';
 import { useAuth } from '@/lib/auth';
 import { syncCommunityDares } from '@/lib/communityDares';
 import { useShareLocationWhileOpen } from '@/lib/location';
@@ -32,6 +33,7 @@ export default function AppLayout() {
   }, [userId]);
 
   return (
+    <>
     <Stack
       screenOptions={{
         // Every screen draws its own top bar (ScreenHeader), so they all match the app's style.
@@ -48,5 +50,8 @@ export default function AppLayout() {
       <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="map" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
+    {/* Everyone must have agreed to the current Terms of Service. */}
+    <TermsGate />
+    </>
   );
 }

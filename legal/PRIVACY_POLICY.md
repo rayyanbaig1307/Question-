@@ -1,6 +1,6 @@
 # Peekaboo – Privacy Policy
 
-**Effective date:** [EFFECTIVE DATE]
+**Effective date:** 31 October 2026
 **Who is responsible for your data ("data controller"):** [OPERATOR NAME], [MAILING ADDRESS], [CONTACT EMAIL]
 
 This policy explains what Peekaboo collects, why, where it goes, and what you can do about it. It is written to match what the app really does. If we change how the app works, we update this policy and tell you in the app.

@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextIn
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
+import { DareRulesSheet } from '@/components/DareRulesSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -23,6 +24,7 @@ import {
   type DareIdea,
 } from '@/lib/communityDares';
 import { friendlyError } from '@/lib/errors';
+import { useDareRulesAccepted } from '@/lib/legal';
 import { REPORT_REASONS } from '@/lib/safety';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
@@ -34,6 +36,8 @@ export default function DareIdeas() {
   const [ideas, setIdeas] = useState<DareIdea[] | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const dareRules = useDareRulesAccepted(userId);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const load = useCallback(
     () =>
@@ -55,6 +59,10 @@ export default function DareIdeas() {
 
   async function suggest() {
     if (!canSend) return;
+    if (!dareRules.accepted) {
+      setRulesOpen(true);
+      return;
+    }
     setSending(true);
     try {
       await submitIdea(clean);
@@ -212,6 +220,14 @@ export default function DareIdeas() {
               </Pressable>
             </View>
           );
+        }}
+      />
+      <DareRulesSheet
+        visible={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        onAccept={async () => {
+          await dareRules.accept();
+          setRulesOpen(false);
         }}
       />
     </View>

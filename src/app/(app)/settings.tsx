@@ -3,7 +3,7 @@ import { reloadAppAsync } from 'expo';
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { formatBirthday } from '@/components/match/BirthdayForm';
 import { useOverlays } from '@/components/Overlays';
@@ -11,6 +11,8 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { inviteFriends } from '@/lib/invite';
+import { contactEmail, type LegalPage } from '@/lib/legal';
+import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
@@ -244,6 +246,16 @@ export default function Settings() {
           </View>
         </Section>
 
+        <Section title="Legal & safety">
+          <Row icon="document-text" color={colors.blue} title="Terms of Service" onPress={() => openLegal('terms')} />
+          <Row icon="shield-checkmark" color={colors.green} title="Privacy Policy" onPress={() => openLegal('privacy')} />
+          <Row icon="people-circle" color={colors.purple} title="Community Guidelines" onPress={() => openLegal('guidelines')} />
+          <Row icon="flame" color={colors.pink} title="Dare Safety Rules" onPress={() => openLegal('dare-rules')} />
+          {CONTACT ? (
+            <Row icon="mail" color={colors.orange} title="Contact us" subtitle={CONTACT} onPress={() => Linking.openURL(`mailto:${CONTACT}`)} />
+          ) : null}
+        </Section>
+
         <Section title="Account">
           <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />
           <Row
@@ -304,6 +316,10 @@ function Row({ icon, color, title, subtitle, right, onPress }: {
     </Pressable>
   );
 }
+
+const openLegal = (doc: LegalPage) => router.push({ pathname: '/legal/[doc]', params: { doc } });
+// The contact email from the Terms (shown once it's been filled in).
+const CONTACT = contactEmail(LEGAL_DOCS.terms);
 
 const THEMES: { key: ThemeChoice; label: string; emoji: string }[] = [
   { key: 'dark', label: 'Dark', emoji: '🌙' },

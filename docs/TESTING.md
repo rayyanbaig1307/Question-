@@ -705,3 +705,18 @@ Use 2 friend accounts (A and B).
    dare: the Dare screen card says **💡 COMMUNITY DARE · by @name**, and the camera's Dare mode shows it too.
    Dare posts from that day get a tag "🎯 Dare … · by @name".
 4. No idea with 3 votes → the built-in list runs as usual. An idea only ever runs once.
+
+## Step 40 – Terms & safety 📜
+
+1. **Existing account:** open Peekaboo → a full-screen **Our Terms** page with a short summary. Tap any of the four
+   links (Terms, Dare Safety Rules, Privacy, Guidelines) – the document opens right there, **Back** returns.
+   **I agree** → into the app. (**Log out** is the only other way out.) It never shows again unless the Terms change.
+2. **New account:** Sign up has a second tick box "I agree to the Terms of Service (including the Dare Safety Rules)
+   and the Privacy Policy" with tappable links. You can't make an account without ticking it. After signing up you
+   are **not** shown the Terms page again – the tick counted.
+3. **First dare:** do a dare, a drop, pay a forfeit or suggest a dare idea → a **Before your first dare 🎯** sheet:
+   the safety points + "I understand – let's go". **Not now** cancels. After agreeing once it never shows again.
+4. **Settings → Legal & safety:** Terms, Privacy Policy, Community Guidelines, Dare Safety Rules all open in the app.
+5. **Dare screen:** the house-rules line under today's dare now ends with **Full rules** (tap → Dare Safety Rules).
+6. **Report** anything → the pop-up says "We review every report within 24 hours".
+7. In Supabase → Table Editor → **legal_acceptances**: one row per person per document, with the date it happened.

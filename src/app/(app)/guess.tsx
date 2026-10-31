@@ -145,7 +145,7 @@ export default function GuessWho() {
               () =>
                 showOptions({
                   title: 'Why are you reporting this?',
-                  message: "Your report is private. Whoever posted it won't know it was you.",
+                  message: "Your report is private – whoever posted it won't know it was you. We review every report within 24 hours.",
                   options: REPORT_REASONS.map((reason) => ({
                     label: reason.label,
                     onPress: async () => {

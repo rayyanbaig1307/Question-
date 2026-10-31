@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormScreen } from '@/components/FormScreen';
 import { TextField } from '@/components/TextField';
 import { friendlyError } from '@/lib/errors';
+import { TERMS_VERSION } from '@/lib/legal';
 import { checkUsernameFormat, cleanUsername, isUsernameAvailable, USERNAME_RULES } from '@/lib/profiles';
 import { supabase } from '@/lib/supabase';
 import { colors, font, radius, space } from '@/theme';
@@ -18,6 +19,8 @@ export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [oldEnough, setOldEnough] = useState(false);
+  // Ticking this is agreeing to the Terms (and the Privacy Policy, Guidelines and Dare Safety Rules they include).
+  const [agreed, setAgreed] = useState(false);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +47,7 @@ export default function SignUp() {
     email: /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
     password: password.length >= 6 ? null : 'Use at least 6 characters.',
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',
+    terms: agreed ? null : 'Please agree to the Terms to make an account.',
   };
 
   async function createAccount() {
@@ -60,7 +64,8 @@ export default function SignUp() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { username, display_name: name.trim() || username } },
+        // Which Terms you agreed to travels with the new account; the app records it once you're in.
+        options: { data: { username, display_name: name.trim() || username, terms_version: TERMS_VERSION } },
       });
       if (signUpError) throw signUpError;
       // With "Confirm email" turned off you're logged in right away and the app opens.
@@ -139,6 +144,30 @@ export default function SignUp() {
       </Pressable>
       {tried && problems.age ? <Text style={styles.error}>{problems.age}</Text> : null}
 
+      <View style={styles.checkRow}>
+        <Pressable onPress={() => setAgreed(!agreed)} accessibilityRole="checkbox" accessibilityState={{ checked: agreed }} hitSlop={8}>
+          <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
+            {agreed ? <Ionicons name="checkmark" size={18} color={colors.onAccent} /> : null}
+          </View>
+        </Pressable>
+        <Text style={styles.checkSmall} onPress={() => setAgreed(!agreed)}>
+          I agree to the{' '}
+          <Text style={styles.link} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
+            Terms of Service
+          </Text>{' '}
+          (including the{' '}
+          <Text style={styles.link} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'dare-rules' } })}>
+            Dare Safety Rules
+          </Text>
+          ) and the{' '}
+          <Text style={styles.link} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })}>
+            Privacy Policy
+          </Text>
+          . If I&apos;m under 18, a parent or guardian agrees too.
+        </Text>
+      </View>
+      {tried && problems.terms ? <Text style={styles.error}>{problems.terms}</Text> : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Let's go!" icon="sparkles" onPress={createAccount} loading={busy} />
       <Button title="Already have an account? Log in" variant="plain" onPress={() => router.replace('/sign-in')} />
@@ -169,6 +198,18 @@ const styles = StyleSheet.create({
   checkText: {
     ...font.body,
     fontWeight: '700',
+  },
+  checkSmall: {
+    ...font.small,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  link: {
+    color: colors.accent,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
   error: {
     color: colors.red,

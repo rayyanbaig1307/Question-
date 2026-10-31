@@ -42,7 +42,7 @@ export function useSafetyActions() {
   }) {
     showOptions({
       title: 'Why are you reporting this?',
-      message: "Your report is private. They won't know it was you.",
+      message: "Your report is private – they won't know it was you. We review every report within 24 hours.",
       options: REPORT_REASONS.map((reason) => ({
         label: reason.label,
         onPress: async () => {

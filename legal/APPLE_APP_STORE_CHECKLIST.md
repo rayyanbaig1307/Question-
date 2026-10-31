@@ -65,11 +65,11 @@ Google Play's questionnaire (IARC) gives "Mature 17+" / "PEGI 18" for the same a
 
 ## E. Things the developer session still needs to build before App Store submission
 
-1. **Sign-up:** add "By continuing you agree to the Terms of Service and Privacy Policy" with working links, and record the acceptance (date + version) on the profile.
-2. **Settings:** links to Terms, Privacy Policy, Community Guidelines, Dare Safety Rules, and a "Contact us" line showing the email.
-3. **Dare safety screen:** the one-time "I understand" screen from `DARE_SAFETY_RULES.md` before the first dare, forfeit or drop; store the acceptance in the database.
-4. **Dare list review:** remove or rewrite risky dares in `src/lib/dares.ts` per the list in `DARE_SAFETY_RULES.md`; add the same rule check to community dare ideas (and a Report button on ideas).
-5. **Report screen:** link to the Community Guidelines and show the "we act within 24 hours" line.
+1. ✅ **Sign-up:** required "I agree to the Terms of Service (including the Dare Safety Rules) and the Privacy Policy" tick box with working links. Acceptance (version + server time) is recorded in `legal_acceptances`; people who signed up earlier, or after a Terms change, get a full-screen "Our Terms" page and can't carry on without agreeing (or logging out).
+2. ✅ **Settings → Legal & safety:** Terms, Privacy Policy, Community Guidelines, Dare Safety Rules (all readable in the app, even logged out). "Contact us" appears automatically once `[CONTACT EMAIL]` is filled in.
+3. ✅ **Dare safety screen:** the one-time "Before your first dare" sheet before the first dare, drop, forfeit or dare idea; acceptance stored in `legal_acceptances`.
+4. ✅ **Dare list review:** 63 dares rewritten (see `DARE_REVIEW_2026-10-31.md`). Community ideas: dangerous-word check in the database, Report on every idea, hidden after 3 reports.
+5. ✅ **Report:** every report pop-up says "We review every report within 24 hours" (so you must actually check the `reports` table daily – see F).
 6. **Review mode for Peek Match:** a safe way to let an Apple reviewer (and you, for testing) into Peek Match without a real ID – e.g. an allow-list of account IDs that count as verified, set only from the database.
 7. **Public web pages** for the Privacy Policy and Terms (GitHub Pages or similar) and their URLs in Settings.
 8. **Google Maps key** for Android so the map is not grey in the Play Store build.

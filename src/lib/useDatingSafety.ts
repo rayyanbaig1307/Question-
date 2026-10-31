@@ -33,7 +33,7 @@ export function useDatingSafety() {
   function report(person: Person, what: 'profile' | 'message', onBlocked?: () => void) {
     showOptions({
       title: what === 'message' ? 'Why are you reporting this chat?' : 'Why are you reporting this profile?',
-      message: "Your report is private. They won't know it was you.",
+      message: "Your report is private – they won't know it was you. We review every report within 24 hours.",
       options: REPORT_REASONS.map((reason) => ({
         label: reason.label,
         onPress: async () => {

@@ -12,12 +12,11 @@ These are the documents Peekaboo needs before it goes on the App Store or Google
 
 ## Before publishing, fill in the placeholders
 
-Search all files for `[` and replace:
+The effective date is filled in (31 October 2026). Search all files for `[` and replace:
 
 - `[OPERATOR NAME]` – your legal name, or your company's name if you set one up (recommended – see below).
 - `[CONTACT EMAIL]` – an email you check, e.g. `hello@peekaboo.app`. Apple requires a working contact.
 - `[MAILING ADDRESS]` – a postal address (a P.O. box is fine). Required for privacy-law notices.
-- `[EFFECTIVE DATE]` – the day you publish, e.g. `1 November 2026`.
 
 ## Honest note on liability (please read)
 
@@ -37,4 +36,8 @@ Apple and Google need the Privacy Policy (and ideally the Terms) at a public web
 1. **GitHub Pages** from this repository: turn on Pages for the `legal/` folder and the files become `https://<your-github-name>.github.io/<repo>/PRIVACY_POLICY` (Markdown renders automatically).
 2. Any free static host (Netlify, Vercel, Cloudflare Pages) with the same files.
 
-Put the resulting URLs into App Store Connect (Privacy Policy URL, Support URL) and into the app's Settings screen.
+Put the resulting URLs into App Store Connect (Privacy Policy URL, Support URL).
+
+## Inside the app
+
+The app shows these documents itself (Settings → Legal & safety, the sign-up screen, and the Dare screen), from a copy in `src/lib/legalDocs.ts`. After editing anything in this folder, run `node scripts/sync-legal.mjs` so the app gets the new text. If the Terms or the Dare Safety Rules change in a way people must agree to again, also bump `TERMS_VERSION` / `DARE_RULES_VERSION` in `src/lib/legal.ts` – everyone is then asked to accept the new version.

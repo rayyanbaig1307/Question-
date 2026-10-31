@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { DareRulesSheet } from '@/components/DareRulesSheet';
 import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { VideoClip } from '@/components/VideoClipSafe';
@@ -18,6 +19,7 @@ import { fetchFriends } from '@/lib/friends';
 import { resizePhoto, type Capture } from '@/lib/media';
 import { todayDareDay, useDare } from '@/lib/dares';
 import { lateLabel } from '@/lib/drop';
+import { useDareRulesAccepted } from '@/lib/legal';
 import { postMystery } from '@/lib/guess';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
@@ -51,6 +53,9 @@ export default function Share() {
   const { showToast } = useOverlays();
   const insets = useSafeAreaInsets();
   const todaysDare = useDare(todayDareDay());
+  // Dares, drops and forfeits need the one-time "Before your first dare" agreement.
+  const dareRules = useDareRulesAccepted(userId);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess && !fromForfeit);
   const [toForfeit, setToForfeit] = useState(fromForfeit);
@@ -102,6 +107,10 @@ export default function Share() {
   const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
   async function send() {
+    if ((toDare || toDrop || toForfeit) && !dareRules.accepted) {
+      setRulesOpen(true);
+      return;
+    }
     setBusy(true);
     try {
       // Photos are shrunk first so they upload quickly; videos were already recorded small.
@@ -292,6 +301,14 @@ export default function Share() {
           <Button title="Send" icon="send" onPress={send} loading={busy} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
+      <DareRulesSheet
+        visible={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        onAccept={async () => {
+          await dareRules.accept();
+          setRulesOpen(false);
+        }}
+      />
     </View>
   );
 }

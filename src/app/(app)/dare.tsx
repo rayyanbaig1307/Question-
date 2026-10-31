@@ -98,7 +98,12 @@ export default function DareScreen() {
           onPress={doTheDare}
           style={styles.cardButton}
         />
-        <Text style={styles.rules}>{DARE_RULES}</Text>
+        <Text
+          style={styles.rules}
+          onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'dare-rules' } })}
+          accessibilityRole="link">
+          {DARE_RULES} · <Text style={styles.rulesLink}>Full rules</Text>
+        </Text>
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
 
@@ -311,6 +316,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     lineHeight: 34,
+  },
+  rulesLink: {
+    textDecorationLine: 'underline',
+    fontWeight: '900',
   },
   rules: {
     color: 'rgba(255,255,255,0.8)',

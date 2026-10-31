@@ -35,18 +35,22 @@ If you see a dare in Peekaboo that breaks these rules, report it.
 >
 > [ I understand – let's go ]   [ Not now ]
 
-Implementation note: store the acceptance (user id + date + rules version) in the database so it can be shown that the person accepted, and show the screen again if the rules change.
+Implementation note: built. The acceptance (user id + date + rules version) is stored in the `legal_acceptances` table, and the screen shows again if the rules version changes (`DARE_RULES_VERSION` in `src/lib/legal.ts`).
 
 ## Dare content review (for the operator)
 
-The dare list in `src/lib/dares.ts` and community-submitted dares must themselves follow these rules. Before App Store launch, remove or rewrite any dare that:
+**Done on 31 October 2026.** Every dare in `src/lib/dares.ts` was checked against the rules above. 63 dares that
+broke them were rewritten in the same spot (so the daily order didn't change): open water, cold-water shock,
+heights, stairs, vehicles and roads, pranks on sleeping people or without consent, choking and allergy risks, and
+"clothes stay on". The full before/after list is in `legal/DARE_REVIEW_2026-10-31.md`.
 
-- involves open water, diving boards, belly flops or jumping into water;
-- involves roads, traffic, vehicles, shopping carts in car parks, or lying on floors of shops;
-- involves strangers (asking strangers to do things, thumb wars, hugs signs);
-- involves eating non-food, very hot peppers, raw onions/garlic/lemons in quantity, or speed-drinking;
-- involves pranks on sleeping people, air horns, plastic-wrapped doorways, scaring people, or cracking eggs on someone;
-- involves ice-water buckets, cold showers for set times, or anything that could cause cold shock;
-- involves a car, even "gently".
+Keep doing this whenever dares change:
 
-Keep dares that are silly, creative, indoor-safe or clearly consensual (costumes, singing, drawing, dancing in private, funny poses, harmless food combos).
+- A dare must not involve open water (sea, lakes, rivers), roads or vehicles, heights, stairs, fire, weapons,
+  alcohol or drugs.
+- Pool dares say "only if you can swim – with someone watching".
+- Pranks only on friends who are in on it, and never while they're asleep.
+- No speed-eating, eating non-food, or stuffing the mouth (choking).
+- Clothes stay on (the app is 13+).
+- Community dare ideas are checked automatically for dangerous words by the database, can be reported, and are
+  hidden after 3 reports.
