@@ -190,6 +190,15 @@ export default function Editor() {
                 }
               />
               <IconButton icon="happy-outline" label="Add sticker" onPress={() => setStickersOpen(true)} />
+              {/* One tap: a pair of googly eyes to drag onto someone's eyes (pinch to resize) */}
+              <IconButton
+                icon="eye-outline"
+                label="Add googly eyes"
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  addItem({ kind: 'special', content: 'googly-eyes', color: colors.white, look: 'shadow' });
+                }}
+              />
               {items.length > 0 ? (
                 <IconButton icon="arrow-undo" label="Undo" onPress={() => setItems((current) => current.slice(0, -1))} />
               ) : null}
@@ -206,7 +215,7 @@ export default function Editor() {
             )}
             {items.length === 0 ? (
               <Text style={styles.hint}>
-                {isVideo ? 'Add text or stickers, or just send it!' : 'Swipe ← → for filters · add text or stickers'}
+                {isVideo ? 'Add text or stickers, or just send it!' : 'Swipe ← → for filters · 👀 for googly eyes'}
               </Text>
             ) : (
               <Text style={styles.hint}>Drag to move · pinch to resize · drop on 🗑️ to remove</Text>

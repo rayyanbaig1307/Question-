@@ -1,5 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
 
@@ -14,12 +16,12 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
     case 'googly-eyes':
       return (
         <View style={[styles.eyes, { gap: 6 * size }]}>
-          <GooglyEye size={70 * size} look={{ x: 0.35, y: 0.4 }} />
-          <GooglyEye size={70 * size} look={{ x: -0.2, y: 0.45 }} />
+          <GooglyEye size={70 * size} look={small ? { x: 0.35, y: 0.4 } : undefined} />
+          <GooglyEye size={70 * size} look={small ? { x: -0.2, y: 0.45 } : undefined} />
         </View>
       );
     case 'googly-eye':
-      return <GooglyEye size={110 * size} look={{ x: 0.3, y: -0.35 }} />;
+      return <GooglyEye size={110 * size} look={small ? { x: 0.3, y: -0.35 } : undefined} />;
     case 'peekaboo':
       return (
         <LinearGradient
@@ -56,24 +58,41 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
   }
 }
 
-// A wobbly-looking cartoon eye: a white ball with a black pupil looking somewhere (x/y from -1 to 1).
-function GooglyEye({ size, look }: { size: number; look: { x: number; y: number } }) {
+// A cartoon googly eye: a white ball with a black pupil looking somewhere (x/y from -1 to 1).
+// On a photo each eye looks a random way, and the pupil jiggles into place when it appears – like the real thing.
+function GooglyEye({ size, look }: { size: number; look?: { x: number; y: number } }) {
   const pupil = size * 0.46;
   const room = (size - pupil) / 2 - size * 0.06;
+  const [target] = useState(() => look ?? randomLook());
+  const x = useSharedValue(look ? target.x : 0);
+  const y = useSharedValue(look ? target.y : -0.9);
+
+  useEffect(() => {
+    if (look) return;
+    const wobbly = { damping: 4, stiffness: 140, mass: 0.6 };
+    x.set(withSequence(withTiming(-target.x * 0.6, { duration: 90 }), withSpring(target.x, wobbly)));
+    y.set(withSpring(target.y, wobbly));
+  }, [look, target, x, y]);
+
+  const pupilStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.get() * room }, { translateY: y.get() * room }],
+  }));
+
   return (
     <View style={[styles.eye, { width: size, height: size, borderRadius: size / 2, borderWidth: Math.max(2, size * 0.05) }]}>
-      <View
-        style={{
-          width: pupil,
-          height: pupil,
-          borderRadius: pupil / 2,
-          backgroundColor: colors.black,
-          transform: [{ translateX: look.x * room }, { translateY: look.y * room }],
-        }}>
+      <Animated.View
+        style={[{ width: pupil, height: pupil, borderRadius: pupil / 2, backgroundColor: colors.black }, pupilStyle]}>
         <View style={[styles.shine, { width: pupil * 0.28, height: pupil * 0.28, borderRadius: pupil * 0.14 }]} />
-      </View>
+      </Animated.View>
     </View>
   );
+}
+
+// Somewhere along the bottom half of the eye, like a pupil that's fallen down (always inside the eye).
+function randomLook() {
+  const angle = Math.PI * (0.15 + Math.random() * 0.7);
+  const reach = 0.55 + Math.random() * 0.4;
+  return { x: Math.cos(angle) * reach, y: Math.sin(angle) * reach };
 }
 
 const styles = StyleSheet.create({
