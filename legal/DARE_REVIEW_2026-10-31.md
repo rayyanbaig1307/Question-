@@ -68,3 +68,7 @@ Each stays in the same day slot. Left: before. Right: after.
 | 341 | Go for a walk at 5am and take a photo of the sunrise | Get up for the sunrise and take a photo of it (from your window counts) |
 | 358 | Shower in the dark | Have a whole conversation using only movie quotes |
 | 363 | Do a cartwheel in every room of the house | Do a victory dance in every room of the house |
+
+## Update – list replaced with 20 bolder dares
+
+At the owner's request the daily list was replaced with 20 dares that test nerve rather than being childish. They are deliberately social (texts, calls, confessions, public singing, outfits, phone swaps) rather than physical, so they stay inside the Dare Safety Rules: no injury risk, no water, vehicles, fire, alcohol or risky eating, and nothing done *to* a stranger. Each is still optional and the "I understand" sheet still appears before the first dare. Message-type dares involve only people the user already knows; every message dare can be skipped or vetoed.
