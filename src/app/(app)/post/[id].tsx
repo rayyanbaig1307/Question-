@@ -1,5 +1,4 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -32,7 +31,7 @@ import type { PostWithAuthor } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
 
-// One photo, full screen.
+// One post: the photo or video, with the likes, comments and caption in a panel underneath.
 export default function PostViewer() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
@@ -48,6 +47,8 @@ export default function PostViewer() {
   const uri = files?.still ? urls[files.still] : undefined;
   const videoUri = files?.video ? urls[files.video] : undefined;
   const likeButton = usePop();
+  // Long captions show 3 lines; tap to see it all.
+  const [captionOpen, setCaptionOpen] = useState(false);
 
   // Who Peeked: opening a friend's drop full screen counts as seeing it (if it's unlocked for you).
   const friendsDrop = !!post && post.drop_day !== null && post.user_id !== userId;
@@ -150,63 +151,23 @@ export default function PostViewer() {
     }
   }
 
+  const authorName = author ? author.display_name || author.username : '';
+
   return (
     <View style={styles.fill}>
       <StatusBar style="light" />
-      {post === undefined ? (
-        <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
-      ) : post === null ? (
-        <View style={[styles.fill, styles.center]}>
-          <EmptyState emoji="💨" title="This post is gone" message="It was deleted, or you can't see it anymore." />
-        </View>
-      ) : locked ? (
-        <View style={[styles.fill, styles.center]}>
-          {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={30} /> : null}
-          <View style={styles.lockedShade} />
-          {files?.lock === 'group' ? (
-            <>
-              <Text style={styles.lockedEmoji}>👯</Text>
-              <Text style={styles.lockedTitle}>Waiting on your group 👀</Text>
-              <Text style={styles.lockedText}>This drop shows once everyone in your group has posted.</Text>
-              <Button title="See my groups" icon="people" onPress={() => router.push('/groups')} />
-            </>
-          ) : (
-            <>
-              <Text style={styles.lockedEmoji}>🙈</Text>
-              <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
-              <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
-              <Button
-                title="Open camera"
-                icon="camera"
-                onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
-              />
-            </>
-          )}
-        </View>
-      ) : videoUri ? (
-        <VideoClip
-          uri={videoUri}
-          posterUri={uri}
-          overlayUri={files?.overlay ? urls[files.overlay] : undefined}
-          contentFit={post.overlay_path ? 'cover' : 'contain'}
-          playing
-          style={styles.fill}
-        />
-      ) : uri ? (
-        <Image source={{ uri, cacheKey: post.media_path }} style={styles.fill} contentFit="contain" transition={200} />
-      ) : (
-        <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
-      )}
 
+      {/* Top bar: close, who posted it, and ••• */}
       <SafeEdge edge="top" style={styles.top}>
-        <LinearGradient colors={['rgba(0,0,0,0.6)', 'transparent']} style={StyleSheet.absoluteFill} />
         <IconButton icon="close" label="Close" onPress={() => router.back()} />
         {author ? (
           <Pressable style={styles.author} onPress={() => router.push(`/profile/${author.id}`)}>
-            <Avatar path={author.avatar_path} name={author.display_name || author.username} size={36} />
-            <View>
-              <Text style={styles.authorName}>{author.display_name || author.username}</Text>
-              <Text style={styles.authorMeta}>
+            <Avatar path={author.avatar_path} name={authorName} size={36} />
+            <View style={styles.authorText}>
+              <Text style={styles.authorName} numberOfLines={1}>
+                {authorName}
+              </Text>
+              <Text style={styles.authorMeta} numberOfLines={1}>
                 @{author.username} · {post ? timeAgo(post.created_at) : ''}
               </Text>
               {post?.drop_day && post.drop_late_seconds !== null ? (
@@ -220,41 +181,57 @@ export default function PostViewer() {
         {post ? <IconButton icon="ellipsis-horizontal" label="More" onPress={openMenu} /> : null}
       </SafeEdge>
 
+      {/* The photo or video, fitted in the space between the top bar and the panel. */}
+      <View style={styles.media}>
+        {post === undefined ? (
+          <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
+        ) : post === null ? (
+          <View style={[styles.fill, styles.center]}>
+            <EmptyState emoji="💨" title="This post is gone" message="It was deleted, or you can't see it anymore." />
+          </View>
+        ) : locked ? (
+          <View style={[styles.fill, styles.center]}>
+            {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={30} /> : null}
+            <View style={styles.lockedShade} />
+            {files?.lock === 'group' ? (
+              <>
+                <Text style={styles.lockedEmoji}>👯</Text>
+                <Text style={styles.lockedTitle}>Waiting on your group 👀</Text>
+                <Text style={styles.lockedText}>This drop shows once everyone in your group has posted.</Text>
+                <Button title="See my groups" icon="people" onPress={() => router.push('/groups')} />
+              </>
+            ) : (
+              <>
+                <Text style={styles.lockedEmoji}>🙈</Text>
+                <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
+                <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
+                <Button
+                  title="Open camera"
+                  icon="camera"
+                  onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+                />
+              </>
+            )}
+          </View>
+        ) : videoUri ? (
+          <VideoClip
+            uri={videoUri}
+            posterUri={uri}
+            overlayUri={files?.overlay ? urls[files.overlay] : undefined}
+            contentFit={post.overlay_path ? 'cover' : 'contain'}
+            playing
+            style={StyleSheet.absoluteFill}
+          />
+        ) : uri ? (
+          <Image source={{ uri, cacheKey: post.media_path }} style={StyleSheet.absoluteFill} contentFit="contain" transition={200} />
+        ) : (
+          <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
+        )}
+      </View>
+
+      {/* Under the photo, in its own panel: ❤️ and 💬, dare tags, then the caption (like Instagram). */}
       {post ? (
-        <SafeEdge edge="bottom" style={styles.bottom}>
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFill} />
-          {post.dare_day ? (
-            <View style={styles.dareTag}>
-              <DareTag day={post.dare_day} />
-            </View>
-          ) : null}
-          {post.forfeit_text ? (
-            <View style={styles.dareTag}>
-              <ForfeitTag text={post.forfeit_text} />
-            </View>
-          ) : null}
-          {post.dare_verdict ? (
-            <View style={styles.dareTag}>
-              <LegitOrCap
-                key={`${isFriend}`}
-                postId={post.id}
-                verdict={post.dare_verdict}
-                canVote={isFriend && post.user_id !== userId}
-                onDark
-              />
-            </View>
-          ) : null}
-          {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
-          {post.peek_stats ? (
-            <Pressable
-              style={styles.peeked}
-              onPress={() => router.push(`/peekers/${post.id}`)}
-              accessibilityLabel="See who peeked">
-              <Text style={styles.peekedText}>
-                👀 {post.peek_stats.revealed} peeked · {post.peek_stats.passed} scrolled past ›
-              </Text>
-            </Pressable>
-          ) : null}
+        <SafeEdge edge="bottom" style={styles.panel}>
           {stats ? (
             <View style={styles.actions}>
               <Bouncy
@@ -276,6 +253,36 @@ export default function PostViewer() {
                 <Text style={styles.count}>{stats.commentCount}</Text>
               </Pressable>
             </View>
+          ) : null}
+          {post.dare_day ? <DareTag day={post.dare_day} /> : null}
+          {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
+          {post.dare_verdict ? (
+            <LegitOrCap
+              key={`${isFriend}`}
+              postId={post.id}
+              verdict={post.dare_verdict}
+              canVote={isFriend && post.user_id !== userId}
+              onDark
+            />
+          ) : null}
+          {post.caption ? (
+            <Text
+              style={styles.caption}
+              numberOfLines={captionOpen ? undefined : 3}
+              onPress={() => setCaptionOpen((open) => !open)}>
+              <Text style={styles.captionName}>{authorName} </Text>
+              {post.caption}
+            </Text>
+          ) : null}
+          {post.peek_stats ? (
+            <Pressable
+              style={styles.peeked}
+              onPress={() => router.push(`/peekers/${post.id}`)}
+              accessibilityLabel="See who peeked">
+              <Text style={styles.peekedText}>
+                👀 {post.peek_stats.revealed} peeked · {post.peek_stats.passed} scrolled past ›
+              </Text>
+            </Pressable>
           ) : null}
         </SafeEdge>
       ) : null}
@@ -328,15 +335,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   top: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     paddingHorizontal: space.lg,
-    paddingBottom: space.xl,
+    paddingBottom: space.sm,
+  },
+  authorText: {
+    flex: 1,
+  },
+  media: {
+    flex: 1,
+    overflow: 'hidden',
   },
   author: {
     flex: 1,
@@ -353,19 +363,18 @@ const styles = StyleSheet.create({
     ...font.small,
     color: 'rgba(255,255,255,0.8)',
   },
-  bottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: space.xl,
-    paddingTop: space.xxl,
-    paddingBottom: space.lg,
+  panel: {
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.md,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    backgroundColor: '#17171f',
   },
   actions: {
     flexDirection: 'row',
     gap: space.xl,
-    marginBottom: space.md,
   },
   action: {
     flexDirection: 'row',
@@ -377,14 +386,13 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '800',
   },
-  dareTag: {
-    marginBottom: space.md,
-  },
   caption: {
     ...font.body,
     color: colors.white,
-    fontSize: 17,
-    lineHeight: 24,
-    marginBottom: space.md,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  captionName: {
+    fontWeight: '900',
   },
 });

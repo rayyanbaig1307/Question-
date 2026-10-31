@@ -47,6 +47,11 @@ export default function AppLayout() {
         name="stories/[user]"
         options={{ animation: 'fade', contentStyle: { backgroundColor: colors.black } }}
       />
+      {/* Comments slide up as a sheet over the post (the screen draws its own sheet and animation). */}
+      <Stack.Screen
+        name="comments/[postId]"
+        options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+      />
       <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="map" options={{ animation: 'slide_from_bottom' }} />
     </Stack>

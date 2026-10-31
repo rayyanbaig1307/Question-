@@ -719,3 +719,13 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 3. **👯 Group Peeks** moved to **Chat**, above your chats: each group shows "2 of 4 posted today's drop" (green
    when everyone has). Tap one to open it; **＋ New** makes another. No groups yet → one **Make a group** row.
    (Settings → Group Peek still works too.)
+
+## Step 48 – Post page and comments, Instagram style 💬
+
+1. Open a post (tap it on your profile). The photo sits between the top bar and a **dark panel underneath**:
+   ❤️ likes and 💬 comments, any dare tags, then the caption with the poster's name in bold – no more words
+   floating on the photo. A long caption shows 3 lines; tap it to read the rest.
+2. Tap **💬** (here or under a post on Home) → the comments **slide up from the bottom** over the post, with the
+   post still showing dimmed behind. Write, reply, like and long-press to delete/report like before.
+3. Close it by **dragging the grey bar at the top down**, **tapping the dimmed area above**, or the phone's back
+   gesture. You're right back on the post (or Home), and the comment count is updated.
