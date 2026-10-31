@@ -18,13 +18,16 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, w
 import { Bouncy } from '@/components/Bouncy';
 import { todayDareDay, useDare } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
+import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
-export type CameraMode = 'photo' | 'dare' | 'drop' | 'guess';
+// 'googly' is a lens: googly eyes stuck on every face the camera sees (a normal photo otherwise).
+export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess';
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
+  { key: 'googly', emoji: '🤪', label: 'Googly' },
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'drop', emoji: '👀', label: 'Drop' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
@@ -119,6 +122,18 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
   const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
+
+  if (mode === 'googly') {
+    // The lens explains itself (eyes on faces). Without face tracking, say how to get it.
+    if (FACE_LENS_AVAILABLE) return null;
+    return (
+      <View style={[styles.caption, styles.captionQuiet]}>
+        <Text style={styles.captionText} numberOfLines={2}>
+          🤪 The googly lens works in the Peekaboo app download (not in Expo Go)
+        </Text>
+      </View>
+    );
+  }
 
   if (mode === 'dare') {
     return (

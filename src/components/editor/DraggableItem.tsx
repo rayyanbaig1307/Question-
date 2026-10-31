@@ -29,8 +29,8 @@ export function DraggableItem({ item, trash, onDragChange, onDelete, onTap }: Pr
   const { width } = useWindowDimensions();
   const x = useSharedValue(item.startX);
   const y = useSharedValue(item.startY);
-  const scale = useSharedValue(1);
-  const rotation = useSharedValue(0);
+  const scale = useSharedValue(item.startScale ?? 1);
+  const rotation = useSharedValue(item.startRotation ?? 0);
   const overTrash = useSharedValue(false);
 
   const pan = usePanGesture({

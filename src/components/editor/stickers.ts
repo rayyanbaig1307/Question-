@@ -11,6 +11,9 @@ export type OverlayItem = {
   // Where it first appears, measured from the middle of the photo.
   startX: number;
   startY: number;
+  // How big and how turned (radians) it starts – set for the googly lens's eyes, which match the faces.
+  startScale?: number;
+  startRotation?: number;
 };
 
 export const EMOJI_STICKERS = [

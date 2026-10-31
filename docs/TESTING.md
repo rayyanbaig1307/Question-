@@ -733,3 +733,16 @@ Use 2 friend accounts (A and B) and one account that isn't friends with A (C).
 5. After **3 votes** the label becomes a verdict: **🔥 Certified legit** or **🧢 Friends say cap**.
 6. The same row is on the full-screen post. **C** (not a friend) sees the totals but can't vote.
 7. Only dare and forfeit posts have it; normal posts don't.
+
+## Step 42 – Googly lens 🤪 (live, like a Snapchat lens)
+
+Needs the **new Android download (v9)** – it has the face tracking built in. Expo Go can't run it.
+1. Open the Camera. On the round mode bubbles above the shutter, swipe to **🤪 Googly** (first bubble after the
+   plain camera). The camera turns to the selfie side.
+2. Point it at a face → a pair of googly eyes sits on the eyes and **follows the face** as it moves, tilts and
+   comes closer. Up to 4 faces at once. Flip to the back camera with the flip button – works there too.
+3. Tap the shutter → the photo opens in the editor with the googly eyes already on the faces. They're normal
+   stickers now: drag, pinch to resize, or drop on the trash. Then **Send to** as usual.
+4. In this mode the shutter takes photos only (hold does nothing).
+5. In **Expo Go** (or an older download) the 🤪 bubble shows "The googly lens works in the Peekaboo app download"
+   and the camera stays normal. Your iPhone gets the lens once TestFlight is set up.

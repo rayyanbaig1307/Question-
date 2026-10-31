@@ -19,6 +19,7 @@ import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { friendlyError } from '@/lib/errors';
+import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
 
 const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, colors.green, colors.orange];
@@ -26,7 +27,7 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, dare, drop, guess, forfeit } = useLocalSearchParams<{
+  const { uri, fit, video, to, dare, drop, guess, forfeit, eyes } = useLocalSearchParams<{
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -36,11 +37,14 @@ export default function Editor() {
     drop?: string;
     guess?: string;
     forfeit?: string;
+    // From the googly lens: where the eyes were on each face (JSON).
+    eyes?: string;
   }>();
   const { width, height } = useWindowDimensions();
   const canvasRef = useRef<ComponentRef<typeof View>>(null);
 
-  const [items, setItems] = useState<OverlayItem[]>([]);
+  // A photo from the googly lens starts with its eyes on the faces – real stickers you can move or delete.
+  const [items, setItems] = useState<OverlayItem[]>(() => lensEyes(eyes, width, height));
   const [dragging, setDragging] = useState(false);
   const [composer, setComposer] = useState<{ editingId: string | null; draft: TextDraft } | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
@@ -261,6 +265,27 @@ export default function Editor() {
       />
     </View>
   );
+}
+
+// The googly lens's eye positions (screen points) → googly-eyes stickers placed from the middle of the photo.
+function lensEyes(json: string | undefined, width: number, height: number): OverlayItem[] {
+  if (!json) return [];
+  try {
+    const pairs = JSON.parse(json) as EyePair[];
+    return pairs.map((pair) => ({
+      id: randomUUID(),
+      kind: 'special' as const,
+      content: 'googly-eyes',
+      color: colors.white,
+      look: 'shadow' as const,
+      startX: pair.x - width / 2,
+      startY: pair.y - height / 2,
+      startScale: pair.scale,
+      startRotation: pair.rotation,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // The filter's name flashes up in the middle for a moment when you swipe to it.

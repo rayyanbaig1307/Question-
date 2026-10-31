@@ -24,11 +24,19 @@ import { useMe } from '@/lib/auth';
 import { timeLeft, useOpenDaresForMe, useStreakNudge } from '@/lib/dareChain';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
+import { FACE_LENS_AVAILABLE, type EyePair } from '@/lib/faceLens';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
+import type { FaceLensHandle } from './FaceLensCamera';
 import { ModeCaption, ModeDial, type CameraMode } from './ModeDial';
+
+// The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
+const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_LENS_AVAILABLE
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./FaceLensCamera').FaceLensCamera
+  : null;
 
 // Videos can be up to this long.
 const MAX_VIDEO_SECONDS = 10;
@@ -36,6 +44,7 @@ const MAX_VIDEO_SECONDS = 10;
 // The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
+  googly: colors.blue,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -106,13 +115,25 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const recordProgress = useSharedValue(0);
   const ringStyle = useAnimatedStyle(() => ({ width: `${recordProgress.get() * 100}%` }));
 
-  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false) =>
+  // The googly lens is on: the live camera with eyes on every face (instead of the normal camera).
+  const lensOn = isHome && homeMode === 'googly' && FaceLens !== null;
+  const lensRef = useRef<FaceLensHandle>(null);
+
+  // Lenses are for faces – picking the googly lens turns to the selfie camera.
+  function changeMode(next: CameraMode) {
+    setHomeMode(next);
+    if (next === 'googly' && facing === 'back') setFacing('front');
+  }
+
+  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, eyes: EyePair[] = []) =>
     router.push({
       pathname: '/editor',
       params: {
         uri,
         fit,
         ...(video ? { video: '1' } : {}),
+        // Googly lens: where the eyes were, so they're on the photo as stickers you can still move.
+        ...(eyes.length > 0 ? { eyes: JSON.stringify(eyes) } : {}),
         ...(sendTo ? { to: sendTo } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
@@ -122,11 +143,17 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     });
 
   async function takePhoto() {
-    if (!cameraRef.current || busy) return;
+    if (busy || (lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
     try {
+      if (lensOn && lensRef.current) {
+        const shot = await lensRef.current.capture();
+        openEditor(shot.uri, 'cover', false, shot.eyes);
+        return;
+      }
+      if (!cameraRef.current) return;
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       openEditor(photo.uri, 'cover');
     } catch (error) {
@@ -231,7 +258,9 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        active || warm ? (
+        lensOn && FaceLens ? (
+          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} />
+        ) : active || warm ? (
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
@@ -305,7 +334,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         {isHome ? (
           <ModeDial
             mode={homeMode}
-            onChange={setHomeMode}
+            onChange={changeMode}
             dots={{ dare: dareDone === false, drop: dropDone === false && dropStatus.kind !== 'waiting' }}
           />
         ) : null}
@@ -319,7 +348,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           {/* The big shutter button: tap for a photo, hold for a video. It squishes when you press it. */}
           <Bouncy
             onPress={takePhoto}
-            onLongPress={startRecording}
+            // The googly lens takes photos only.
+            onLongPress={lensOn ? undefined : startRecording}
             delayLongPress={250}
             onPressOut={stopRecording}
             disabled={!permission?.granted || (busy && !recording) || dropNotYet}
