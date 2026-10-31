@@ -729,3 +729,12 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    post still showing dimmed behind. Write, reply, like and long-press to delete/report like before.
 3. Close it by **dragging the grey bar at the top down**, **tapping the dimmed area above**, or the phone's back
    gesture. You're right back on the post (or Home), and the comment count is updated.
+
+## Step 49 – Zoom into photos 🔍
+
+1. Open your profile (or anyone's) → tap a photo in the grid.
+2. **Pinch** with two fingers → it zooms in towards your fingers (up to 5×). Let go a little zoomed and it
+   stays; let go at normal size and it snaps back.
+3. While zoomed, **drag with one finger** to look around – it stops at the photo's edges.
+4. **Double-tap** a spot → zooms in on it. Double-tap again → back to normal.
+5. Not zoomed: one-finger swipes do what they did before (e.g. swipe back on iPhone). Videos don't zoom.

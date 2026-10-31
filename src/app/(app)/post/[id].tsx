@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { VideoClip } from '@/components/VideoClipSafe';
+import { ZoomableImage } from '@/components/ZoomableImage';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { LegitOrCap } from '@/components/LegitOrCap';
@@ -223,7 +224,8 @@ export default function PostViewer() {
             style={StyleSheet.absoluteFill}
           />
         ) : uri ? (
-          <Image source={{ uri, cacheKey: post.media_path }} style={StyleSheet.absoluteFill} contentFit="contain" transition={200} />
+          // Pinch or double-tap to zoom in.
+          <ZoomableImage uri={uri} cacheKey={post.media_path} style={StyleSheet.absoluteFill} />
         ) : (
           <ActivityIndicator style={styles.fill} color={colors.accent} size="large" />
         )}
