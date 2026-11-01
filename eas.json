@@ -29,7 +29,7 @@
     "production": {},
     "testflight": {
       "ios": {
-        "ascAppId": "FILL_IN_FROM_APP_STORE_CONNECT"
+        "ascAppId": "6829561855"
       }
     }
   }
