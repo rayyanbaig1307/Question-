@@ -11,7 +11,6 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -101,7 +100,15 @@ export function FeedCard({
       // Double tap → like + a big heart pops up.
       lastTap.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      heart.set(withSequence(withSpring(1, { damping: 8 }), withDelay(500, withTiming(0, { duration: 200 }))));
+      // Pops up, stays a moment, then fades away (about 1.5 seconds in all). Timed steps only, so it always
+      // goes away – a bouncy spring could keep it on screen.
+      heart.set(
+        withSequence(
+          withTiming(1.15, { duration: 160 }),
+          withTiming(1, { duration: 100 }),
+          withDelay(900, withTiming(0, { duration: 250 })),
+        ),
+      );
       if (!post.likedByMe) {
         likeButton.pop();
         onLike(true);
@@ -112,7 +119,7 @@ export function FeedCard({
   }
 
   const heartStyle = useAnimatedStyle(() => ({
-    opacity: heart.get() > 0.05 ? 1 : 0,
+    opacity: heart.get() > 0.05 ? Math.min(1, heart.get()) : 0,
     transform: [{ scale: heart.get() }],
   }));
 
