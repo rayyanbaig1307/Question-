@@ -262,7 +262,6 @@ export default function PostViewer() {
             <HypeRating
               key={`${isFriend}`}
               postId={post.id}
-              authorId={post.user_id}
               hype={post.dare_hype}
               canVote={isFriend && post.user_id !== userId}
               onDark

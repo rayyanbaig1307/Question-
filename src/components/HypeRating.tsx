@@ -3,39 +3,25 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Bouncy } from '@/components/Bouncy';
-import { useMe } from '@/lib/auth';
 import { rateDare, HYPE_RATINGS, type DareHype, type HypeRatingKey } from '@/lib/dareChain';
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
 
-// It gets a verdict ("💀 Unhinged") once this many friends have rated it.
-const VERDICT_AFTER = 3;
-
-// Under a dare (or forfeit) post: friends rate how bold it was – 🔥 Iconic · 😬 Mid · 💀 Unhinged.
+// Under a dare (or forfeit) post: three small buttons – 🔥 Iconic · 😬 Mid · 💀 Unhinged – no words on screen.
+// Friends tap one to rate how bold the dare was; the most-picked one is highlighted.
 // Ratings are anonymous – everyone sees the totals, nobody sees who picked what.
 // `canVote` is false on your own posts and on strangers' posts (then it just shows the totals).
-export function HypeRating({ postId, authorId, hype, canVote, onDark = false }: {
+export function HypeRating({ postId, hype, canVote, onDark = false }: {
   postId: string;
-  // Who posted the dare (on your own post it says your friends are rating you).
-  authorId: string;
   hype: DareHype;
   canVote: boolean;
-  // Drawn over a photo (white text) instead of on the page background.
+  // Drawn over a photo instead of on the page background.
   onDark?: boolean;
 }) {
-  const { userId } = useMe();
   const [current, setCurrent] = useState(hype);
-  const total = HYPE_RATINGS.reduce((sum, item) => sum + current[item.key], 0);
-  // The most-picked rating wins (ties go to the bolder one).
+  // The most-picked rating (ties go to the bolder one), shown a little bigger.
   const top = [...HYPE_RATINGS].reverse().reduce((best, item) => (current[item.key] > current[best.key] ? item : best));
-  const label =
-    total >= VERDICT_AFTER
-      ? `${top.emoji} ${top.word}`
-      : authorId === userId
-        ? 'Your friends rate your dare'
-        : canVote
-          ? 'How bold was it?'
-          : 'Friends rate this dare';
+  const topKey = current[top.key] > 0 ? top.key : null;
 
   async function rate(key: HypeRatingKey) {
     if (!canVote) return;
@@ -57,9 +43,6 @@ export function HypeRating({ postId, authorId, hype, canVote, onDark = false }: 
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.label, onDark && styles.labelDark]} numberOfLines={1}>
-        {label}
-      </Text>
       {HYPE_RATINGS.map((item) => (
         <Pill
           key={item.key}
@@ -67,6 +50,7 @@ export function HypeRating({ postId, authorId, hype, canVote, onDark = false }: 
           word={item.word}
           count={current[item.key]}
           on={current.mine === item.key}
+          top={topKey === item.key}
           color={item.color}
           disabled={!canVote}
           onDark={onDark}
@@ -77,11 +61,12 @@ export function HypeRating({ postId, authorId, hype, canVote, onDark = false }: 
   );
 }
 
-function Pill({ emoji, word, count, on, color, disabled, onDark, onPress }: {
+function Pill({ emoji, word, count, on, top, color, disabled, onDark, onPress }: {
   emoji: string;
   word: string;
   count: number;
   on: boolean;
+  top: boolean;
   color: string;
   disabled: boolean;
   onDark: boolean;
@@ -96,9 +81,9 @@ function Pill({ emoji, word, count, on, color, disabled, onDark, onPress }: {
       accessibilityRole="button"
       accessibilityState={{ selected: on, disabled }}
       accessibilityLabel={`${word}: ${count} rating${count === 1 ? '' : 's'}${on ? ', your rating' : ''}`}>
-      <Text style={[styles.pillText, (on || onDark) && styles.pillTextOn]}>
-        {emoji} {count}
-      </Text>
+      <Text style={[styles.emoji, top && styles.emojiTop]}>{emoji}</Text>
+      {/* Just the emoji until someone picks it */}
+      {count > 0 ? <Text style={[styles.count, (on || onDark) && styles.countOn]}>{count}</Text> : null}
     </Bouncy>
   );
 }
@@ -109,33 +94,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.sm,
   },
-  label: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  labelDark: {
-    color: colors.white,
-  },
   pill: {
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: 'transparent',
     backgroundColor: colors.card,
   },
   pillDark: {
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderColor: 'rgba(255,255,255,0.35)',
   },
-  pillText: {
-    color: colors.text,
+  emoji: {
+    fontSize: 16,
+  },
+  emojiTop: {
+    fontSize: 20,
+  },
+  count: {
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '800',
   },
-  pillTextOn: {
+  countOn: {
     color: colors.white,
   },
 });

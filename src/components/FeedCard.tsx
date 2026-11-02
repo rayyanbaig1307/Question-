@@ -297,7 +297,6 @@ export function FeedCard({
           // Fresh numbers from the server start it over.
           key={`${post.dare_hype.iconic}-${post.dare_hype.mid}-${post.dare_hype.unhinged}-${post.dare_hype.mine}`}
           postId={post.id}
-          authorId={post.user_id}
           hype={post.dare_hype}
           canVote={canVote}
         />
