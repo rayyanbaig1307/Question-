@@ -68,7 +68,8 @@
         }
       ],
       "expo-video",
-      "expo-audio"
+      "expo-audio",
+      "expo-image"
     ],
     "experiments": {
       "reactCompiler": true
