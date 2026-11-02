@@ -16,9 +16,13 @@ import { StickerPicker } from '@/components/editor/StickerPicker';
 import { randomOffset, TEXT_COLORS, type OverlayItem } from '@/components/editor/stickers';
 import { TextComposer, type TextDraft } from '@/components/editor/TextComposer';
 import { IconButton } from '@/components/IconButton';
+import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
+import { useMe } from '@/lib/auth';
+import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { resizePhoto, type Capture } from '@/lib/media';
 import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
 
@@ -50,6 +54,10 @@ export default function Editor() {
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const isVideo = video === '1';
+  const { userId } = useMe();
+  const { showToast } = useOverlays();
+  // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
+  const straightToChat = !!to && !dare && !drop && !guess && !forfeit;
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
   const [filterIndex, setFilterIndex] = useState(0);
   const [filterFlash, setFilterFlash] = useState(0);
@@ -129,6 +137,20 @@ export default function Editor() {
         ...(guess ? { guess } : {}),
         ...(forfeit ? { forfeit } : {}),
       };
+      if (straightToChat) {
+        const photo: Capture = isVideo
+          ? {
+              kind: 'video',
+              uri,
+              overlayUri: items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : null,
+            }
+          : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+        await sendSnap(userId, [to], photo);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast('Peek sent 👀');
+        router.dismissTo(`/chat/${to}`);
+        return;
+      }
       if (isVideo) {
         // Videos keep their text and stickers as a see-through picture that's shown on top while it plays.
         const overlay =
@@ -140,7 +162,7 @@ export default function Editor() {
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
-      Alert.alert('Could not save the photo', friendlyError(error));
+      Alert.alert(straightToChat ? 'Could not send' : 'Could not save the photo', friendlyError(error));
     } finally {
       setBusy(false);
     }
@@ -229,7 +251,7 @@ export default function Editor() {
               disabled={busy}
               style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
               accessibilityRole="button">
-              <Text style={styles.sendText}>{busy ? 'Saving…' : 'Send to'}</Text>
+              <Text style={styles.sendText}>{busy ? (straightToChat ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : 'Send to'}</Text>
               <Ionicons name="send" size={18} color={colors.onAccent} />
             </Pressable>
           </SafeEdge>
