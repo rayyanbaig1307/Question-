@@ -7,8 +7,8 @@ import { rateDare, HYPE_RATINGS, type DareHype, type HypeRatingKey } from '@/lib
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
 
-// Under a dare (or forfeit) post: three small buttons – 🔥 Iconic · 😬 Mid · 💀 Unhinged – no words on screen.
-// Friends tap one to rate how bold the dare was; the most-picked one is highlighted.
+// Under a dare (or forfeit) post: one rounded bar split in three – 🔥 Iconic | 😬 Mid | 💀 Unhinged.
+// Friends tap one to rate how bold the dare was; the one you picked fills with its colour.
 // Ratings are anonymous – everyone sees the totals, nobody sees who picked what.
 // `canVote` is false on your own posts and on strangers' posts (then it just shows the totals).
 export function HypeRating({ postId, hype, canVote, onDark = false }: {
@@ -19,9 +19,6 @@ export function HypeRating({ postId, hype, canVote, onDark = false }: {
   onDark?: boolean;
 }) {
   const [current, setCurrent] = useState(hype);
-  // The most-picked rating (ties go to the bolder one), shown a little bigger.
-  const top = [...HYPE_RATINGS].reverse().reduce((best, item) => (current[item.key] > current[best.key] ? item : best));
-  const topKey = current[top.key] > 0 ? top.key : null;
 
   async function rate(key: HypeRatingKey) {
     if (!canVote) return;
@@ -42,15 +39,14 @@ export function HypeRating({ postId, hype, canVote, onDark = false }: {
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.bar, onDark && styles.barDark]}>
       {HYPE_RATINGS.map((item) => (
-        <Pill
+        <Segment
           key={item.key}
           emoji={item.emoji}
           word={item.word}
           count={current[item.key]}
           on={current.mine === item.key}
-          top={topKey === item.key}
           color={item.color}
           disabled={!canVote}
           onDark={onDark}
@@ -61,12 +57,11 @@ export function HypeRating({ postId, hype, canVote, onDark = false }: {
   );
 }
 
-function Pill({ emoji, word, count, on, top, color, disabled, onDark, onPress }: {
+function Segment({ emoji, word, count, on, color, disabled, onDark, onPress }: {
   emoji: string;
   word: string;
   count: number;
   on: boolean;
-  top: boolean;
   color: string;
   disabled: boolean;
   onDark: boolean;
@@ -74,52 +69,54 @@ function Pill({ emoji, word, count, on, top, color, disabled, onDark, onPress }:
 }) {
   return (
     <Bouncy
-      style={[styles.pill, onDark && styles.pillDark, on && { backgroundColor: color, borderColor: color }]}
-      pressScale={0.88}
+      style={[styles.segment, on && { backgroundColor: color }]}
+      pressScale={0.94}
       disabled={disabled}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: on, disabled }}
       accessibilityLabel={`${word}: ${count} rating${count === 1 ? '' : 's'}${on ? ', your rating' : ''}`}>
-      <Text style={[styles.emoji, top && styles.emojiTop]}>{emoji}</Text>
-      {/* Just the emoji until someone picks it */}
-      {count > 0 ? <Text style={[styles.count, (on || onDark) && styles.countOn]}>{count}</Text> : null}
+      <Text style={[styles.word, (on || onDark) && styles.wordOn]} numberOfLines={1}>
+        {emoji} {word}
+        {/* The number only shows once someone has picked it */}
+        {count > 0 ? <Text style={[styles.count, (on || onDark) && styles.countOn]}>{`  ${count}`}</Text> : null}
+      </Text>
     </Bouncy>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  bar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    padding: 3,
+    gap: 3,
     borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
     backgroundColor: colors.card,
   },
-  pillDark: {
+  barDark: {
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  emoji: {
-    fontSize: 16,
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: space.xs,
+    borderRadius: radius.pill,
   },
-  emojiTop: {
-    fontSize: 20,
+  word: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  wordOn: {
+    color: colors.white,
   },
   count: {
     color: colors.textMuted,
-    fontSize: 13,
     fontWeight: '800',
   },
   countOn: {
-    color: colors.white,
+    color: 'rgba(255,255,255,0.8)',
   },
 });
