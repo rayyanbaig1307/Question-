@@ -71,9 +71,14 @@ export function ModeDial({ mode, onChange, dots }: {
   }
 
   // When the row stops moving, whichever spot is closest to the middle wins.
+  // Only switches modes – it never opens a page (the row also settles after swiping between pages,
+  // and that must not count as a second tap on Dare or Guess Who).
   function settled(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const at = Math.round(event.nativeEvent.contentOffset.x / SLOT_WIDTH);
-    pick(SLOTS[Math.max(0, Math.min(SLOTS.length - 1, at))]);
+    const next = SLOTS[Math.max(0, Math.min(SLOTS.length - 1, at))];
+    if (next === mode) return;
+    Haptics.selectionAsync();
+    onChange(next);
   }
 
   return (
