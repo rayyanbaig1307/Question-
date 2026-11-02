@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Bouncy } from '@/components/Bouncy';
+import { useMe } from '@/lib/auth';
 import { voteDare, type DareVerdict } from '@/lib/dareChain';
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
@@ -13,13 +14,17 @@ const VERDICT_AFTER = 3;
 // "Legit or cap?" under a dare (or forfeit) post: friends vote 🔥 legit (they really did it) or 🧢 cap.
 // Votes are anonymous – everyone sees the totals, nobody sees who voted what.
 // `canVote` is false on your own posts and on strangers' posts (then it just shows the totals).
-export function LegitOrCap({ postId, verdict, canVote, onDark = false }: {
+// The words above the buttons say what's going on, so it's clear why they're there.
+export function LegitOrCap({ postId, authorId, verdict, canVote, onDark = false }: {
   postId: string;
+  // Who posted the dare (on your own post it says your friends are voting on you).
+  authorId: string;
   verdict: DareVerdict;
   canVote: boolean;
   // Drawn over a photo (white text) instead of on the page background.
   onDark?: boolean;
 }) {
+  const { userId } = useMe();
   const [current, setCurrent] = useState(verdict);
   const total = current.legit + current.cap;
   const label =
@@ -27,11 +32,11 @@ export function LegitOrCap({ postId, verdict, canVote, onDark = false }: {
       ? current.cap > current.legit
         ? '🧢 Friends say cap'
         : '🔥 Certified legit'
-      : canVote
-        ? 'Legit or cap?'
-        : total === 0
-          ? 'No votes yet'
-          : 'Legit or cap?';
+      : authorId === userId
+        ? 'Your friends vote: did you really do it?'
+        : canVote
+          ? 'Did they really do it? Vote:'
+          : 'Friends vote: did they really do it?';
 
   async function vote(legit: boolean) {
     if (!canVote) return;
@@ -55,7 +60,7 @@ export function LegitOrCap({ postId, verdict, canVote, onDark = false }: {
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.label, onDark && styles.labelDark]} numberOfLines={1}>
+      <Text style={[styles.label, onDark && styles.labelDark]} numberOfLines={2}>
         {label}
       </Text>
       <Pill

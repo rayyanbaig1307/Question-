@@ -262,6 +262,7 @@ export default function PostViewer() {
             <LegitOrCap
               key={`${isFriend}`}
               postId={post.id}
+              authorId={post.user_id}
               verdict={post.dare_verdict}
               canVote={isFriend && post.user_id !== userId}
               onDark

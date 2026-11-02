@@ -297,6 +297,7 @@ export function FeedCard({
           // Fresh numbers from the server start it over.
           key={`${post.dare_verdict.legit}-${post.dare_verdict.cap}-${post.dare_verdict.mine}`}
           postId={post.id}
+          authorId={post.user_id}
           verdict={post.dare_verdict}
           canVote={canVote}
         />
