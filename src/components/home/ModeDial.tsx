@@ -29,7 +29,6 @@ export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess';
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
   { key: 'googly', emoji: '🤪', label: 'Googly' },
   { key: 'dare', emoji: '🎯', label: 'Dare' },
-  { key: 'drop', emoji: '👀', label: 'Drop' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
 

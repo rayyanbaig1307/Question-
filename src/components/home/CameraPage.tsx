@@ -17,7 +17,7 @@ import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { Button } from '@/components/Button';
 import { DareBanner, DarePill } from '@/components/DareBanner';
-import { DropTimer } from '@/components/DropPill';
+import { DropPill, DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
@@ -83,10 +83,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const [homeMode, setHomeMode] = useState<CameraMode>('photo');
   const dropStatus = useDropStatus();
   const dareOn = dare || (isHome && homeMode === 'dare');
-  const dropOn = drop || (isHome && homeMode === 'drop');
+  // While today's drop is live (2 minutes) and you haven't posted it, the normal camera IS the drop camera:
+  // no bubble to pick, just snap. (The drop notification also opens the camera straight in drop mode.)
+  const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone === false;
+  const dropOn = drop || autoDrop;
+  // Missed it: a small "post today's drop · you're late" button on the camera until you do.
+  const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false;
   const guessOn = guess || (isHome && homeMode === 'guess');
-  // Drop mode before today's drop has happened: nothing to post yet, so the shutter waits too.
-  const dropNotYet = isHome && homeMode === 'drop' && dropStatus.kind === 'waiting';
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
@@ -299,7 +302,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             </View>
           ) : null}
           {/* Taking your drop photo: the countdown, and today's dare in case you'd rather do that */}
-          {drop ? <DropTimer /> : null}
+          {drop || autoDrop ? <DropTimer /> : null}
+          {lateDrop ? <DropPill /> : null}
           {drop ? <DarePill done={null} /> : null}
           {/* Taking the dare photo: a quick reminder of what the dare is */}
           {dare && !bannerGone ? <DareBanner onDismiss={hideBanner} /> : null}
@@ -323,7 +327,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           <ModeDial
             mode={homeMode}
             onChange={changeMode}
-            dots={{ dare: dareDone === false, drop: dropDone === false && dropStatus.kind !== 'waiting' }}
+            dots={{ dare: dareDone === false }}
           />
         ) : null}
         {recording ? (
@@ -340,14 +344,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             onLongPress={lensOn ? undefined : startRecording}
             delayLongPress={250}
             onPressOut={stopRecording}
-            disabled={!permission?.granted || (busy && !recording) || dropNotYet}
+            disabled={!permission?.granted || (busy && !recording)}
             accessibilityRole="button"
-            accessibilityLabel={dropNotYet ? "Today's drop hasn't happened yet" : 'Take photo, or hold to record a video'}
+            accessibilityLabel={autoDrop ? 'Take your Peekaboo drop photo' : 'Take photo, or hold to record a video'}
             pressScale={0.82}
             style={[
               styles.shutter,
-              isHome && { borderColor: MODE_RING[homeMode] },
-              dropNotYet && styles.shutterOff,
+              isHome && { borderColor: autoDrop ? MODE_RING.drop : MODE_RING[homeMode] },
               recording && styles.shutterRecording,
             ]}>
             <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
@@ -491,9 +494,6 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  shutterOff: {
-    opacity: 0.4,
   },
   shutterRecording: {
     borderColor: colors.red,
