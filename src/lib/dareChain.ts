@@ -6,6 +6,7 @@ import { fetchFriends } from './friends';
 import { withAppLink } from './invite';
 import { supabase } from './supabase';
 import type { Profile } from './types';
+import { colors } from '@/theme';
 
 // ---------------------------------------------------------------------------
 // Dare chains: after you do today's dare, you dare up to 3 friends. They have 24 hours.
@@ -183,14 +184,23 @@ export function useStreakNudge(me: string, enabled: boolean): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Legit or cap? 🔥/🧢: friends vote on whether you really did the dare. Anonymous – only totals are shown.
+// Hype rating 🔥 Iconic · 😬 Mid · 💀 Unhinged: friends rate how bold your dare was. Anonymous – only totals are shown.
 // ---------------------------------------------------------------------------
 
-// Comes with dare and forfeit posts (`dare_verdict`): the totals and your own vote (null = you haven't voted).
-export type DareVerdict = { legit: number; cap: number; mine: boolean | null };
+export type HypeRatingKey = 'iconic' | 'mid' | 'unhinged';
 
-// Vote 🔥 (true) or 🧢 (false), or take your vote back (null).
-export async function voteDare(postId: string, legit: boolean | null): Promise<void> {
-  const { error } = await supabase.rpc('vote_dare', { post: postId, legit });
+// The three ratings, in the order they're shown.
+export const HYPE_RATINGS: { key: HypeRatingKey; emoji: string; word: string; color: string }[] = [
+  { key: 'iconic', emoji: '🔥', word: 'Iconic', color: colors.pink },
+  { key: 'mid', emoji: '😬', word: 'Mid', color: colors.orange },
+  { key: 'unhinged', emoji: '💀', word: 'Unhinged', color: colors.purple },
+];
+
+// Comes with dare and forfeit posts (`dare_hype`): the totals and your own rating (null = you haven't rated).
+export type DareHype = Record<HypeRatingKey, number> & { mine: HypeRatingKey | null };
+
+// Rate a friend's dare, or take your rating back (null).
+export async function rateDare(postId: string, rating: HypeRatingKey | null): Promise<void> {
+  const { error } = await supabase.rpc('rate_dare', { post: postId, rating });
   if (error) throw error;
 }

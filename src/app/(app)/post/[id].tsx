@@ -13,7 +13,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { ZoomableImage } from '@/components/ZoomableImage';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
-import { LegitOrCap } from '@/components/LegitOrCap';
+import { HypeRating } from '@/components/HypeRating';
 import { DropBadge } from '@/components/DropPill';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
@@ -66,10 +66,10 @@ export default function PostViewer() {
     }, [id]),
   );
 
-  // "Legit or cap?": only the poster's friends can vote on a dare.
+  // Hype rating: only the poster's friends can rate a dare.
   const [isFriend, setIsFriend] = useState(false);
   const posterId = post?.user_id ?? null;
-  const hasVerdict = !!post?.dare_verdict;
+  const hasVerdict = !!post?.dare_hype;
   useEffect(() => {
     if (!posterId || posterId === userId || !hasVerdict) return;
     fetchRelation(userId, posterId)
@@ -258,12 +258,12 @@ export default function PostViewer() {
           ) : null}
           {post.dare_day ? <DareTag day={post.dare_day} /> : null}
           {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
-          {post.dare_verdict ? (
-            <LegitOrCap
+          {post.dare_hype ? (
+            <HypeRating
               key={`${isFriend}`}
               postId={post.id}
               authorId={post.user_id}
-              verdict={post.dare_verdict}
+              hype={post.dare_hype}
               canVote={isFriend && post.user_id !== userId}
               onDark
             />

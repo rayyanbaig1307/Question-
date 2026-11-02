@@ -285,7 +285,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
               onLike={(liked) => like(item, liked)}
               onMenu={() => openMenu(item)}
               onRevealed={() => noteDropSeen(item.id, true)}
-              // Only friends vote "Legit or cap?" – not on your own dares.
+              // Only friends rate dares (🔥 😬 💀) – not your own.
               canVote={item.user_id !== userId && !item.fromEveryone}
             />
           </>

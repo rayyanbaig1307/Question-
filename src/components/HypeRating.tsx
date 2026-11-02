@@ -4,85 +4,75 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Bouncy } from '@/components/Bouncy';
 import { useMe } from '@/lib/auth';
-import { voteDare, type DareVerdict } from '@/lib/dareChain';
+import { rateDare, HYPE_RATINGS, type DareHype, type HypeRatingKey } from '@/lib/dareChain';
 import { friendlyError } from '@/lib/errors';
 import { colors, radius, space } from '@/theme';
 
-// It's a verdict once this many friends have voted.
+// It gets a verdict ("💀 Unhinged") once this many friends have rated it.
 const VERDICT_AFTER = 3;
 
-// "Legit or cap?" under a dare (or forfeit) post: friends vote 🔥 legit (they really did it) or 🧢 cap.
-// Votes are anonymous – everyone sees the totals, nobody sees who voted what.
+// Under a dare (or forfeit) post: friends rate how bold it was – 🔥 Iconic · 😬 Mid · 💀 Unhinged.
+// Ratings are anonymous – everyone sees the totals, nobody sees who picked what.
 // `canVote` is false on your own posts and on strangers' posts (then it just shows the totals).
-// The words above the buttons say what's going on, so it's clear why they're there.
-export function LegitOrCap({ postId, authorId, verdict, canVote, onDark = false }: {
+export function HypeRating({ postId, authorId, hype, canVote, onDark = false }: {
   postId: string;
-  // Who posted the dare (on your own post it says your friends are voting on you).
+  // Who posted the dare (on your own post it says your friends are rating you).
   authorId: string;
-  verdict: DareVerdict;
+  hype: DareHype;
   canVote: boolean;
   // Drawn over a photo (white text) instead of on the page background.
   onDark?: boolean;
 }) {
   const { userId } = useMe();
-  const [current, setCurrent] = useState(verdict);
-  const total = current.legit + current.cap;
+  const [current, setCurrent] = useState(hype);
+  const total = HYPE_RATINGS.reduce((sum, item) => sum + current[item.key], 0);
+  // The most-picked rating wins (ties go to the bolder one).
+  const top = [...HYPE_RATINGS].reverse().reduce((best, item) => (current[item.key] > current[best.key] ? item : best));
   const label =
     total >= VERDICT_AFTER
-      ? current.cap > current.legit
-        ? '🧢 Friends say cap'
-        : '🔥 Certified legit'
+      ? `${top.emoji} ${top.word}`
       : authorId === userId
-        ? 'Your friends vote: did you really do it?'
+        ? 'Your friends rate your dare'
         : canVote
-          ? 'Did they really do it? Vote:'
-          : 'Friends vote: did they really do it?';
+          ? 'How bold was it?'
+          : 'Friends rate this dare';
 
-  async function vote(legit: boolean) {
+  async function rate(key: HypeRatingKey) {
     if (!canVote) return;
-    // Tap your own vote again to take it back.
-    const next = current.mine === legit ? null : legit;
+    // Tap your own rating again to take it back.
+    const next = current.mine === key ? null : key;
     const before = current;
-    const counts = { legit: current.legit, cap: current.cap };
-    if (current.mine === true) counts.legit -= 1;
-    if (current.mine === false) counts.cap -= 1;
-    if (next === true) counts.legit += 1;
-    if (next === false) counts.cap += 1;
+    const counts = { iconic: current.iconic, mid: current.mid, unhinged: current.unhinged };
+    if (current.mine) counts[current.mine] -= 1;
+    if (next) counts[next] += 1;
     Haptics.selectionAsync();
     setCurrent({ ...counts, mine: next });
     try {
-      await voteDare(postId, next);
+      await rateDare(postId, next);
     } catch (error) {
       setCurrent(before);
-      Alert.alert('Could not vote', friendlyError(error));
+      Alert.alert('Could not rate', friendlyError(error));
     }
   }
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.label, onDark && styles.labelDark]} numberOfLines={2}>
+      <Text style={[styles.label, onDark && styles.labelDark]} numberOfLines={1}>
         {label}
       </Text>
-      <Pill
-        emoji="🔥"
-        word="Legit"
-        count={current.legit}
-        on={current.mine === true}
-        color={colors.pink}
-        disabled={!canVote}
-        onDark={onDark}
-        onPress={() => vote(true)}
-      />
-      <Pill
-        emoji="🧢"
-        word="Cap"
-        count={current.cap}
-        on={current.mine === false}
-        color={colors.purple}
-        disabled={!canVote}
-        onDark={onDark}
-        onPress={() => vote(false)}
-      />
+      {HYPE_RATINGS.map((item) => (
+        <Pill
+          key={item.key}
+          emoji={item.emoji}
+          word={item.word}
+          count={current[item.key]}
+          on={current.mine === item.key}
+          color={item.color}
+          disabled={!canVote}
+          onDark={onDark}
+          onPress={() => rate(item.key)}
+        />
+      ))}
     </View>
   );
 }
@@ -105,10 +95,9 @@ function Pill({ emoji, word, count, on, color, disabled, onDark, onPress }: {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: on, disabled }}
-      accessibilityLabel={`${word}: ${count} vote${count === 1 ? '' : 's'}${on ? ', your vote' : ''}`}>
+      accessibilityLabel={`${word}: ${count} rating${count === 1 ? '' : 's'}${on ? ', your rating' : ''}`}>
       <Text style={[styles.pillText, (on || onDark) && styles.pillTextOn]}>
-        {emoji} {disabled ? '' : `${word} `}
-        {count}
+        {emoji} {count}
       </Text>
     </Bouncy>
   );

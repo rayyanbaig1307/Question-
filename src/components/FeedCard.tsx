@@ -19,7 +19,7 @@ import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
-import { LegitOrCap } from '@/components/LegitOrCap';
+import { HypeRating } from '@/components/HypeRating';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
 import type { DropLock } from '@/lib/drop';
@@ -64,7 +64,7 @@ export function FeedCard({
   onMenu: () => void;
   // You scratched a drop clear (for Who Peeked).
   onRevealed?: () => void;
-  // "Legit or cap?" on a friend's dare: you can vote (not on your own, not on strangers').
+  // Hype rating on a friend's dare: you can rate it (not your own, not strangers').
   canVote?: boolean;
 }) {
   const lastTap = useRef(0);
@@ -292,13 +292,13 @@ export function FeedCard({
       ) : null}
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
       {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
-      {post.dare_verdict ? (
-        <LegitOrCap
+      {post.dare_hype ? (
+        <HypeRating
           // Fresh numbers from the server start it over.
-          key={`${post.dare_verdict.legit}-${post.dare_verdict.cap}-${post.dare_verdict.mine}`}
+          key={`${post.dare_hype.iconic}-${post.dare_hype.mid}-${post.dare_hype.unhinged}-${post.dare_hype.mine}`}
           postId={post.id}
           authorId={post.user_id}
-          verdict={post.dare_verdict}
+          hype={post.dare_hype}
           canVote={canVote}
         />
       ) : null}
