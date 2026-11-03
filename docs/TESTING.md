@@ -362,7 +362,7 @@ Where it works:
 
 ## Step 20 – Videos 🎥
 
-1. On the camera, **hold** the shutter: it turns red and a red bar fills up – you're recording (up to 30 seconds). With ⚡ on, the back light stays on the whole video; with the selfie camera a bright ring lights up the screen edges. Works with every lens too (googly eyes and the pup are added as stickers).
+1. On the camera, **hold** the shutter: it turns red and a red bar fills up – you're recording (up to 30 seconds). With ⚡ on, the back light stays on the whole video; with the selfie camera a bright ring lights up the screen edges. Works with the googly lens too (the eyes follow your face in the video – see Step 42).
    Let go to stop. (The first time, allow the microphone – then hold again.) A quick tap still takes a photo.
 2. The video plays in the editor. Add text/stickers if you like → **Send to** → pick My Story, a post, friends
    (as a peek), today's dare or your drop.
@@ -643,7 +643,10 @@ Needs the **new Android download (v9)** – it has the face tracking built in. E
    comes closer. Up to 4 faces at once. Flip to the back camera with the flip button – works there too.
 3. Tap the shutter → the photo opens in the editor with the googly eyes already on the faces. They're normal
    stickers now: drag, pinch to resize, or drop on the trash. Then **Send to** as usual.
-4. In this mode the shutter takes photos only (hold does nothing).
+4. **Hold** the shutter to record a video with the lens. When the video opens in the editor, the bottom says
+   "👀 Sticking the eyes to your face… %". After a few seconds it says "The googly eyes follow your face!" – play
+   it back: the eyes move with your face (turn, tilt, come closer). Send it as a story and as a peek in a chat:
+   your friend sees the eyes moving too. (If it finds no face, the eyes stay as normal stickers.)
 5. In **Expo Go** (or an older download) the 🤪 bubble shows "The googly lens works in the Peekaboo app download"
    and the camera stays normal. Your iPhone gets the lens once TestFlight is set up.
 

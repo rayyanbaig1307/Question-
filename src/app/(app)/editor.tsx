@@ -23,6 +23,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
 import { addKeep, CAN_SAVE_TO_PHOTOS, saveToPhotos } from '@/lib/keeps';
 import { resizePhoto, type Capture } from '@/lib/media';
 import type { EyePair } from '@/lib/faceLens';
@@ -55,6 +56,46 @@ export default function Editor() {
 
   // A photo from the googly lens starts with its eyes on the faces – real stickers you can move or delete.
   const [items, setItems] = useState<OverlayItem[]>(() => lensItems(lens ?? eyes, width, height));
+  // The googly eyes the lens put on a video (they start where your face was when you started recording).
+  const [lensEyeIds] = useState(() => new Set(items.filter((item) => item.content === 'googly-eyes').map((item) => item.id)));
+  // A video from the googly lens: the eyes follow your face while it plays (see lib/eyeTrack.ts).
+  // `trackProgress` is how far along the face-finding is (null when it's not running).
+  const [track, setTrack] = useState<EyeTrack | null>(null);
+  const [trackProgress, setTrackProgress] = useState<number | null>(null);
+  const trackStarted = useRef(false);
+  const leaving = useRef(false);
+  useEffect(
+    () => () => {
+      leaving.current = true;
+    },
+    [],
+  );
+
+  async function startTracking(seconds: number) {
+    if (!isVideo || trackStarted.current || lensEyeIds.size === 0 || !CAN_TRACK_EYES) return;
+    trackStarted.current = true;
+    setTrackProgress(0);
+    try {
+      const found = await trackEyes(uri, seconds, { width, height }, 'googly-eyes', setTrackProgress, () => leaving.current);
+      if (found && !leaving.current) {
+        // The moving eyes take over from the still ones the lens put on.
+        setItems((current) => current.filter((item) => !lensEyeIds.has(item.id)));
+        setTrack(found);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.warn('Could not track the eyes', error);
+    } finally {
+      if (!leaving.current) setTrackProgress(null);
+    }
+  }
+
+  // A video's text and stickers as a see-through picture (with the moving eyes' track tucked inside).
+  async function videoLayer(): Promise<string | null> {
+    if (items.length === 0 && !track) return null;
+    const png = await captureRef(canvasRef, { format: 'png', result: 'tmpfile' });
+    return track ? addTrackToPng(png, track) : png;
+  }
   const [dragging, setDragging] = useState(false);
   const [composer, setComposer] = useState<{ editingId: string | null; draft: TextDraft } | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
@@ -171,7 +212,7 @@ export default function Editor() {
   }
 
   function close() {
-    if (items.length === 0 && filterIndex === 0) {
+    if (items.length === 0 && filterIndex === 0 && !track) {
       router.back();
       return;
     }
@@ -187,7 +228,7 @@ export default function Editor() {
       return {
         kind: 'video',
         uri,
-        overlayUri: items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : null,
+        overlayUri: await videoLayer(),
       };
     }
     return { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
@@ -227,7 +268,7 @@ export default function Editor() {
           ? {
               kind: 'video',
               uri,
-              overlayUri: items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : null,
+              overlayUri: await videoLayer(),
             }
           : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
         await sendSnap(userId, [to], photo);
@@ -238,8 +279,7 @@ export default function Editor() {
       }
       if (isVideo) {
         // Videos keep their text and stickers as a see-through picture that's shown on top while it plays.
-        const overlay =
-          items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : undefined;
+        const overlay = (await videoLayer()) ?? undefined;
         router.push({ pathname: '/share', params: { uri, video: '1', ...(overlay ? { overlay } : {}), ...extra } });
         return;
       }
@@ -256,7 +296,9 @@ export default function Editor() {
   return (
     <View style={styles.fill}>
       <StatusBar style="light" />
-      {isVideo ? <VideoClip uri={uri} playing loop style={StyleSheet.absoluteFill} /> : null}
+      {isVideo ? (
+        <VideoClip uri={uri} playing loop eyeTrack={track} onDuration={startTracking} style={StyleSheet.absoluteFill} />
+      ) : null}
       <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
         {isVideo ? null : (
           <GestureDetector gesture={photoGestures}>
@@ -328,7 +370,11 @@ export default function Editor() {
                 ))}
               </View>
             )}
-            {items.length === 0 ? (
+            {trackProgress !== null ? (
+              <Text style={styles.hint}>👀 Sticking the eyes to your face… {Math.round(trackProgress * 100)}%</Text>
+            ) : track && items.length === 0 ? (
+              <Text style={styles.hint}>👀 The googly eyes follow your face!</Text>
+            ) : items.length === 0 ? (
               <Text style={styles.hint}>
                 {isVideo ? 'Add text or stickers, or just send it!' : 'Pinch to zoom & crop · swipe ← → for filters'}
               </Text>

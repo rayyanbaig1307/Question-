@@ -1,8 +1,11 @@
 import { useEvent, useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+
+import { TrackedEyes } from '@/components/TrackedEyes';
+import { readTrack, type EyeTrack } from '@/lib/eyeTrack';
 
 export type VideoClipProps = {
   uri: string;
@@ -10,6 +13,9 @@ export type VideoClipProps = {
   posterUri?: string | null;
   // The text and stickers that were added, shown on top.
   overlayUri?: string | null;
+  // Googly eyes that follow the faces (from the googly lens). Normally read from the sticker layer picture;
+  // the editor passes it in directly (null = none).
+  eyeTrack?: EyeTrack | null;
   contentFit?: 'cover' | 'contain';
   playing: boolean;
   muted?: boolean;
@@ -25,6 +31,7 @@ export function VideoClip({
   uri,
   posterUri,
   overlayUri,
+  eyeTrack,
   contentFit = 'cover',
   playing,
   muted = false,
@@ -48,6 +55,21 @@ export function VideoClip({
     setMuted(player, muted);
   }, [player, muted]);
 
+  // Moving googly eyes hidden in the sticker layer picture (see lib/eyeTrack.ts).
+  const [found, setFound] = useState<{ uri: string; track: EyeTrack | null } | null>(null);
+  useEffect(() => {
+    if (eyeTrack !== undefined || !overlayUri) return;
+    let live = true;
+    readTrack(overlayUri).then((track) => {
+      if (live) setFound({ uri: overlayUri, track });
+    });
+    return () => {
+      live = false;
+    };
+  }, [overlayUri, eyeTrack]);
+  const track = eyeTrack !== undefined ? eyeTrack : found && found.uri === overlayUri ? found.track : null;
+  const videoTime = useCallback(() => player.currentTime, [player]);
+
   useEventListener(player, 'sourceLoad', ({ duration }) => onDuration?.(duration));
   useEventListener(player, 'playToEnd', () => onEnd?.());
 
@@ -60,6 +82,7 @@ export function VideoClip({
       {overlayUri ? (
         <Image source={{ uri: overlayUri }} style={StyleSheet.absoluteFill} contentFit={contentFit} pointerEvents="none" />
       ) : null}
+      {track ? <TrackedEyes track={track} time={videoTime} contentFit={contentFit} /> : null}
     </View>
   );
 }
