@@ -232,8 +232,9 @@ export default function Share() {
     postToProfile ? 'my profile' : null,
     picked.length === 1 ? friendName(picked[0]) : picked.length > 1 ? `${picked.length} friends` : null,
   ].filter((place): place is string => place !== null);
-  const sendTitle =
-    places.length === 0
+  const sendTitle = fromGuess
+    ? 'Post my Guess Who 🕵️'
+    : places.length === 0
       ? 'Pick where it goes'
       : `Send to ${places.length <= 2 ? places.join(' + ') : `${places[0]} + ${places.length - 1} more`}`;
 
@@ -286,22 +287,24 @@ export default function Share() {
             />
           ) : null}
           {fromGuess ? (
+            // From the Guess Who camera there's no choice: it only goes to the Guess Who page, with no name on it.
             <Option
               emoji="🕵️"
               title="Guess Who"
-              subtitle="No name on it – friends guess it's you"
-              selected={toGuess}
-              onPress={toggleGuess}
+              subtitle="Posted with no name – friends have to guess it's you. Not on your story or profile."
+              selected
+              onPress={() => {}}
             />
-          ) : null}
-          <Option
-            emoji="✨"
-            title="My Story"
-            subtitle="Your friends see it for 24 hours"
-            selected={toStory}
-            onPress={() => toggle(setToStory, !toStory)}
-          />
-          {toDare || toDrop || toForfeit ? null : (
+          ) : (
+            <Option
+              emoji="✨"
+              title="My Story"
+              subtitle="Your friends see it for 24 hours"
+              selected={toStory}
+              onPress={() => toggle(setToStory, !toStory)}
+            />
+          )}
+          {toDare || toDrop || toForfeit || fromGuess ? null : (
             <Option
               emoji="🖼️"
               title="My Profile"
