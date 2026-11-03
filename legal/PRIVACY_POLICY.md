@@ -1,7 +1,7 @@
 # Peekaboo – Privacy Policy
 
 **Effective date:** 31 October 2026
-**Who is responsible for your data ("data controller"):** [OPERATOR NAME], [MAILING ADDRESS], [CONTACT EMAIL]
+**Who is responsible for your data ("data controller"):** [OPERATOR NAME], [MAILING ADDRESS], rbaig18@z2automation.net
 
 This policy explains what Peekaboo collects, why, where it goes, and what you can do about it. It is written to match what the app really does. If we change how the app works, we update this policy and tell you in the app.
 
@@ -29,7 +29,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 
 We do **not** collect: contacts/address book, health data, financial information, advertising identifiers, or precise location when sharing is off. We do not use analytics or ad SDKs.
 
-**Photos of other people.** If you post a photo or video with other people in it, you are responsible for having their permission. Anyone who finds themselves in content on Peekaboo without consent can email [CONTACT EMAIL] and we will remove it.
+**Photos of other people.** If you post a photo or video with other people in it, you are responsible for having their permission. Anyone who finds themselves in content on Peekaboo without consent can email rbaig18@z2automation.net and we will remove it.
 
 ## 3. Who can see what (inside the app)
 
@@ -76,7 +76,7 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 
 ## 7. Your rights
 
-Wherever you live, you can: see the data we hold about you; correct it (most of it from Edit profile); delete it (Delete account, or email us); withdraw consent for location and notifications (phone settings / in-app switches); and ask us questions. Email [CONTACT EMAIL]; we answer within 30 days and may ask you to confirm it is your account.
+Wherever you live, you can: see the data we hold about you; correct it (most of it from Edit profile); delete it (Delete account, or email us); withdraw consent for location and notifications (phone settings / in-app switches); and ask us questions. Email rbaig18@z2automation.net; we answer within 30 days and may ask you to confirm it is your account.
 
 - **Canada (PIPEDA and provincial laws):** you may complain to the Office of the Privacy Commissioner of Canada (priv.gc.ca) if you are not satisfied with our answer.
 - **European Economic Area / United Kingdom (GDPR / UK GDPR):** you also have the rights to restrict or object to processing, to data portability, and to complain to your local data-protection authority. Our legal bases are listed in section 2.
@@ -85,7 +85,7 @@ Wherever you live, you can: see the data we hold about you; correct it (most of 
 
 ## 8. Children
 
-Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email [CONTACT EMAIL] and we will delete it. Users aged 13–17 need a parent's or guardian's permission; Hit ups only connect people under 18 with other people under 18, and adults with adults.
+Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission; Hit ups only connect people under 18 with other people under 18, and adults with adults.
 
 ## 9. Security
 
@@ -103,4 +103,4 @@ We will post changes here and, for significant changes, show a notice in the app
 
 [OPERATOR NAME]
 [MAILING ADDRESS]
-[CONTACT EMAIL]
+rbaig18@z2automation.net

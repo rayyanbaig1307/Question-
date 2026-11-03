@@ -1,7 +1,7 @@
 # Peekaboo – Terms of Service
 
 **Effective date:** 31 October 2026
-**Operator:** [OPERATOR NAME], [MAILING ADDRESS], [CONTACT EMAIL] ("Peekaboo", "we", "us")
+**Operator:** [OPERATOR NAME], [MAILING ADDRESS], rbaig18@z2automation.net ("Peekaboo", "we", "us")
 
 Please read these Terms carefully. They are a legal agreement between you and the operator of the Peekaboo app. By creating an account or using Peekaboo you agree to them, to our [Privacy Policy](PRIVACY_POLICY.md), our [Community Guidelines](COMMUNITY_GUIDELINES.md) and our [Dare Safety Rules](DARE_SAFETY_RULES.md), which are all part of these Terms. If you do not agree, do not use Peekaboo.
 
@@ -37,7 +37,7 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 3.5 We do not check content before it is posted. We may remove any content and restrict any account at our discretion, including for reports from other users, without notice.
 
-3.6 **Copyright complaints.** If you believe content on Peekaboo infringes your copyright, email [CONTACT EMAIL] with: the content (a screenshot or description), where it appears, your contact details, a statement that you own the rights or act for the owner, and a statement that your complaint is accurate. We act on valid complaints and may terminate repeat infringers.
+3.6 **Copyright complaints.** If you believe content on Peekaboo infringes your copyright, email rbaig18@z2automation.net with: the content (a screenshot or description), where it appears, your contact details, a statement that you own the rights or act for the owner, and a statement that your complaint is accurate. We act on valid complaints and may terminate repeat infringers.
 
 3.7 Profile songs are 30-second previews provided by Apple's iTunes Search service and remain subject to Apple's terms. Peekaboo does not sell or distribute music.
 
@@ -117,7 +117,7 @@ We may update these Terms. For important changes we will show a notice in the ap
 
 13.1 These Terms are governed by the laws of the Province of Ontario and the federal laws of Canada that apply there, without regard to conflict-of-law rules.
 
-13.2 **Talk to us first.** If you have a problem, email [CONTACT EMAIL]; most issues can be fixed quickly.
+13.2 **Talk to us first.** If you have a problem, email rbaig18@z2automation.net; most issues can be fixed quickly.
 
 13.3 Any dispute that cannot be settled will be decided by the courts of Ontario, Canada, and you agree to their jurisdiction – except that, if you are a consumer, you may bring a claim in the courts of the place where you live, and nothing here takes away your right to use a small-claims court or any right under consumer-protection law that cannot be waived (for example under Ontario's Consumer Protection Act, 2002).
 
@@ -149,4 +149,4 @@ If you downloaded Peekaboo from Apple's App Store, the following also applies, a
 
 [OPERATOR NAME]
 [MAILING ADDRESS]
-[CONTACT EMAIL]
+rbaig18@z2automation.net

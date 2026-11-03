@@ -37,4 +37,4 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 
 ## Contact
 
-Questions or appeals: [CONTACT EMAIL]
+Questions or appeals: rbaig18@z2automation.net
