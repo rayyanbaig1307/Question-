@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
+import { LensSticker } from './LensStickers';
 
 // Peekaboo's own stickers, drawn by the app (no pictures needed).
 export const SPECIAL_STICKERS = ['googly-eyes', 'googly-eye', 'peekaboo', 'peek-bubble', 'i-see-you', 'caught'] as const;
@@ -53,6 +54,10 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
           <Text style={[styles.stampText, { fontSize: 30 * size }]}>CAUGHT 📸</Text>
         </View>
       );
+    // The face lenses' drawings (Glam, Peekaboo Pup) – only from the lens camera, not in the sticker picker.
+    case 'lens-makeup':
+    case 'lens-pup':
+      return <LensSticker id={id} />;
     default:
       return null;
   }

@@ -11,6 +11,15 @@ export type PhotoFilter = {
 
 export const FILTERS: PhotoFilter[] = [
   { name: 'No filter', layers: [] },
+  // Soft, warm and bright – evens out skin and gives it a glow.
+  {
+    name: 'Glow ✨',
+    layers: [
+      { color: '#FFD3C2', blend: 'soft-light', opacity: 0.55 },
+      { color: '#FFFFFF', blend: 'screen', opacity: 0.12 },
+      { color: '#FF9EC4', blend: 'soft-light', opacity: 0.18 },
+    ],
+  },
   {
     name: 'Bubblegum 🍬',
     layers: [

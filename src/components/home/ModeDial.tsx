@@ -22,12 +22,16 @@ import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
-// 'googly' is a lens: googly eyes stuck on every face the camera sees (a normal photo otherwise).
-export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess';
+// Lenses: 'googly' (googly eyes), 'makeup' (Glam: blush, lips, eyeliner) and 'pup' (Peekaboo Pup) stick to every
+// face the camera sees; 'glow' gives the photo a soft, warm glow.
+export type CameraMode = 'photo' | 'googly' | 'makeup' | 'glow' | 'pup' | 'dare' | 'drop' | 'guess';
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
   { key: 'googly', emoji: '🤪', label: 'Googly' },
+  { key: 'makeup', emoji: '💄', label: 'Glam' },
+  { key: 'glow', emoji: '✨', label: 'Glow' },
+  { key: 'pup', emoji: '🐶', label: 'Peekaboo Pup' },
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];

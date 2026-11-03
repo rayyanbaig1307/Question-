@@ -31,7 +31,7 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, dare, drop, guess, forfeit, eyes } = useLocalSearchParams<{
+  const { uri, fit, video, to, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -41,14 +41,18 @@ export default function Editor() {
     drop?: string;
     guess?: string;
     forfeit?: string;
-    // From the googly lens: where the eyes were on each face (JSON).
+    // From the googly lens: where the eyes were on each face (JSON). (Older copies of the app.)
     eyes?: string;
+    // From a face lens: the drawing on each face and where it was (JSON list of LensItem).
+    lens?: string;
+    // Start with this filter on (its name, e.g. 'Glow ✨' from the Glow lens).
+    filter?: string;
   }>();
   const { width, height } = useWindowDimensions();
   const canvasRef = useRef<ComponentRef<typeof View>>(null);
 
   // A photo from the googly lens starts with its eyes on the faces – real stickers you can move or delete.
-  const [items, setItems] = useState<OverlayItem[]>(() => lensEyes(eyes, width, height));
+  const [items, setItems] = useState<OverlayItem[]>(() => lensItems(lens ?? eyes, width, height));
   const [dragging, setDragging] = useState(false);
   const [composer, setComposer] = useState<{ editingId: string | null; draft: TextDraft } | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
@@ -59,7 +63,7 @@ export default function Editor() {
   // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
   const straightToChat = !!to && !dare && !drop && !guess && !forfeit;
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
-  const [filterIndex, setFilterIndex] = useState(0);
+  const [filterIndex, setFilterIndex] = useState(() => Math.max(0, FILTERS.findIndex((f) => f.name === startFilter)));
   const [filterFlash, setFilterFlash] = useState(0);
   const filter = FILTERS[filterIndex];
 
@@ -289,15 +293,16 @@ export default function Editor() {
   );
 }
 
-// The googly lens's eye positions (screen points) → googly-eyes stickers placed from the middle of the photo.
-function lensEyes(json: string | undefined, width: number, height: number): OverlayItem[] {
+// A face lens's drawings (screen points) → stickers placed from the middle of the photo.
+// (Googly eyes from older copies of the app come without a `sticker`.)
+function lensItems(json: string | undefined, width: number, height: number): OverlayItem[] {
   if (!json) return [];
   try {
-    const pairs = JSON.parse(json) as EyePair[];
+    const pairs = JSON.parse(json) as (EyePair & { sticker?: string })[];
     return pairs.map((pair) => ({
       id: randomUUID(),
       kind: 'special' as const,
-      content: 'googly-eyes',
+      content: pair.sticker ?? 'googly-eyes',
       color: colors.white,
       look: 'shadow' as const,
       startX: pair.x - width / 2,

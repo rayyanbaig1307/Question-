@@ -4,8 +4,9 @@ import { StyleSheet, View } from 'react-native';
 import { usePhotoOutput } from 'react-native-vision-camera';
 import { Camera as FaceCamera, type Face } from 'react-native-vision-camera-face-detector';
 
+import { LENS_BOX } from '@/components/editor/LensStickers';
 import { SpecialSticker } from '@/components/editor/SpecialSticker';
-import type { EyePair, LensShot } from '@/lib/faceLens';
+import { LOOK_STICKER, type EyePair, type FaceLook, type LensShot } from '@/lib/faceLens';
 
 // The googly-eyes sticker is two 70-point eyes with a 6-point gap: 146 × 70, eye centres 76 apart.
 const PAIR_WIDTH = 146;
@@ -22,12 +23,17 @@ type TrackedPair = EyePair & { key: string };
 // Only loaded on phones that have face tracking (see lib/faceLens.ts).
 // The live camera with googly eyes stuck on every face it sees. `capture()` takes the photo and says where the
 // eyes were, so the editor can put real stickers there (drag, resize or delete them like any sticker).
-export function FaceLensCamera({ ref, active, facing, flash }: {
+export function FaceLensCamera({ ref, active, facing, flash, look = 'googly' }: {
   ref: Ref<FaceLensHandle>;
   active: boolean;
   facing: 'front' | 'back';
   flash: 'on' | 'off';
+  // Which drawing goes on every face.
+  look?: FaceLook;
 }) {
+  const sticker = LOOK_STICKER[look];
+  // The drawing's box (googly eyes are 146 × 70); the point between the eyes is its middle.
+  const box = look === 'googly' ? { width: PAIR_WIDTH, height: PAIR_HEIGHT } : LENS_BOX[sticker as keyof typeof LENS_BOX];
   const photoOutput = usePhotoOutput({ quality: 0.9 });
   const [pairs, setPairs] = useState<TrackedPair[]>([]);
   const latest = useRef<TrackedPair[]>([]);
@@ -56,7 +62,7 @@ export function FaceLensCamera({ ref, active, facing, flash }: {
     ref,
     () => ({
       async capture() {
-        const eyes = latest.current.map(({ x, y, scale, rotation }) => ({ x, y, scale, rotation }));
+        const items = latest.current.map(({ x, y, scale, rotation }) => ({ x, y, scale, rotation, sticker }));
         const file = await photoOutput.capturePhotoToFile(
           // Front cameras usually have no flash.
           { flashMode: flash === 'on' && facing === 'back' ? 'on' : 'off' },
@@ -67,10 +73,10 @@ export function FaceLensCamera({ ref, active, facing, flash }: {
         if (facing === 'front' && !file.isMirrored) photo = photo.flip(FlipType.Horizontal);
         const rendered = await photo.renderAsync();
         const saved = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG });
-        return { uri: saved.uri, eyes };
+        return { uri: saved.uri, items };
       },
     }),
-    [photoOutput, flash, facing],
+    [photoOutput, flash, facing, sticker],
   );
 
   return (
@@ -99,12 +105,14 @@ export function FaceLensCamera({ ref, active, facing, flash }: {
                 style={[
                   styles.pair,
                   {
-                    left: pair.x - PAIR_WIDTH / 2,
-                    top: pair.y - PAIR_HEIGHT / 2,
+                    width: box.width,
+                    height: box.height,
+                    left: pair.x - box.width / 2,
+                    top: pair.y - box.height / 2,
                     transform: [{ rotateZ: `${pair.rotation}rad` }, { scale: pair.scale }],
                   },
                 ]}>
-                <SpecialSticker id="googly-eyes" />
+                <SpecialSticker id={sticker} />
               </View>
             ))
           : null}
@@ -133,8 +141,6 @@ export function eyesOf(face: Face, index: number): TrackedPair {
 const styles = StyleSheet.create({
   pair: {
     position: 'absolute',
-    width: PAIR_WIDTH,
-    height: PAIR_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },

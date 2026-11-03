@@ -24,5 +24,18 @@ export const FACE_LENS_AVAILABLE = lensAvailable();
 // size) and how tilted (radians).
 export type EyePair = { x: number; y: number; scale: number; rotation: number };
 
-// A photo taken with the lens, and where the eyes were when it was taken (so the editor can put them there).
-export type LensShot = { uri: string; eyes: EyePair[] };
+// The face lenses. Each puts one drawing on every face, centred between the eyes:
+// 'googly' = googly eyes, 'makeup' = Glam (blush, lips, eyeliner), 'pup' = Peekaboo Pup (ears, nose, freckles).
+export type FaceLook = 'googly' | 'makeup' | 'pup';
+export const LOOK_STICKER: Record<FaceLook, string> = {
+  googly: 'googly-eyes',
+  makeup: 'lens-makeup',
+  pup: 'lens-pup',
+};
+
+// One drawing on one face: where, how big, how tilted, and which drawing.
+export type LensItem = EyePair & { sticker: string };
+
+// A photo taken with a lens, and where the drawings were when it was taken (so the editor can put them there,
+// as stickers you can still move, resize or delete).
+export type LensShot = { uri: string; items: LensItem[] };

@@ -23,7 +23,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
-import { FACE_LENS_AVAILABLE, type EyePair } from '@/lib/faceLens';
+import { FACE_LENS_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
@@ -44,6 +44,9 @@ const MAX_VIDEO_SECONDS = 10;
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
+  makeup: colors.pink,
+  glow: colors.yellow,
+  pup: colors.purple,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -107,25 +110,30 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const recordProgress = useSharedValue(0);
   const ringStyle = useAnimatedStyle(() => ({ width: `${recordProgress.get() * 100}%` }));
 
-  // The googly lens is on: the live camera with eyes on every face (instead of the normal camera).
-  const lensOn = isHome && homeMode === 'googly' && FaceLens !== null;
+  // A face lens is on: the live camera with a drawing on every face (instead of the normal camera).
+  const faceLook: FaceLook | null =
+    isHome && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'pup') ? homeMode : null;
+  const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
+  // Glow: a warm glow on the live camera, and the photo opens with the Glow filter on.
+  const glowOn = isHome && homeMode === 'glow';
 
-  // Lenses are for faces – picking the googly lens turns to the selfie camera.
+  // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
     setHomeMode(next);
-    if (next === 'googly' && facing === 'back') setFacing('front');
+    if ((next === 'googly' || next === 'makeup' || next === 'pup' || next === 'glow') && facing === 'back') setFacing('front');
   }
 
-  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, eyes: EyePair[] = []) =>
+  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
     router.push({
       pathname: '/editor',
       params: {
         uri,
         fit,
         ...(video ? { video: '1' } : {}),
-        // Googly lens: where the eyes were, so they're on the photo as stickers you can still move.
-        ...(eyes.length > 0 ? { eyes: JSON.stringify(eyes) } : {}),
+        // Face lens: where the drawings were, so they're on the photo as stickers you can still move.
+        ...(lens.length > 0 ? { lens: JSON.stringify(lens) } : {}),
+        ...(glowOn && !video ? { filter: 'Glow ✨' } : {}),
         ...(sendTo ? { to: sendTo } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
@@ -138,11 +146,18 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     if (busy || (lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
+    // Selfie cameras have no flash, so the screen becomes the flash: bright white for a moment, then the photo.
+    const screenFlash = flash === 'on' && facing === 'front';
+    if (screenFlash) {
+      flashOverlay.set(withTiming(1, { duration: 80 }));
+      await new Promise((resolve) => setTimeout(resolve, 280));
+    } else {
+      flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
+    }
     try {
       if (lensOn && lensRef.current) {
         const shot = await lensRef.current.capture();
-        openEditor(shot.uri, 'cover', false, shot.eyes);
+        openEditor(shot.uri, 'cover', false, shot.items);
         return;
       }
       if (!cameraRef.current) return;
@@ -151,6 +166,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     } catch (error) {
       Alert.alert('Could not take photo', friendlyError(error));
     } finally {
+      if (screenFlash) flashOverlay.set(withTiming(0, { duration: 250 }));
       setBusy(false);
     }
   }
@@ -251,13 +267,14 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
         lensOn && FaceLens ? (
-          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} />
+          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} look={faceLook ?? 'googly'} />
         ) : active || warm ? (
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
             facing={facing}
-            flash={flash}
+            // The selfie camera uses the screen as its flash instead (see takePhoto).
+            flash={facing === 'back' ? flash : 'off'}
             mirror={facing === 'front'}
             mode={mode}
             mute={!(mic?.granted ?? false)}
@@ -281,6 +298,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       )}
 
       {permission?.granted ? <Pressable style={StyleSheet.absoluteFill} onPress={tapCamera} accessible={false} /> : null}
+      {/* Glow: a soft warm wash over the live camera (the photo gets the real Glow filter in the editor). */}
+      {glowOn ? <View style={styles.glow} pointerEvents="none" /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
 
       {/* Top: your picture on the left (with a count of new friend requests), flip and flash on the right */}
@@ -488,6 +507,10 @@ const styles = StyleSheet.create({
   flash: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.white,
+  },
+  glow: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255, 196, 176, 0.16)',
   },
   shutterInner: {
     width: 62,
