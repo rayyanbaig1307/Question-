@@ -94,23 +94,11 @@ export default function Share() {
     setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
   };
 
-  // Picking anything else turns Guess Who off, and picking Guess Who turns everything else off.
+  // (From the Guess Who camera nothing else can be picked, so picking anything just clears Guess Who.)
   const toggle = (set: (on: boolean) => void, on: boolean) => {
     setToGuess(false);
     set(on);
   };
-  function toggleGuess() {
-    if (toGuess) {
-      setToGuess(false);
-      return;
-    }
-    setToGuess(true);
-    setToStory(false);
-    setToProfile(false);
-    setToDare(false);
-    setToDrop(false);
-    setPicked([]);
-  }
 
   const nothingPicked = !toStory && !toProfile && !toDare && !toDrop && !toGuess && !toForfeit && picked.length === 0;
   // A dare, drop or forfeit photo is a post on your profile too, so "Post to my profile" isn't needed then.
