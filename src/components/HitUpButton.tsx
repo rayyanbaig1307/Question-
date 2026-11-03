@@ -5,6 +5,7 @@ import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextIn
 import { Button } from '@/components/Button';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { fetchHitUpStatus, HIT_UP_MAX_LENGTH, sendHitUp, type HitUpStatus } from '@/lib/hitups';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
@@ -33,6 +34,11 @@ export function HitUpButton({ person, onConnected }: {
   useEffect(load, [load]);
 
   async function send(message: string) {
+    const notAllowed = checkClean(message, 'content');
+    if (notAllowed) {
+      Alert.alert('Hit up not sent', notAllowed);
+      return;
+    }
     setSending(true);
     try {
       const result = await sendHitUp(person.id, message);

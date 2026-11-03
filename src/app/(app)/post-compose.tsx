@@ -10,6 +10,7 @@ import { PostPreview } from '@/components/PostPreview';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
 import { fetchPost, postFromStory, updatePostCaption } from '@/lib/posts';
@@ -51,6 +52,11 @@ export default function PostCompose() {
 
   async function save() {
     if (!item) return;
+    const notAllowed = checkClean(caption, 'content');
+    if (notAllowed) {
+      Alert.alert('Caption not saved', notAllowed);
+      return;
+    }
     setBusy(true);
     try {
       if (editing) {

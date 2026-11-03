@@ -45,6 +45,7 @@ import {
   subscribeToMyMessages,
   type Message,
 } from '@/lib/chat';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
@@ -110,6 +111,11 @@ export default function ChatScreen() {
   async function send() {
     const body = text.trim();
     if (!body || sending) return;
+    const notAllowed = checkClean(body, 'content');
+    if (notAllowed) {
+      Alert.alert('Message not sent', notAllowed);
+      return;
+    }
     setSending(true);
     try {
       const sent = await sendText(userId, friendId, body);

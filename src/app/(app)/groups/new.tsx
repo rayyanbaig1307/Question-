@@ -12,6 +12,7 @@ import { useOverlays } from '@/components/Overlays';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { addToGroup, createGroup, fetchGroup, renameGroup } from '@/lib/groups';
@@ -73,6 +74,11 @@ export default function NewGroup() {
 
   async function save() {
     if (!canSave || saving) return;
+    const notAllowed = checkClean(name, 'identity');
+    if (notAllowed) {
+      Alert.alert('Pick another name', notAllowed);
+      return;
+    }
     setSaving(true);
     try {
       if (groupId) {

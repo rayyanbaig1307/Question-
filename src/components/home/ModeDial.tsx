@@ -135,7 +135,7 @@ export function ModeCaption({ mode, drop, dareNudge }: {
     return (
       <View style={[styles.caption, styles.captionQuiet]}>
         <Text style={styles.captionText} numberOfLines={2}>
-          🤪 The googly lens works in the Peekaboo app download (not in Expo Go)
+          🤪 The googly lens needs the newest Peekaboo – update the app to use it
         </Text>
       </View>
     );

@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FormScreen } from '@/components/FormScreen';
 import { TextField } from '@/components/TextField';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { TERMS_VERSION } from '@/lib/legal';
 import { checkUsernameFormat, cleanUsername, isUsernameAvailable, USERNAME_RULES } from '@/lib/profiles';
@@ -46,7 +47,9 @@ export default function SignUp() {
   const usernameFree = availability?.name === username && availability.free;
 
   const problems = {
-    username: !username ? 'Pick a username.' : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : null)),
+    username: !username
+      ? 'Pick a username.'
+      : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(`${username} ${name}`, 'identity'))),
     email: !withEmail || /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
     password: password.length >= 6 ? null : 'Use at least 6 characters.',
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',

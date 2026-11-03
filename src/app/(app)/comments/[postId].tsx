@@ -26,6 +26,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { addComment, deleteComment, fetchComments, setCommentLiked, type Comment } from '@/lib/feed';
 import { fetchPost } from '@/lib/posts';
@@ -115,6 +116,11 @@ export default function Comments() {
   async function send() {
     const body = text.trim();
     if (!body || sending) return;
+    const notAllowed = checkClean(body, 'content');
+    if (notAllowed) {
+      Alert.alert('Comment not posted', notAllowed);
+      return;
+    }
     setSending(true);
     try {
       // Replies always hang off the top comment (one level deep).

@@ -13,14 +13,14 @@ House rules: nobody gets hurt · no fire · clothes stay on · friends must be i
 7. Let a friend change your profile picture to anything they want for 24 hours
 8. Read your last 5 searches out loud on camera
 9. Confess something you've never told this friend group – on camera
-10. Reply "you up?" to the 5th chat in your messages and screenshot the reply
-11. Rate everyone in the group chat out of 10 – honestly, in the chat
-12. Tell the group chat your biggest ick about each person in it
-13. Swap phones with a friend for an hour – no locking apps
+10. Send the 5th chat in your messages a voice note of you beatboxing for 15 seconds
+11. Give everyone in the group chat a superhero name and a power – in the chat
+12. Tell the group chat the most random thing you remember about each person in it
+13. Let a friend pick your phone wallpaper for a week – no changing it
 14. Sing a whole song out loud somewhere busy – no stopping halfway
 15. Do 2 minutes of stand-up for your friends, no notes
 16. Wear an outfit your friends pick out in public for an hour
-17. Order your food in a made-up accent and keep it up until you leave
+17. Order your food in your best movie-trailer voice and keep it up until you leave
 18. Let a friend write a word on your arm in marker and keep it on all day
-19. Do your best runway walk down a busy street, full attitude, friend filming
+19. Do your best runway walk through a busy mall or park, full attitude, friend filming
 20. Show your screen time report to the group – every app, no hiding

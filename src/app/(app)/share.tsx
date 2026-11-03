@@ -16,6 +16,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { resizePhoto, type Capture } from '@/lib/media';
@@ -116,6 +117,11 @@ export default function Share() {
   const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
   async function send(storyOk = storyChecked) {
+    const notAllowed = checkClean(caption, 'content');
+    if (notAllowed) {
+      Alert.alert('Caption not allowed', notAllowed);
+      return;
+    }
     if ((toDare || toDrop || toForfeit) && !dareRules.accepted) {
       setRulesOpen(true);
       return;

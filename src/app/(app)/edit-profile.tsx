@@ -9,6 +9,7 @@ import { FormScreen } from '@/components/FormScreen';
 import { useOverlays } from '@/components/Overlays';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { deleteAvatar, resizePhoto, uploadAvatar } from '@/lib/media';
 import {
@@ -80,6 +81,11 @@ export default function EditProfile() {
     const formatError = checkUsernameFormat(username);
     if (formatError) {
       setUsernameError(formatError);
+      return;
+    }
+    const notAllowed = checkClean(`${username} ${displayName} ${bio}`, 'identity');
+    if (notAllowed) {
+      Alert.alert('Pick something else', notAllowed);
       return;
     }
     setBusy(true);

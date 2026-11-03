@@ -774,3 +774,19 @@ arrive with the normal update.
 4. **Hide their stories** → their circle disappears from the story row on Home (their profile still shows the
    story). Hold again → **Show their stories again**.
 5. **Close friends** toggles the same list as Settings → Close friends.
+
+## Step 53 – Clean words 🧼
+
+1. **Sign up / Edit profile:** a username, name or bio with a swear word or slur (also "f.u.c.k", "n1gg3r")
+   says "Let's keep it clean…" and won't save. Normal names like "scunthorpe" or "cocktail" are fine.
+2. **Chat, comments, captions, hit ups, dare ideas, group names:** slurs are blocked ("That word isn't allowed on
+   Peekaboo"); ordinary swearing between friends still goes through in chats and captions.
+
+## Step 54 – Reports (owner only) 🚩
+
+1. Settings → an **Owner** section with **Reports** shows only on admin accounts (set in the database).
+2. Have a test account report a post, a comment, a message and a profile. Each shows up with who reported whom,
+   the reason, and the reported text. **Open / All** switches the list.
+3. **Remove** deletes that post/comment/message/story for everyone (asks first). **Ban** stops the account
+   logging in (asks first; they're logged out within an hour) – **Unban** undoes it. **Reviewed** and
+   **Dismiss** close the report. Open their profile by tapping the name.

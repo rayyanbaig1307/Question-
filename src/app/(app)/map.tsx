@@ -63,7 +63,7 @@ export default function FriendMap() {
       const updated = await setLocationSharing(userId, !sharing);
       if (!updated) {
         Alert.alert(
-          'Location is turned off for Expo Go',
+          'Location is turned off for Peekaboo',
           'To share your spot with friends, allow location in your phone settings.',
           [
             { text: 'Not now', style: 'cancel' },

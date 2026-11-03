@@ -23,6 +23,7 @@ import {
   voteIdea,
   type DareIdea,
 } from '@/lib/communityDares';
+import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { useDareRulesAccepted } from '@/lib/legal';
 import { REPORT_REASONS } from '@/lib/safety';
@@ -61,6 +62,11 @@ export default function DareIdeas() {
     if (!canSend) return;
     if (!dareRules.accepted) {
       setRulesOpen(true);
+      return;
+    }
+    const notAllowed = checkClean(clean, 'content');
+    if (notAllowed) {
+      Alert.alert('Idea not sent', notAllowed);
       return;
     }
     setSending(true);
