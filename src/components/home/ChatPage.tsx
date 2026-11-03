@@ -2,18 +2,20 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { FriendButton } from '@/components/FriendButton';
 import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
+import { PersonRow } from '@/components/PersonRow';
 import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
-import { fetchFriends } from '@/lib/friends';
+import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { respondToHitUp, type HitUp } from '@/lib/hitups';
@@ -49,6 +51,12 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   // Your per-friend options (pin, mute, hidden stories) and your close friends.
   const [settings, setSettings] = useState<Map<string, FriendSettings>>(new Map());
   const [closeFriends, setCloseFriends] = useState<Set<string>>(new Set());
+  // The search bar: filters your chats and finds new people to add.
+  const [query, setQuery] = useState('');
+  const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
+  const [links, setLinks] = useState<FriendLink[]>([]);
+  const trimmed = query.trim().replace(/^@/, '');
+  const searching = trimmed.length > 0;
 
   const refresh = useCallback(() => {
     fetchRows(userId)
@@ -75,10 +83,41 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
     return subscribeToMyMessages(`chat-list-${userId}`, refresh);
   }, [visible, userId, refresh]);
 
+  // Look people up a moment after you stop typing (and know who you've already asked).
+  useEffect(() => {
+    if (!trimmed) return;
+    const timer = setTimeout(() => {
+      Promise.all([searchUsers(trimmed, userId), fetchMyFriendLinks(userId)])
+        .then(([people, myLinks]) => {
+          setFound({ query: trimmed, people });
+          setLinks(myLinks);
+        })
+        .catch((error) => console.warn('Search failed', error));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [trimmed, userId]);
+  const reloadLinks = () => {
+    fetchMyFriendLinks(userId)
+      .then(setLinks)
+      .catch(() => {});
+    refresh();
+  };
+
   // Pinned chats stay at the top.
   const shown = rows
     ? [...rows].sort((a, b) => Number(!!settings.get(b.friend.id)?.pinned) - Number(!!settings.get(a.friend.id)?.pinned))
     : null;
+  // While searching: only the chats whose name matches, and new people (not friends yet) below.
+  const needle = trimmed.toLowerCase();
+  const matching = (shown ?? []).filter(
+    (row) =>
+      row.friend.username.toLowerCase().includes(needle) ||
+      (row.friend.display_name ?? '').toLowerCase().includes(needle),
+  );
+  const friendIds = new Set((rows ?? []).map((row) => row.friend.id));
+  const newPeople = found && found.query === trimmed ? found.people.filter((person) => !friendIds.has(person.id)) : null;
+  const relationWith = (personId: string) =>
+    relationFrom(links.find((link) => link.requester_id === personId || link.addressee_id === personId) ?? null, userId);
 
   // Hold down a chat: options for that friend.
   function openFriendMenu(friend: Profile) {
@@ -143,14 +182,38 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   return (
     <View style={styles.fill}>
       <PageHeader title="Chat" onCamera={onCamera} />
+      <View style={styles.search}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search friends or add someone new"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={styles.searchInput}
+          accessibilityLabel="Search friends"
+        />
+        {query ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityLabel="Clear search">
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
       {rows === null ? (
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
         <FlatList
-          data={shown ?? []}
+          data={searching ? matching : shown ?? []}
           keyExtractor={(row) => row.friend.id}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
           ListHeaderComponent={
+            searching ? (
+              matching.length > 0 ? <Text style={styles.sectionTitle}>💬 Chats</Text> : undefined
+            ) : (
             <>
               {hitUps.length > 0 ? (
                 <View style={styles.hitUps}>
@@ -167,8 +230,32 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
                 </>
               ) : null}
             </>
+            )
+          }
+          ListFooterComponent={
+            searching ? (
+              <View>
+                <Text style={styles.sectionTitle}>👋 Add friends</Text>
+                {newPeople === null ? (
+                  <ActivityIndicator color={colors.accent} style={styles.searchLoading} />
+                ) : newPeople.length === 0 ? (
+                  <Text style={styles.searchEmpty}>Nobody new called @{trimmed}. Check the spelling, or invite them!</Text>
+                ) : (
+                  <View style={styles.people}>
+                    {newPeople.map((person) => (
+                      <PersonRow
+                        key={person.id}
+                        person={person}
+                        right={<FriendButton person={person} relation={relationWith(person.id)} onChanged={reloadLinks} small />}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : undefined
           }
           ListEmptyComponent={
+            searching ? undefined : (
             <EmptyState
               emoji="👀"
               title="It's quiet in here… too quiet"
@@ -176,6 +263,7 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
               <Button title="Invite friends" icon="paper-plane" onPress={() => inviteFriends(profile?.username)} />
               <Button title="Find friends" icon="search" variant="secondary" onPress={() => router.push('/friends')} />
             </EmptyState>
+            )
           }
           renderItem={({ item }) => (
             <ChatRowView
@@ -470,6 +558,36 @@ const styles = StyleSheet.create({
   },
   statusText: {
     ...font.small,
+  },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    paddingHorizontal: space.md,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  searchLoading: {
+    marginTop: space.md,
+  },
+  searchEmpty: {
+    ...font.small,
+    paddingHorizontal: space.lg,
+    paddingTop: space.xs,
+  },
+  people: {
+    paddingHorizontal: space.lg,
+    gap: space.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
