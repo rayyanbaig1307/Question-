@@ -14,7 +14,6 @@ import Animated, {
 import logoEyes from '../../assets/images/logo-eyes.png';
 import { Button } from '@/components/Button';
 import { SafeScreen } from '@/components/SafeEdge';
-import { Wordmark } from '@/components/Wordmark';
 import { font, space } from '@/theme';
 
 // The same pink → purple as the app icon.
@@ -38,7 +37,8 @@ export default function Welcome() {
           <Animated.View style={mascotStyle}>
             <Image source={logoEyes} style={styles.mascot} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
           </Animated.View>
-          <Wordmark height={54} onDark />
+          {/* Plain letters here – the big eyes above are the logo, no need for them twice. */}
+          <Text style={styles.title}>peekaboo</Text>
           <Text style={styles.tagline}>Peek it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
         </View>
         <View style={styles.buttons}>
@@ -70,6 +70,15 @@ const styles = StyleSheet.create({
     width: 190,
     height: 152,
     marginBottom: space.sm,
+  },
+  title: {
+    ...font.hero,
+    color: '#FFFFFF',
+    fontSize: 52,
+    letterSpacing: -2,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
   },
   tagline: {
     ...font.body,
