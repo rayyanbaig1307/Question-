@@ -27,6 +27,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
+import { DareComposer } from '@/components/DareComposer';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -40,6 +41,7 @@ import {
   deleteMessage,
   fetchConversation,
   markChatRead,
+  sendDare,
   sendText,
   setSnapSaved,
   subscribeToMyMessages,
@@ -126,6 +128,25 @@ export default function ChatScreen() {
       Alert.alert('Message not sent', friendlyError(error));
     } finally {
       setSending(false);
+    }
+  }
+
+  // Your own dare for this friend: checked for bad words, then sent as a dare card.
+  const [dareOpen, setDareOpen] = useState(false);
+  async function sendMyDare(dare: string): Promise<boolean> {
+    const notAllowed = checkClean(dare, 'content');
+    if (notAllowed) {
+      Alert.alert('Dare not sent', notAllowed);
+      return false;
+    }
+    try {
+      const sent = await sendDare(userId, friendId, dare);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+      return true;
+    } catch (error) {
+      Alert.alert('Dare not sent', friendlyError(error));
+      return false;
     }
   }
 
@@ -268,6 +289,7 @@ export default function ChatScreen() {
               color={colors.onAccent}
               onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
             />
+            <IconButton icon="flag" label="Write a dare" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
             <TextInput
               value={text}
               onChangeText={(value) => {
@@ -298,6 +320,7 @@ export default function ChatScreen() {
           <Text style={[styles.notFriends, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
         )}
       </KeyboardAvoidingView>
+      <DareComposer visible={dareOpen} friendName={name} onClose={() => setDareOpen(false)} onSend={sendMyDare} />
     </View>
   );
 }
@@ -338,6 +361,32 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
           </Text>
         </Pressable>
         <Text style={styles.time}>{time}</Text>
+      </View>
+    );
+  }
+
+  // A dare a friend wrote: the dare, and (for the one who got it) a button to do it and send the proof back.
+  if (message.kind === 'dare') {
+    return (
+      <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+        <Pressable onLongPress={onLongPress} style={styles.dareCard}>
+          <Text style={styles.dareLabel}>🎯 {mine ? `YOU DARED ${(friendName || 'them').toUpperCase()}` : 'YOU GOT DARED'}</Text>
+          <Text style={styles.dareText}>{message.body}</Text>
+          {mine ? null : (
+            <Pressable
+              onPress={() => router.push({ pathname: '/camera', params: { to: message.sender_id } })}
+              style={({ pressed }) => [styles.dareButton, pressed && styles.snapPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Do the dare and send the proof">
+              <Ionicons name="camera" size={16} color={colors.onAccent} />
+              <Text style={styles.dareButtonText}>Do it · send proof</Text>
+            </Pressable>
+          )}
+        </Pressable>
+        <View style={styles.metaRow}>
+          <Text style={styles.time}>{time}</Text>
+          {statusLine(showStatus)}
+        </View>
       </View>
     );
   }
@@ -478,6 +527,39 @@ function TypingDot({ delay }: { delay: number }) {
 }
 
 const styles = StyleSheet.create({
+  dareCard: {
+    maxWidth: '80%',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.pink,
+    backgroundColor: colors.card,
+    padding: space.md,
+    gap: space.sm,
+  },
+  dareLabel: {
+    color: colors.pink,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  dareText: {
+    ...font.body,
+    fontWeight: '700',
+  },
+  dareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.pink,
+  },
+  dareButtonText: {
+    color: colors.onAccent,
+    fontSize: 14,
+    fontWeight: '800',
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,

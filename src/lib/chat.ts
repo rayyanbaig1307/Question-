@@ -12,7 +12,8 @@ export type Message = {
   recipient_id: string;
   // 'screenshot' = a notice that someone took a screenshot; body is 'chat' or 'peek'.
   // 'voice' = a voice note (media_path is the recording); 'reaction' = an emoji sent from your story.
-  kind: 'text' | 'snap' | 'screenshot' | 'voice' | 'reaction';
+  // 'dare' = a dare you wrote yourself (body is the dare).
+  kind: 'text' | 'snap' | 'screenshot' | 'voice' | 'reaction' | 'dare';
   body: string | null;
   // Peeks: the photo or video (see MediaFields).
   media_path: string | null;
@@ -101,6 +102,17 @@ export async function sendText(me: string, friend: string, body: string): Promis
   const { data, error } = await supabase
     .from('messages')
     .insert({ sender_id: me, recipient_id: friend, kind: 'text', body: body.trim() })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as Message;
+}
+
+// A dare you wrote yourself, sent to a friend in your chat.
+export async function sendDare(me: string, friend: string, dare: string): Promise<Message> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ sender_id: me, recipient_id: friend, kind: 'dare', body: dare.trim() })
     .select('*')
     .single();
   if (error) throw error;

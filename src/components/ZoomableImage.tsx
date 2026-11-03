@@ -8,17 +8,25 @@ import {
   useTapGesture,
 } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 const MAX_ZOOM = 5;
 const DOUBLE_TAP_ZOOM = 2.5;
 
 // A photo you can zoom into: pinch with two fingers (it zooms towards your fingers), drag it around while
 // zoomed, and double-tap to zoom in on that spot (or back out).
-export function ZoomableImage({ uri, cacheKey, style }: {
+// `contentFit`: 'contain' shows the whole photo (default), 'cover' fills the frame (full-screen peeks).
+// `doubleTapZoom`: turn off where a single tap already does something (a peek closes on tap).
+// `onZoomChange`: told when you start zooming and when the photo is back to normal.
+export function ZoomableImage({ uri, cacheKey, style, contentFit = 'contain', doubleTapZoom = true, onZoomChange }: {
   uri: string;
   cacheKey?: string;
   style?: StyleProp<ViewStyle>;
+  contentFit?: 'contain' | 'cover';
+  doubleTapZoom?: boolean;
+  onZoomChange?: (zoomed: boolean) => void;
 }) {
+  const report = (value: boolean) => onZoomChange?.(value);
   const width = useSharedValue(0);
   const height = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -45,6 +53,7 @@ export function ZoomableImage({ uri, cacheKey, style }: {
     x.set(withTiming(0));
     y.set(withTiming(0));
     zoomed.set(false);
+    scheduleOnRN(report, false);
   }
 
   // After a pinch or drag: barely zoomed → back to normal; otherwise keep the photo's edges in view.
@@ -60,6 +69,10 @@ export function ZoomableImage({ uri, cacheKey, style }: {
   }
 
   const pinch = usePinchGesture({
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(report, true);
+    },
     onUpdate: (event) => {
       'worklet';
       const before = scale.get();
@@ -92,6 +105,7 @@ export function ZoomableImage({ uri, cacheKey, style }: {
   });
 
   const doubleTap = useTapGesture({
+    enabled: doubleTapZoom,
     numberOfTaps: 2,
     onActivate: (event) => {
       'worklet';
@@ -105,6 +119,7 @@ export function ZoomableImage({ uri, cacheKey, style }: {
       x.set(withTiming(clampX(-focusX * (DOUBLE_TAP_ZOOM - 1), DOUBLE_TAP_ZOOM)));
       y.set(withTiming(clampY(-focusY * (DOUBLE_TAP_ZOOM - 1), DOUBLE_TAP_ZOOM)));
       zoomed.set(true);
+      scheduleOnRN(report, true);
     },
   });
 
@@ -123,7 +138,7 @@ export function ZoomableImage({ uri, cacheKey, style }: {
           height.set(event.nativeEvent.layout.height);
         }}>
         <Animated.View style={[StyleSheet.absoluteFill, zoomStyle]}>
-          <Image source={{ uri, cacheKey }} style={StyleSheet.absoluteFill} contentFit="contain" transition={200} />
+          <Image source={{ uri, cacheKey }} style={StyleSheet.absoluteFill} contentFit={contentFit} transition={200} />
         </Animated.View>
       </View>
     </GestureDetector>

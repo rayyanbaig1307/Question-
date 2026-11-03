@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge, SafeScreen } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
+import { ZoomableImage } from '@/components/ZoomableImage';
 import { useMe } from '@/lib/auth';
 import { canReplay, fetchMessage, getSnapUrl, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
@@ -59,6 +60,8 @@ export default function SnapViewer() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const progress = useSharedValue(0);
+  // Pinch-zoom on the photo: whether it's zoomed in, and when that last changed.
+  const zoomRef = useRef({ zoomed: false, at: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -184,10 +187,18 @@ export default function SnapViewer() {
   }
 
   const name = state.sender ? state.sender.display_name || state.sender.username : '';
+  // A tap closes the peek – but not while you're zoomed in, or right after pinching.
+  function noteZoom(zoomed: boolean) {
+    zoomRef.current = { zoomed, at: Date.now() };
+  }
+  function tapToClose() {
+    if (zoomRef.current.zoomed || Date.now() - zoomRef.current.at < 400) return;
+    close();
+  }
   const label = saved ? 'Saved in chat 📌' : state.mode === 'replay' ? 'Replay 🔁' : null;
 
   return (
-    <Pressable style={styles.fill} onPress={close} accessibilityLabel="Close peek">
+    <Pressable style={styles.fill} onPress={tapToClose} accessibilityLabel="Close peek">
       <StatusBar style="light" />
       {state.video ? (
         <VideoClip
@@ -200,7 +211,14 @@ export default function SnapViewer() {
           style={StyleSheet.absoluteFill}
         />
       ) : (
-        <Image source={{ uri: state.url }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
+        // Pinch to zoom in (it springs back when you let go far enough out).
+        <ZoomableImage
+          uri={state.url}
+          contentFit="cover"
+          doubleTapZoom={false}
+          onZoomChange={noteZoom}
+          style={StyleSheet.absoluteFill}
+        />
       )}
       <SafeEdge edge="top" style={styles.top}>
         <View style={[styles.track, !timed && styles.hidden]}>

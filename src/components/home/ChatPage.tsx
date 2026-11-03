@@ -429,7 +429,7 @@ function buildRows(friends: Profile[], messages: Message[]): ChatRow[] {
       friend,
       last: withFriend[0] ?? null,
       newSnaps: unopened.filter((m) => m.kind === 'snap').length,
-      newChats: unopened.filter((m) => m.kind === 'text' || m.kind === 'voice' || m.kind === 'reaction').length,
+      newChats: unopened.filter((m) => m.kind === 'text' || m.kind === 'voice' || m.kind === 'reaction' || m.kind === 'dare').length,
     };
   });
   // Most recent conversations first; friends you haven't talked to yet at the bottom.
@@ -461,6 +461,15 @@ function describe(row: ChatRow, me: string): {
       icon: 'happy',
       color: colors.pink,
       label: theyDidIt ? `Reacted ${last.body} to your story` : `You reacted ${last.body}`,
+      bold: theyDidIt && !last.opened_at,
+    };
+  }
+  if (last.kind === 'dare') {
+    const theyDidIt = last.sender_id !== me;
+    return {
+      icon: 'flag',
+      color: colors.pink,
+      label: theyDidIt ? 'Dared you 🎯' : 'You sent a dare',
       bold: theyDidIt && !last.opened_at,
     };
   }
