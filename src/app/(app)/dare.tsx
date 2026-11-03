@@ -9,6 +9,9 @@ import { PostGrid } from '@/components/PostGrid';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Avatar } from '@/components/Avatar';
 import { useMe } from '@/lib/auth';
+import { fetchDaresForMe, type DareForMe } from '@/lib/chat';
+import { fetchFriends } from '@/lib/friends';
+import { timeAgo } from '@/lib/time';
 import {
   fetchDareChain,
   fetchDareStreaks,
@@ -24,10 +27,14 @@ import {
 } from '@/lib/dareChain';
 import { syncCommunityDares } from '@/lib/communityDares';
 import { DARE_RULES, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay, useDare } from '@/lib/dares';
-import type { PostWithAuthor } from '@/lib/types';
+import type { PostWithAuthor, Profile } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
 
-// Today's dare, a countdown to the next one, and everyone's photos for it.
+// The Dare screen, top to bottom:
+// 1. Today's dare (everyone gets the same one) – do it, or do it again.
+// 2. Dare your friends – write your own dare and send it to anyone, any time.
+// 3. Dares for you – what friends dared you (do it → the proof goes back to them).
+// 4. Streaks, forfeits and your dare chain, then everyone's photos for today's dare.
 export default function DareScreen() {
   const { userId } = useMe();
   const [day, setDay] = useState(todayDareDay);
@@ -39,6 +46,9 @@ export default function DareScreen() {
   // Streaks with friends: days in a row you both did the dare.
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  // Dares friends wrote for you, and your friends (for the quick "dare them" faces).
+  const [daresForMe, setDaresForMe] = useState<DareForMe[]>([]);
+  const [friends, setFriends] = useState<Profile[]>([]);
   const dare = useDare(day);
 
   const load = useCallback(async () => {
@@ -57,6 +67,12 @@ export default function DareScreen() {
       if (loadedChain) setChain(loadedChain);
       if (loadedForfeits) setForfeits(loadedForfeits);
       if (loadedStreaks) setStreaks(loadedStreaks);
+      fetchDaresForMe(userId)
+        .then(setDaresForMe)
+        .catch(() => {});
+      fetchFriends(userId)
+        .then(setFriends)
+        .catch(() => {});
     } catch (error) {
       console.warn('Could not load dare posts', error);
       setPosts((current) => current ?? { day, list: [] });
@@ -107,8 +123,47 @@ export default function DareScreen() {
       </LinearGradient>
       {iDidIt ? <Text style={styles.done}>✅ You did today&apos;s dare. Legend.</Text> : null}
 
-      {/* Community dares: suggest one, vote, and the top one becomes everyone's dare with your name on it */}
-      <Button title="💡 Suggest a dare · vote on ideas" variant="secondary" onPress={() => router.push('/dare-ideas')} />
+      {/* Dare your friends: your own dare, to anyone, any time */}
+      <View style={styles.dareFriends}>
+        <Text style={styles.dareFriendsTitle}>😈 Dare your friends</Text>
+        <Text style={styles.dareFriendsText}>Write your own dare and send it to anyone – as many as you like.</Text>
+        {friends.length > 0 ? (
+          <View style={styles.faces}>
+            {friends.slice(0, 6).map((friend) => (
+              <Pressable
+                key={friend.id}
+                onPress={() => router.push({ pathname: '/dare-friend', params: { to: friend.id } })}
+                accessibilityLabel={`Dare ${friend.display_name || friend.username}`}
+                style={styles.face}>
+                <Avatar path={friend.avatar_path} name={friend.display_name || friend.username} size={46} />
+                <Text style={styles.faceName} numberOfLines={1}>
+                  {friend.display_name || friend.username}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <Button title="✍️ Write a dare" onPress={() => router.push('/dare-friend')} />
+      </View>
+
+      {/* Dares friends wrote for you: do it, and the proof goes straight back to them */}
+      {daresForMe.length > 0 ? (
+        <View style={styles.chainBox}>
+          <Text style={styles.chainTitle}>📬 Dares for you</Text>
+          {daresForMe.slice(0, 5).map((d) => (
+            <View key={d.id} style={styles.forMe}>
+              <Avatar path={d.from.avatar_path} name={d.from.display_name || d.from.username} size={36} />
+              <View style={styles.forMeText}>
+                <Text style={styles.forMeFrom}>
+                  {d.from.display_name || d.from.username} · {timeAgo(d.created_at)}
+                </Text>
+                <Text style={styles.forMeDare}>{d.body}</Text>
+              </View>
+              <Button title="Do it 📸" small onPress={() => router.push({ pathname: '/camera', params: { to: d.from.id } })} />
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/* Streaks: you and a friend both doing the dare, day after day */}
       {streaks.length > 0 ? (
@@ -141,7 +196,7 @@ export default function DareScreen() {
       {/* Dares you were given: who dared you and how long you've got */}
       {chain.received.length > 0 ? (
         <View style={styles.chainBox}>
-          <Text style={styles.chainTitle}>😈 Dared you today</Text>
+          <Text style={styles.chainTitle}>⏳ Dared you to do today&apos;s dare</Text>
           {chain.received.map((n) => (
             <ChainRow key={n.id} person={n.from} nomination={n} mine={false} />
           ))}
@@ -183,7 +238,7 @@ export default function DareScreen() {
       {/* Dares you gave, and the button to give more */}
       {chain.sent.length > 0 || canDareMore ? (
         <View style={styles.chainBox}>
-          <Text style={styles.chainTitle}>🔗 Your dare chain</Text>
+          <Text style={styles.chainTitle}>🔗 Who you dared to do today&apos;s dare</Text>
           {chain.sent.map((n) => (
             <ChainRow
               key={n.id}
@@ -198,7 +253,7 @@ export default function DareScreen() {
           ))}
           {canDareMore ? (
             <Button
-              title={chain.sent.length > 0 ? `Dare more friends (${MAX_DARES_PER_DAY - chain.sent.length} left)` : 'Dare your friends 😈'}
+              title={chain.sent.length > 0 ? `Pass today's dare on (${MAX_DARES_PER_DAY - chain.sent.length} left)` : "Pass today's dare on 🔗"}
               icon="flame"
               small
               onPress={() => router.push('/dare-chain')}
@@ -206,6 +261,10 @@ export default function DareScreen() {
           ) : null}
         </View>
       ) : null}
+      {/* Community dares: suggest one, vote, and the top one becomes everyone's dare with your name on it */}
+      <Pressable onPress={() => router.push('/dare-ideas')} style={styles.ideasLink} accessibilityRole="link">
+        <Text style={styles.ideasLinkText}>💡 Suggest tomorrow&apos;s dare for everyone · vote on ideas ›</Text>
+      </Pressable>
       <Text style={styles.sectionTitle}>
         Everyone&apos;s dares today{list && list.length > 0 ? ` (${list.length})` : ''}
       </Text>
@@ -301,8 +360,8 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: radius.lg,
-    padding: space.xl,
-    gap: space.md,
+    padding: space.lg,
+    gap: space.sm,
     overflow: 'hidden',
   },
   label: {
@@ -313,9 +372,9 @@ const styles = StyleSheet.create({
   },
   dare: {
     color: colors.white,
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '900',
-    lineHeight: 34,
+    lineHeight: 28,
   },
   rulesLink: {
     textDecorationLine: 'underline',
@@ -327,6 +386,63 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginTop: space.xs,
+  },
+  dareFriends: {
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.pink,
+    backgroundColor: colors.card,
+    padding: space.lg,
+    gap: space.md,
+  },
+  dareFriendsTitle: {
+    ...font.heading,
+  },
+  dareFriendsText: {
+    ...font.small,
+    marginTop: -space.sm,
+  },
+  faces: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.md,
+  },
+  face: {
+    width: 52,
+    alignItems: 'center',
+    gap: 4,
+  },
+  faceName: {
+    ...font.small,
+    fontSize: 11,
+    color: colors.text,
+  },
+  forMe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: space.xs,
+  },
+  forMeText: {
+    flex: 1,
+    gap: 2,
+  },
+  forMeFrom: {
+    ...font.small,
+    fontSize: 12,
+  },
+  forMeDare: {
+    ...font.body,
+    fontWeight: '700',
+  },
+  ideasLink: {
+    paddingVertical: space.sm,
+  },
+  ideasLinkText: {
+    ...font.small,
+    color: colors.accent,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   chainBox: {
     backgroundColor: colors.card,

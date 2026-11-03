@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
-import type { MediaFields } from './types';
+import type { MediaFields, Profile } from './types';
 import { supabase } from './supabase';
 
 // A "peek" is a photo sent in chat that disappears once opened (stored with kind 'snap').
@@ -117,6 +117,33 @@ export async function sendDare(me: string, friend: string, dare: string): Promis
     .single();
   if (error) throw error;
   return data as Message;
+}
+
+// The same dare to several friends at once (each gets it in their chat with you).
+export async function sendDareTo(me: string, friends: string[], dare: string): Promise<void> {
+  if (friends.length === 0) return;
+  const { error } = await supabase
+    .from('messages')
+    .insert(friends.map((friend) => ({ sender_id: me, recipient_id: friend, kind: 'dare', body: dare.trim() })));
+  if (error) throw error;
+}
+
+// Dares friends wrote for you in the last week, newest first, with who sent them.
+export type DareForMe = { id: string; body: string; created_at: string; from: Profile };
+export async function fetchDaresForMe(me: string): Promise<DareForMe[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, body, created_at, sender:profiles!messages_sender_id_fkey(*)')
+    .eq('recipient_id', me)
+    .eq('kind', 'dare')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return ((data ?? []) as unknown as { id: string; body: string; created_at: string; sender: Profile | null }[])
+    .filter((row) => row.sender)
+    .map((row) => ({ id: row.id, body: row.body, created_at: row.created_at, from: row.sender as Profile }));
 }
 
 // A reaction to a friend's story. It shows up in your chat with them.
