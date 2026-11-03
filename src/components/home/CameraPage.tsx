@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -23,7 +23,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
-import { FACE_LENS_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
+import { FACE_LENS_AVAILABLE, SKIA_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
@@ -114,11 +114,12 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
   // A face lens is on: the live camera with a drawing on every face (instead of the normal camera).
   const faceLook: FaceLook | null =
-    lensesHere && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'pup') ? homeMode : null;
+    lensesHere && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'glow' || homeMode === 'pup') ? homeMode : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
-  // Glow: a warm glow on the live camera, and the photo opens with the Glow filter on.
-  const glowOn = lensesHere && homeMode === 'glow';
+  // Glow without face tracking (Expo Go, older downloads): a warm wash, and the photo opens with the Glow filter.
+  const glowOn = lensesHere && homeMode === 'glow' && !lensOn;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
@@ -159,7 +160,18 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     try {
       if (lensOn && lensRef.current) {
         const shot = await lensRef.current.capture();
-        openEditor(shot.uri, 'cover', false, shot.items);
+        let uri = shot.uri;
+        // Glam and Glow: paint the makeup / glow into the photo along the real face outlines.
+        if ((faceLook === 'makeup' || faceLook === 'glow') && SKIA_AVAILABLE) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { paintLook } = require('@/lib/lensPhoto') as typeof import('@/lib/lensPhoto');
+            uri = await paintLook(shot.uri, shot.shapes, faceLook, { width: screenWidth, height: screenHeight });
+          } catch (error) {
+            console.warn('Could not paint the lens', error);
+          }
+        }
+        openEditor(uri, 'cover', false, shot.items);
         return;
       }
       if (!cameraRef.current) return;

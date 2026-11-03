@@ -54,8 +54,7 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
           <Text style={[styles.stampText, { fontSize: 30 * size }]}>CAUGHT 📸</Text>
         </View>
       );
-    // The face lenses' drawings (Glam, Peekaboo Pup) – only from the lens camera, not in the sticker picker.
-    case 'lens-makeup':
+    // The Peekaboo Pup lens drawing – only from the lens camera, not in the sticker picker.
     case 'lens-pup':
       return <LensSticker id={id} />;
     default:
