@@ -361,7 +361,12 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       {glowOn ? <View style={styles.glow} pointerEvents="none" /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
       {/* Flash during a selfie video: a bright ring light around the screen edges lights up your face. */}
-      {recording && flash === 'on' && facing === 'front' ? <View style={styles.ringLight} pointerEvents="none" /> : null}
+      {recording && flash === 'on' && facing === 'front' ? (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={styles.selfieLightFill} />
+          <View style={styles.selfieLightEdge} />
+        </View>
+      ) : null}
 
       {/* Top: your picture on the left (with a count of new friend requests), flip and flash on the right */}
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
@@ -571,11 +576,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.white,
   },
-  ringLight: {
+  // A see-through wash of light over the preview plus a bright thin edge – lights your face in the dark
+  // without hiding any of the picture.
+  selfieLightFill: {
     ...StyleSheet.absoluteFill,
-    borderWidth: 48,
-    borderColor: 'rgba(255, 246, 236, 0.95)',
-    borderRadius: 48,
+    backgroundColor: 'rgba(255, 248, 240, 0.28)',
+  },
+  selfieLightEdge: {
+    ...StyleSheet.absoluteFill,
+    borderWidth: 12,
+    borderColor: 'rgba(255, 248, 240, 0.95)',
+    borderRadius: 28,
   },
   glow: {
     ...StyleSheet.absoluteFill,

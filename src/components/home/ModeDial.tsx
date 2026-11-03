@@ -28,10 +28,8 @@ export type CameraMode = 'photo' | 'googly' | 'makeup' | 'glow' | 'pup' | 'dare'
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
+  // Only the googly eyes for now (Glam, Glow and Pup were tried and dropped – the owner wants one lens).
   { key: 'googly', emoji: '🤪', label: 'Googly' },
-  { key: 'makeup', emoji: '💄', label: 'Glam' },
-  { key: 'glow', emoji: '✨', label: 'Glow' },
-  { key: 'pup', emoji: '🐶', label: 'Peekaboo Pup' },
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
@@ -47,7 +45,7 @@ const BUBBLE_ACTIVE = 54;
 // Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
 // A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
 // The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat.
-export const LENS_MODES: CameraMode[] = ['googly', 'makeup', 'glow', 'pup'];
+export const LENS_MODES: CameraMode[] = ['googly'];
 
 export function ModeDial({ mode, onChange, dots, lensesOnly = false }: {
   mode: CameraMode;
