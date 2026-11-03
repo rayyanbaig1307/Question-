@@ -122,6 +122,9 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     lensesHere && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'glow' || homeMode === 'pup') ? homeMode : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
+  // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
+  const [lensRecording, setLensRecording] = useState(false);
+  const lensVideoItems = useRef<LensItem[]>([]);
   // Glow without face tracking (Expo Go, older downloads): a warm wash, and the photo opens with the Glow filter.
   const glowOn = lensesHere && homeMode === 'glow' && !lensOn;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -199,7 +202,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
   async function startRecording() {
     if (busy || recording) return;
-    if (lensOn ? !lensRef.current : !cameraRef.current) return;
+    if (!lensOn && !cameraRef.current) return;
     // First time: ask for the microphone (so videos have sound), then you hold again.
     if (!mic?.granted && mic?.canAskAgain !== false) {
       await requestMic();
@@ -211,23 +214,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     setRecording(true);
     setMode('video');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // With a lens: record from the lens camera. Googly eyes and the pup go on the video as stickers.
+    // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
+    // yet). Googly eyes and the pup go on the video as stickers where they were when you started.
     if (lensOn && lensRef.current) {
-      try {
-        recordProgress.set(0);
-        recordProgress.set(withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000 + 700, easing: Easing.linear }));
-        const clip = await lensRef.current.record(MAX_VIDEO_SECONDS);
-        openEditor(clip.uri, 'cover', true, clip.items);
-      } catch (error) {
-        Alert.alert('Could not record', friendlyError(error));
-      } finally {
-        cancelAnimation(recordProgress);
-        recordProgress.set(0);
-        setRecording(false);
-        setMode('picture');
-        setBusy(false);
-      }
-      return;
+      lensVideoItems.current = lensRef.current.currentItems();
+      setLensRecording(true);
+      // The normal camera needs a moment to start up.
+      await new Promise((resolve) => setTimeout(resolve, 900));
     }
     await waitForCamera();
     try {
@@ -239,7 +232,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         maxDuration: MAX_VIDEO_SECONDS,
         ...(Platform.OS === 'ios' ? { codec: 'avc1' as const } : {}),
       });
-      if (video?.uri) openEditor(video.uri, 'cover', true);
+      if (video?.uri) openEditor(video.uri, 'cover', true, lensVideoItems.current);
       else if (!withSound) Alert.alert('No video', 'Something went wrong while recording. Try again!');
     } catch (error) {
       Alert.alert('Could not record', friendlyError(error));
@@ -249,6 +242,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       setRecording(false);
       setMode('picture');
       setBusy(false);
+      setLensRecording(false);
+      lensVideoItems.current = [];
     }
   }
 
@@ -256,8 +251,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     stopAsked.current = true;
     if (recording) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (lensOn) lensRef.current?.stop();
-      else cameraRef.current?.stopRecording();
+      cameraRef.current?.stopRecording();
     }
   }
 
@@ -324,7 +318,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        lensOn && FaceLens ? (
+        lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} look={faceLook ?? 'googly'} zoom={camZoom} />
         ) : active || warm ? (
           <CameraView

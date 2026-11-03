@@ -1,7 +1,7 @@
 import { FlipType, ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { CommonResolutions, usePhotoOutput, useVideoOutput, type Recorder } from 'react-native-vision-camera';
+import { usePhotoOutput } from 'react-native-vision-camera';
 import { Camera as FaceCamera, type Face } from 'react-native-vision-camera-face-detector';
 
 import { LENS_BOX } from '@/components/editor/LensStickers';
@@ -24,9 +24,8 @@ const MAX_FACES = 4;
 
 export type FaceLensHandle = {
   capture: () => Promise<LensShot>;
-  // Videos: starts recording; resolves when it stops (you let go, or the time runs out).
-  record: (maxSeconds: number) => Promise<LensShot>;
-  stop: () => void;
+  // Where the drawings are right now (videos are recorded by the normal camera, with these as stickers).
+  currentItems: () => LensShot['items'];
 };
 
 type TrackedPair = EyePair & { key: string };
@@ -52,11 +51,6 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
   const [shapes, setShapes] = useState<FaceShape[]>([]);
   const latestShapes = useRef<FaceShape[]>([]);
   const photoOutput = usePhotoOutput({ quality: 0.9 });
-  // Videos: small, quick-to-upload 720p with sound. The camera switches to video while you hold the shutter.
-  const videoOutput = useVideoOutput({ targetResolution: CommonResolutions.HD_16_9, targetBitRate: 2_500_000, enableAudio: true });
-  const [videoMode, setVideoMode] = useState(false);
-  const recorder = useRef<Recorder | null>(null);
-  const stopEarly = useRef(false);
   const [pairs, setPairs] = useState<TrackedPair[]>([]);
   const latest = useRef<TrackedPair[]>([]);
 
@@ -111,33 +105,12 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
         const saved = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG });
         return { uri: saved.uri, items, shapes: shapesNow };
       },
-      async record(maxSeconds) {
-        stopEarly.current = false;
-        setVideoMode(true);
-        // Give the camera a moment to switch to video.
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        try {
-          const rec = await videoOutput.createRecorder({ maxDuration: maxSeconds });
-          recorder.current = rec;
-          const items = sticker ? latest.current.map(({ x, y, scale, rotation }) => ({ x, y, scale, rotation, sticker })) : [];
-          const path = await new Promise<string>((resolve, reject) => {
-            rec.startRecording((filePath) => resolve(filePath), reject).then(() => {
-              // You let go before it even started: still keep a short clip.
-              if (stopEarly.current) setTimeout(() => rec.stopRecording().catch(() => {}), 400);
-            }, reject);
-          });
-          return { uri: path.startsWith('file://') ? path : `file://${path}`, items, shapes: [] };
-        } finally {
-          recorder.current = null;
-          setVideoMode(false);
-        }
-      },
-      stop() {
-        stopEarly.current = true;
-        recorder.current?.stopRecording().catch(() => {});
+      // Where the drawings are right now (for a video, which is recorded by the normal camera).
+      currentItems() {
+        return sticker ? latest.current.map(({ x, y, scale, rotation }) => ({ x, y, scale, rotation, sticker })) : [];
       },
     }),
-    [photoOutput, videoOutput, flash, facing, sticker],
+    [photoOutput, flash, facing, sticker],
   );
 
   return (
@@ -146,11 +119,9 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
         style={StyleSheet.absoluteFill}
         device={facing}
         isActive={active}
-        outputs={[videoMode ? videoOutput : photoOutput]}
-        // Flash while recording with the back camera (the selfie camera lights up the screen instead).
-        torchMode={videoMode && flash === 'on' && facing === 'back' ? 'on' : 'off'}
+        outputs={[photoOutput]}
         resizeMode="cover"
-        zoom={1 + zoom * 3}
+        zoom={zoom > 0 ? 1 + zoom * 3 : undefined}
         mirrorMode="auto"
         cameraFacing={facing}
         // Face positions come back already lined up with the preview on screen.
