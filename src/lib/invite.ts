@@ -3,7 +3,7 @@ import { Share } from 'react-native';
 // Where friends can get Peekaboo.
 // Android: this download installs the app directly (and it keeps updating itself after that). When there's a
 // newer Android download, change this one line. iPhone: no link until Peekaboo is on TestFlight / the App Store.
-export const ANDROID_LINK: string | null = 'https://expo.dev/artifacts/eas/fm57nv8YmFXBKep-Jbhy2AF7h2szgGTvcxlS3WHA_0s.apk';
+export const ANDROID_LINK: string | null = 'https://expo.dev/artifacts/eas/HYWYhrrKiOHVcL54iALmFvMDgUeUJe-W5Uzr5r2K-is.apk';
 export const IPHONE_LINK: string | null = null;
 
 // Adds the download links to a message.
