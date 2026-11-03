@@ -1,6 +1,7 @@
 import { FlipType, ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { usePhotoOutput } from 'react-native-vision-camera';
 import { Camera as FaceCamera, type Face } from 'react-native-vision-camera-face-detector';
 
@@ -18,9 +19,16 @@ const LiveLook: typeof import('./LiveLook').LiveLook | null = SKIA_AVAILABLE
 const PAIR_WIDTH = 146;
 const PAIR_HEIGHT = 70;
 const PAIR_EYE_DISTANCE = 76;
-// How much a new position counts vs. the last one (smaller = smoother but a bit laggy).
+// Smoothing for the painted looks (Glam / Glow outlines).
 const FOLLOW = 0.55;
 const MAX_FACES = 4;
+// Tiny wobbles in where the tracker says your eyes are (a pixel or two) are ignored, so the eyes don't shiver
+// when you hold still. Anything bigger than this many points is followed straight away.
+const STILL = 1.5;
+// The eyes on screen are moved by the animation thread, not by redrawing the whole screen, so they keep up
+// with your face. One slot per face the tracker can follow at once.
+type Slot = { on: boolean; x: number; y: number; scale: number; rotation: number };
+const EMPTY_SLOT: Slot = { on: false, x: 0, y: 0, scale: 1, rotation: 0 };
 
 export type FaceLensHandle = {
   capture: () => Promise<LensShot>;
@@ -51,27 +59,27 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
   const [shapes, setShapes] = useState<FaceShape[]>([]);
   const latestShapes = useRef<FaceShape[]>([]);
   const photoOutput = usePhotoOutput({ quality: 0.9 });
-  const [pairs, setPairs] = useState<TrackedPair[]>([]);
   const latest = useRef<TrackedPair[]>([]);
+
+  // Which face (tracker id) each slot is showing right now, so a face keeps its slot while it moves.
+  const slotKeys = useRef<(string | null)[]>(Array(MAX_FACES).fill(null));
+  const slots = [useSharedValue<Slot>(EMPTY_SLOT), useSharedValue<Slot>(EMPTY_SLOT), useSharedValue<Slot>(EMPTY_SLOT), useSharedValue<Slot>(EMPTY_SLOT)];
 
   function handleFaces(faces: Face[]) {
     const before = new Map(latest.current.map((pair) => [pair.key, pair]));
     const next = faces.slice(0, MAX_FACES).map((face, index) => {
       const pair = eyesOf(face, index);
       const last = before.get(pair.key);
-      // Glide from where the eyes were, so they don't jitter.
-      return last
-        ? {
-            key: pair.key,
-            x: last.x + (pair.x - last.x) * FOLLOW,
-            y: last.y + (pair.y - last.y) * FOLLOW,
-            scale: last.scale + (pair.scale - last.scale) * FOLLOW,
-            rotation: last.rotation + (pair.rotation - last.rotation) * FOLLOW,
-          }
-        : pair;
+      if (!last) return pair;
+      // Holding still: ignore the tracker's tiny wobble. Moving: go straight to where the eyes are now.
+      const moved = Math.hypot(pair.x - last.x, pair.y - last.y);
+      if (moved < STILL && Math.abs(pair.scale - last.scale) < 0.02 && Math.abs(pair.rotation - last.rotation) < 0.02) {
+        return { ...last, key: pair.key };
+      }
+      return pair;
     });
     latest.current = next;
-    setPairs(next);
+    placeEyes(next);
     if (painted) {
       const before = new Map(latestShapes.current.map((shape) => [shape.key, shape]));
       const nextShapes = faces
@@ -85,6 +93,38 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
       latestShapes.current = nextShapes;
       setShapes(nextShapes);
     }
+  }
+
+  // Hand each face's eyes to its slot on the animation thread (same face → same slot; empty slots are hidden).
+  function placeEyes(pairs: TrackedPair[]) {
+    const keys = slotKeys.current;
+    const taken = new Set<number>();
+    const placed: (TrackedPair | null)[] = Array(MAX_FACES).fill(null);
+    for (const pair of pairs) {
+      const index = keys.indexOf(pair.key);
+      if (index >= 0 && !taken.has(index)) {
+        placed[index] = pair;
+        taken.add(index);
+      }
+    }
+    for (const pair of pairs) {
+      if (placed.includes(pair)) continue;
+      const free = placed.findIndex((slot, index) => slot === null && !taken.has(index));
+      if (free < 0) break;
+      placed[free] = pair;
+      taken.add(free);
+    }
+    placed.forEach((pair, index) => {
+      keys[index] = pair?.key ?? null;
+      const now = slots[index].get();
+      if (pair) {
+        if (!now.on || now.x !== pair.x || now.y !== pair.y || now.scale !== pair.scale || now.rotation !== pair.rotation) {
+          slots[index].set({ on: true, x: pair.x, y: pair.y, scale: pair.scale, rotation: pair.rotation });
+        }
+      } else if (now.on) {
+        slots[index].set(EMPTY_SLOT);
+      }
+    });
   }
 
   useImperativeHandle(
@@ -137,25 +177,26 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zo
       {painted && active && LiveLook ? <LiveLook shapes={shapes} look={look === 'glow' ? 'glow' : 'makeup'} /> : null}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {active && sticker
-          ? pairs.map((pair) => (
-              <View
-                key={pair.key}
-                style={[
-                  styles.pair,
-                  {
-                    width: box.width,
-                    height: box.height,
-                    left: pair.x - box.width / 2,
-                    top: pair.y - box.height / 2,
-                    transform: [{ rotateZ: `${pair.rotation}rad` }, { scale: pair.scale }],
-                  },
-                ]}>
-                <SpecialSticker id={sticker ?? ''} />
-              </View>
-            ))
+          ? slots.map((slot, index) => <EyesOnFace key={index} slot={slot} sticker={sticker} width={box.width} height={box.height} />)
           : null}
       </View>
     </View>
+  );
+}
+
+// One face's drawing, moved by the animation thread as its slot changes (hidden when the slot has no face).
+function EyesOnFace({ slot, sticker, width, height }: { slot: SharedValue<Slot>; sticker: string; width: number; height: number }) {
+  const place = useAnimatedStyle(() => {
+    const s = slot.get();
+    return {
+      opacity: s.on ? 1 : 0,
+      transform: [{ translateX: s.x - width / 2 }, { translateY: s.y - height / 2 }, { rotateZ: `${s.rotation}rad` }, { scale: s.scale }],
+    };
+  });
+  return (
+    <Animated.View style={[styles.pair, { width, height }, place]}>
+      <SpecialSticker id={sticker} />
+    </Animated.View>
   );
 }
 
@@ -226,6 +267,8 @@ function glide(last: FaceShape, next: FaceShape): FaceShape {
 const styles = StyleSheet.create({
   pair: {
     position: 'absolute',
+    left: 0,
+    top: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
