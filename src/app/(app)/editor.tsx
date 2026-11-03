@@ -10,6 +10,7 @@ import { captureRef } from 'react-native-view-shot';
 import { scheduleOnRN } from 'react-native-worklets';
 import { StatusBar } from 'expo-status-bar';
 
+import { CropTool } from '@/components/editor/CropTool';
 import { DraggableItem, type TrashZone } from '@/components/editor/DraggableItem';
 import { FilterLayers, FILTERS } from '@/components/editor/filters';
 import { StickerPicker } from '@/components/editor/StickerPicker';
@@ -59,6 +60,10 @@ export default function Editor() {
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const isVideo = video === '1';
+  // Photos can be cropped: the cropped photo replaces the original here (and is shown whole, not cut to the screen).
+  const [photoUri, setPhotoUri] = useState(uri);
+  const [photoFit, setPhotoFit] = useState(fit);
+  const [cropOpen, setCropOpen] = useState(false);
   const { userId } = useMe();
   const { showToast } = useOverlays();
   // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
@@ -257,16 +262,16 @@ export default function Editor() {
           <GestureDetector gesture={photoGestures}>
             <View style={styles.photo}>
               <Animated.View style={[StyleSheet.absoluteFill, zoomStyle]}>
-              {fit === 'contain' ? (
+              {photoFit === 'contain' ? (
                 <>
                   {/* Photos from the camera roll keep their shape. Instead of black bars around them,
                       a blurry, zoomed-in copy of the same photo fills the empty space. */}
-                  <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={40} />
+                  <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={40} />
                   <View style={styles.dim} />
-                  <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                  <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
                 </>
               ) : (
-                <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
               )}
               </Animated.View>
               <FilterLayers filter={filter} />
@@ -307,6 +312,8 @@ export default function Editor() {
                   addItem({ kind: 'special', content: 'googly-eyes', color: colors.white, look: 'shadow' });
                 }}
               />
+              {/* Photos: crop it – drag the sides and corners */}
+              {isVideo ? null : <IconButton icon="crop" label="Crop" onPress={() => setCropOpen(true)} />}
               {items.length > 0 ? (
                 <IconButton icon="arrow-undo" label="Undo" onPress={() => setItems((current) => current.slice(0, -1))} />
               ) : null}
@@ -353,6 +360,21 @@ export default function Editor() {
       ) : null}
 
       {filterFlash > 0 && !composer ? <FilterName key={filterFlash} name={filter.name} /> : null}
+
+      {cropOpen ? (
+        <CropTool
+          uri={photoUri}
+          onCancel={() => setCropOpen(false)}
+          onDone={(cropped) => {
+            setPhotoUri(cropped);
+            setPhotoFit('contain');
+            zoom.set(1);
+            panX.set(0);
+            panY.set(0);
+            setCropOpen(false);
+          }}
+        />
+      ) : null}
 
       {dragging ? (
         <View style={[styles.trash, { top: trash.top + 20, left: width / 2 - 36 }]} pointerEvents="none">
