@@ -29,13 +29,15 @@ type TrackedPair = EyePair & { key: string };
 // Only loaded on phones that have face tracking (see lib/faceLens.ts).
 // The live camera with googly eyes stuck on every face it sees. `capture()` takes the photo and says where the
 // eyes were, so the editor can put real stickers there (drag, resize or delete them like any sticker).
-export function FaceLensCamera({ ref, active, facing, flash, look = 'googly' }: {
+export function FaceLensCamera({ ref, active, facing, flash, look = 'googly', zoom = 0 }: {
   ref: Ref<FaceLensHandle>;
   active: boolean;
   facing: 'front' | 'back';
   flash: 'on' | 'off';
   // Which drawing goes on every face.
   look?: FaceLook;
+  // Pinch zoom from the camera screen: 0 = not zoomed, 1 = as far as it goes (here up to 4×).
+  zoom?: number;
 }) {
   const sticker = LOOK_STICKER[look];
   // Glam and Glow follow the real face outlines (lips, eyes, face shape) instead of a sticker.
@@ -111,6 +113,7 @@ export function FaceLensCamera({ ref, active, facing, flash, look = 'googly' }: 
         isActive={active}
         outputs={[photoOutput]}
         resizeMode="cover"
+        zoom={1 + zoom * 3}
         mirrorMode="auto"
         cameraFacing={facing}
         // Face positions come back already lined up with the preview on screen.

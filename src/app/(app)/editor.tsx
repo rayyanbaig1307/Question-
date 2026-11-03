@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -74,16 +74,60 @@ export default function Editor() {
     setFilterFlash((count) => count + 1);
   }
 
-  // Swipe left/right on the photo (not on a sticker) to change the filter, like Snapchat.
+  // Zoom and crop: pinch the photo to zoom in, drag it to frame it, double-tap to go back.
+  // What's on screen is what gets sent, so zooming in is how you crop.
+  const zoom = useSharedValue(1);
+  const panX = useSharedValue(0);
+  const panY = useSharedValue(0);
+  const clampPan = (value: number, size: number, z: number) => {
+    'worklet';
+    const max = (size * (z - 1)) / 2;
+    return Math.min(max, Math.max(-max, value));
+  };
+  const pinch = usePinchGesture({
+    onUpdate: (event) => {
+      'worklet';
+      const before = zoom.get();
+      const after = Math.min(5, Math.max(1, before * event.scaleChange));
+      const factor = after / before;
+      // Zoom towards your fingers.
+      const fx = event.focalX - width / 2;
+      const fy = event.focalY - height / 2;
+      zoom.set(after);
+      panX.set(clampPan(fx - (fx - panX.get()) * factor, width, after));
+      panY.set(clampPan(fy - (fy - panY.get()) * factor, height, after));
+    },
+  });
+  // One finger: while zoomed in it moves the photo; otherwise swipe left/right for filters, like Snapchat.
   const swipe = usePanGesture({
-    activeOffsetX: [-15, 15],
-    failOffsetY: [-20, 20],
+    minDistance: 12,
+    onUpdate: (event) => {
+      'worklet';
+      if (zoom.get() <= 1.02) return;
+      panX.set(clampPan(panX.get() + event.changeX, width, zoom.get()));
+      panY.set(clampPan(panY.get() + event.changeY, height, zoom.get()));
+    },
     onDeactivate: (event) => {
       'worklet';
+      if (zoom.get() > 1.02) return;
+      if (Math.abs(event.translationY) > Math.abs(event.translationX)) return;
       if (event.translationX < -40) scheduleOnRN(changeFilter, 1);
       else if (event.translationX > 40) scheduleOnRN(changeFilter, -1);
     },
   });
+  const resetZoom = useTapGesture({
+    numberOfTaps: 2,
+    onActivate: () => {
+      'worklet';
+      zoom.set(withTiming(1));
+      panX.set(withTiming(0));
+      panY.set(withTiming(0));
+    },
+  });
+  const photoGestures = useSimultaneousGestures(pinch, swipe, resetZoom);
+  const zoomStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: panX.get() }, { translateY: panY.get() }, { scale: zoom.get() }],
+  }));
 
   const trash: TrashZone = { top: height - 150, left: width / 2 - 70, right: width / 2 + 70 };
 
@@ -210,8 +254,9 @@ export default function Editor() {
       {isVideo ? <VideoClip uri={uri} playing loop style={StyleSheet.absoluteFill} /> : null}
       <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
         {isVideo ? null : (
-          <GestureDetector gesture={swipe}>
+          <GestureDetector gesture={photoGestures}>
             <View style={styles.photo}>
+              <Animated.View style={[StyleSheet.absoluteFill, zoomStyle]}>
               {fit === 'contain' ? (
                 <>
                   {/* Photos from the camera roll keep their shape. Instead of black bars around them,
@@ -223,6 +268,7 @@ export default function Editor() {
               ) : (
                 <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
               )}
+              </Animated.View>
               <FilterLayers filter={filter} />
             </View>
           </GestureDetector>
@@ -277,7 +323,7 @@ export default function Editor() {
             )}
             {items.length === 0 ? (
               <Text style={styles.hint}>
-                {isVideo ? 'Add text or stickers, or just send it!' : 'Swipe ← → for filters · 👀 for googly eyes'}
+                {isVideo ? 'Add text or stickers, or just send it!' : 'Pinch to zoom & crop · swipe ← → for filters'}
               </Text>
             ) : (
               <Text style={styles.hint}>Drag to move · pinch to resize · drop on 🗑️ to remove</Text>
@@ -377,6 +423,7 @@ const styles = StyleSheet.create({
   photo: {
     ...StyleSheet.absoluteFill,
     isolation: 'isolate',
+    overflow: 'hidden',
   },
   filterName: {
     position: 'absolute',

@@ -12,6 +12,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { GestureDetector, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
@@ -75,7 +77,10 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<CameraType>('back');
-  const lastTap = useRef(0);
+  // Pinch the camera to zoom in (0 = not zoomed, 1 = as far as it goes).
+  const [camZoom, setCamZoom] = useState(0);
+  const camZoomShared = useSharedValue(0);
+  const zoomStart = useSharedValue(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
   const isHome = !sendTo && !dare && !drop && !guess && !forfeit;
@@ -238,19 +243,38 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
   function flipCamera() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
+    // A new camera starts un-zoomed.
+    camZoomShared.set(0);
+    setCamZoom(0);
   }
 
-  // Double-tap anywhere on the camera to flip between the front and back camera.
-  function tapCamera() {
-    const now = Date.now();
-    if (now - lastTap.current < 300) {
-      lastTap.current = 0;
-      Haptics.selectionAsync();
-      flipCamera();
-    } else {
-      lastTap.current = now;
-    }
+  // Pinch anywhere on the camera to zoom; double-tap to flip between the front and back camera.
+  const pinchZoom = usePinchGesture({
+    onActivate: () => {
+      'worklet';
+      zoomStart.set(camZoomShared.get());
+    },
+    onUpdate: (event) => {
+      'worklet';
+      const next = Math.min(1, Math.max(0, zoomStart.get() + (event.scale - 1) * 0.45));
+      camZoomShared.set(next);
+      scheduleOnRN(setCamZoom, next);
+    },
+  });
+  const doubleTapFlip = useTapGesture({
+    numberOfTaps: 2,
+    onActivate: () => {
+      'worklet';
+      scheduleOnRN(tapFlip);
+    },
+  });
+  const cameraGestures = useSimultaneousGestures(pinchZoom, doubleTapFlip);
+  function tapFlip() {
+    Haptics.selectionAsync();
+    flipCamera();
   }
+
+
 
   async function pickFromGallery() {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -281,12 +305,13 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
         lensOn && FaceLens ? (
-          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} look={faceLook ?? 'googly'} />
+          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} look={faceLook ?? 'googly'} zoom={camZoom} />
         ) : active || warm ? (
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
             facing={facing}
+            zoom={camZoom}
             // The selfie camera uses the screen as its flash instead (see takePhoto).
             flash={facing === 'back' ? flash : 'off'}
             mirror={facing === 'front'}
@@ -311,7 +336,11 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         </View>
       )}
 
-      {permission?.granted ? <Pressable style={StyleSheet.absoluteFill} onPress={tapCamera} accessible={false} /> : null}
+      {permission?.granted ? (
+        <GestureDetector gesture={cameraGestures}>
+          <View style={StyleSheet.absoluteFill} accessible={false} />
+        </GestureDetector>
+      ) : null}
       {/* Glow: a soft warm wash over the live camera (the photo gets the real Glow filter in the editor). */}
       {glowOn ? <View style={styles.glow} pointerEvents="none" /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
