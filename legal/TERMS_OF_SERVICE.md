@@ -1,7 +1,7 @@
 # Peekaboo – Terms of Service
 
 **Effective date:** 31 October 2026
-**Operator:** [OPERATOR NAME], [MAILING ADDRESS], rbaig18@z2automation.net ("Peekaboo", "we", "us")
+**Operator:** 2865113 Ontario Inc., [MAILING ADDRESS], rbaig18@z2automation.net ("Peekaboo", "we", "us")
 
 Please read these Terms carefully. They are a legal agreement between you and the operator of the Peekaboo app. By creating an account or using Peekaboo you agree to them, to our [Privacy Policy](PRIVACY_POLICY.md), our [Community Guidelines](COMMUNITY_GUIDELINES.md) and our [Dare Safety Rules](DARE_SAFETY_RULES.md), which are all part of these Terms. If you do not agree, do not use Peekaboo.
 
@@ -147,6 +147,6 @@ If you downloaded Peekaboo from Apple's App Store, the following also applies, a
 
 ## 16. Contact
 
-[OPERATOR NAME]
+2865113 Ontario Inc.
 [MAILING ADDRESS]
 rbaig18@z2automation.net
