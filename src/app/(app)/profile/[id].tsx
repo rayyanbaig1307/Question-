@@ -179,6 +179,7 @@ export default function ProfileScreen() {
             style={styles.action}
             onPress={() => router.push('/friends')}
           />
+          <Button title="Keeps" icon="albums" variant="secondary" small style={styles.action} onPress={() => router.push('/keeps')} />
         </View>
       ) : (
         <View style={styles.personActions}>

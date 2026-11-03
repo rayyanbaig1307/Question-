@@ -790,3 +790,12 @@ arrive with the normal update.
 3. **Remove** deletes that post/comment/message/story for everyone (asks first). **Ban** stops the account
    logging in (asks first; they're logged out within an hour) – **Unban** undoes it. **Reviewed** and
    **Dismiss** close the report. Open their profile by tapping the name.
+
+## Step 55 – Keeps 📦 (save your edits)
+
+1. Take a photo, add a filter/text/sticker → in the editor, tap the **⬇️** button (top row). It turns green ✓
+   and says "Saved to Photos and your Keeps" (or just "Saved to your Keeps" on an older download without
+   Photos access).
+2. Your profile → **Keeps** → a grid of everything you saved (only you can see it). Tap one → full screen with
+   **Save to Photos**, **Post it** (goes through the normal Send to… screen) and 🗑 delete.
+3. The first save asks for permission to add to Photos; saying no still keeps it in Peekaboo.

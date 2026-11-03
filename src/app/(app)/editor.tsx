@@ -22,6 +22,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { addKeep, CAN_SAVE_TO_PHOTOS, saveToPhotos } from '@/lib/keeps';
 import { resizePhoto, type Capture } from '@/lib/media';
 import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
@@ -131,6 +132,37 @@ export default function Editor() {
     ]);
   }
 
+  // The finished picture (or the video plus its text/sticker layer), ready to send or keep.
+  async function finish(): Promise<Capture> {
+    if (isVideo) {
+      return {
+        kind: 'video',
+        uri,
+        overlayUri: items.length > 0 ? await captureRef(canvasRef, { format: 'png', result: 'tmpfile' }) : null,
+      };
+    }
+    return { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+  }
+
+  // Save it with everything on it: to the phone's Photos and to your Keeps in Peekaboo.
+  const [saved, setSaved] = useState(false);
+  async function keep() {
+    if (busy || saved) return;
+    setBusy(true);
+    try {
+      const capture = await finish();
+      await addKeep(userId, capture);
+      const inPhotos = CAN_SAVE_TO_PHOTOS ? await saveToPhotos(capture.uri).catch(() => false) : false;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaved(true);
+      showToast(inPhotos ? 'Saved to Photos and your Keeps 📦' : 'Saved to your Keeps 📦');
+    } catch (error) {
+      Alert.alert('Could not save', friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function next() {
     setBusy(true);
     try {
@@ -232,6 +264,12 @@ export default function Editor() {
               {items.length > 0 ? (
                 <IconButton icon="arrow-undo" label="Undo" onPress={() => setItems((current) => current.slice(0, -1))} />
               ) : null}
+              <IconButton
+                icon={saved ? 'checkmark-done' : 'download-outline'}
+                label={saved ? 'Saved' : 'Save to Photos and Keeps'}
+                background={saved ? colors.green : colors.overlay}
+                onPress={keep}
+              />
             </View>
           </SafeEdge>
 

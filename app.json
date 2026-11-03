@@ -70,7 +70,14 @@
       ],
       "expo-video",
       "expo-audio",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Peekaboo saves the photos and videos you keep to your Photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true
