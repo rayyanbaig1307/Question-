@@ -11,12 +11,15 @@ import { friendlyError } from '@/lib/errors';
 import { TERMS_VERSION } from '@/lib/legal';
 import { checkUsernameFormat, cleanUsername, isUsernameAvailable, USERNAME_RULES } from '@/lib/profiles';
 import { supabase } from '@/lib/supabase';
+import { signUpWithUsername } from '@/lib/usernameAuth';
 import { colors, font, radius, space } from '@/theme';
 
 export default function SignUp() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  // Sign up with an email (recommended – you can get back in if you forget your password), or just a username.
+  const [withEmail, setWithEmail] = useState(true);
   const [password, setPassword] = useState('');
   const [oldEnough, setOldEnough] = useState(false);
   // Ticking this is agreeing to the Terms (and the Privacy Policy, Guidelines and Dare Safety Rules they include).
@@ -44,7 +47,7 @@ export default function SignUp() {
 
   const problems = {
     username: !username ? 'Pick a username.' : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : null)),
-    email: /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
+    email: !withEmail || /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
     password: password.length >= 6 ? null : 'Use at least 6 characters.',
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',
     terms: agreed ? null : 'Please agree to the Terms to make an account.',
@@ -59,6 +62,11 @@ export default function SignUp() {
     try {
       if (!(await isUsernameAvailable(username))) {
         setAvailability({ name: username, free: false });
+        return;
+      }
+      if (!withEmail) {
+        // Just a username: you're logged in straight away and the app opens.
+        await signUpWithUsername(username, password, name.trim() || username, TERMS_VERSION);
         return;
       }
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -114,17 +122,39 @@ export default function SignUp() {
         error={tried || usernameFormatError || usernameTaken ? problems.username : null}
         hint={usernameFree ? `✅ @${username} is free!` : USERNAME_RULES}
       />
-      <TextField
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@example.com"
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        textContentType="emailAddress"
-        error={tried ? problems.email : null}
-      />
+      <View style={styles.choice}>
+        {[
+          { key: true, label: '📧 With email' },
+          { key: false, label: '👤 Just a username' },
+        ].map((option) => (
+          <Pressable
+            key={option.label}
+            onPress={() => setWithEmail(option.key)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: withEmail === option.key }}
+            style={[styles.choiceChip, withEmail === option.key && styles.choiceChipOn]}>
+            <Text style={[styles.choiceText, withEmail === option.key && styles.choiceTextOn]}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {withEmail ? (
+        <TextField
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          error={tried ? problems.email : null}
+        />
+      ) : (
+        <Text style={styles.warning}>
+          ⚠️ No email means you log in with your username – but if you forget your password, there&apos;s no way to get
+          your account back. Keep your password somewhere safe.
+        </Text>
+      )}
       <TextField
         label="Password"
         value={password}
@@ -176,6 +206,39 @@ export default function SignUp() {
 }
 
 const styles = StyleSheet.create({
+  choice: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  choiceChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  choiceChipOn: {
+    borderColor: colors.accent,
+  },
+  choiceText: {
+    ...font.body,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
+  choiceTextOn: {
+    color: colors.text,
+  },
+  warning: {
+    ...font.small,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.text,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',

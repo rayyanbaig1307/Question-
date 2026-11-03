@@ -17,7 +17,7 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 ## 2. Your account
 
-2.1 You need an email address and a password. Keep your password private; you are responsible for everything done with your account.
+2.1 You need a username and a password, and you can add an email address. If you sign up without an email, you log in with your username, and **we cannot get your account back if you forget your password**. Keep your password private; you are responsible for everything done with your account.
 
 2.2 One account per person. Give true information. Do not impersonate anyone.
 

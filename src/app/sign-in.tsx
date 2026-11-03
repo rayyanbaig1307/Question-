@@ -7,41 +7,52 @@ import { FormScreen } from '@/components/FormScreen';
 import { TextField } from '@/components/TextField';
 import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
+import { logInWithUsername } from '@/lib/usernameAuth';
 import { colors, space } from '@/theme';
 
+// Log in with your email or your username.
 export default function SignIn() {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function logIn() {
-    if (!email.trim() || !password) {
-      setError('Type your email and password first.');
+    const typed = login.trim();
+    if (!typed || !password) {
+      setError('Type your email or username, and your password.');
       return;
     }
     setBusy(true);
     setError(null);
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    setBusy(false);
-    // On success the app switches to the camera by itself.
-    if (loginError) setError(friendlyError(loginError));
+    try {
+      // Has an @ in the middle → an email; otherwise it's a username (a leading @ is fine).
+      if (/^[^@\s]+@[^@\s]+$/.test(typed)) {
+        const { error: loginError } = await supabase.auth.signInWithPassword({ email: typed, password });
+        if (loginError) throw loginError;
+      } else {
+        await logInWithUsername(typed, password);
+      }
+      // On success the app switches to the camera by itself.
+    } catch (loginError) {
+      setError(friendlyError(loginError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <FormScreen title="Welcome back! 👋" subtitle="Log in to see what your friends are up to.">
       <TextField
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@example.com"
+        label="Email or username"
+        value={login}
+        onChangeText={setLogin}
+        placeholder="you@example.com or coolname"
         autoCapitalize="none"
-        autoComplete="email"
+        autoCorrect={false}
+        autoComplete="username"
         keyboardType="email-address"
-        textContentType="emailAddress"
+        textContentType="username"
         returnKeyType="next"
       />
       <TextField

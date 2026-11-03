@@ -740,3 +740,13 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 3. While zoomed, **drag with one finger** to look around – it stops at the photo's edges.
 4. **Double-tap** a spot → zooms in on it. Double-tap again → back to normal.
 5. Not zoomed: one-finger swipes do what they did before (e.g. swipe back on iPhone). Videos don't zoom.
+
+## Step 50 – Sign up with just a username 👤
+
+1. Log out → **Sign up**. Under the username there's a choice: **📧 With email** or **👤 Just a username**.
+2. Pick **Just a username** → the email box disappears and a note warns that without an email a forgotten
+   password can't be recovered. Fill in name, username, password, tick the boxes → **Let's go!** → you're in.
+3. A username that's taken says "That username is already taken" (same as before).
+4. **Log in** now has one box: **Email or username**. Type the username (with or without @) and the password.
+   Email accounts can log in with their username too. A wrong password says "Wrong username or password".
+5. After 8 wrong passwords for the same username in 15 minutes it asks you to wait 15 minutes.
