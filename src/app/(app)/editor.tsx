@@ -264,12 +264,6 @@ export default function Editor() {
               {items.length > 0 ? (
                 <IconButton icon="arrow-undo" label="Undo" onPress={() => setItems((current) => current.slice(0, -1))} />
               ) : null}
-              <IconButton
-                icon={saved ? 'checkmark-done' : 'download-outline'}
-                label={saved ? 'Saved' : 'Save to Photos and Keeps'}
-                background={saved ? colors.green : colors.overlay}
-                onPress={keep}
-              />
             </View>
           </SafeEdge>
 
@@ -288,14 +282,26 @@ export default function Editor() {
             ) : (
               <Text style={styles.hint}>Drag to move · pinch to resize · drop on 🗑️ to remove</Text>
             )}
-            <Pressable
-              onPress={next}
-              disabled={busy}
-              style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
-              accessibilityRole="button">
-              <Text style={styles.sendText}>{busy ? (straightToChat ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : 'Send to'}</Text>
-              <Ionicons name="send" size={18} color={colors.onAccent} />
-            </Pressable>
+            <View style={styles.bottomRow}>
+              {/* Bottom-left corner: save it (to Photos and your Keeps). */}
+              <Pressable
+                onPress={keep}
+                disabled={busy || saved}
+                style={({ pressed }) => [styles.save, saved && styles.saveDone, pressed && styles.sendPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={saved ? 'Saved' : 'Save to Photos and Keeps'}>
+                <Text style={styles.saveEmoji}>{saved ? '✅' : '📥'}</Text>
+                <Text style={styles.saveText}>{saved ? 'Saved' : 'Save'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={next}
+                disabled={busy}
+                style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
+                accessibilityRole="button">
+                <Text style={styles.sendText}>{busy ? (straightToChat ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : 'Send to'}</Text>
+                <Ionicons name="send" size={18} color={colors.onAccent} />
+              </Pressable>
+            </View>
           </SafeEdge>
         </>
       ) : null}
@@ -448,6 +454,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textShadowColor: 'rgba(0,0,0,0.7)',
     textShadowRadius: 6,
+  },
+  bottomRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  save: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  saveDone: {
+    borderColor: colors.green,
+  },
+  saveEmoji: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  saveText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '800',
   },
   send: {
     flexDirection: 'row',
