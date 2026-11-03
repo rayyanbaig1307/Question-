@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -10,8 +11,10 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
+import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
+import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
@@ -38,28 +41,104 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   onHitUpsChanged: () => void;
 }) {
   const { userId, profile } = useMe();
+  const { showOptions, showToast } = useOverlays();
+  const { confirmBlock } = useSafetyActions();
   const tabSpace = useTabBarSpace();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
   const [groups, setGroups] = useState<PeekGroup[]>([]);
+  // Your per-friend options (pin, mute, hidden stories) and your close friends.
+  const [settings, setSettings] = useState<Map<string, FriendSettings>>(new Map());
+  const [closeFriends, setCloseFriends] = useState<Set<string>>(new Set());
+
+  const refresh = useCallback(() => {
+    fetchRows(userId)
+      .then(setRows)
+      .catch((error) => {
+        console.warn('Could not load chats', error);
+        setRows((current) => current ?? []);
+      });
+  }, [userId]);
 
   useEffect(() => {
     if (!visible) return;
     fetchGroups()
       .then(setGroups)
       .catch(() => {});
-    const load = async () => {
+    fetchFriendSettings(userId)
+      .then(setSettings)
+      .catch(() => {});
+    fetchCloseFriendIds(userId)
+      .then(setCloseFriends)
+      .catch(() => {});
+    refresh();
+    // Refresh instantly when a message arrives or gets opened.
+    return subscribeToMyMessages(`chat-list-${userId}`, refresh);
+  }, [visible, userId, refresh]);
+
+  // Pinned chats stay at the top.
+  const shown = rows
+    ? [...rows].sort((a, b) => Number(!!settings.get(b.friend.id)?.pinned) - Number(!!settings.get(a.friend.id)?.pinned))
+    : null;
+
+  // Hold down a chat: options for that friend.
+  function openFriendMenu(friend: Profile) {
+    const current = settings.get(friend.id);
+    const name = friend.display_name || friend.username;
+    const close = closeFriends.has(friend.id);
+    const change = async (changes: Partial<Omit<FriendSettings, 'friend_id'>>, done: string) => {
       try {
-        const [friends, messages] = await Promise.all([fetchFriends(userId), fetchRecentMessages(userId)]);
-        setRows(buildRows(friends, messages));
+        const saved = await saveFriendSettings(userId, friend.id, changes);
+        setSettings((map) => new Map(map).set(friend.id, saved));
+        showToast(done);
       } catch (error) {
-        console.warn('Could not load chats', error);
-        setRows((current) => current ?? []);
+        Alert.alert('Could not save', friendlyError(error));
       }
     };
-    load();
-    // Refresh instantly when a message arrives or gets opened.
-    return subscribeToMyMessages(`chat-list-${userId}`, load);
-  }, [visible, userId]);
+    showOptions({
+      title: name,
+      options: [
+        {
+          label: current?.pinned ? '📌 Unpin chat' : '📌 Pin chat to top',
+          onPress: () => change({ pinned: !current?.pinned }, current?.pinned ? 'Unpinned' : 'Pinned to the top 📌'),
+        },
+        {
+          label: current?.mute_messages ? '🔔 Unmute notifications' : '🔕 Mute notifications',
+          onPress: () =>
+            change(
+              { mute_messages: !current?.mute_messages },
+              current?.mute_messages ? `Notifications from ${name} are back on` : `${name} is muted – no notifications from them`,
+            ),
+        },
+        {
+          label: current?.mute_stories ? '👀 Show their stories again' : '🙈 Hide their stories',
+          onPress: () =>
+            change(
+              { mute_stories: !current?.mute_stories },
+              current?.mute_stories ? `${name}'s stories are back on Home` : `${name}'s stories won't show on Home`,
+            ),
+        },
+        {
+          label: close ? '⭐ Remove from close friends' : '⭐ Add to close friends',
+          onPress: async () => {
+            try {
+              await setCloseFriend(userId, friend.id, !close);
+              setCloseFriends((set) => {
+                const next = new Set(set);
+                if (close) next.delete(friend.id);
+                else next.add(friend.id);
+                return next;
+              });
+              showToast(close ? `${name} is no longer a close friend` : `${name} is a close friend now ⭐`);
+            } catch (error) {
+              Alert.alert('Could not save', friendlyError(error));
+            }
+          },
+        },
+        { label: '👤 See profile', onPress: () => router.push(`/profile/${friend.id}`) },
+        { label: '🚫 Block', destructive: true, onPress: () => confirmBlock(friend, refresh) },
+      ],
+    });
+  }
 
   return (
     <View style={styles.fill}>
@@ -68,7 +147,7 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : (
         <FlatList
-          data={rows}
+          data={shown ?? []}
           keyExtractor={(row) => row.friend.id}
           contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
           ListHeaderComponent={
@@ -98,7 +177,15 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
               <Button title="Find friends" icon="search" variant="secondary" onPress={() => router.push('/friends')} />
             </EmptyState>
           }
-          renderItem={({ item }) => <ChatRowView row={item} me={userId} />}
+          renderItem={({ item }) => (
+            <ChatRowView
+              row={item}
+              me={userId}
+              pinned={!!settings.get(item.friend.id)?.pinned}
+              muted={!!settings.get(item.friend.id)?.mute_messages}
+              onMenu={() => openFriendMenu(item.friend)}
+            />
+          )}
         />
       )}
     </View>
@@ -241,6 +328,11 @@ function HitUpRow({ hitUp, onDone }: { hitUp: HitUp; onDone: () => void }) {
   );
 }
 
+async function fetchRows(me: string): Promise<ChatRow[]> {
+  const [friends, messages] = await Promise.all([fetchFriends(me), fetchRecentMessages(me)]);
+  return buildRows(friends, messages);
+}
+
 function buildRows(friends: Profile[], messages: Message[]): ChatRow[] {
   const rows = friends.map((friend) => {
     const withFriend = messages.filter((m) => m.sender_id === friend.id || m.recipient_id === friend.id);
@@ -294,17 +386,32 @@ function describe(row: ChatRow, me: string): {
   return { icon: last.kind === 'snap' ? 'square-outline' : 'chatbubble-outline', color, label: 'Received', bold: false };
 }
 
-function ChatRowView({ row, me }: { row: ChatRow; me: string }) {
+function ChatRowView({ row, me, pinned, muted, onMenu }: {
+  row: ChatRow;
+  me: string;
+  pinned: boolean;
+  muted: boolean;
+  onMenu: () => void;
+}) {
   const status = describe(row, me);
   return (
     <Pressable
       onPress={() => router.push(`/chat/${row.friend.id}`)}
+      onLongPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onMenu();
+      }}
+      accessibilityHint="Hold for options"
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <Avatar path={row.friend.avatar_path} name={row.friend.display_name || row.friend.username} size={52} />
       <View style={styles.rowText}>
-        <Text style={styles.name} numberOfLines={1}>
-          {row.friend.display_name || row.friend.username}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, styles.nameText]} numberOfLines={1}>
+            {row.friend.display_name || row.friend.username}
+          </Text>
+          {pinned ? <Ionicons name="pin" size={14} color={colors.textMuted} /> : null}
+          {muted ? <Ionicons name="notifications-off" size={14} color={colors.textMuted} /> : null}
+        </View>
         <View style={styles.status}>
           <Ionicons name={status.icon} size={14} color={status.color} />
           <Text style={[styles.statusText, status.bold && { color: status.color, fontWeight: '900' }]}>
@@ -347,6 +454,14 @@ const styles = StyleSheet.create({
     ...font.body,
     fontSize: 17,
     fontWeight: '800',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nameText: {
+    flexShrink: 1,
   },
   status: {
     flexDirection: 'row',

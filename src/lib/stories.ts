@@ -1,4 +1,5 @@
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
+import { fetchHiddenStoryAuthors } from './friendSettings';
 import { supabase } from './supabase';
 import type { Audience, Profile, Story } from './types';
 
@@ -82,14 +83,17 @@ function groupIntoRings(stories: StoryWithAuthor[], seen: Set<string>): StoryRin
 
 // For the Stories page: your own ring, then friends (new stories first).
 export async function fetchStoryRings(me: string): Promise<{ mine: StoryRing | null; friends: StoryRing[] }> {
-  const stories = await fetchVisibleStories();
+  const [stories, hidden] = await Promise.all([
+    fetchVisibleStories(),
+    fetchHiddenStoryAuthors(me).catch(() => new Set<string>()),
+  ]);
   const seen = await fetchSeenIds(
     me,
     stories.filter((s) => s.user_id !== me).map((s) => s.id),
   );
   const rings = groupIntoRings(stories, seen);
   const friends = rings
-    .filter((ring) => ring.author.id !== me)
+    .filter((ring) => ring.author.id !== me && !hidden.has(ring.author.id))
     .sort((a, b) => Number(a.allSeen) - Number(b.allSeen) || b.latestAt.localeCompare(a.latestAt));
   return { mine: rings.find((ring) => ring.author.id === me) ?? null, friends };
 }

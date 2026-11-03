@@ -750,3 +750,27 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 4. **Log in** now has one box: **Email or username**. Type the username (with or without @) and the password.
    Email accounts can log in with their username too. A wrong password says "Wrong username or password".
 5. After 8 wrong passwords for the same username in 15 minutes it asks you to wait 15 minutes.
+
+## Step 51 – The real logo 👀✨
+
+Needs the **new downloads** (Android APK / TestFlight build) for the icon and loading screen; the in-app parts
+arrive with the normal update.
+1. **Home screen icon:** the googly eyes with the sparkle on the pink→purple square (iPhone), or inside the
+   phone's circle/squircle (Android). Android "themed icons" show white eyes.
+2. **Opening the app:** the loading screen shows the rounded icon tile with "peekab👀" under it.
+3. **Home page:** the "peekab👀" wordmark sits in the top bar instead of the word Peekaboo (navy letters in
+   light mode, white in dark mode).
+4. **Welcome screen** (logged out): the eyes bob up and down above the wordmark, on the logo's colours.
+5. **Android notifications:** the small icon in the status bar is the white eyes.
+
+## Step 52 – Hold down a chat 📌🔕
+
+1. **Chat** → press and hold a friend's row → a menu for that friend: **📌 Pin chat to top**, **🔕 Mute
+   notifications**, **🙈 Hide their stories**, **⭐ Add to close friends**, **👤 See profile**, **🚫 Block**.
+2. **Pin** → the chat jumps to the top of the list and shows a small 📌. Hold again → **Unpin**.
+3. **Mute** → a 🔕 shows next to their name, and their messages, peeks and screenshot notices no longer send
+   you a notification (the chat and the red number still update). Hold again → **Unmute**. Your messages to
+   them still notify them as usual.
+4. **Hide their stories** → their circle disappears from the story row on Home (their profile still shows the
+   story). Hold again → **Show their stories again**.
+5. **Close friends** toggles the same list as Settings → Close friends.

@@ -35,7 +35,7 @@
         {
           "backgroundColor": "#0B0B10",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 96
+          "imageWidth": 220
         }
       ],
       [
@@ -64,7 +64,8 @@
       [
         "expo-notifications",
         {
-          "color": "#FF4F9A"
+          "color": "#FF4F9A",
+          "icon": "./assets/images/notification-icon.png"
         }
       ],
       "expo-video",

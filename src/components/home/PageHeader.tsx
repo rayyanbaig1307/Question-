@@ -4,12 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { IconButton } from '@/components/IconButton';
+import { Wordmark } from '@/components/Wordmark';
 import { useMe } from '@/lib/auth';
 import { colors, font, space } from '@/theme';
 
-// Top bar for the Chat and Home pages: a camera button on the left, a title, and your picture (→ profile)
-// on the right – so your profile is always one tap away.
-export function PageHeader({ title, onCamera }: { title: string; onCamera: () => void }) {
+// Top bar for the Chat and Home pages: a camera button on the left, a title (or the Peekaboo logo), and your
+// picture (→ profile) on the right – so your profile is always one tap away.
+export function PageHeader({ title, logo = false, onCamera }: { title?: string; logo?: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const insets = useSafeAreaInsets();
 
@@ -25,7 +26,13 @@ export function PageHeader({ title, onCamera }: { title: string; onCamera: () =>
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
       <View style={styles.side}>{camera}</View>
-      <Text style={styles.title}>{title}</Text>
+      {logo ? (
+        <View style={styles.logo}>
+          <Wordmark height={30} />
+        </View>
+      ) : (
+        <Text style={styles.title}>{title}</Text>
+      )}
       <View style={[styles.side, styles.right]}>{me}</View>
     </View>
   );
@@ -50,6 +57,11 @@ const styles = StyleSheet.create({
     ...font.title,
     flex: 1,
     textAlign: 'center',
+    paddingTop: space.sm,
+  },
+  logo: {
+    flex: 1,
+    alignItems: 'center',
     paddingTop: space.sm,
   },
 });

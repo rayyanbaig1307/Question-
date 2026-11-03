@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
@@ -10,9 +11,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import logoEyes from '../../assets/images/logo-eyes.png';
 import { Button } from '@/components/Button';
 import { SafeScreen } from '@/components/SafeEdge';
-import { colors, font, space } from '@/theme';
+import { Wordmark } from '@/components/Wordmark';
+import { font, space } from '@/theme';
+
+// The same pink → purple as the app icon.
+const BRAND = ['#FE59A5', '#E469C7', '#8650DB'] as const;
 
 export default function Welcome() {
   const bob = useSharedValue(0);
@@ -26,11 +32,13 @@ export default function Welcome() {
   }));
 
   return (
-    <LinearGradient colors={[colors.purple, colors.pink, colors.orange]} style={styles.fill}>
+    <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
       <SafeScreen style={styles.fill}>
         <View style={styles.hero}>
-          <Animated.Text style={[styles.mascot, mascotStyle]}>👀</Animated.Text>
-          <Text style={styles.title}>Peekaboo</Text>
+          <Animated.View style={mascotStyle}>
+            <Image source={logoEyes} style={styles.mascot} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
+          </Animated.View>
+          <Wordmark height={54} onDark />
           <Text style={styles.tagline}>Peek it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
         </View>
         <View style={styles.buttons}>
@@ -59,15 +67,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
   },
   mascot: {
-    fontSize: 96,
-  },
-  title: {
-    ...font.hero,
-    color: colors.white,
-    fontSize: 52,
-    textShadowColor: 'rgba(0,0,0,0.25)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
+    width: 190,
+    height: 152,
+    marginBottom: space.sm,
   },
   tagline: {
     ...font.body,
