@@ -79,6 +79,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
   const isHome = !sendTo && !dare && !drop && !guess && !forfeit;
+  // Lenses (googly, Glam, Glow, Pup) work on the home camera and on the camera inside a chat.
+  const lensesHere = isHome || (!!sendTo && !dare && !drop && !guess && !forfeit);
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
@@ -112,11 +114,11 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
 
   // A face lens is on: the live camera with a drawing on every face (instead of the normal camera).
   const faceLook: FaceLook | null =
-    isHome && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'pup') ? homeMode : null;
+    lensesHere && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'pup') ? homeMode : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
   // Glow: a warm glow on the live camera, and the photo opens with the Glow filter on.
-  const glowOn = isHome && homeMode === 'glow';
+  const glowOn = lensesHere && homeMode === 'glow';
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
@@ -348,6 +350,9 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             onChange={changeMode}
             dots={{ dare: dareDone === false }}
           />
+        ) : lensesHere ? (
+          // In a chat: just the lenses.
+          <ModeDial mode={homeMode} onChange={changeMode} lensesOnly />
         ) : null}
         {recording ? (
           <View style={styles.recordTrack} pointerEvents="none">
@@ -369,7 +374,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             pressScale={0.82}
             style={[
               styles.shutter,
-              isHome && { borderColor: autoDrop ? MODE_RING.drop : MODE_RING[homeMode] },
+              lensesHere && { borderColor: autoDrop ? MODE_RING.drop : MODE_RING[homeMode] },
               recording && styles.shutterRecording,
             ]}>
             <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />

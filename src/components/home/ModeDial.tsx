@@ -37,7 +37,6 @@ export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; l
 ];
 
 // Everything on the row, including the empty spot for the plain camera at the start.
-const SLOTS: CameraMode[] = ['photo', ...CAMERA_MODES.map((item) => item.key)];
 
 // Every spot on the row is this wide, so the row snaps one spot at a time and the chosen one lands dead centre.
 const SLOT_WIDTH = 76;
@@ -47,11 +46,17 @@ const BUBBLE_ACTIVE = 54;
 // The row of round mode bubbles right above the shutter, like lenses on other camera apps.
 // Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
 // A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
-export function ModeDial({ mode, onChange, dots }: {
+// The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat.
+export const LENS_MODES: CameraMode[] = ['googly', 'makeup', 'glow', 'pup'];
+
+export function ModeDial({ mode, onChange, dots, lensesOnly = false }: {
   mode: CameraMode;
   onChange: (mode: CameraMode) => void;
   dots?: Partial<Record<CameraMode, boolean>>;
+  lensesOnly?: boolean;
 }) {
+  const modes = lensesOnly ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key)) : CAMERA_MODES;
+  const SLOTS: CameraMode[] = ['photo', ...modes.map((item) => item.key)];
   // The row stretches across the whole screen, so "the middle" is the middle of the screen – right over the shutter.
   const { width } = useWindowDimensions();
   const scroll = useRef<ScrollViewInstance>(null);
@@ -100,7 +105,7 @@ export function ModeDial({ mode, onChange, dots }: {
       style={[styles.dial, { width }]}>
       {/* The empty spot: plain camera, nothing to see */}
       <Pressable style={styles.slot} onPress={() => pick('photo')} accessibilityRole="tab" accessibilityLabel="Plain camera" />
-      {CAMERA_MODES.map((item) => {
+      {modes.map((item) => {
         const active = item.key === mode;
         return (
           <Pressable
