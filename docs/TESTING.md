@@ -362,7 +362,7 @@ Where it works:
 
 ## Step 20 – Videos 🎥
 
-1. On the camera, **hold** the shutter: it turns red and a red bar fills up – you're recording (up to 10 seconds).
+1. On the camera, **hold** the shutter: it turns red and a red bar fills up – you're recording (up to 30 seconds). With ⚡ on, the back light stays on the whole video; with the selfie camera a bright ring lights up the screen edges. Works with every lens too (googly eyes and the pup are added as stickers).
    Let go to stop. (The first time, allow the microphone – then hold again.) A quick tap still takes a photo.
 2. The video plays in the editor. Add text/stickers if you like → **Send to** → pick My Story, a post, friends
    (as a peek), today's dare or your drop.
@@ -371,7 +371,7 @@ Where it works:
 4. **Stories:** a video story plays for its full length, then moves on.
 5. **Peeks:** a video peek plays once (and can be replayed once / saved, like photo peeks).
 6. **Profile grid:** videos show a ▶ in the corner.
-7. You can also pick a video (10 seconds or less) from your camera roll with the 🖼️ button.
+7. You can also pick a video (30 seconds or less) from your camera roll with the 🖼️ button.
 
 ## Step 21 – Comments, replies and comment likes 💬
 

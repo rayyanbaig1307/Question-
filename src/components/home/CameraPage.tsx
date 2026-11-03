@@ -40,7 +40,7 @@ const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_L
   : null;
 
 // Videos can be up to this long.
-const MAX_VIDEO_SECONDS = 10;
+const MAX_VIDEO_SECONDS = 30;
 
 // The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
 const MODE_RING: Record<CameraMode, string> = {
@@ -108,7 +108,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
 
-  // Videos: hold the shutter to record (up to 10 seconds). The camera switches to video while you hold.
+  // Videos: hold the shutter to record (up to 30 seconds). The camera switches to video while you hold.
   const [mic, requestMic] = useMicrophonePermissions();
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recording, setRecording] = useState(false);
@@ -198,7 +198,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     });
 
   async function startRecording() {
-    if (!cameraRef.current || busy || recording) return;
+    if (busy || recording) return;
+    if (lensOn ? !lensRef.current : !cameraRef.current) return;
     // First time: ask for the microphone (so videos have sound), then you hold again.
     if (!mic?.granted && mic?.canAskAgain !== false) {
       await requestMic();
@@ -210,6 +211,24 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     setRecording(true);
     setMode('video');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // With a lens: record from the lens camera. Googly eyes and the pup go on the video as stickers.
+    if (lensOn && lensRef.current) {
+      try {
+        recordProgress.set(0);
+        recordProgress.set(withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000 + 700, easing: Easing.linear }));
+        const clip = await lensRef.current.record(MAX_VIDEO_SECONDS);
+        openEditor(clip.uri, 'cover', true, clip.items);
+      } catch (error) {
+        Alert.alert('Could not record', friendlyError(error));
+      } finally {
+        cancelAnimation(recordProgress);
+        recordProgress.set(0);
+        setRecording(false);
+        setMode('picture');
+        setBusy(false);
+      }
+      return;
+    }
     await waitForCamera();
     try {
       recordProgress.set(0);
@@ -237,7 +256,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     stopAsked.current = true;
     if (recording) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      cameraRef.current?.stopRecording();
+      if (lensOn) lensRef.current?.stop();
+      else cameraRef.current?.stopRecording();
     }
   }
 
@@ -312,12 +332,14 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
             style={StyleSheet.absoluteFill}
             facing={facing}
             zoom={camZoom}
+            // Flash during a video: the back camera's light stays on the whole time.
+            enableTorch={recording && flash === 'on' && facing === 'back'}
             // The selfie camera uses the screen as its flash instead (see takePhoto).
             flash={facing === 'back' ? flash : 'off'}
             mirror={facing === 'front'}
             mode={mode}
             mute={!(mic?.granted ?? false)}
-            // Small, quick-to-upload videos: 720p at a modest quality (about 3–4 MB for 10 seconds).
+            // Small, quick-to-upload videos: 720p at a modest quality (about 9–10 MB for 30 seconds).
             videoQuality="720p"
             videoBitrate={2_500_000}
             onCameraReady={() => cameraReady.current.splice(0).forEach((resolve) => resolve())}
@@ -344,6 +366,8 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
       {/* Glow: a soft warm wash over the live camera (the photo gets the real Glow filter in the editor). */}
       {glowOn ? <View style={styles.glow} pointerEvents="none" /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
+      {/* Flash during a selfie video: a bright ring light around the screen edges lights up your face. */}
+      {recording && flash === 'on' && facing === 'front' ? <View style={styles.ringLight} pointerEvents="none" /> : null}
 
       {/* Top: your picture on the left (with a count of new friend requests), flip and flash on the right */}
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
@@ -405,8 +429,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           {/* The big shutter button: tap for a photo, hold for a video. It squishes when you press it. */}
           <Bouncy
             onPress={takePhoto}
-            // The googly lens takes photos only.
-            onLongPress={lensOn ? undefined : startRecording}
+            onLongPress={startRecording}
             delayLongPress={250}
             onPressOut={stopRecording}
             disabled={!permission?.granted || (busy && !recording)}
@@ -553,6 +576,12 @@ const styles = StyleSheet.create({
   flash: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.white,
+  },
+  ringLight: {
+    ...StyleSheet.absoluteFill,
+    borderWidth: 48,
+    borderColor: 'rgba(255, 246, 236, 0.95)',
+    borderRadius: 48,
   },
   glow: {
     ...StyleSheet.absoluteFill,

@@ -31,6 +31,8 @@ import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
 
 const SECONDS = 10;
+// A video peek plays to its end (videos can be up to 30 seconds).
+const MAX_VIDEO_SECONDS = 30;
 
 // first = opening it for the first time, replay = your one replay, saved = saved in the chat (no time limit).
 type Mode = 'first' | 'replay' | 'saved';
@@ -121,7 +123,7 @@ export default function SnapViewer() {
   // length for a video (it starts once the video has loaded).
   const [videoSeconds, setVideoSeconds] = useState<number | null>(null);
   const isVideo = state.kind === 'showing' && state.video !== null;
-  const seconds = isVideo ? Math.min(SECONDS, Math.max(1, videoSeconds ?? SECONDS)) : SECONDS;
+  const seconds = isVideo ? Math.min(MAX_VIDEO_SECONDS, Math.max(1, videoSeconds ?? SECONDS)) : SECONDS;
   const timed = state.kind === 'showing' && !saved && (!isVideo || videoSeconds !== null);
   useEffect(() => {
     if (!timed) return;
