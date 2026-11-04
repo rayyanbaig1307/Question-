@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadEdge, query, request } from './edgeHarness.mjs';
+import { loadLibrary } from '../unit/libHarness.mjs';
 
 function deletionService(overrides = {}) {
   const list = vi.fn(async () => ({ data: [], error: null }));
@@ -291,5 +292,76 @@ describe('username-auth real handler', () => {
     const missing = await handler(request({ action: 'signin', username: 'nobody', password: 'wrong12345' }));
     expect(wrong.status).toBe(missing.status);
     expect(await wrong.json()).toEqual(await missing.json());
+  });
+});
+
+// OPEN-01: names chosen at username sign-up go through the same word filter before any account is made.
+// The fake database answers with the app's own filter; tests/unit/word-filter-parity.test.mjs proves the real
+// database function gives the same answers.
+describe('username-auth sign-up word filter', () => {
+  const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
+  function filteredService() {
+    const service = usernameService();
+    const { findBlockedWord } = loadLibrary('cleanWords');
+    const limiter = service.rpc.getMockImplementation();
+    service.rpc.mockImplementation(async (fn, args) => {
+      if (fn !== 'public_name_allowed') return limiter(fn, args);
+      return { data: !findBlockedWord(args.username, 'name') && !findBlockedWord(args.display_name, 'name'), error: null };
+    });
+    service.admin.from.mockReturnValue(query({ data: null, error: null }));
+    service.login.mockResolvedValue({ data: { session: { access_token: 'test-access', refresh_token: 'test-refresh' } }, error: null });
+    return service;
+  }
+  const signup = (handler, extra) => handler(request({ action: 'signup', password: 'test12345', ...extra }));
+  const reserved = (rpc) => rpc.mock.calls.filter(([fn]) => fn === 'reserve_username_auth_attempt');
+
+  it.each(['f.u.c.k', 'fuckboy', 'n1gg3r', 'sh1t_head'])('rejects the blocked username %s with a clear message and no account', async (username) => {
+    const { admin, login, rpc, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username, display_name: 'Alex' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: NAME_NOT_ALLOWED });
+    expect(createUser).not.toHaveBeenCalled();
+    // A refused name doesn't use up one of the sign-up tries.
+    expect(reserved(rpc)).toHaveLength(0);
+  });
+
+  it.each(['big dick', 'F U C K', 'ｆｕｃｋ', 'Total Bitch', 'n1gg3r'])('rejects the blocked display name %s', async (display_name) => {
+    const { admin, login, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: NAME_NOT_ALLOWED });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['Moby Dick', 'Alex Cock', 'Scunthorpe', 'Nazir'])('lets the real name %s through', async (display_name) => {
+    const { admin, login, rpc, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name });
+    expect(response.status).toBe(200);
+    expect(createUser.mock.calls[0][0].user_metadata.display_name).toBe(display_name);
+    expect(rpc).toHaveBeenCalledWith('public_name_allowed', { username: 'alex', display_name });
+  });
+
+  it('checks the display name that will really be saved (the username when it is left empty)', async () => {
+    const { admin, login, rpc } = filteredService();
+    await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name: '   ' });
+    expect(rpc).toHaveBeenCalledWith('public_name_allowed', { username: 'alex', display_name: 'alex' });
+  });
+
+  it.each([
+    ['the check fails', { data: null, error: { message: 'offline' } }],
+    ['the check gives a strange answer', { data: 'yes', error: null }],
+  ])('makes no account when %s', async (_why, answer) => {
+    const { admin, login, rpc, createUser } = filteredService();
+    const limiter = rpc.getMockImplementation();
+    rpc.mockImplementation(async (fn, args) => (fn === 'public_name_allowed' ? answer : limiter(fn, args)));
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name: 'Alex' });
+    expect(response.status).toBe(503);
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('does not run the name check when logging in', async () => {
+    const { admin, login, rpc } = filteredService();
+    await loadEdge('username-auth', admin, login)(request({ action: 'signin', username: 'alex', password: 'test12345' }));
+    expect(rpc.mock.calls.filter(([fn]) => fn === 'public_name_allowed')).toHaveLength(0);
   });
 });

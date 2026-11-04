@@ -19,13 +19,15 @@ function appleService(sub = 'apple-A') {
 }
 
 it('deleting account A cannot revoke a code belonging to Apple identity B', async () => {
-  const { admin, options, fetch, deleteUser, remove } = appleService('apple-B');
+  const { admin, options, fetch, deleteUser } = appleService('apple-B');
   const response = await loadEdge('delete-account', admin, undefined, options)(request({ apple_code: 'code-for-B' }, { token: 'valid-A' }));
-  expect(response.status).toBe(409);
+  // B's Apple login is never cancelled: only the code swap reaches Apple, never /revoke.
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][0]).toBe('https://appleid.apple.com/auth/token');
-  expect(deleteUser).not.toHaveBeenCalled();
-  expect(remove).not.toHaveBeenCalled();
+  // The Apple step is skipped, not a hard stop (a real owner on a phone with another Apple ID must
+  // still be able to delete). Only the verified caller A is ever deleted.
+  expect(response.status).toBe(200);
+  expect(deleteUser).toHaveBeenCalledExactlyOnceWith('user-A');
 });
 
 it('a matching Apple code is revoked without trusting a subject supplied in the body', async () => {
@@ -41,9 +43,11 @@ it('a password-only user cannot submit another Apple account’s code for revoca
   const { admin, options, fetch, deleteUser } = appleService();
   admin.auth.getUser = async () => ({ data: { user: { id: 'password-user', identities: [{ provider: 'email' }], app_metadata: { provider: 'email' } } }, error: null });
   const response = await loadEdge('delete-account', admin, undefined, options)(request({ apple_code: 'someone-elses-code' }, { token: 'valid' }));
-  expect(response.status).toBe(400);
+  // The code never reaches Apple (no swap, no revoke). Like every other Apple problem, this only skips
+  // the Apple step: the verified caller's own account is still deleted, and nobody else's.
   expect(fetch).not.toHaveBeenCalled();
-  expect(deleteUser).not.toHaveBeenCalled();
+  expect(response.status).toBe(200);
+  expect(deleteUser).toHaveBeenCalledExactlyOnceWith('password-user');
 });
 
 it('an Apple network stall has a deadline and does not prevent deleting the caller’s account forever', async () => {

@@ -1,6 +1,14 @@
 // Delete account: permanently deletes the person calling it – their photo files, then their login.
 // Deleting the login also removes their profile, posts, stories, chats, friends, likes and comments
 // (the database's "on delete cascade" links do that part).
+//
+// Release order: deploy this function just BEFORE the database migrations. Until they finish it
+// safely says "try again" and changes nothing. The older live version, if left running after the
+// migrations, can leave a deleted person's photo files behind in Storage. After the release, run this
+// read-only check once; it lists media files whose owner no longer exists (it only finds files whose
+// owner_id is set):
+//   select o.name from storage.objects o where o.bucket_id = 'media' and o.owner_id is not null
+//     and not exists (select 1 from auth.users u where u.id::text = o.owner_id);
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { decodeJwt, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 
@@ -60,12 +68,11 @@ async function mysteryFiles(userId: string): Promise<string[]> {
 // token and tell Apple to cancel it. Needs these Edge Function secrets (Supabase → Edge Functions → Secrets):
 //   APPLE_KEY_ID       – the Key ID of a "Sign in with Apple" key (Apple Developer → Keys)
 //   APPLE_PRIVATE_KEY  – the text inside that key's .p8 file
-// Without them (or if Apple says no) the account is still deleted – this part is best effort.
+// Without them (or if Apple says no, the code is for a different Apple ID, or the account has no Apple
+// login) the account is still deleted – this part is best effort.
 // ---------------------------------------------------------------------------
 const APPLE_TEAM_ID = Deno.env.get('APPLE_TEAM_ID') ?? 'TMFHJ8D3H5';
 const APPLE_CLIENT_ID = Deno.env.get('APPLE_CLIENT_ID') ?? 'com.rbaig18.peekaboo';
-
-class AppleIdentityMismatch extends Error {}
 
 async function readDeleteBody(req: Request): Promise<Record<string, unknown> | Response> {
   const reader = req.body?.getReader();
@@ -135,8 +142,19 @@ async function disconnectFromApple(code: string, allowedSubjects: string[]): Pro
   }
   // This JWT came directly from Apple's HTTPS token endpoint. Compare its subject to the identities
   // Supabase verified for the caller, never to user-editable profile metadata or request fields.
-  if (typeof body.id_token !== 'string' || !allowedSubjects.includes(String(decodeJwt(body.id_token).sub ?? ''))) {
-    throw new AppleIdentityMismatch('The Apple confirmation belongs to another account');
+  // If the code is for a different Apple ID, we never cancel it: it could be someone else's Apple login.
+  // That also happens to real owners (a phone signed into another Apple ID), so we just skip this part
+  // and still delete the caller's own account – like any other Apple problem here.
+  // Only plain, non-empty text counts as an Apple ID. A number, a list or anything else is never
+  // turned into text to make it match – it is treated as "a different Apple ID".
+  let subject = '';
+  try {
+    const sub = typeof body.id_token === 'string' ? decodeJwt(body.id_token).sub : undefined;
+    subject = typeof sub === 'string' ? sub : '';
+  } catch { subject = ''; }
+  if (!subject || !allowedSubjects.includes(subject)) {
+    console.warn('The Apple confirmation is for a different Apple ID – skipping the Apple disconnect');
+    return;
   }
   const { response: revoked } = await post('revoke', {
     client_id: APPLE_CLIENT_ID,
@@ -158,7 +176,7 @@ Deno.serve(async (req) => {
     if (whoError || !who.user) return json({ error: 'Not logged in' }, 401);
     const userId = who.user.id;
 
-    // Apple confirmation is handled before any files or account records are removed.
+    // Check the request first, before anything is changed.
     const body = await readDeleteBody(req);
     if (body instanceof Response) return body;
     if (body.expected_user_id !== undefined && typeof body.expected_user_id !== 'string') {
@@ -169,23 +187,38 @@ Deno.serve(async (req) => {
     }
     const appleCode = body.apple_code;
     if (appleCode !== undefined && (typeof appleCode !== 'string' || appleCode.length > 2048)) return json({ error: 'Check the Apple confirmation and try again' }, typeof appleCode === 'string' ? 413 : 400);
+
+    // Intentional account deletion takes precedence over a temporary cleanup-retention claim.
+    // This is also the first step that needs the new database. If this function is deployed before the
+    // database migrations, it stops here with "try again" and changes nothing – not even the Apple link.
+    const { error: deletionScopeError } = await admin.rpc('begin_account_media_deletion', { account: userId });
+    if (deletionScopeError) throw deletionScopeError;
+    // Their Guess Who files (kept in a shared "mystery" folder so the file names don't give away who
+    // posted them). Loaded before the Apple step, so a failure here also leaves the Apple link alone.
+    const sharedFolderPaths = await mysteryFiles(userId);
+
+    // Apple disconnect: only once the deletion can really go ahead, and before any files or account
+    // records are removed.
     if (typeof appleCode === 'string' && appleCode) {
-      const subjects = (who.user.identities ?? []).filter((identity) => identity.provider === 'apple').map((identity) => identity.identity_data?.sub ?? identity.id).filter((subject): subject is string => typeof subject === 'string' && subject.length > 0);
-      if (subjects.length === 0) return json({ error: 'This account has no Apple login to disconnect' }, 400);
-      try { await disconnectFromApple(appleCode, subjects); }
-      catch (error) {
-        if (error instanceof AppleIdentityMismatch) return json({ error: 'Choose the same Apple account you use for Peekaboo' }, 409);
-        console.warn('Apple disconnect could not finish', error);
+      // The Apple IDs Supabase verified for this person. If the saved Apple ID is missing or empty,
+      // use the login's own id instead (Supabase keeps the Apple ID there too).
+      const textOrEmpty = (value: unknown) => (typeof value === 'string' ? value : '');
+      const subjects = (who.user.identities ?? [])
+        .filter((identity) => identity.provider === 'apple')
+        .map((identity) => textOrEmpty(identity.identity_data?.sub) || textOrEmpty(identity.id))
+        .filter((subject) => subject.length > 0);
+      if (subjects.length === 0) {
+        // No Apple login on this account, so there is nothing of theirs to disconnect. Never send the
+        // code to Apple (it could be someone else's) – just skip this part and still delete the account.
+        console.warn('This account has no Apple login – skipping the Apple disconnect');
+      } else {
+        // Best effort: whatever Apple says, carry on deleting the logged-in person's own account.
+        try { await disconnectFromApple(appleCode, subjects); }
+        catch (error) { console.warn('Apple disconnect could not finish', error); }
       }
     }
 
-    // Intentional account deletion takes precedence over a temporary cleanup-retention claim.
-    const { error: deletionScopeError } = await admin.rpc('begin_account_media_deletion', { account: userId });
-    if (deletionScopeError) throw deletionScopeError;
-
-    // 1. Their photo files – in their own folders, plus their Guess Who files (kept in a shared "mystery"
-    // folder so the file names don't give away who posted them).
-    const sharedFolderPaths = await mysteryFiles(userId);
+    // 1. Their photo files – in their own folders, plus their Guess Who files from above.
     for (const bucket of ['media', 'avatars']) {
       const paths = [...(await listAll(bucket, userId)), ...(bucket === 'media' ? sharedFolderPaths : [])];
       for (let i = 0; i < paths.length; i += 100) {
