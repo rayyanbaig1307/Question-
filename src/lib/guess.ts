@@ -84,5 +84,5 @@ export async function blockMysteryPoster(postId: string): Promise<void> {
 export async function deleteMystery(post: MysteryPost): Promise<void> {
   const { error } = await supabase.from('mystery_posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(post));
+  await deleteMedia(mediaFiles(post)).catch((cleanupError) => console.warn('Guess Who removed; its files could not be cleaned up yet', cleanupError));
 }

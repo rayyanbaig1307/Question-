@@ -1,5 +1,12 @@
 # How to test each feature on your phone
 
+The automated local-only suite and commands are in [tests/README.md](../tests/README.md).
+Use a dedicated test project for this manual checklist. The automated suite never
+needs a real Supabase URL, account or key. Its results do not replace phone checks:
+camera, microphone, gestures, native playback, push and real Apple/Google login
+still need a test build on a device. Use the new social sign-in/setup flow where
+available; the legacy signup steps below apply to fallback builds.
+
 Before anything: do the one-time setup in the [README](../README.md), then run `npx expo start`
 and scan the QR code with your phone (iPhone: Camera app, Android: Expo Go).
 

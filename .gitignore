@@ -49,3 +49,8 @@ example
 .eas/.env/
 .env.asc
 *.p8
+
+# Local QA builds, evidence, and temporary service state
+.qa/
+.supabase/
+supabase/.temp/

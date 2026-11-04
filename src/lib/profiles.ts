@@ -68,10 +68,15 @@ export async function updateMyProfile(
 // which only ever deletes the person who's logged in.
 // Accounts made with Apple: Apple asks once more (Face ID), so the server can also disconnect Peekaboo from
 // the person's Apple ID – Apple's rules require that.
-export async function deleteMyAccount(): Promise<void> {
-  const { data: current } = await supabase.auth.getSession();
+export async function deleteMyAccount(expectedUserId?: string): Promise<void> {
+  const { data: current, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!current.session) throw new Error('Please log in again before deleting your account.');
+  const deletingUser = expectedUserId ?? current.session.user.id;
+  if (current.session.user.id !== deletingUser) throw new Error('The signed-in account changed. Open Settings and try again.');
   let appleCode: string | null = null;
-  if (current.session?.user.app_metadata?.provider === 'apple') {
+  if (current.session.user.app_metadata?.provider === 'apple' ||
+      current.session.user.identities?.some((identity) => identity.provider === 'apple')) {
     try {
       appleCode = await appleCodeForDeleting();
     } catch (appleError) {
@@ -79,9 +84,12 @@ export async function deleteMyAccount(): Promise<void> {
       throw appleError;
     }
   }
+  const { data: latest, error: latestError } = await supabase.auth.getSession();
+  if (latestError) throw latestError;
+  if (latest.session?.user.id !== deletingUser) throw new Error('The signed-in account changed. Open Settings and try again.');
   const { data, error } = await supabase.functions.invoke('delete-account', {
     method: 'POST',
-    body: appleCode ? { apple_code: appleCode } : {},
+    body: { expected_user_id: deletingUser, ...(appleCode ? { apple_code: appleCode } : {}) },
   });
   if (error) throw error;
   if (!data?.deleted) throw new Error(data?.error ?? 'Could not delete your account');

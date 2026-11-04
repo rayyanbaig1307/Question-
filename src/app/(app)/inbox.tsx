@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -173,10 +173,13 @@ function HitUpRow({ hitUp, onDone }: { hitUp: HitUp; onDone: () => void }) {
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
   const [busy, setBusy] = useState<'back' | 'ignore' | null>(null);
+  const responding = useRef(false);
   const sender = hitUp.sender;
   const name = sender.display_name || sender.username;
 
   async function respond(hitBack: boolean) {
+    if (responding.current) return;
+    responding.current = true;
     setBusy(hitBack ? 'back' : 'ignore');
     try {
       await respondToHitUp(hitUp.id, hitBack);
@@ -191,6 +194,7 @@ function HitUpRow({ hitUp, onDone }: { hitUp: HitUp; onDone: () => void }) {
       Alert.alert('Oops', friendlyError(error));
       onDone();
     } finally {
+      responding.current = false;
       setBusy(null);
     }
   }

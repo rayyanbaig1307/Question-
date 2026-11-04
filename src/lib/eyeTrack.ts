@@ -213,6 +213,22 @@ export function eyesAt(track: EyeTrack, ms: number): ({ x: number; y: number; sc
 // ---------------------------------------------------------------------------
 
 const KEYWORD = 'peekaboo-eyes';
+const MAX_TRACK_BYTES = 128 * 1024;
+
+// Sticker files come from other people. Check the whole note before the animation uses its numbers.
+function checkedTrack(value: unknown): EyeTrack | null {
+  if (!value || typeof value !== 'object') return null;
+  const track = value as Partial<EyeTrack>;
+  const dimension = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= 16384;
+  if (track.v !== 1 || !dimension(track.w) || !dimension(track.h) ||
+      typeof track.step !== 'number' || !Number.isFinite(track.step) || track.step <= 0 ||
+      track.sticker !== 'googly-eyes' || !Array.isArray(track.frames) ||
+      track.frames.length === 0 || track.frames.length > MAX_LOOKS + 1) return null;
+  const valid = track.frames.every((row) => Array.isArray(row) && row.length <= MAX_FACES &&
+    row.every((spot) => spot === 0 || (Array.isArray(spot) && spot.length === 4 &&
+      spot.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1_000_000) && spot[2] > 0)));
+  return valid ? track as EyeTrack : null;
+}
 
 // Adds the track to a PNG file and returns the new file.
 export async function addTrackToPng(pngUri: string, track: EyeTrack): Promise<string> {
@@ -256,15 +272,16 @@ async function loadTrack(uri: string): Promise<EyeTrack | null> {
   if (head.length < 41 || !isPng(head)) return null;
   const view = new DataView(head.buffer, head.byteOffset, head.byteLength);
   const length = view.getUint32(33);
+  if (length > MAX_TRACK_BYTES) return null;
   if (decodeAscii(head.subarray(37, 41)) !== 'tEXt') return null;
   // Is it our note? (The keyword comes first.)
   const keyEnd = 41 + KEYWORD.length;
   if (head.length > keyEnd && decodeAscii(head.subarray(41, keyEnd)) !== KEYWORD) return null;
   const body = head.length >= 41 + length ? head.subarray(41, 41 + length) : await fetchBytes(uri, 41, 41 + length - 1);
+  if (body.length !== length) return null;
   const text = decodeAscii(body);
   if (!text.startsWith(`${KEYWORD}\0`)) return null;
-  const track = JSON.parse(text.slice(KEYWORD.length + 1)) as EyeTrack;
-  return track?.v === 1 && Array.isArray(track.frames) && track.step > 0 ? track : null;
+  return checkedTrack(JSON.parse(text.slice(KEYWORD.length + 1)));
 }
 
 async function fetchBytes(url: string, from: number, to: number): Promise<Uint8Array> {

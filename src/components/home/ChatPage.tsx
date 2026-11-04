@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -58,6 +58,11 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
   const [links, setLinks] = useState<FriendLink[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const trimmed = query.trim().replace(/^@/, '');
   const searching = trimmed.length > 0;
 
@@ -152,12 +157,15 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
 
   // Hold down a chat: options for that friend.
   function openFriendMenu(friend: Profile) {
+    if (!active.current) return;
     const current = settings.get(friend.id);
     const name = friend.display_name || friend.username;
     const close = closeFriends.has(friend.id);
     const change = async (changes: Partial<Omit<FriendSettings, 'friend_id'>>, done: string) => {
+      if (!active.current) return;
       try {
         const saved = await saveFriendSettings(userId, friend.id, changes);
+        if (!active.current) return;
         setSettings((map) => new Map(map).set(friend.id, saved));
         showToast(done);
       } catch (error) {
@@ -190,8 +198,10 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
         {
           label: close ? '⭐ Remove from close friends' : '⭐ Add to close friends',
           onPress: async () => {
+            if (!active.current) return;
             try {
               await setCloseFriend(userId, friend.id, !close);
+              if (!active.current) return;
               setCloseFriends((set) => {
                 const next = new Set(set);
                 if (close) next.delete(friend.id);
@@ -215,8 +225,10 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
                 text: 'Clear',
                 style: 'destructive',
                 onPress: async () => {
+                  if (!active.current) return;
                   try {
                     await clearChat(friend.id);
+                    if (!active.current) return;
                     showToast('Chat cleared 🧹');
                     refresh();
                   } catch (error) {

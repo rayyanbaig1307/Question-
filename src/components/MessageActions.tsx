@@ -1,4 +1,5 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { SafeEdge } from '@/components/SafeEdge';
 import { REACTIONS } from '@/lib/reactions';
@@ -15,8 +16,28 @@ export function MessageActions({ visible, myReaction, onReact, actions, onClose 
   actions: MessageAction[];
   onClose: () => void;
 }) {
+  const pending = useRef<(() => void) | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function runPending() {
+    const action = pending.current;
+    pending.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    action?.();
+  }
+  function choose(action: () => void) {
+    if (pending.current) return;
+    pending.current = action;
+    onClose();
+    // iOS needs the old native menu gone before a report sheet or warning can open.
+    timer.current = setTimeout(runPending, Platform.OS === 'ios' ? 700 : 250);
+  }
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    pending.current = null;
+  }, []);
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={runPending}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close">
         <SafeEdge edge="bottom" style={styles.sheet}>
           <Pressable style={styles.inner}>
@@ -25,8 +46,7 @@ export function MessageActions({ visible, myReaction, onReact, actions, onClose 
                 <Pressable
                   key={emoji}
                   onPress={() => {
-                    onClose();
-                    onReact(emoji);
+                    choose(() => onReact(emoji));
                   }}
                   style={({ pressed }) => [styles.emojiButton, myReaction === emoji && styles.emojiMine, pressed && styles.pressed]}
                   accessibilityRole="button"
@@ -39,8 +59,7 @@ export function MessageActions({ visible, myReaction, onReact, actions, onClose 
               <Pressable
                 key={action.label}
                 onPress={() => {
-                  onClose();
-                  action.onPress();
+                  choose(action.onPress);
                 }}
                 style={({ pressed }) => [styles.action, pressed && styles.pressed]}
                 accessibilityRole="button">

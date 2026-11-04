@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+
 import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
@@ -58,7 +60,7 @@ export async function fetchPost(postId: string): Promise<PostWithAuthor | null> 
 export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(post));
+  await deleteMedia(mediaFiles(post)).catch((cleanupError) => console.warn('Post removed; its files could not be cleaned up yet', cleanupError));
 }
 
 // Change the caption of one of your own posts (after it's posted).
@@ -73,7 +75,8 @@ export async function postFromStory(userId: string, story: Story, caption: strin
   const copied: string[] = [];
   const copy = async (path: string | null) => {
     if (!path) return null;
-    const target = `${userId}/posts/${path.split('/').pop()}`;
+    const extension = path.match(/\.[a-z0-9]+$/i)?.[0] ?? '';
+    const target = `${userId}/posts/${randomUUID()}${extension}`;
     const { error } = await supabase.storage.from('media').copy(path, target);
     if (error) throw error;
     copied.push(target);

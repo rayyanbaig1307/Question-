@@ -1,0 +1,20 @@
+import { createHash } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+
+if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('This optional test runtime is configured for Windows x64.');
+const folder = new URL('../../.qa/tools/postgrest/', import.meta.url);
+await mkdir(folder, { recursive: true });
+const response = await fetch('https://github.com/PostgREST/postgrest/releases/download/v16.5/postgrest-v16.5-windows-x86-64.zip');
+if (!response.ok) throw new Error(`Could not download test runtime: ${response.status}`);
+const bytes = Buffer.from(await response.arrayBuffer());
+const hash = createHash('sha256').update(bytes).digest('hex');
+if (hash !== '17f595b0d8dd37473d0231417dea07c5ac9f791282ff5b017fae51ff29e5de2f') throw new Error('Test runtime checksum mismatch');
+const zip = new URL('postgrest.zip', folder);
+const script = new URL('extract.ps1', folder);
+await writeFile(zip, bytes);
+await writeFile(script, `param([string]$Archive,[string]$Target)\n$ErrorActionPreference='Stop'\nExpand-Archive -LiteralPath $Archive -DestinationPath $Target -Force\n`);
+const result = spawnSync('powershell.exe', ['-NoProfile', '-File', fileURLToPath(script), '-Archive', fileURLToPath(zip), '-Target', fileURLToPath(folder)], { windowsHide: true, stdio: 'inherit' });
+if (result.status !== 0) throw new Error('Could not extract test runtime');
+console.log('Verified PostgREST 16.5 test runtime is ready in .qa/tools/postgrest.');

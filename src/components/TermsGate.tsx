@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,8 +17,14 @@ import { colors, font, radius, space } from '@/theme';
 export function TermsGate() {
   const { session, userId, signOut } = useAuth();
   const insets = useSafeAreaInsets();
-  const [needed, setNeeded] = useState(false);
+  const [needed, setNeeded] = useState(true);
+  const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   // Reading one of the documents (shown right here – this page sits on top of everything else).
   const [reading, setReading] = useState<LegalPage | null>(null);
   const agreedAtSignUp = session?.user.user_metadata?.terms_version === TERMS_VERSION;
@@ -28,28 +34,47 @@ export function TermsGate() {
     let cancelled = false;
     hasAccepted(userId, 'terms', TERMS_VERSION)
       .then(async (accepted) => {
-        if (accepted || cancelled) return;
+        if (cancelled) return;
+        if (accepted) {
+          setNeeded(false);
+          return;
+        }
         if (agreedAtSignUp) {
           await acceptLegal('terms', TERMS_VERSION);
+          if (!cancelled) setNeeded(false);
           return;
         }
         setNeeded(true);
       })
-      .catch((error) => console.warn('Could not check the Terms', error));
+      .catch((error) => console.warn('Could not check the Terms', error))
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
     return () => {
       cancelled = true;
     };
   }, [userId, agreedAtSignUp]);
 
   async function agree() {
+    if (!active.current) return;
     setBusy(true);
     try {
       await acceptLegal('terms', TERMS_VERSION);
+      if (!active.current) return;
       setNeeded(false);
     } catch (error) {
-      Alert.alert('Could not save', friendlyError(error));
+      if (active.current) Alert.alert('Could not save', friendlyError(error));
     } finally {
-      setBusy(false);
+      if (active.current) setBusy(false);
+    }
+  }
+
+  async function logOut() {
+    if (!active.current) return;
+    try {
+      await signOut(userId ?? undefined);
+    } catch (error) {
+      if (active.current) Alert.alert('Could not log out', friendlyError(error));
     }
   }
 
@@ -110,8 +135,8 @@ export function TermsGate() {
           <Text style={styles.small}>If you&apos;re under 18, show these to a parent or guardian – they need to agree too.</Text>
         </ScrollView>
         <View style={styles.buttons}>
-          <Button title="I agree" icon="checkmark-circle" loading={busy} onPress={agree} />
-          <Button title="Log out" variant="plain" onPress={() => signOut()} />
+          <Button title="I agree" icon="checkmark-circle" loading={busy || checking} onPress={agree} />
+          <Button title="Log out" variant="plain" onPress={logOut} />
         </View>
           </>
         )}

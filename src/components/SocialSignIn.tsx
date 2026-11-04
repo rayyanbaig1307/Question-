@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -21,8 +21,11 @@ export const SOCIAL_SIGN_IN_AVAILABLE = APPLE_SIGN_IN_AVAILABLE || GOOGLE_SIGN_I
 export function SocialSignInButtons({ onDark = false }: { onDark?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signingIn = useRef(false);
 
   async function run(signIn: () => Promise<void>) {
+    if (signingIn.current) return;
+    signingIn.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -30,6 +33,7 @@ export function SocialSignInButtons({ onDark = false }: { onDark?: boolean }) {
     } catch (signInError) {
       if (!(signInError instanceof SignInCancelled)) setError(friendlyError(signInError));
     } finally {
+      signingIn.current = false;
       setBusy(false);
     }
   }

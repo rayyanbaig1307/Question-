@@ -52,7 +52,7 @@ export async function fetchKeeps(userId: string): Promise<Keep[]> {
 export async function deleteKeep(keep: Keep): Promise<void> {
   const { error } = await supabase.from('keeps').delete().eq('id', keep.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(keep));
+  await deleteMedia(mediaFiles(keep)).catch((cleanupError) => console.warn('Keep removed; its files could not be cleaned up yet', cleanupError));
 }
 
 // Downloads a keep's file to the phone (for saving to Photos or posting it again).

@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { unregisterPush } from './notifications';
 import { fetchProfile } from './profiles';
@@ -13,7 +13,7 @@ type AuthContextValue = {
   initializing: boolean;
   refreshProfile: () => Promise<void>;
   setProfile: (profile: Profile) => void;
-  signOut: () => Promise<void>;
+  signOut: (expectedUserId?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -23,17 +23,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const sessionUser = useRef<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let authChanged = false;
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      authChanged = true;
+      sessionUser.current = newSession?.user.id ?? null;
+      if (!cancelled) setSession(newSession);
+    });
     supabase.auth
       .getSession()
-      .then(({ data }) => setSession(data.session))
-      .finally(() => setInitializing(false));
+      .then(({ data, error }) => {
+        if (error) throw error;
+        // A logout or account change that happened while loading is newer than this saved login.
+        if (!cancelled && !authChanged) {
+          sessionUser.current = data.session?.user.id ?? null;
+          setSession(data.session);
+        }
+      })
+      .catch((error) => console.warn('Could not read your saved login', error))
+      .finally(() => { if (!cancelled) setInitializing(false); });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
-    return () => data.subscription.unsubscribe();
+    return () => { cancelled = true; listener.subscription.unsubscribe(); };
   }, []);
 
   const userId = session?.user.id ?? null;
@@ -61,10 +74,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (expectedUserId?: string) => {
+    const target = expectedUserId ?? sessionUser.current;
+    const checkAccount = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (!target || data.session?.user.id !== target || sessionUser.current !== target) {
+        throw new Error('The signed-in account changed. Open Settings and try again.');
+      }
+    };
+    await checkAccount();
     // Stop sending this account's notifications to this phone.
     await unregisterPush().catch(() => {});
-    await supabase.auth.signOut();
+    await checkAccount();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    // A newer login event must not be overwritten by this older operation finishing.
+    if (sessionUser.current !== null && sessionUser.current !== target) return;
+    sessionUser.current = null;
+    setSession(null);
     setProfile(null);
   }, []);
 

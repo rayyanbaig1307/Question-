@@ -1,0 +1,617 @@
+PEEKABOO — SECOND QA AND SECURITY REPORT
+4 November 2026
+
+RESULT
+
+The latest finished branch was tested, including its updated Android invitation
+link. I reproduced and fixed serious account, privacy, media-deletion and race
+bugs locally. One critical finding could delete the wrong signed-in account
+through an old native confirmation. High findings included private media leaks,
+account-switch state leaks, deletion of shared/evidence files, and login-limit
+bypasses. The detailed records below give reproduction steps, severity and fixes.
+Related findings overlap across frontend, API and database; they are not counted
+as separate bugs simply because several tests fail.
+
+Final result: 547 passing automated checks, 3 explicit browser skips.
+The final bounded HTTP load test performed 12,400 requests using invented
+accounts. No corrected automated check failed. This is substantial local QA,
+not a complete native release sign-off. I reviewed every screen and feature
+module, but could not physically exercise every phone button or hardware flow.
+
+Production was never connected to, read or changed. Nothing was pushed, deployed,
+published or migrated remotely. The included source and patch contain LOCAL fixes
+and runnable tests. Their security improvements are not live until reviewed and
+released. The earlier audit's fixes were absent upstream, so they were reproduced
+and ported again while preserving the new social-login and group-chat features.
+
+WHAT THE APP DOES AND HOW DATA MOVES
+
+Peekaboo is a camera-first social phone app. Friends can share profile posts,
+24-hour stories and disappearing peeks; send direct/group text, voice, media,
+replies and reactions; pin/search/hide messages; and receive Inbox activity.
+It includes daily dares, drops, chat dares, forfeits, Guess Who, hit ups, groups,
+close friends, private accounts, blocking/reporting, Keeps, profile songs and an
+optional friend map. A separate static website hosts help and legal pages.
+
+The frontend is Expo/React Native with TypeScript and Expo Router. Screens call
+feature modules in src/lib. Those modules mostly talk directly to Supabase:
+Auth verifies the session, Postgres stores content and relationships, row-level
+security (RLS) controls access, Storage holds files, and Realtime updates chats.
+Apple/Google sign-in gives Supabase a provider token. Older accounts use email
+or username/password. The app has no separate general-purpose application server.
+
+Three Edge Functions handle username authentication, account deletion and media
+cleanup. Trusted SQL functions handle social actions and security checks. Database
+triggers queue notifications; phone-local jobs schedule drop alerts. Apple supplies
+song search. Camera/gallery -> editor -> destination/audience -> file upload ->
+database write is the main sharing path. An authorized reader queries the row,
+requests a temporary private file link, then displays it. Avatar files are public.
+Files and database writes are separate operations, so rollback/retry behavior and
+partial failures matter. Already issued media links remain bearer links until
+their expiry; changing database permissions cannot revoke a copied URL instantly.
+
+SOURCE AND COVERAGE
+
+Branch: claude/mobile-social-app-expo-h090jm
+Audit began: b0dc637576cfd5cf5033538d2a8080fd1e99a9a7
+Final source: a9e5ddf88e785bd8378b2b7d9dcd7e341df439b1
+The only change between these commits was the Android APK invitation URL. It was
+included and verified with a fake share action. No real message was sent. Core
+database/API behavior was identical, and the final loaders target the final head.
+
+Read: CLAUDE.md, docs/HANDOFF.md and docs/TESTING.md first; then all 40 screen/layout
+files (38 screens), shared components, 47 library modules, 47 original migrations,
+three Edge Functions, scripts, configuration and generated/legal website content.
+Unchanged material was compared with the earlier full review. New source was read
+in full. The database has 39 public tables; all 39 have RLS. The added hardening
+migration is appended after existing migrations; historical migrations are intact.
+
+                                   Original code         Corrected code
+Database rules/feature checks       94 pass / 48 fail      142 pass / 0 fail
+Rendered screen/component checks   42 pass / 47 fail      89 pass / 0 fail
+API/auth/media/library checks       83 pass / 105 fail     188 pass / 0 fail
+Real PostgreSQL concurrency         1 pass / 15 fail       17 pass / 0 fail
+Real HTTP/JWT/RLS checks             44 pass / 7 fail       51 pass / 0 fail
+Browser at three viewport sizes     not a before/after     60 pass / 3 skipped
+
+npm test passes 419 checks. The frontend total includes one parent result
+for three audience subtests. Native original/fixed counts differ because the
+original has no auth-reservation helper. Added post-hardening safety tests are
+not all pre-existing bugs: two story-copy checks caught an integration change
+required by tombstones. Original failures are intentional evidence. A passing
+test count is not a unique bug count or a percentage of all possible behavior.
+
+The final load run used actual HTTP, signed test JWTs and pooled database roles:
+- 10,000 reads from 100 synthetic users, 128 requests in flight: no role/data leakage.
+- 2,400 writes by 24 authors across six groups, 64 in flight: exact counts, authors,
+  unread totals and reset-to-read behavior were correct.
+These are short localhost bursts, not a capacity promise for hosted infrastructure.
+Exact timings are recorded in Peekaboo-verification.json and evidence/rest-after.json.
+
+The independent PostgreSQL run uses up to 64 connections. It reproduced quotas
+of 11 instead of 10 hit ups, 13 instead of 12 members, eight nudges instead of one,
+duplicate introductions/forfeit payments/dare ideas, failed reciprocal connections,
+same-name OAuth profile collisions and report/Keep cleanup races. A previous run
+also lost vote-counter updates; that race depends on scheduling. The fixed run
+preserves limits, counts, unique profiles, cleanup claims and evidence. A burst
+of 100 login reservations allows only eight attempts. PGlite separately executes
+the real SQL, constraints, grants, RLS and transactions in memory.
+
+The real PostgREST 16.5 / PostgreSQL 16.15 gateway rejected expired, future, forged,
+malformed and wrong-role JWTs. Tests checked cross-user writes, stranger/friend
+reads, blocked/removed group users, hidden messages, private activity, SQL/XSS-like
+plain text, hostile data types, huge/empty inputs, duplicate and atomic batch writes,
+server-only RPC access, pagination and deleted-user Storage metadata writes.
+No SQL injection or executable XSS was demonstrated in these tested paths.
+
+Browser checks used the real web export with a deliberately fake backend, blocking
+external requests. They covered logged-out forms, availability, wrong credentials,
+timeouts/retry, protected deep links, refresh/back, and all seven website pages in
+light/dark mode at 320px, 412px and desktop sizes. Website images, links, overflow
+and a true 404 passed. The small-phone welcome screenshot was visually inspected.
+Three signed-in cases are skipped because the native pager crashes on web; the
+failure is preserved rather than counted as success.
+
+TypeScript, Expo lint, Expo dependency compatibility, web export and whitespace
+checks passed. Dependency auditing found a HIGH development-only Zod advisory
+(GHSA-mrhx-c7xc-m3w5); a scoped override upgrades it to 4.6.6. Final audit: zero
+critical/high and 19 moderate package entries. These are dependency chains, not
+19 demonstrated app exploits. No privileged secret was found in reviewed tracked
+source. Public Supabase/Firebase configuration is not a service-role secret;
+hosted restrictions and untracked provider credentials were not inspected.
+
+REMAINING ISSUES AND HONEST LIMITS
+
+OPEN-01 — MEDIUM — Public-name moderation can be bypassed via direct HTTP.
+Reproduce in the local test fixture: PATCH your own profile username to f.u.c.k.
+The API returns 204 although the normal UI rejects it. The database validates
+format/length but does not enforce the nuanced client word policy. Fix: put the
+same public-name/public-text policy at a trusted write boundary, preserving real
+name and private-chat exceptions. This needs a shared product policy; it was not
+silently replaced with a crude SQL denylist. This is not an access-control bypass.
+
+OPEN-02 — MEDIUM — Signed-in web app crashes in the native pager.
+Reproduce: build the browser fixture, run QA_FULL_WEB=1 npm run test:browser for the
+signed-in settings case. It raises codegenNativeCommands is not a function before
+the private page loads. Fix: add a web-safe pager implementation or explicitly
+declare the phone app native-only and test the equivalent native flow on devices.
+The public website and logged-out browser screens pass. This finding does not
+prove a native build launch crash. Three browser cases remain explicitly skipped.
+
+OPEN-03 — MEDIUM — A completely fresh hosted setup has an owner-row assumption.
+The historical report-alert migration expects an existing owner profile, while
+the old README instructed running only the first schema. Fix for a future setup:
+make that owner/report configuration explicit and idempotent, then apply the full
+migration history in a disposable full Supabase instance. The README now explains
+this limit; the local test fixture supplies a synthetic owner row, not a real
+owner login. This is not a claim that a fresh hosted installation was validated.
+
+OPEN-04 — MEDIUM dependency findings remain in Expo/build tooling chains.
+Reproduce: npm ci; npm audit. See the saved audit JSON for affected versions and
+chains. Fix: take upstream compatible updates and recheck Expo native versions;
+avoid force-upgrading core native packages across SDK versions. Zero high or
+critical advisories remain. No exploit of these moderate entries was demonstrated.
+
+OPEN-05 — LOW — Username ILIKE treats underscore as a one-character wildcard.
+Reproduce the documented username availability/auth lookup with an underscore
+pattern matching another name. Fix: exact normalized matching or escaped LIKE
+metacharacters. This can cause misleading availability/lookup results; credentials
+are still checked. No authentication bypass was demonstrated.
+
+Other boundaries still need a disposable integrated environment or real devices:
+- Real Apple/Google login and configuration, Apple token revocation, Supabase Auth,
+  hosted Edge auth/gateway, Storage HTTP/S3 bytes, Realtime, push and scheduled jobs.
+- Camera/microphone/maps permissions, physical recording cleanup, codecs, screenshots,
+  swipe/pinch/keyboard/safe-area layout, app kill/resume and actual phone back action.
+- Long-duration endurance and geographically distributed load, packet loss and
+  true platform outages; current failure tests inject controlled errors/timeouts.
+- Account deletion and file/row writes cross service boundaries. Partial failure
+  is retryable but not one distributed transaction; another device may still upload
+  during deletion, and ambiguous upload failures can leave private orphan files.
+- Copied signed URLs may work until expiry (about an hour generally, shorter for
+  peeks). This is a known bearer-link property, not immediate revocation.
+- Age/Terms checks are user confirmations, not independent verification of age.
+
+No confirmed critical/high issue from this audit is intentionally left unfixed.
+These limits mean an untested critical/high bug can still exist outside the tested
+boundaries. The report does not claim every device control was physically tested.
+
+HOW TO USE THE DELIVERABLES
+
+Peekaboo-tested-source.zip: corrected project and tests, without dependencies,
+credentials, temporary clusters or Git history. Peekaboo-fixes.patch applies to
+the final revision above; it was checked on an untouched copy. See tests/README.md
+for commands. The report and test plan state what actually ran versus what remains
+a device/integration checklist. Test evidence contains before/after results and
+known failures. SHA256.json verifies the output files.
+
+Before any later release, review tests/database/deployment-preflight.sql on an
+approved test copy. Old duplicate forfeit payments deliberately block the unique
+index; older malformed rows are preserved by NOT VALID constraints. Review those
+rows rather than deleting them automatically. Later deployment order is the new
+database migration, all changed server functions, then the client. Username auth
+fails closed until its trusted quota helper exists. Nothing was deployed here.
+
+DETAILED FINDINGS — REPRODUCTIONS AND FIXES
+
+The following reviewer records overlap where one flaw crosses layers. File paths
+refer to the included source. A security boundary or controlled timing regression
+was tested, rather than treating a source-code pattern alone as proof of exploit.
+
+API AND LIBRARY FINDINGS
+
+R2-API-01 — CRITICAL — FIXED
+What broke / reproduce: A native Delete forever confirmation for account A can survive logout/unmount. If B signs in before its callback runs, the old client helper reads B's current session and deletes B. Changing accounts while the Apple confirmation is open has the same risk.
+Fix and proof: The screen passes the account that opened the confirmation; the helper checks it before and after Apple and sends expected_user_id. The server compares that ID with the verified JWT subject before Apple calls, deletion scope or file removal. Wrong type returns 400; mismatch returns 409. Tests cover stale A→B callbacks, a switch during Apple, and a switch at the server boundary. Frontend native-alert tests separately cover the actual confirmation lifetime.
+
+R2-API-02 — HIGH — FIXED
+What broke / reproduce: The Apple code was not tied to the account being deleted. Deleting A while supplying an authorization code for Apple identity B caused the handler to send B's token for revocation. A password-only account could also submit somebody else's code.
+Fix and proof: Compare the subject of the token returned directly by Apple's HTTPS token endpoint with the Apple identities Supabase verified for the caller. Reject a mismatch before revocation or deletion. Tests verify mismatching and matching identities, ignored request-body identity claims, password-only callers and linked Apple accounts.
+
+R2-API-03 — HIGH — FIXED
+What broke / reproduce: Username throttling still counted first and logged later. A burst of 100 wrong passwords reached 100 credential checks despite an eight-try limit; 30 parallel signups exceeded the five-account limit. Database failures removed the protection.
+Fix and proof: Reserve attempts atomically through a service-only SQL function before credential checks, and fail closed when it is unavailable. Handler tests allow 8/reject 92 logins and allow 5/reject 25 signups. Database tests independently verify the actual SQL locking and permissions. The limit now counts reserved tries, including successful ones.
+
+R2-API-04 — HIGH — FIXED
+What broke / reproduce: Account deletion ignored storage/query failures, skipped files after the first 1,000 entries or anonymous-post rows, and missed anonymous uploads whose row had already been removed.
+Fix and proof: Page every list, include owner-attributed orphaned anonymous uploads through a service-only helper, stop on errors and keep the login retryable. The verified user's short deletion scope lets intentional account deletion proceed despite temporary cleanup-retention claims, without allowing another user's files to be removed. Tests cover pagination, nested folders, each outage, invalid tokens, victim IDs in the body, ownership and scope failure.
+
+R2-API-05 — HIGH — FIXED
+What broke / reproduce: Cleanup of an old shared peek treated a failed recipient query as an empty conversation and deleted a file another recipient still needed. Filtering hidden rows could cause the same mistake. A safe main file could also have a poster/overlay reused by another live or saved message. Group-message deletion removed shared companion files without checking.
+Fix and proof: A privileged SQL helper checks all references, including hidden rows, groups and reports. Every distinct main/poster/overlay path must receive a positive claim before any file is removed; one failure or live reference stops the bundle. Storage rechecks under the shared path lock. Tests cover unopened/saved recipients, query failure, safe cleanup, shared companions, failed overlay checks, group reuse and duplicate paths.
+
+R2-API-06 — HIGH — FIXED
+What broke / reproduce: Signed private links remained cached across users. B could receive A's cached private keep URL without a new permission check; an old signing response could refill the cache after switching.
+Fix and proof: Clear on identity changes, discard older replies and key mounted-hook results to the current identity version and requested paths. Tests cover logout, switching, delayed responses and a real mounted hook. Previously copied bearer URLs remain valid until expiry; this fix cannot revoke them.
+
+R2-API-07 — HIGH — FIXED
+What broke / reproduce: A crafted video PNG note with frames:["not-a-frame"], null rows or invalid coordinates was accepted, then crashed the animation's .map call. Huge advertised note lengths caused unnecessary requests.
+Fix and proof: Validate the whole note, finite numbers, dimensions, 151 frames, four faces and a 128 KB limit. Hostile metadata is rejected; legitimate animation/interpolation remains valid.
+
+R2-API-08 — HIGH — FIXED
+What broke / reproduce: Two mounted copies of a direct chat reused a realtime channel name. Adding the second listener after subscription can throw, repeating the documented launch-crash failure pattern.
+Fix and proof: Give every direct-message listener a unique suffix. A model of the actual subscribed-channel restriction reproduces the old throw; duplicate chat, group and reaction subscriptions now succeed and clean up separately. This is not a hosted websocket load test.
+
+R2-API-09 — HIGH — FIXED
+What broke / reproduce: Old native Block/report callbacks could run after A's screen unmounted and act through B's global session. A delayed success could navigate or show another prompt in B. An old logout callback could also sign B out after waiting for push cleanup.
+Fix and proof: Cancel stale hook continuations. Block calls carry A to a server-checked overload; reports include A's reporter ID so row security rejects a shifted JWT. Logout verifies identity before and after the asynchronous push step and preserves a newer login event. Tests cover callback lifetime, delayed prompts/responses, approving-user payloads and the logout race.
+
+R2-API-10 — HIGH — FIXED
+What broke / reproduce: Scheduled cleanup's old candidate snapshot omitted group-message references and could race a new report/reference. Its handler also returned success after Storage failures.
+Fix and proof: The database agent added claims, path locks, deletion guards and tombstones; the handler calls the claim helper and returns a retryable 503 with its partial count on failure. Tests cover secret rejection, Vault/candidate/Storage failures, 250-file batching, partial results and unexpected rejection. The database/native/REST suites own actual group/reference/report race proof.
+
+R2-API-11 — MEDIUM — FIXED
+What broke / reproduce: Username auth crashed on JSON null, coerced nonstring passwords and read huge bodies. Apple revocation could hang forever.
+Fix and proof: Bound auth/delete request bodies, validate types, reject huge Apple codes and abort Apple calls after ten seconds. A stalled Apple service no longer prevents the user's deletion indefinitely. Original Apple revocation was best effort; missing secrets/provider failure still skip that external step and are a deployment limitation.
+
+R2-API-12 — MEDIUM — FIXED
+What broke / reproduce: The initial saved-login reply could overwrite a newer logout; signout errors and saved-login read failures were mishandled.
+Fix and proof: Ignore stale initial replies, handle returned errors and clear only the intended local account. Real React-provider tests verify the failure and race paths. Stale UI state was reproduced; this was not a demonstrated server-side token bypass.
+
+R2-API-13 — MEDIUM — FIXED
+What broke / reproduce: Apple/Google names were assigned after the session could open setup. A second Apple account without a new name inherited the prior user's name.
+Fix and proof: Set or clear the name before opening the session, and clear it on failed auth. Tests exercise name timing, account changes, cancellation, missing tokens, native fallbacks and the hashed/raw nonce pairing.
+
+R2-API-14 — HIGH — FIXED
+What broke / reproduce: A delayed Activity refresh for A overwrote B's activity when the hook stayed mounted. Within one account, an old refresh replaced newer items and a delayed local preference read undid Clear.
+Fix and proof: Account-keyed data, request versions and preference-action versions discard stale replies. All three original behavioral regressions fail and all three changed checks pass. The root navigator also remounts private screens by account.
+
+R2-API-15 — MEDIUM — FIXED
+What broke / reproduce: Hidden-message lookup failed open, so cleared messages reappeared during a privacy-table outage. The client-side ID list alone was also bounded.
+Fix and proof: Read errors now stop the request. The database agent enforces hides in row security for direct reads, search and reactions, so the client list is no longer the privacy boundary.
+
+R2-API-16 — MEDIUM — FIXED
+What broke / reproduce: Failed multi-file video uploads left earlier files behind; a failed group-photo save left its new public avatar upload behind.
+Fix and proof: Roll back known successful files, retain the original error if cleanup also fails, and remove rejected group-photo uploads. Tests cover all six media folders, later-file failures, cleanup failure, first-file failure and success.
+
+R2-API-17 — MEDIUM — FIXED
+What broke / reproduce: Profile song data could carry file/javascript/intent links or a phishing host under the Apple Music label. Music searches had no deadline.
+Fix and proof: Restrict song URLs to HTTPS Apple/mzstatic hosts and abort searches after 15 seconds. Tests cover unsafe links, normal results, special-character search encoding, empty queries, failure and a stalled service.
+
+R2-API-18 — HIGH — FIXED
+What broke / reproduce: Reported media protection depended on the content row still existing. After a report, an author could delete the post/story/message row and then remove its file: the retention join no longer found the reported row.
+Fix and proof: The database agent reproduced the loss and added private, persistent report-to-file snapshots under the same path locks. The file remains protected after the visible content row is removed. Existing reachable reports are backfilled; already lost bytes cannot be recovered. Targeted database tests reject deletion of the evidence while still allowing explicitly scoped full account deletion.
+
+FRONTEND FINDINGS
+
+FE-01 — HIGH — FIXED
+What broke / reproduce: Start a dare, drop or forfeit photo; also select My Story; turn on Close friends only; confirm the story preview. The story was restricted, but the same photo became a profile post with the default everyone audience. A public account could expose the restricted photo to strangers.
+Fix and proof: Pass the selected audience to every generated post, and show the privacy switch for special posts even without a story. Three rendered screen cases fail on the original and pass after the fix (share.test.cjs).
+
+FE-02 — HIGH — FIXED
+What broke / reproduce: Start showing your location while the permission prompt is delayed, then choose Hide. Complete the older permission prompt. The old request switched sharing back on. A delayed profile save could do the same; an old GPS lookup could upload coordinates after Hide.
+Fix and proof: Keep profile writes in order, discard superseded permission/GPS results, and cancel background refresh work when its effect ends. Hiding does not wait for GPS. The original fails all three controlled timing cases; all pass after the fix (location.test.cjs).
+
+FE-03 — HIGH — FIXED
+What broke / reproduce: In Settings, switch Private account off then on while the first save is delayed. The older public save could finish last and leave the account public. Similarly, choose Friends of friends then Nobody for hit ups; the older, broader choice could win.
+Fix and proof: Queue privacy saves in the order selected. Merge only the changed profile fields so an unrelated late response cannot overwrite other local settings. Both original timing tests fail; both pass now (settings.test.cjs).
+
+FE-04 — HIGH — FIXED
+What broke / reproduce: In Close friends, start with Bob excluded. Add Bob and then remove him before the first request finishes. Let the removal finish first and the older addition finish last. The screen said Bob was excluded while the saved list still included him.
+Fix and proof: Allow only one pending change per person; disable that person's row until the save settles. A failed save restores the old choice. The original privacy invariant fails (true stored versus false shown); the fixed tests pass (privacy.test.cjs).
+
+FE-05 — HIGH, CONDITIONAL — FIXED
+What broke / reproduce: Replace account A's signed-in session directly with account B's session without an intermediate signed-out state. The navigation tree kept its identity, so old chats, forms and component state could remain until new loads completed. The ordinary Log out then Log in path already unmounted it.
+Fix and proof: Give the navigation tree a key based on the signed-in user ID. The rendered test proves it now remounts on account change (navigation.test.cjs). Combine with the separate signed-media cache/auth fixes; this is a device state isolation issue, not a database authorization bypass.
+
+FE-06 — MEDIUM — FIXED
+What broke / reproduce: Press Send twice before the first render disables it. Share sent two identical peeks; the direct chat, group chat and editor-to-group paths also sent duplicates. Delayed preview callbacks could use an old completion snapshot.
+Fix and proof: Use immediate in-flight locks and a live completion record where a send has several destinations. Retrying after a later destination fails still avoids resending successful destinations. Original cases make 2 sends; fixed cases make 1 (share.test.cjs, chat.test.cjs, group-chat.test.cjs, editor.test.cjs).
+
+FE-07 — MEDIUM — FIXED
+What broke / reproduce: Open the profile preview with an allowed caption, then edit its caption to disallowed content and press Post. The final preview called the send function without checking the edited text.
+Fix and proof: Recheck the final caption at the write boundary. The original makes a post; fixed code blocks it and explains why (share.test.cjs). Server-side content controls are separately assessed in the database review.
+
+FE-08 — MEDIUM — FIXED
+What broke / reproduce: Open a disappearing photo on a slow connection and go Back before its download completes. The old download continued and consumed the view even though the screen was gone.
+Fix and proof: Check cancellation before consuming the view/replay. Original test consumes 1 view; fixed test consumes 0 (snap.test.cjs). This test covers a photo download; it does not certify the native video playback failure path.
+
+FE-09 — MEDIUM — FIXED
+What broke / reproduce: Open the app while Terms acceptance is loading, or make that database read fail. The original gate started open and stayed open after an error.
+Fix and proof: Start with the gate closed and only dismiss it after a confirmed acceptance or successful save. Original pending/error cases fail; all gate tests pass now (terms.test.cjs).
+
+FE-10 — MEDIUM — FIXED
+What broke / reproduce: Enable location sharing, let the preference save, then make the GPS lookup fail. The original threw before returning the saved profile, leaving the screen unaware that sharing was enabled.
+Fix and proof: Return the committed preference even if refreshing coordinates fails; record that refresh failure and let the normal refresh retry. The location test confirms the screen receives the same sharing state that was saved (location.test.cjs).
+
+FE-11 — MEDIUM — FIXED
+What broke / reproduce: Make logout reject while choosing Log out from the Terms screen or confirming it in Settings. The button callbacks had no error handler, producing an unhandled rejection without a useful explanation. This also matters now that the auth fix correctly reports rejected logout requests.
+Fix and proof: Catch the failure in both screens and show a clear error while keeping the current screen. Both rendered rejection tests pass (terms.test.cjs, settings.test.cjs).
+
+FE-12 — HIGH, SIGNUP GATE — FIXED
+What broke / reproduce: Make the new Apple/Google setup's Terms lookup fail. useNeedsSetup answered "setup not needed", skipping the required name/age/setup confirmations. The ordinary Terms modal could still appear, but it does not perform the age/name setup.
+Fix and proof: On a failed check, keep setup required. The original hook returns false; fixed returns true (social-setup.test.cjs). This is a client onboarding bypass, not proof that Apple or Google accounts identify the user's age.
+
+FE-13 — HIGH, CONDITIONAL — FIXED
+What broke / reproduce: Begin saving account A's setup and leave/switch accounts while the profile write is delayed. Let it complete after unmount. The old code still called the current-session accept_legal operation, which could accept Terms for account B.
+Fix and proof: Stop setup continuations after cancellation/unmount; prevent competing saves. The old test calls accept_legal once after unmount; the fixed test calls it zero times (social-setup.test.cjs).
+
+FE-14 — MEDIUM — FIXED
+What broke / reproduce: Press the native Google sign-in button twice before busy state renders. Two native account-selection/login flows start and can compete to choose the signed-in account.
+Fix and proof: Use an immediate ref lock shared by the social buttons. The original starts 2 flows, fixed starts 1 (social-setup.test.cjs). Native Apple/Google delivery still needs device testing.
+
+FE-15 — HIGH, BROKEN CORE FEATURE — FIXED
+What broke / reproduce: Send a video to a group chat. Every video was rendered paused with native playback controls disabled, and there was no tap action to open or play it.
+Fix and proof: Add a closeable full-screen media viewer: tap a photo/video to open it; a video plays there with sound, while thumbnails remain paused. The rendered test proves the action and active player flags; actual playback/decoding still needs a device (group-chat.test.cjs).
+
+FE-16 — MEDIUM — FIXED
+What broke / reproduce: Report a group message. The report was about the sender's profile, with no ID for the offending message; a moderator could not find the exact reported content from that report.
+Fix and proof: Send group_message plus the actual message ID. The database hardening separately validates group membership and the sender. Original sends user/sender ID; fixed sends group_message/message ID (group-chat.test.cjs).
+
+FE-17 — MEDIUM — FIXED
+What broke / reproduce: On a slow send in either chat, type the next message before the first request returns. Success of the first send erased the newly typed draft (and could clear a newly selected reply).
+Fix and proof: Clear only the exact draft/reply that was sent. Original loses the next draft; both fixed chat tests preserve it (chat.test.cjs, group-chat.test.cjs).
+
+FE-18 — MEDIUM — FIXED
+What broke / reproduce: Search for one word, immediately search another, and deliver the older request last. The older result overwrote the newer result; query matching then hid the list, losing the correct results.
+Fix and proof: Accept only the latest search response/error. Both original direct/group cases lose the new result; both fixed cases keep it (chat.test.cjs, group-chat.test.cjs).
+
+FE-19 — MEDIUM — FIXED
+What broke / reproduce: Send photo proof for a chat dare, let the photo save, then fail the dare update. The error was swallowed and the screen announced success even though the sender could not confirm the dare.
+Fix and proof: Explain the partial success and retry only the dare update; keep the successful photo recorded so retry does not resend it (editor.test.cjs).
+
+FE-20 — MEDIUM — FIXED
+What broke / reproduce: Start recording, then leave while recording or while preparation is pending. The JS polling timer remained, and old preparation still attempted to start the recorder. A failure when stopping also rejected without a handled UI path.
+Fix and proof: Clear timers, stop/cancel pending work, avoid post-unmount sends, and handle stop failures. Three original cases fail and fixed cases pass (voice.test.cjs). These tests verify JS lifecycle; they do not claim that Expo's native auto-release leaves the physical microphone recording.
+
+FE-21 — MEDIUM, NATIVE PRESENTATION RISK — FIXED
+What broke / reproduce: Choose Report in the new message menu. The next sheet was requested immediately while the old native Modal was still closing. This conflicts with the app's established iOS menu-closing pattern.
+Fix and proof: Defer actions until native dismissal, with a guarded fallback timer. The sequencing test proves the next action waits and executes once. Whether the original failed visually on a particular phone remains unverified (message-actions.test.cjs).
+
+FE-22 — MEDIUM — FIXED
+What broke / reproduce: Press Hit back and Ignore in the Inbox before the first render disables them. Both contradictory responses were submitted for the same hit up.
+Fix and proof: Lock the response immediately. The original submits 2 requests; fixed submits only the first choice (inbox.test.cjs). Database concurrency protection is tested separately.
+
+FE-23 — HIGH, CONDITIONAL — FIXED
+What broke / reproduce: Replace the signed-in account while an old bottom menu is open or a menu action is delayed. The global overlay survived the navigation reset, and its delayed action could still run after unmount using the next session.
+Fix and proof: Key overlays by account as well as navigation; cancel their timers and pending actions on unmount. Both original lifetime tests fail, fixed pass (navigation.test.cjs, overlays.test.cjs).
+
+FE-24 — HIGH, CONDITIONAL DESTRUCTIVE ACTION — FIXED
+What broke / reproduce: Open account A's final native Delete account confirmation, unmount/switch to B, and invoke the stored confirmation. It still called deletion using the current login. Old logout and Clear chat confirmations similarly acted after their source account was left; an old successful deletion response could log out B. Native Alerts can outlive React screens.
+Fix and proof: Guard native callbacks and post-request continuations by screen lifetime. Bind delete/logout requests to the account that approved them; the API layer separately validates expected user identity. The original stored-callback cases act after unmount; fixed cases make no operation. An in-flight deletion explicitly receives A's ID and does not log out a later login (settings.test.cjs, terms.test.cjs, chat-list.test.cjs).
+
+DATABASE FINDINGS AND ENVIRONMENT
+
+Fresh database QA: Peekaboo
+==========================
+Reviewed final original revision a9e5ddf88e785bd8378b2b7d9dcd7e341df439b1 on
+claude/mobile-social-app-expo-h090jm. Initial inspection used b0dc637; the only
+upstream change between those revisions is the Android APK link in invite.ts.
+This is a fresh audit of the newer app,
+not a claim that the older local fixes were already in the repository.
+
+The first 36 migrations are unchanged from the previous audit and every earlier
+fix was absent. All 47 original migrations were read/applied in filename order.
+The added migrations cover OAuth profile creation, activity/inbox, report alerts,
+chat dares, drop reminders, cleanup, hides, group messages/media/reactions/replies/
+pins. The new fix migration is 20261213102659_qa_round2_security_hardening.sql.
+It was created by the Supabase CLI, then moved after the existing future-dated
+20261212 migration so execution order is correct. Original live migrations were
+not edited. The new OAuth/group behaviors were preserved when fixing older rules.
+
+Final database checks
+---------------------
+node --test tests/database/*.test.mjs
+  142/142 passing: 95 recurrent/general checks plus 47 newer-feature checks.
+  Refreshed original baseline: 94 passing, 48 failing, 142 total. Some failures
+  are checks for newly added helper contracts, not distinct original bugs.
+node tests/database/concurrency.mjs
+  17/17 fixed real PostgreSQL scenarios passed. The final original run failed
+  15/16 supported scenarios (the auth-reservation RPC does not exist originally).
+  A previous run also reproduced the vote counter race: 28 displayed votes
+  versus 32 actual vote rows; this race depends on scheduling.
+
+Final saved logs:
+  .qa/database-before.tap: 94 passed, 48 failed.
+  .qa/database-after.tap: 142 passed, 0 failed.
+  .qa/concurrency-results.json: fixed 17 passed; original 1 passed, 15 failed.
+Latest native source result at handoff:
+  work/native-pg-1793791850210/concurrency-results.json (outside the repo)
+The parent report may contain a later final run. Native tests intentionally run
+both original and fixed schemas; only a fixed-scenario failure fails the script.
+
+Test environment and limits
+---------------------------
+PGlite 0.5.15 runs real PostgreSQL constraints, grants, RLS and functions in memory.
+Native PostgreSQL 16.15 uses independent TCP sessions on 127.0.0.1, with up to 64
+connections. All cluster files are in this chat's work folder, processes are
+hidden and finally handlers stop them. No production database, account, URL,
+token, notification, cron job or media object was contacted or changed.
+
+Supabase platform schemas are local stand-ins: auth.uid() understands both SQL
+test claims and real PostgREST request.jwt.claims; cron only records schedules;
+Vault contains a locally generated key; net.http_post records rows, never sends
+HTTP. One historical report-alert migration assumes its owner account already
+exists, so the harness seeds a synthetic LOCAL auth/profile row with that id.
+It does not retrieve or log in to the real account. Actual OAuth, Apple/Google,
+GoTrue, S3 byte deletion, Expo push and device behavior are separate boundaries.
+Root additionally owns real local PostgREST/JWT tests and browser checks.
+
+The cleanup tests exercise real SQL races at Storage's metadata boundary. The
+current official Storage source awaits the database transaction before physical
+cleanup (object.ts deleteObjects, lines 604-616). The guard raises an exception,
+rather than skipping a row, when a concurrent report/reference rescues a file;
+the metadata transaction aborts before physical cleanup is reached. We did not
+run the hosted Storage service or delete real S3 objects. Primary reference:
+https://github.com/supabase/storage/blob/master/src/storage/object.ts
+
+Recurrent bugs: reproduced against this revision and fixed again
+----------------------------------------------------------------
+R1 HIGH - Draft/deleted post files readable to others.
+  Reproduce: public A uploads A/posts/file without a post row, or deletes a
+  close-friends post while file cleanup fails. Under B, can_read_media returned
+  true. Fix: require an actual visible post owned by the path owner, plus all
+  audience/drop/group rules. Blurry previews now obey audience too.
+R2 MEDIUM - Editing own post accepted another user's media path.
+  Reproduce: update A's post.media_path to B/posts/private.jpg. Fix: enforce
+  owned folders on UPDATE for main/poster/overlay/blur just like INSERT.
+R3 HIGH - Reporting Guess Who disclosed the anonymous author.
+  Reproduce: B reports before guessing, then SELECTs their own reports and reads
+  reported_user_id=A. Fix: mark anonymous reports and hide those report rows
+  from reporters, retaining the real author for moderators.
+R4 MEDIUM - Guess Who client could set expiry to 2099.
+  Fix: server-controlled exactly-24-hour expiry, like stories.
+R5 HIGH - Community dare author forged votes/selection state and daily quota.
+  Reproduce: INSERT votes=99999, used_on, hidden, backdated created_at; insert
+  two ideas in one statement or concurrent sessions. Fix: canonical fields,
+  server time and author quota lock. Atomic vote deltas replace stale recounts.
+R6 HIGH - Notification queue failure rolled back valid app actions.
+  Reproduce: make local net.http_post fail during a valid message insert.
+  Message was lost. Fix: isolate only the queue call and keep the main write;
+  record a generic warning. Delivery retries remain outside this change.
+R7 MEDIUM - Posts could be moved into the future by editing created_at.
+  Fix: server timestamp on INSERT, immutable original timestamp on UPDATE.
+R8 MEDIUM - Duplicate forfeit payments in one statement/concurrent sessions.
+  Reproduce: insert two posts with the same unpaid forfeit_id together.
+  Fix: unique partial index, which also covers concurrent transactions.
+R9 MEDIUM - New report could start as already reviewed.
+  Reproduce: INSERT status='reviewed'. Fix: force open status/server time.
+R10 MEDIUM - Snap sender could forge recipient save/replay workflow state.
+  Reproduce: INSERT saved_at, saved_by=recipient, replayed_at. Fix: canonical
+  initial state and sender timestamps; trusted hit-up introduction timing stays.
+R11 MEDIUM - SQL NULL allowed a voice message without media or empty screenshot.
+  Fix: explicit non-null content checks for those kinds.
+R12 MEDIUM - Voice waveform accepted negative, >100 and null bars.
+  Fix: validate every element and the 64-bar limit.
+R13 MEDIUM - Two hit ups at quota=9 produced 11 instead of 10.
+  Fix: per-sender lock and quota recheck at insertion.
+R14 MEDIUM - Two additions to an 11-member group produced 13 members.
+  Fix: group row lock and write-time size check. Duplicate adds remain idempotent.
+R15 MEDIUM - Eight parallel nudges produced eight notices inside one cooldown.
+  Fix: per-group/pair cooldown lock and recheck.
+R16 MEDIUM - Concurrent hit-back actions duplicated an introduction message.
+  Reproduce: duplicate respond calls, or mix respond_hit_up with hit_up.
+  Fix: shared connect helper locks/rechecks pending state, participants, blocks
+  and both adult ages; recipient response also locks its row.
+R17 MEDIUM - Reciprocal simultaneous hit ups left two pending rows, no friendship.
+  Fix: serialize the sorted pair before reading/writing.
+
+New or expanded findings in this revision
+----------------------------------------
+N1 HIGH - Activity leaked private replies after post access was revoked.
+  Reproduce: B comments while A's post is public. A goes private; friend C replies
+  privately to B's old comment. B cannot SELECT the post but my_activity returned
+  C's new private text. Fix: activity events with posts require current post access.
+N2 MEDIUM - Delete for me/Clear chat were only client filters.
+  Reproduce: hide/clear, then directly SELECT/search messages or reactions. The
+  old rows reappear. Fix: enforce each person's hides in messages SELECT and
+  reaction authorization. Other participants retain their own copy.
+N3 HIGH - Blocks did not protect group text/photos/reactions/summaries.
+  Reproduce: A/B remain in a group, B blocks A; B could still SELECT A's group
+  messages/photos/reactions and summary. Voice/push already treated blocks
+  differently. Fix: consistent blocked-sender filtering across rows, media,
+  summaries/reactions and pin access, without deleting group membership.
+  This follows the parent's explicit instruction for expected group blocking.
+N4 MEDIUM - Blocked/unfriended people could signal through chat-dare RPCs.
+  Reproduce: send dare, block, then recipient calls claim_chat_dare. It changed
+  state and notified the blocker. Fix: friendship/block checks and row locks on
+  claim/confirmation, preserving normal claim/nope/done behavior.
+N5 MEDIUM - Group voice/media allowed malformed and enormous payloads.
+  Reproduce: voice without file, negative/huge audio_ms, invalid waveform,
+  kind='photo' with media_type='video', or giant voice body. Fix: explicit content,
+  duration, waveform, media-kind and universal body limits. Old rows are preserved.
+N6 MEDIUM - Group messages accepted forged future timestamps.
+  Reproduce: INSERT created_at=2099. Fix: server time on group INSERT.
+N7 MEDIUM - Group reports did not identify the offending message.
+  Original UI reported a user id and database rejected group_message type.
+  Fix: supported group_message report type, reporter-membership validation,
+  canonical real sender and retained content id. Frontend/API agents wire the UI.
+N8 HIGH - Cleanup could delete live group files or new report/Keep evidence.
+  Reproduce: eligible old story is also referenced by group chat, or cleanup
+  reads candidates then another session reports/saves it before deletion.
+  Original cleanup omitted group refs and deleted metadata despite the new row.
+  Fix: all live references count; claims, reports, file references and Storage
+  deletes acquire the same path lock. At delete, recheck and abort if rescued.
+  Every media delete also protects unclaimed companions and writes a tombstone.
+  A later reference/replacement upload at that key is rejected after logical
+  deletion, preventing dangling references and pending-byte-delete races.
+  Confirmed real concurrent report/Keep wins, and delete-wins reference/upload
+  rejection. File bundles now require every distinct path to be safe (API agent).
+N9 HIGH - A deleted account's still-valid JWT could upload orphan Storage files.
+  Reproduce: trusted local delete of auth user, then use the same subject under
+  authenticated role to INSERT its own UUID folder. Old RLS allowed it.
+  Fix: restrictive Storage INSERT/UPDATE policies require an existing own profile.
+  Root additionally tests this through signed JWT and actual local HTTP.
+N10 MEDIUM - Same-name OAuth signups raced in automatic profile creation.
+  Reproduce: 16 simultaneous new auth users with one common Google full_name.
+  Original result: only one succeeded; others hit username uniqueness.
+  Fix: serialize the normalized username base before selecting a free candidate.
+  Fixed result: 16 valid accounts with unique profiles. Google names remain intact.
+N11 MEDIUM - Group reaction notified a sender who already left the group.
+  Reproduce: sender registers a local token, sends, leaves, remaining member
+  reacts. Fix: group reaction push requires current sender membership.
+N12 LOW - Reentrant reminder jobs queued duplicate reminders.
+  Reproduce: two independent send_drop_reminders calls read the same due user.
+  ON CONFLICT skipped one marker but both sent. Fix: send only if marker insert
+  actually succeeded. Same-job pg_cron normally serializes, so exposure is low.
+N13 HIGH - Ordinary author deletion could still erase reported media evidence.
+  Reproduce on the earlier hardening version: report a post, then author deletes
+  its visible post row and calls Storage.remove. The report still exists, but
+  its path was recoverable only by joining the now-deleted source row. The guard
+  therefore allowed the file deletion. A real database regression failed first.
+  Fix: persistent private report_media_evidence snapshots, captured atomically
+  in the BEFORE report trigger with a deferred FK. Cleanup checks these paths
+  independently of source rows. Reports and content deletion use the same sorted
+  path locks. Existing reachable reports are backfilled. App users have no table
+  access or helper access; private table RLS and explicit privilege revocation
+  defend against broad platform defaults. Paths remain until trusted report
+  removal, consistent with the previous retention policy.
+  Regression covers reported post, story, peek, group message, comment plus its
+  parent post, and anonymous content deletion; rejected reports roll back their
+  snapshots. Native concurrent report/author-delete now retains the file.
+  Intentional verified account deletion still overrides retention as designed.
+  Old reports whose source/path or physical file was already deleted cannot be
+  reconstructed by this migration. No recovery of those files is claimed.
+
+Safety/support contracts added for the other agents
+--------------------------------------------------
+reserve_username_auth_attempt(kind,key,max,minutes): server-only atomic throttle.
+account_mystery_files(account): server-only, sorted orphan anonymous-file lookup.
+claim_media_cleanup(max_files): server-only list/claim, bounded to 1000 paths.
+can_cleanup_snap(object_name): authenticated own snaps/voice/group paths, checks
+  every recipient and all cross-field/live refs despite hides, then claims it.
+begin_account_media_deletion(account): server-only verified deletion scope for
+  ten minutes, restricted to that account's owned files. Needed so intentional
+  account deletion can remove its own live/reported/claimed media; other accounts
+  remain protected. Auth-user deletion cascades its scope; interruptions expire.
+block_user(target,expected_user_id): authenticated actor-bound overload; a safety
+  dialog opened by A cannot execute after login changes to B. Legacy 1-arg stays.
+
+Coverage and remaining work
+---------------------------
+The database suite covers every public table's RLS flag, public privileged RPC
+anonymous grants, cross-user writes, profiles, audiences, files, blocks, social
+profile/hook behavior, stories, peeks, saved/expired media, comments/replies/likes,
+map privacy, friends, complete group lifecycle, group media/proofs/typing/replies/
+reactions/pins/read/mute, hides, activity, legal records, birthdays, hit ups,
+community/daily/chat dares, nominations/streaks/forfeits/ratings, push preferences,
+report alerts, reminder eligibility, cleanup claims/evidence/tombstones and actor
+binding. Fuzz inputs include empty/null, wrong types, huge text, emoji, SQL/XSS-like
+plain text, invalid coordinates/ages, negative numbers and duplicate writes.
+
+Final review: the account-deletion override is service-role-only, lasts ten
+minutes, checks only that account's owner id/path prefix, and cascades on Auth
+deletion. Report/file/reference path loops use distinct sorted paths. Complex
+multi-row transactions can still produce a PostgreSQL deadlock/retry under an
+opposite cross-record lock order; they fail closed rather than bypass retention.
+An already committed comment report retains its snapshot even if both the
+comment and parent post disappear. A report that starts after its source was
+already deleted cannot recover unknown paths by design.
+
+NOT VALID content constraints preserve older malformed data for review while
+blocking new bad rows. The new unique forfeit index deliberately refuses old
+duplicates. Run deployment-preflight.sql only on an approved test copy; review
+bad rows before a separate release. No remote migration/advisor/apply/push ran.
+
+One medium content-moderation gap remains a separate product decision: nuanced
+cleanWords.ts name/public-text rules are client-side, while SQL enforces lengths
+and formats only. A direct allowed-format offensive username such as f.u.c.k can
+bypass the client name rule. Porting its real-name and private-chat exceptions
+blindly would risk blocking legitimate content; the parent was informed. This
+is not an authorization or arbitrary-code execution claim.
+
+Historic report-alert setup assumes an owner row. The test fixture supplies a
+synthetic one; generic fresh-environment bootstrap still needs that assumption
+documented. Cron scheduling and Vault are stand-ins, not proof of hosted job
+execution. Signed links already issued may remain valid until their expiry even
+after access changes. No real users' data or device/native/OAuth flows were used.

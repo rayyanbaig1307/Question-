@@ -1,4 +1,4 @@
-import { deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
+import { deleteAvatar, deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -110,8 +110,13 @@ export async function pinGroupMessage(groupId: string, messageId: string | null)
 // The group's picture: uploaded like a profile picture (your own folder), then set for the group. null removes it.
 export async function setGroupPhoto(me: string, groupId: string, localUri: string | null): Promise<void> {
   const photo = localUri ? await uploadAvatar(me, localUri) : null;
-  const { error } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
-  if (error) throw error;
+  try {
+    const { error } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
+    if (error) throw error;
+  } catch (error) {
+    if (photo) await deleteAvatar(photo).catch((cleanupError) => console.warn('Could not remove an unfinished group photo', cleanupError));
+    throw error;
+  }
 }
 
 // Live: the group itself changed (new pin, photo or name). Own channel name per listener.
@@ -150,7 +155,11 @@ export async function searchGroupMessages(groupId: string, text: string): Promis
 export async function deleteGroupMessage(message: GroupMessage): Promise<void> {
   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
   if (error) throw error;
-  const files = [message.media_path, message.poster_path, message.overlay_path].filter((f): f is string => !!f);
+  const files = [...new Set([message.media_path, message.poster_path, message.overlay_path].filter((f): f is string => !!f))];
+  for (const path of files) {
+    const { data: safe, error: checkError } = await supabase.rpc('can_cleanup_snap', { object_name: path });
+    if (checkError || safe !== true) return;
+  }
   if (files.length > 0) await deleteMedia(files).catch(() => {});
 }
 

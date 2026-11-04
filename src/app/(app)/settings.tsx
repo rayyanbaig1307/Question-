@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { reloadAppAsync } from 'expo';
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { formatBirthday } from '@/components/BirthdayForm';
@@ -19,7 +19,7 @@ import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type Notificatio
 import { scheduleDropNotifications } from '@/lib/notifications';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
-import type { HitUpsFrom } from '@/lib/types';
+import type { HitUpsFrom, Profile } from '@/lib/types';
 import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
 
 export default function Settings() {
@@ -29,6 +29,33 @@ export default function Settings() {
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
   const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
+  const profileWrites = useRef(Promise.resolve());
+  const latestProfile = useRef(profile);
+  const locationRequest = useRef(0);
+  const active = useRef(true);
+  const deleting = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+
+  useEffect(() => {
+    latestProfile.current = profile;
+  }, [profile]);
+
+  // Keep privacy saves in the order you chose them, even if the connection is slow.
+  function savePrivacyInOrder(action: () => Promise<void>): Promise<void> {
+    const saved = profileWrites.current.then(async () => { if (active.current) await action(); });
+    profileWrites.current = saved.catch(() => {});
+    return saved;
+  }
+
+  function showProfileChange(updated: Profile, changes: Partial<Profile>) {
+    if (!active.current) return;
+    const next = { ...(latestProfile.current ?? updated), ...changes };
+    latestProfile.current = next;
+    setProfile(next);
+  }
 
   useEffect(() => {
     fetchNotificationPrefs(userId)
@@ -53,6 +80,7 @@ export default function Settings() {
     setNotify(next);
     try {
       await saveNotificationPrefs(userId, next);
+      if (!active.current) return;
       if (key === 'drops') await scheduleDropNotifications(on);
     } catch (error) {
       setNotify(before);
@@ -72,8 +100,11 @@ export default function Settings() {
 
   async function setPrivate(value: boolean) {
     try {
-      setProfile(await updateMyProfile(userId, { is_private: value }));
-      showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
+      await savePrivacyInOrder(async () => {
+        const updated = await updateMyProfile(userId, { is_private: value });
+        showProfileChange(updated, { is_private: updated.is_private });
+        showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
+      });
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
@@ -87,8 +118,11 @@ export default function Settings() {
         label: `${option.label}${profile?.hit_ups_from === option.key ? ' ✓' : ''}`,
         onPress: async () => {
           try {
-            setProfile(await updateMyProfile(userId, { hit_ups_from: option.key }));
-            showToast(`Hit ups: ${option.label.toLowerCase()}`);
+            await savePrivacyInOrder(async () => {
+              const updated = await updateMyProfile(userId, { hit_ups_from: option.key });
+              showProfileChange(updated, { hit_ups_from: updated.hit_ups_from });
+              showToast(`Hit ups: ${option.label.toLowerCase()}`);
+            });
           } catch (error) {
             Alert.alert('Could not save', friendlyError(error));
           }
@@ -98,21 +132,25 @@ export default function Settings() {
   }
 
   async function setHidden(hidden: boolean) {
+    const request = ++locationRequest.current;
     try {
       const updated = await setLocationSharing(userId, !hidden);
+      if (request !== locationRequest.current) return;
       if (!updated) {
         Alert.alert('Location is turned off', 'Allow location for Peekaboo in your phone settings to share your spot.');
         return;
       }
-      setProfile(updated);
+      showProfileChange(updated, { location_sharing: updated.location_sharing });
       showToast(hidden ? "🙈 You're hidden on the map" : '👀 Your friends can see you now');
     } catch (error) {
+      if (request !== locationRequest.current) return;
       Alert.alert('Could not save', friendlyError(error));
     }
   }
 
   // Two warnings before anything is deleted – there's no undo.
   function confirmDelete() {
+    if (!active.current) return;
     Alert.alert(
       'Delete your account?',
       'Your profile, posts, stories, chats and friends will be gone forever. This cannot be undone.',
@@ -121,33 +159,48 @@ export default function Settings() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () =>
+          onPress: () => {
+            if (!active.current) return;
             Alert.alert('Are you really sure?', `@${profile?.username ?? 'you'} will be deleted right now.`, [
               { text: 'Keep my account', style: 'cancel' },
               {
                 text: 'Delete forever',
                 style: 'destructive',
                 onPress: async () => {
+                  if (!active.current || deleting.current) return;
+                  deleting.current = true;
                   try {
-                    await deleteMyAccount();
+                    await deleteMyAccount(userId);
+                    if (!active.current) return;
                     showToast('Your account was deleted. Bye 👋');
                     // The login no longer exists, so this just clears it from the phone.
-                    await signOut().catch(() => {});
+                    await signOut(userId).catch(() => {});
                   } catch (error) {
-                    Alert.alert('Could not delete your account', friendlyError(error));
+                    if (active.current) Alert.alert('Could not delete your account', friendlyError(error));
+                  } finally {
+                    deleting.current = false;
                   }
                 },
               },
-            ]),
+            ]);
+          },
         },
       ],
     );
   }
 
   function confirmSignOut() {
+    if (!active.current) return;
     Alert.alert('Log out?', undefined, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: signOut },
+      { text: 'Log out', style: 'destructive', onPress: async () => {
+        if (!active.current) return;
+        try {
+          await signOut(userId);
+        } catch (error) {
+          if (active.current) Alert.alert('Could not log out', friendlyError(error));
+        }
+      } },
     ]);
   }
 

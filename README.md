@@ -6,6 +6,7 @@ Built with **Expo** (React Native + TypeScript) and **Supabase**.
 
 * 📖 **The plan, in simple words:** [docs/PLAN.md](docs/PLAN.md)
 * 🧪 **How to test each feature on your phone:** [docs/TESTING.md](docs/TESTING.md)
+* **Automated tests using only local data:** [tests/README.md](tests/README.md)
 
 ---
 
@@ -32,9 +33,15 @@ npm install
 > Skip the parts that are already done for you – the setup message from Claude says which.
 
 1. Go to [supabase.com](https://supabase.com), log in and **create a new project**.
-2. In your project, open **SQL Editor** → **New query**.
-   Copy *everything* from `supabase/migrations/20261027000000_core_schema.sql`, paste it in, and press **Run**.
-   This creates all the tables, privacy rules and photo storage.
+2. The app needs every migration in `supabase/migrations/`, applied in filename order;
+   the first core schema alone is no longer enough. Use a disposable test project
+   and the Supabase migration workflow. The historical report-alert migration
+   assumes the owner's profile already exists, so a completely fresh hosted setup
+   needs that assumption resolved first. The automated local fixture supplies an
+   invented owner row and runs the full schema without contacting a hosted project.
+   Before later releasing the QA hardening migration, review the read-only checks
+   in `tests/database/deployment-preflight.sql` on a test copy for older duplicate
+   or malformed rows. This audit did not deploy any migration.
 3. **Make testing easy:** go to **Authentication → Sign In / Providers → Email** and turn **off** "Confirm email".
    (Otherwise every new test account has to click a link in an email first. Turn it back on before launching.)
 

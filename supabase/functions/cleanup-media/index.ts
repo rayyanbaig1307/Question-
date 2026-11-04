@@ -13,21 +13,28 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
-
-  // Only the daily job (it knows the key) may start a cleanup.
-  const { data: ok } = await admin.rpc('media_cleanup_key_ok', { given: req.headers.get('x-cleanup-key') ?? '' });
-  if (ok !== true) return json({ error: 'Not allowed' }, 401);
-
-  const { data, error } = await admin.rpc('media_cleanup_candidates', { max_files: 1000 });
-  if (error) return json({ error: error.message }, 500);
-  const names = ((data ?? []) as { name: string }[]).map((row) => row.name).filter(Boolean);
-
   let removed = 0;
-  for (let i = 0; i < names.length; i += 100) {
-    const { data: gone, error: removeError } = await admin.storage.from('media').remove(names.slice(i, i + 100));
-    if (removeError) console.warn('Could not remove some files', removeError.message);
-    removed += gone?.length ?? 0;
+  let found = 0;
+  try {
+    // Only the daily job (it knows the key) may start a cleanup.
+    const { data: ok, error: keyError } = await admin.rpc('media_cleanup_key_ok', { given: req.headers.get('x-cleanup-key') ?? '' });
+    if (keyError) throw keyError;
+    if (ok !== true) return json({ error: 'Not allowed' }, 401);
+
+    // A claim makes Storage recheck eligibility at deletion, so a new report or shared file wins the race.
+    const { data, error } = await admin.rpc('claim_media_cleanup', { max_files: 1000 });
+    if (error || !data) throw error ?? new Error('Could not check old files');
+    const names = [...new Set((data as { name: string }[]).map((row) => row.name).filter(Boolean))];
+    found = names.length;
+    for (let i = 0; i < names.length; i += 100) {
+      const { data: gone, error: removeError } = await admin.storage.from('media').remove(names.slice(i, i + 100));
+      if (removeError) throw removeError;
+      removed += gone?.length ?? 0;
+    }
+    console.log(`Media cleanup: ${removed} of ${found} files removed`);
+    return json({ removed, found });
+  } catch (error) {
+    console.warn('Media cleanup could not finish', error);
+    return json({ error: 'Could not finish media cleanup. Please retry.', removed, found }, 503);
   }
-  console.log(`Media cleanup: ${removed} of ${names.length} files removed`);
-  return json({ removed, found: names.length });
 });

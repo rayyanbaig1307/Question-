@@ -71,14 +71,15 @@ export let sharedName: string | null = null;
 export async function signInWithApple(): Promise<void> {
   const { credential, nonce } = await askApple();
   if (!credential.identityToken) throw new Error('Apple did not send a login. Please try again.');
+  // Signing in can open ProfileSetup before the auth call returns. Set (or clear) the name first.
+  const name = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(' ').trim();
+  sharedName = name || null;
   const { error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
     nonce,
   });
-  if (error) throw error;
-  const name = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(' ').trim();
-  if (name) sharedName = name;
+  if (error) { sharedName = null; throw error; }
 }
 
 // Deleting an account that was made with Apple: Apple asks us to disconnect Peekaboo from the person's Apple
@@ -101,9 +102,9 @@ export async function signInWithGoogle(): Promise<void> {
   if (!isSuccessResponse(response)) throw new SignInCancelled();
   const idToken = response.data.idToken;
   if (!idToken) throw new Error('Google did not send a login. Please try again.');
-  const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
-  if (error) throw error;
   sharedName = response.data.user.name ?? null;
+  const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+  if (error) { sharedName = null; throw error; }
 }
 
 // Was this account made with Apple or Google (rather than a username or email)?

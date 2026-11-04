@@ -23,25 +23,40 @@ type ItunesResult = {
   trackViewUrl?: string;
 };
 
+// Profiles can be edited outside this app too. Only open song links from Apple's music hosts.
+function appleUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https:\/\/(?:[a-z0-9-]+\.)*(?:apple\.com|mzstatic\.com)\//i.test(value);
+}
+
 export async function searchSongs(term: string): Promise<Song[]> {
   const query = term.trim();
   if (!query) return [];
-  const response = await fetch(
-    `https://itunes.apple.com/search?media=music&entity=song&limit=25&term=${encodeURIComponent(query)}`,
-  );
-  if (!response.ok) throw new Error("Couldn't search for songs right now");
-  const data = (await response.json()) as { results?: ItunesResult[] };
-  return (data.results ?? [])
-    .filter((r) => r.trackId && r.trackName && r.artistName && r.artworkUrl100 && r.previewUrl && r.trackViewUrl)
-    .map((r) => ({
-      id: r.trackId!,
-      title: r.trackName!,
-      artist: r.artistName!,
-      // A bigger cover than the tiny 100 px one.
-      artworkUrl: r.artworkUrl100!.replace('100x100bb', '300x300bb'),
-      previewUrl: r.previewUrl!,
-      linkUrl: r.trackViewUrl!,
-    }));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(
+      `https://itunes.apple.com/search?media=music&entity=song&limit=25&term=${encodeURIComponent(query)}`,
+      { signal: controller.signal },
+    );
+    if (!response.ok) throw new Error("Couldn't search for songs right now");
+    const data = (await response.json()) as { results?: ItunesResult[] };
+    return (Array.isArray(data.results) ? data.results : [])
+      .filter((r) => r && r.trackId && r.trackName && r.artistName && appleUrl(r.artworkUrl100) && appleUrl(r.previewUrl) && appleUrl(r.trackViewUrl))
+      .map((r) => ({
+        id: r.trackId!,
+        title: r.trackName!,
+        artist: r.artistName!,
+        // A bigger cover than the tiny 100 px one.
+        artworkUrl: r.artworkUrl100!.replace('100x100bb', '300x300bb'),
+        previewUrl: r.previewUrl!,
+        linkUrl: r.trackViewUrl!,
+      }));
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('Search took too long. Please try again.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // The song on someone's profile (or null if they haven't picked one).
@@ -49,6 +64,7 @@ export function profileSong(profile: Profile | null | undefined): Song | null {
   if (!profile?.song_title || !profile.song_artist || !profile.song_artwork_url || !profile.song_preview_url || !profile.song_link_url) {
     return null;
   }
+  if (!appleUrl(profile.song_artwork_url) || !appleUrl(profile.song_preview_url) || !appleUrl(profile.song_link_url)) return null;
   return {
     id: 0,
     title: profile.song_title,

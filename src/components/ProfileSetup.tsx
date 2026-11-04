@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -34,9 +34,9 @@ export function useNeedsSetup(): [boolean | null, () => void] {
       .then((agreed) => {
         if (!cancelled) setAnswer({ user: userId, needed: !agreed });
       })
-      // If the check fails (no internet), don't lock anyone out – the Terms check runs again later.
+      // A failed check must not skip the name, age and Terms confirmations.
       .catch(() => {
-        if (!cancelled) setAnswer({ user: userId, needed: false });
+        if (!cancelled) setAnswer({ user: userId, needed: true });
       });
     return () => {
       cancelled = true;
@@ -63,6 +63,13 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availability, setAvailability] = useState<{ name: string; free: boolean } | null>(null);
+  const working = useRef(false);
+  const mounted = useRef(true);
+  const leaving = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // Check if the username is free, a moment after you stop typing. (The one you already have counts as free.)
   const isMine = username === profile?.username;
@@ -90,29 +97,46 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   };
 
   async function finish() {
+    if (working.current || leaving.current) return;
     setTried(true);
     setError(null);
     if (!userId || Object.values(problems).some(Boolean)) return;
+    working.current = true;
     setBusy(true);
     try {
       if (!isMine && !(await isUsernameAvailable(username))) {
         setAvailability({ name: username, free: false });
         return;
       }
+      if (!mounted.current || leaving.current) return;
       const updated = await updateMyProfile(userId, { username, display_name: name.trim() });
+      if (!mounted.current || leaving.current) return;
       setProfile(updated);
       // Agreeing is the last step: it's also how the app knows setup is done.
       await acceptLegal('terms', TERMS_VERSION);
+      if (!mounted.current || leaving.current) return;
       onDone();
     } catch (setupError) {
       setError(friendlyError(setupError));
     } finally {
-      setBusy(false);
+      working.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  async function cancelSetup() {
+    if (!mounted.current) return;
+    leaving.current = true;
+    try {
+      await signOut(userId ?? undefined);
+    } catch (logoutError) {
+      leaving.current = false;
+      if (mounted.current) setError(friendlyError(logoutError));
     }
   }
 
   return (
-    <FormScreen title="Almost there! 🎉" subtitle="Pick how your friends find you." onBack={signOut}>
+    <FormScreen title="Almost there! 🎉" subtitle="Pick how your friends find you." onBack={cancelSetup}>
       <TextField
         label="Your name"
         value={name}
@@ -176,7 +200,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Let's go!" icon="sparkles" onPress={finish} loading={busy} />
-      <Button title="Cancel and log out" variant="plain" onPress={signOut} />
+      <Button title="Cancel and log out" variant="plain" onPress={cancelSetup} />
     </FormScreen>
   );
 }

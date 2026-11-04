@@ -27,6 +27,8 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The option that was tapped, waiting for the menu to finish closing.
   const pendingAction = useRef<(() => void) | null>(null);
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
 
   const showToast = useCallback((message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -35,8 +37,12 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (actionTimer.current) clearTimeout(actionTimer.current);
+      pendingAction.current = null;
     };
   }, []);
 
@@ -48,17 +54,21 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   };
 
   const runPendingAction = () => {
+    if (!mounted.current) return;
     const action = pendingAction.current;
     pendingAction.current = null;
+    if (actionTimer.current) clearTimeout(actionTimer.current);
+    actionTimer.current = null;
     action?.();
   };
 
   const choose = (option: SheetOption) => {
+    if (pendingAction.current) return;
     closeSheet();
     // Let the menu finish closing before running the action – the phone can't open the camera,
     // the photo picker or another menu while this one is still on screen.
     pendingAction.current = option.onPress;
-    setTimeout(runPendingAction, Platform.OS === 'ios' ? 700 : 250);
+    actionTimer.current = setTimeout(runPendingAction, Platform.OS === 'ios' ? 700 : 250);
   };
 
   return (

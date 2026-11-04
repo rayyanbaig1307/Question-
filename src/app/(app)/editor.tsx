@@ -107,6 +107,9 @@ export default function Editor() {
   const [composer, setComposer] = useState<{ editingId: string | null; draft: TextDraft } | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const working = useRef(false);
+  const sentToChat = useRef(false);
+  const finishedDirect = useRef(false);
   const isVideo = video === '1';
   // Photos can be cropped: the cropped photo replaces the original here (and is shown whole, not cut to the screen).
   const [photoUri, setPhotoUri] = useState(uri);
@@ -250,7 +253,8 @@ export default function Editor() {
   // Save it with everything on it: to the phone's Photos and to your Keeps in Peekaboo.
   const [saved, setSaved] = useState(false);
   async function keep() {
-    if (busy || saved) return;
+    if (working.current || saved) return;
+    working.current = true;
     setBusy(true);
     try {
       const capture = await finish();
@@ -262,11 +266,14 @@ export default function Editor() {
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     } finally {
+      working.current = false;
       setBusy(false);
     }
   }
 
   async function next() {
+    if (working.current || finishedDirect.current) return;
+    working.current = true;
     setBusy(true);
     try {
       const extra = {
@@ -286,6 +293,7 @@ export default function Editor() {
           : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
         if (straightToGroup && group) {
           await sendGroupCapture(userId, group, photo, groupDare);
+          finishedDirect.current = true;
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast(groupDare ? 'Proof posted in the group 🎯' : 'Sent to the group 📸');
           router.dismissTo(`/groups/chat/${group}`);
@@ -293,14 +301,19 @@ export default function Editor() {
         }
         if (straightToGuess) {
           await postMystery(userId, photo, '');
+          finishedDirect.current = true;
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast("Guess Who posted 🕵️ Let's see who figures it out!");
           router.dismissTo('/guess');
           return;
         }
-        await sendSnap(userId, [to ?? ''], photo);
+        if (!sentToChat.current) {
+          await sendSnap(userId, [to ?? ''], photo);
+          sentToChat.current = true;
+        }
         // The proof for their dare: tell them you did it (they confirm it in the chat).
-        if (chatDare) await claimChatDare(chatDare).catch(() => {});
+        if (chatDare) await claimChatDare(chatDare);
+        finishedDirect.current = true;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast(chatDare ? 'Proof sent 🎯 Now they confirm it' : 'Peek sent 👀');
         router.dismissTo(`/chat/${to}`);
@@ -316,8 +329,13 @@ export default function Editor() {
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
-      Alert.alert(straightToChat ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));
+      if (straightToChat && chatDare && sentToChat.current) {
+        Alert.alert('Photo sent, dare not updated', `${friendlyError(error)}\n\nYour photo is already sent. Tap Send again to update the dare.`);
+      } else {
+        Alert.alert(straightToChat || straightToGroup ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));
+      }
     } finally {
+      working.current = false;
       setBusy(false);
     }
   }

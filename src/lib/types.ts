@@ -68,4 +68,4 @@ export type Story = MediaFields & {
   expires_at: string;
 };
 
-export type ReportContentType = 'user' | 'post' | 'story' | 'message' | 'comment';
+export type ReportContentType = 'user' | 'post' | 'story' | 'message' | 'group_message' | 'comment';

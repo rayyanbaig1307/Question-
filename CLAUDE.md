@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Peekaboo: a camera-first social app for close friends (stories, disappearing "peeks", chat, daily dare, daily drop, Guess Who, hit ups, friend map). Expo SDK 58 + expo-router + TypeScript on the client, Supabase (Postgres + RLS + Storage + one Edge Function) as the whole back end. The owner is non-technical: user-facing copy and code comments are written in plain, simple English – keep that style.
+Peekaboo: a camera-first social app for close friends (stories, disappearing "peeks", chat, daily dare, daily drop, Guess Who, hit ups, friend map). Expo SDK 58 + expo-router + TypeScript on the client, Supabase (Postgres + RLS + Storage + three Edge Functions) as the whole back end. The owner is non-technical: user-facing copy and code comments are written in plain, simple English – keep that style.
 
 ## Start here
 
@@ -24,7 +24,7 @@ node scripts/sync-legal.mjs  # after editing anything in legal/ (regenerates src
 node scripts/build-website.mjs  # also after legal/ changes (regenerates the public website/ folder)
 ```
 
-There is no automated test suite; `docs/TESTING.md` is the manual, per-feature test script. Validate changes with typecheck + lint.
+Run `npm test`, typecheck and lint for the local regression suite. See `tests/README.md` for real HTTP/JWT, concurrent PostgreSQL and browser tests, their setup and their limits. `docs/TESTING.md` remains the manual phone checklist. Automated tests use invented users and local services only; do not point them at a real project.
 
 `.env` (gitignored, see `.env.example`) holds `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Without them `src/lib/supabase.ts` points at a dummy host and the root layout shows the `SetupNeeded` screen instead of crashing.
 

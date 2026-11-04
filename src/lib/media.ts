@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from 'expo';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { supabase } from './supabase';
 import type { MediaFields } from './types';
@@ -43,10 +43,22 @@ export async function uploadCapture(
     return { fields: { media_path, media_type: 'photo', poster_path: null, overlay_path: null }, stillUri: capture.uri };
   }
   const posterUri = await makePoster(capture.uri);
-  const media_path = await uploadMedia(userId, folder, capture.uri, 'video');
-  const poster_path = posterUri ? await uploadMedia(userId, folder, posterUri) : null;
-  const overlay_path = capture.overlayUri ? await uploadMedia(userId, folder, capture.overlayUri, 'png') : null;
-  return { fields: { media_path, media_type: 'video', poster_path, overlay_path }, stillUri: posterUri };
+  const uploaded: string[] = [];
+  const save = async (uri: string, type: 'jpg' | 'png' | 'video' = 'jpg') => {
+    const path = await uploadMedia(userId, folder, uri, type);
+    uploaded.push(path);
+    return path;
+  };
+  try {
+    const media_path = await save(capture.uri, 'video');
+    const poster_path = posterUri ? await save(posterUri) : null;
+    const overlay_path = capture.overlayUri ? await save(capture.overlayUri, 'png') : null;
+    return { fields: { media_path, media_type: 'video', poster_path, overlay_path }, stillUri: posterUri };
+  } catch (error) {
+    // A video has several files. If a later file fails, undo the files already saved.
+    await deleteMedia(uploaded).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    throw error;
+  }
 }
 
 // All the files that belong to one photo or video (to delete them together).
@@ -109,11 +121,14 @@ export async function uploadAvatar(userId: string, localUri: string): Promise<st
 
 export async function deleteMedia(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  await supabase.storage.from('media').remove(paths);
+  const { error } = await supabase.storage.from('media').remove(paths);
+  if (error) throw error;
+  paths.forEach((path) => cache.delete(path));
 }
 
 export async function deleteAvatar(path: string): Promise<void> {
-  await supabase.storage.from('avatars').remove([path]);
+  const { error } = await supabase.storage.from('avatars').remove([path]);
+  if (error) throw error;
 }
 
 export function avatarUrl(path: string | null | undefined): string | null {
@@ -127,6 +142,19 @@ export function avatarUrl(path: string | null | undefined): string | null {
 // ---------------------------------------------------------------------------
 const LINK_LIFETIME_SECONDS = 60 * 60;
 const cache = new Map<string, { url: string; expiresAt: number }>();
+const cacheListeners = new Set<() => void>();
+let cacheOwner: string | null = null;
+let cacheVersion = 0;
+
+// A signed link carries permission with it. Never reuse one from a previous person's login.
+supabase.auth.onAuthStateChange((_event, session) => {
+  const owner = session?.user.id ?? null;
+  if (owner === cacheOwner) return;
+  cacheOwner = owner;
+  cacheVersion += 1;
+  cache.clear();
+  cacheListeners.forEach((listener) => listener());
+});
 
 function cached(path: string): string | null {
   const hit = cache.get(path);
@@ -136,6 +164,7 @@ function cached(path: string): string | null {
 }
 
 export async function getMediaUrls(paths: string[]): Promise<Record<string, string>> {
+  const version = cacheVersion;
   const result: Record<string, string> = {};
   const missing: string[] = [];
   for (const path of new Set(paths)) {
@@ -145,6 +174,8 @@ export async function getMediaUrls(paths: string[]): Promise<Record<string, stri
   }
   if (missing.length > 0) {
     const { data, error } = await supabase.storage.from('media').createSignedUrls(missing, LINK_LIFETIME_SECONDS);
+    // The request may have started for the person who just logged out.
+    if (version !== cacheVersion) return {};
     if (error) throw error;
     for (const item of data ?? []) {
       if (item.path && item.signedUrl) {
@@ -159,7 +190,11 @@ export async function getMediaUrls(paths: string[]): Promise<Record<string, stri
 // React helper: gives you { [path]: url } for a list of photo paths.
 export function useMediaUrls(paths: string[]): Record<string, string> {
   const key = paths.join('|');
-  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [loaded, setLoaded] = useState<{ key: string; version: number; urls: Record<string, string> } | null>(null);
+  const version = useSyncExternalStore(
+    (listener) => { cacheListeners.add(listener); return () => { cacheListeners.delete(listener); }; },
+    () => cacheVersion,
+  );
 
   useEffect(() => {
     const list = key ? key.split('|') : [];
@@ -167,15 +202,15 @@ export function useMediaUrls(paths: string[]): Record<string, string> {
     let cancelled = false;
     getMediaUrls(list)
       .then((found) => {
-        if (!cancelled) setUrls((previous) => ({ ...previous, ...found }));
+        if (!cancelled) setLoaded({ key, version, urls: found });
       })
       .catch((error) => console.warn('Could not load photos', error));
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, version]);
 
-  return urls;
+  return loaded?.key === key && loaded.version === version ? loaded.urls : {};
 }
 
 export function useMediaUrl(path: string | null | undefined): string | null {
