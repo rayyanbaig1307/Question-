@@ -57,6 +57,19 @@ as update `b9693978-610a-43e9-b6bd-9236ca3559de`. The owner tested and OK'd it: 
 - Last good published update: `2805de80-32fd-4d0b-b2ea-859a479862b0` (commit `6c768aa`). Every app change up
   to then is live. Commits after it only touch docs.
 
+## Media cleanup and the Android map (4 Nov)
+
+- **Cleanup:** `supabase/functions/cleanup-media` (verify_jwt off; checks `x-cleanup-key` against the Vault
+  secret `media_cleanup_key`) runs daily at 04:17 UTC from pg_cron job `peekaboo-media-cleanup`. It deletes the
+  files of stories / Guess Who posts that ended 7+ days ago and of opened, unsaved peeks 7+ days old – never posts,
+  Keeps, voice notes, saved/unopened peeks, or anything reported. Rules: `public.media_cleanup_candidates` in
+  migration `20261208000000_media_cleanup.sql` (live). A new media feature needs no change: only those three
+  kinds are ever touched.
+- **Android map:** `app.config.js` adds `android.config.googleMaps.apiKey` from the EAS env var
+  `GOOGLE_MAPS_ANDROID_API_KEY` (iOS untouched – Apple Maps). Without it the Android map is grey. Needs the
+  owner to create the key (Google Cloud project peekaboo-513706 → Maps SDK for Android, restricted to
+  com.rbaig18.peekaboo + the EAS SHA-1) and then a new Android build.
+
 ## Website (for the App Store / Google links)
 
 `website/` is built by `node scripts/build-website.mjs` from `legal/*.md` (home, support, privacy, terms,
