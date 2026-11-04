@@ -12,8 +12,8 @@ import { fetchProfile } from '@/lib/profiles';
 import type { Profile } from '@/lib/types';
 import { colors, space } from '@/theme';
 
-// Someone else's friends list (from the Friends number on their profile). Each row has an Add button, so you
-// can add their friends too. A private account's list only shows to their friends.
+// A friend's friends list (from the Friends number on their profile). Each row has an Add button, so you can
+// add their friends too. Only friends can see it – add someone first to see who they know.
 export default function FriendsOf() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
@@ -49,7 +49,7 @@ export default function FriendsOf() {
       {friends === null ? (
         <ActivityIndicator color={colors.accent} style={styles.loading} />
       ) : friends.length === 0 ? (
-        <EmptyState emoji="🫥" title="No friends to show" message={`${name || 'They'} ${person?.is_private ? 'keeps this list for friends only' : "hasn't added anyone yet"}.`} />
+        <EmptyState emoji="🫥" title="No friends to show" message={`${name || 'They'} hasn't added anyone yet – or you need to be friends first.`} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {friends.map((friend) => (

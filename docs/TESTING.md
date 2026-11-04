@@ -105,8 +105,8 @@ person when the steps say so (Settings → Log out).
    the top of Chat with A's row and **Accept** / **✕**. (The 👤+ button on the camera shows a red 1 too.)
 4. (Private B only) Tap **Accept** → "You and @personA are friends! 🎉". Both of you now see each other under
    **My friends**, and the **Friends** count on your profiles went up.
-   **Someone's friends:** on any profile, tap the **Friends** number → their friends list, each with an **Add**
-   button. A private account's list only opens for their friends ("🔒 This account is private" otherwise).
+   **Someone's friends:** on a **friend's** profile, tap the **Friends** number → their friends list, each with an
+   **Add** button. On anyone you're not friends with, the number can't be tapped – add them first.
 5. Tap Person A's row → their profile. You see a **Friends** button and a **👯 Friends** badge.
 6. **Private accounts:** make Person B private (Settings). Log in as someone who is **not** B's friend and open
    B's profile → "🔒 This account is private". Friends of B can still see B's photos.

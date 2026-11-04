@@ -74,8 +74,8 @@ begin
 end;
 $$;
 
--- Someone's friends list, for the Friends number on their profile. You can see it when it's your own, when
--- their account is public, or when you're friends. Blocked (either way) or a private stranger → nothing.
+-- Someone's friends list, for the Friends number on their profile. Only their friends (and they themselves)
+-- can see it – public or private, you have to be friends first. Blocked (either way) → nothing.
 create or replace function public.friends_of(person uuid)
 returns setof public.profiles language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -89,13 +89,8 @@ begin
   if they_are_private is null then
     return;
   end if;
-  if person <> me then
-    if private.is_blocked(me, person) then
-      return;
-    end if;
-    if they_are_private and not private.are_friends(me, person) then
-      return;
-    end if;
+  if person <> me and (private.is_blocked(me, person) or not private.are_friends(me, person)) then
+    return;
   end if;
   return query
     select p.* from public.friendships f
