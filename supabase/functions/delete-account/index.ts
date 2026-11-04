@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
   const userId = who.user.id;
 
   // 0. Made with Apple? Disconnect Peekaboo from their Apple ID.
-  const { apple_code: appleCode } = await req.json().catch(() => ({}));
+  const { apple_code: appleCode } = ((await req.json().catch(() => null)) ?? {}) as { apple_code?: unknown };
   if (typeof appleCode === 'string' && appleCode) {
     await disconnectFromApple(appleCode).catch((error) => console.warn('Apple disconnect failed', error));
   }

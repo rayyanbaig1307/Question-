@@ -63,6 +63,8 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Migration `20261204000000_apple_google_sign_in.sql`: new-user trigger takes Google's name; plus
   `public.hook_only_apple_or_google_sign_ups`, inert until the owner switches on the "Before User Created" auth
   hook (do that only after the new builds are out).
+- Live now: the migration (applied 4 Nov) and `delete-account` v5. Not published yet: the app code (it needs the
+  new native builds; an OTA alone just keeps the old buttons).
 - `delete-account` revokes the Apple token when the app sends `apple_code` (needs secrets `APPLE_KEY_ID`,
   `APPLE_PRIVATE_KEY`; skipped without them).
 - Owner's steps, in order: Supabase Apple provider (Client IDs `com.rbaig18.peekaboo`); Google Cloud project with
@@ -128,7 +130,7 @@ Optional ideas the owner may ask for:
 ## Database changes
 
 Migrations live in `supabase/migrations` and are applied in filename order. All of them up to
-`20261203000000_add_public_friends.sql` are live. The old `20261129000000_moderation.sql` was deleted and never
+`20261204000000_apple_google_sign_in.sql` are live (its sign-up hook is not switched on yet). The old `20261129000000_moderation.sql` was deleted and never
 applied.
 
 Earlier sessions tested every migration on a local Postgres 16 with small stubs for Supabase's `auth`,
