@@ -42,7 +42,8 @@ and the owner's standing preferences.
 **Test channel:** there's a `testing` channel/branch for trying changes in Expo Go before they go live
 (`exp://u.expo.dev/3c421eae-c4ec-47ea-92da-4b2d07b7d13e?channel-name=testing`). Installed builds use `preview`, so
 nothing on `testing` reaches users or Apple's reviewer. The Inbox + chat dare streaks (`d636971`) are on `testing`
-as update `b9693978-610a-43e9-b6bd-9236ca3559de`, waiting for the owner's OK before they go to `preview`.
+as update `b9693978-610a-43e9-b6bd-9236ca3559de`. The owner tested and OK'd it: it's **live on `preview`** as update
+`b73eb4c8-d867-42f7-bfd6-70af64c303de` (head `a20e651`).
 
 - Earlier sessions used a second "publishing" session to run `eas update` and native builds, because it holds
   the Expo/App Store Connect credentials. A new session can publish itself if `EXPO_TOKEN` is set
