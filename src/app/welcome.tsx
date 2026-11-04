@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -44,16 +44,20 @@ export default function Welcome() {
         </View>
         <View style={styles.buttons}>
           {SOCIAL_SIGN_IN_AVAILABLE ? (
-            // New accounts are made with Apple (iPhone) or Google (Android) – no password, no email to confirm.
-            // The same button logs you back in. Older accounts log in with their username or email.
+            // One button for everyone: Apple (iPhone) or Google (Android) makes a new account the first time and
+            // logs you back in after that – no password, no email to confirm. Only people who made an account the
+            // old way (username + password) need the small link underneath.
             <>
               <SocialSignInButtons onDark />
-              <Button
-                title="Log in with username or email"
-                variant="secondary"
-                style={styles.secondary}
+              <Pressable
                 onPress={() => router.push('/sign-in')}
-              />
+                hitSlop={12}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}>
+                <Text style={styles.linkText}>
+                  Have a username and password? <Text style={styles.linkBold}>Log in</Text>
+                </Text>
+              </Pressable>
             </>
           ) : (
             // Expo Go and older downloads don't have Apple/Google sign-in.
@@ -113,5 +117,23 @@ const styles = StyleSheet.create({
   },
   secondary: {
     backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  link: {
+    alignSelf: 'center',
+    paddingVertical: space.sm,
+  },
+  linkPressed: {
+    opacity: 0.6,
+  },
+  linkText: {
+    ...font.body,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+  },
+  linkBold: {
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
   },
 });
