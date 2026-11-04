@@ -16,7 +16,6 @@ import { contactEmail, type LegalPage } from '@/lib/legal';
 import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
-import { fetchAmIAdmin } from '@/lib/moderation';
 import { scheduleDropNotifications } from '@/lib/notifications';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
@@ -30,8 +29,6 @@ export default function Settings() {
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
   const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
-  // Admins (set in the database) get the Reports screen.
-  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
     fetchNotificationPrefs(userId)
@@ -44,9 +41,6 @@ export default function Settings() {
     useCallback(() => {
       fetchMyBirthday(userId)
         .then(setBirthday)
-        .catch(() => {});
-      fetchAmIAdmin(userId)
-        .then(setAdmin)
         .catch(() => {});
     }, [userId]),
   );
@@ -287,12 +281,6 @@ export default function Settings() {
             <Row icon="mail" color={colors.orange} title="Contact us" subtitle={CONTACT} onPress={() => Linking.openURL(`mailto:${CONTACT}`)} />
           ) : null}
         </Section>
-
-        {admin ? (
-          <Section title="Owner">
-            <Row icon="flag" color={colors.red} title="Reports" subtitle="What people reported – remove, ban or dismiss" onPress={() => router.push('/reports')} />
-          </Section>
-        ) : null}
 
         <Section title="Account">
           <Row icon="person" color={colors.blue} title="Edit profile" onPress={() => router.push('/edit-profile')} />

@@ -793,14 +793,18 @@ arrive with the normal update.
 2. **Chat, comments, captions, hit ups, dare ideas, group names:** slurs are blocked ("That word isn't allowed on
    Peekaboo"); ordinary swearing between friends still goes through in chats and captions.
 
-## Step 54 – Reports (owner only) 🚩
+## Step 54 – Reports (owner, in Supabase) 🚩
 
-1. Settings → an **Owner** section with **Reports** shows only on admin accounts (set in the database).
-2. Have a test account report a post, a comment, a message and a profile. Each shows up with who reported whom,
-   the reason, and the reported text. **Open / All** switches the list.
-3. **Remove** deletes that post/comment/message/story for everyone (asks first). **Ban** stops the account
-   logging in (asks first; they're logged out within an hour) – **Unban** undoes it. **Reviewed** and
-   **Dismiss** close the report. Open their profile by tapping the name.
+Reports are handled in the Supabase dashboard only – there's no owner screen in the app. Check at least once a
+day and act within 24 hours.
+
+1. Have a test account report a post, a comment, a message and a profile.
+2. Supabase → **Table Editor → reports**: each report is a row with the reporter, the reported account, the
+   reason, what kind of thing it was (`content_type`) and its id (`content_id`).
+3. **Remove it:** open the matching table (posts, mystery_posts, stories, comments or messages), find the row
+   with that id and delete it. Then set the report's `status` to `reviewed`.
+4. **Ban someone:** Supabase → **Authentication → Users** → find them → **Ban user**. (Unban the same way.)
+5. Nothing to do: set the report's `status` to `dismissed`.
 
 ## Step 55 – Keeps 📦 (save your edits)
 
