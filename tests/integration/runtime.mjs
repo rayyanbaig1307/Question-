@@ -1,12 +1,13 @@
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { resolve } from 'node:path';
+import { delimiter, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHmac, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import pg from 'pg';
 import { initializeDatabase, seedUsers, friend } from '../database/local-db.mjs';
+import { postgresBin, exe, assertNotRoot } from '../support/native-tools.mjs';
 
 export async function freePort() {
   return new Promise((resolvePort, reject) => {
@@ -18,9 +19,10 @@ export async function freePort() {
 
 export async function startLocalRest({ includeFixes = true, syntheticUsers = 40 } = {}) {
   const repo = fileURLToPath(new URL('../../', import.meta.url));
-  const binary = resolve(repo, 'node_modules/@embedded-postgres/windows-x64/native/bin');
-  const localRest = resolve(repo, '.qa/tools/postgrest/postgrest.exe');
-  const postgrest = process.env.QA_POSTGREST_BINARY || (existsSync(localRest) ? localRest : resolve(repo, '../tools/postgrest/runtime/postgrest.exe'));
+  assertNotRoot();
+  const binary = postgresBin(repo);
+  const localRest = resolve(repo, '.qa/tools/postgrest', exe('postgrest'));
+  const postgrest = process.env.QA_POSTGREST_BINARY || (existsSync(localRest) ? localRest : resolve(repo, '../tools/postgrest/runtime', exe('postgrest')));
   const root = resolve(repo, '.qa', `rest-${Date.now()}-${randomBytes(3).toString('hex')}`);
   await mkdir(root, { recursive: true });
   const dbPort = await freePort();
@@ -39,12 +41,12 @@ export async function startLocalRest({ includeFixes = true, syntheticUsers = 40 
   const stop = async () => {
     rest?.kill();
     await pool?.end().catch(() => {});
-    if (postgres) await command(resolve(binary, 'pg_ctl.exe'), ['-D', resolve(root, 'cluster'), '-m', 'fast', '-w', 'stop']).catch(() => postgres.kill());
+    if (postgres) await command(resolve(binary, exe('pg_ctl')), ['-D', resolve(root, 'cluster'), '-m', 'fast', '-w', 'stop']).catch(() => postgres.kill());
     await Promise.all(processes.map(child => child.exitCode !== null ? Promise.resolve() : new Promise(resolveExit => { child.once('exit', resolveExit); setTimeout(resolveExit, 3000); })));
   };
   try {
-    await command(resolve(binary, 'initdb.exe'), ['-D', resolve(root, 'cluster'), '-U', 'postgres', '--auth=trust', '--locale=C', '--encoding=UTF8', '--no-instructions']);
-    postgres = spawn(resolve(binary, 'postgres.exe'), ['-D', resolve(root, 'cluster'), '-h', '127.0.0.1', '-p', String(dbPort), '-c', 'fsync=off', '-c', 'max_connections=100'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    await command(resolve(binary, exe('initdb')), ['-D', resolve(root, 'cluster'), '-U', 'postgres', '--auth=trust', '--locale=C', '--encoding=UTF8', '--no-instructions']);
+    postgres = spawn(resolve(binary, exe('postgres')), ['-D', resolve(root, 'cluster'), '-h', '127.0.0.1', '-p', String(dbPort), '-c', 'fsync=off', '-c', 'max_connections=100'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     processes.push(postgres);
     let logs = '';
     postgres.stdout.on('data', value => logs += value);
@@ -93,7 +95,7 @@ export async function startLocalRest({ includeFixes = true, syntheticUsers = 40 
       `jwt-secret = "${secret}"`, 'server-host = "127.0.0.1"', `server-port = ${restPort}`,
       'db-pool = 16', 'db-channel-enabled = false', 'log-level = "error"',
     ].join('\n'));
-    rest = spawn(postgrest, [config], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: `${binary};${process.env.PATH ?? ''}` } });
+    rest = spawn(postgrest, [config], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: `${binary}${delimiter}${process.env.PATH ?? ''}` } });
     processes.push(rest);
     let restError = null;
     rest.once('error', error => { restError = error; });

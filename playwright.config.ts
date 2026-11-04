@@ -2,7 +2,14 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
-const installedChrome = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+// Use a Chrome/Chromium already on this computer if there is one (QA_CHROME_PATH,
+// the normal Windows Chrome, or a preinstalled Linux Chromium); otherwise
+// Playwright's own browser (npx playwright install chromium).
+const installedChrome = [
+  process.env.QA_CHROME_PATH,
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  '/opt/pw-browsers/chromium',
+].find(candidate => candidate && existsSync(candidate));
 export default defineConfig({
   testDir: './tests/browser',
   testMatch: '*.spec.ts',
@@ -13,7 +20,7 @@ export default defineConfig({
   reporter: [['list'], ['json', { outputFile: '.qa/browser-results.json' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',
-    launchOptions: existsSync(installedChrome) ? { executablePath: installedChrome } : {},
+    launchOptions: installedChrome ? { executablePath: installedChrome } : {},
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     serviceWorkers: 'block',

@@ -6,12 +6,14 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { initializeDatabase, seedUsers, asUser, friend } from './local-db.mjs';
+import { postgresBin, exe, assertNotRoot } from '../support/native-tools.mjs';
 
 // Real PostgreSQL 16, listening ONLY on loopback. Everything, including the
 // cluster's files, is created in this chat's work folder. Pushes remain local.
 const repo=fileURLToPath(new URL('../../',import.meta.url));
-const native=resolve(repo,'node_modules/@embedded-postgres/windows-x64/native/bin');
-const root=resolve(repo,'..',`native-pg-${Date.now()}`);
+assertNotRoot();
+const native=postgresBin(repo);
+const root=resolve(process.env.QA_NATIVE_ROOT??resolve(repo,'.qa'),`native-pg-${Date.now()}`);
 await mkdir(root,{recursive:true});
 const output=resolve(process.env.QA_CONCURRENCY_OUTPUT??resolve(root,'concurrency-results.json'));
 const port=await new Promise((res,rej)=>{const s=createServer();s.once('error',rej);s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>res(p));});});
@@ -22,9 +24,9 @@ const run=(exe,args)=>new Promise((res,rej)=>{
 });
 let server;const reports=[];let pools=[];
 try {
-  await run('initdb.exe',['-D',resolve(root,'cluster'),'-U','postgres','--auth=trust','--locale=C','--encoding=UTF8','--no-instructions']);
+  await run(exe('initdb'),['-D',resolve(root,'cluster'),'-U','postgres','--auth=trust','--locale=C','--encoding=UTF8','--no-instructions']);
   let log='';
-  server=spawn(resolve(native,'postgres.exe'),['-D',resolve(root,'cluster'),'-h','127.0.0.1','-p',String(port),'-c','fsync=off','-c','max_connections=100'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
+  server=spawn(resolve(native,exe('postgres')),['-D',resolve(root,'cluster'),'-h','127.0.0.1','-p',String(port),'-c','fsync=off','-c','max_connections=100'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
   server.stdout.on('data',x=>log+=x);server.stderr.on('data',x=>log+=x);
   const config={host:'127.0.0.1',port,user:'postgres',database:'postgres',max:64,connectionTimeoutMillis:10000,statement_timeout:15000};
   let admin;
@@ -216,5 +218,5 @@ try {
   if(reports.some(r=>r.environment==='qa_fixed'&&!r.passed))process.exitCode=1;
 } finally {
   await Promise.all(pools.map(p=>p.end().catch(()=>{})));
-  if(server){await run('pg_ctl.exe',['-D',resolve(root,'cluster'),'-m','fast','-w','stop']).catch(()=>server.kill());}
+  if(server){await run(exe('pg_ctl'),['-D',resolve(root,'cluster'),'-m','fast','-w','stop']).catch(()=>server.kill());}
 }
