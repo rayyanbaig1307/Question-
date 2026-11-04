@@ -12,6 +12,7 @@ import { Button } from '@/components/Button';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { ZoomableImage } from '@/components/ZoomableImage';
 import { Bouncy, usePop } from '@/components/Bouncy';
+import { DareBackButton } from '@/components/DareBackButton';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { HypeRating } from '@/components/HypeRating';
 import { DropBadge } from '@/components/DropPill';
@@ -257,6 +258,9 @@ export default function PostViewer() {
             </View>
           ) : null}
           {post.dare_day ? <DareTag day={post.dare_day} /> : null}
+          {post.dare_day && isFriend && post.user_id !== userId && post.author ? (
+            <DareBackButton person={{ id: post.user_id, name: post.author.display_name || post.author.username }} />
+          ) : null}
           {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
           {post.dare_hype ? (
             <HypeRating

@@ -17,6 +17,7 @@ import Animated, {
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
+import { DareBackButton } from '@/components/DareBackButton';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { DropBadge } from '@/components/DropPill';
 import { HypeRating } from '@/components/HypeRating';
@@ -46,6 +47,7 @@ export function FeedCard({
   onMenu,
   onRevealed,
   canVote = false,
+  canDareBack = false,
 }: {
   post: FeedPost;
   // The photo's link (for a video: its still picture) – or, while `locked`, the link of its tiny blurry preview.
@@ -66,6 +68,8 @@ export function FeedCard({
   onRevealed?: () => void;
   // Hype rating on a friend's dare: you can rate it (not your own, not strangers').
   canVote?: boolean;
+  // A friend's dare post: show "Dare them back" (sends a dare to your chat with them).
+  canDareBack?: boolean;
 }) {
   const lastTap = useRef(0);
   const locked = lock !== null;
@@ -291,6 +295,9 @@ export function FeedCard({
         </Pressable>
       ) : null}
       {post.dare_day ? <DareTag day={post.dare_day} /> : null}
+      {post.dare_day && canDareBack && post.author ? (
+        <DareBackButton person={{ id: post.user_id, name: post.author.display_name || post.author.username }} />
+      ) : null}
       {post.forfeit_text ? <ForfeitTag text={post.forfeit_text} /> : null}
       {post.dare_hype ? (
         <HypeRating

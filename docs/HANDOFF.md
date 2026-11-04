@@ -116,6 +116,17 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Dare them back, live Inbox, server drop reminder (4 Nov)
+
+- `components/DareBackButton.tsx` on friends' dare posts (FeedCard `canDareBack`, post/[id]) → a chat dare.
+- Inbox listens live (likes, comments, comment_likes, friendships, hit_ups added to `supabase_realtime` by
+  `20261207000000_inbox_live.sql`, applied). One channel per visit with a unique name.
+- `20261208000000_drop_reminders.sql`: `push_tokens.utc_offset_minutes`, `register_push_token(push_token, phone,
+  utc_offset default null)`, `private.send_drop_reminders()` run every minute by pg_cron
+  (`peekaboo-drop-reminders`). It sends to users whose last app open was 7–45 days ago at their local drop minute,
+  once a day. **The app code sends `utc_offset`, so this migration must be live before that code is published**
+  (otherwise `register_push_token` rejects the unknown argument).
+
 ## Inbox 🔔 + chat dare streaks (done, 4 Nov)
 
 - **Inbox** (`src/app/(app)/inbox.tsx`): hit ups, friend requests and Activity moved out of the Chat list into

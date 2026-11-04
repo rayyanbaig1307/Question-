@@ -16,13 +16,17 @@ import { friendlyError } from '@/lib/errors';
 import { fetchIncomingRequests, relationFrom, type FriendLink } from '@/lib/friends';
 import { respondToHitUp, useHitUps, type HitUp } from '@/lib/hitups';
 import { clearDeliveredNotifications } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
 
+let inboxListener = 0;
+
 // Your Inbox 🔔 (the bell at the top of Chat), like Instagram's notifications page:
 // hit ups and friend requests waiting for an answer, then your activity – who liked, commented, added you…
-// Pull down to refresh. "Clear" empties the activity list. Leaving marks everything as seen.
+// It updates live while open; pull down to refresh too. "Clear" empties the activity list. Leaving marks
+// everything as seen.
 export default function Inbox() {
   const { userId } = useMe();
   const [focused, setFocused] = useState(false);
@@ -46,11 +50,30 @@ export default function Inbox() {
       loadRequests();
       // Opening the Inbox clears Peekaboo's notifications off your lock screen and the number on the app icon.
       clearDeliveredNotifications();
+      // Live while it's open: a like, comment, hit up or friend request shows up straight away.
+      // (Several changes close together → one reload.) Each visit gets its own channel name – two listeners
+      // on the same name crash the realtime library (see docs/HANDOFF.md).
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const soon = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          reloadActivity();
+          reloadHitUps();
+          loadRequests();
+        }, 600);
+      };
+      const channel = supabase.channel(`inbox-${userId}-${++inboxListener}`);
+      for (const table of ['likes', 'comments', 'comment_likes', 'friendships', 'hit_ups']) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table }, soon);
+      }
+      channel.subscribe();
       return () => {
+        if (timer) clearTimeout(timer);
+        supabase.removeChannel(channel);
         setFocused(false);
         markSeen();
       };
-    }, [loadRequests, markSeen]),
+    }, [loadRequests, markSeen, reloadActivity, reloadHitUps, userId]),
   );
 
   async function refresh() {

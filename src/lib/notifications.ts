@@ -85,6 +85,9 @@ export async function registerForPush(): Promise<void> {
     const { error } = await supabase.rpc('register_push_token', {
       push_token: token,
       phone: Platform.OS === 'ios' ? 'ios' : 'android',
+      // The phone's time zone, so the server can send the drop alert at your local drop time if you haven't
+      // opened Peekaboo for a while (see supabase/migrations/20261208000000_drop_reminders.sql).
+      utc_offset: -new Date().getTimezoneOffset(),
     });
     if (error) throw error;
     myPushToken = token;

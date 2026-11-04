@@ -867,3 +867,14 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    More than 3 days without a completed dare resets it.
 5. Nobody can confirm their own dare or fake a completed one.
 
+## Step 58 – Dare them back, live Inbox, drop reminder ⏰
+
+1. **Dare them back:** a friend's daily-dare post (Home feed, or opened full screen) shows **🎯 Dare <name> back**.
+   Write a dare → "Dare sent to <name> 🎯 It's in your chat" → it's a dare card in your chat with them (Step 57).
+   Not shown on your own posts or on posts from people you're not friends with.
+2. **Live Inbox:** keep the Inbox open on phone A. From phone B like A's post, comment, hit A up or add A – it
+   appears on A within a second or two, no pull-down needed.
+3. **Drop reminder from the server:** someone who hasn't opened Peekaboo for 7–45 days still gets
+   "⏰ Peekaboo drop!" at their local drop time (once a day; not if they turned Drops off in Settings →
+   Notifications). People who open the app normally get the phone's own reminder instead, never two.
+

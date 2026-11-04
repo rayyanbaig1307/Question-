@@ -287,6 +287,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
               onRevealed={() => noteDropSeen(item.id, true)}
               // Only friends rate dares (🔥 😬 💀) – not your own.
               canVote={item.user_id !== userId && !item.fromEveryone}
+              canDareBack={item.user_id !== userId && !item.fromEveryone}
             />
           </>
         )}
