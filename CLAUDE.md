@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Peekaboo: a camera-first social app for close friends (stories, disappearing "peeks", chat, daily dare, daily drop, Guess Who, hit ups, friend map). Expo SDK 58 + expo-router + TypeScript on the client, Supabase (Postgres + RLS + Storage + one Edge Function) as the whole back end. The owner is non-technical: user-facing copy and code comments are written in plain, simple English – keep that style.
 
+## Start here
+
+Read `docs/HANDOFF.md` first. It covers the current status, open items, the owner's preferences (plain words,
+post links after every publish, never ask for keys in chat) and the launch-crash lesson. Work on branch
+`claude/mobile-social-app-expo-h090jm`.
+
 ## Commands
 
 ```sh
