@@ -97,9 +97,15 @@ async function countIncomingRequests(me: string): Promise<number> {
   return count ?? 0;
 }
 
+// Each place that listens gets its own channel name. Two listeners on the same name share one channel, and
+// adding a listener to a channel that's already subscribed makes the realtime library throw (that crashed the
+// app on launch once, when the Camera and the Chat tab both listened as `friend-requests-<me>`).
+let listenerNumber = 0;
+
 // Live number of friend requests waiting for you (updates instantly when someone adds you).
 export function useIncomingRequestCount(me: string, active: boolean): number {
   const [count, setCount] = useState(0);
+  const [channelName] = useState(() => `friend-requests-${me}-${++listenerNumber}`);
 
   useEffect(() => {
     if (!active) return;
@@ -109,13 +115,13 @@ export function useIncomingRequestCount(me: string, active: boolean): number {
         .catch(() => {});
     refresh();
     const channel = supabase
-      .channel(`friend-requests-${me}`)
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, refresh)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [me, active]);
+  }, [me, active, channelName]);
 
   return count;
 }
