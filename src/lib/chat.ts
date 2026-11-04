@@ -74,26 +74,57 @@ const pairFilter = (me: string, friend: string) =>
 
 // Newest first.
 export async function fetchConversation(me: string, friend: string, limit = 100): Promise<Message[]> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*, story:stories(media_path, media_type, poster_path)')
-    .or(pairFilter(me, friend))
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const [{ data, error }, hidden] = await Promise.all([
+    supabase
+      .from('messages')
+      .select('*, story:stories(media_path, media_type, poster_path)')
+      .or(pairFilter(me, friend))
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    fetchHiddenIds(me),
+  ]);
   if (error) throw error;
-  return (data ?? []) as Message[];
+  return ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
+}
+
+// Messages you deleted "for me" (or cleared): hidden from your side only.
+async function fetchHiddenIds(me: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('message_hides')
+    .select('message_id')
+    .eq('user_id', me)
+    .order('hidden_at', { ascending: false })
+    .limit(5000);
+  // A server without "delete for me" yet: nothing is hidden.
+  if (error) return new Set();
+  return new Set((data ?? []).map((row) => row.message_id as string));
+}
+
+// "Delete for me": hides a message (yours or theirs) from your chat only. Your friend still sees it.
+export async function hideMessage(messageId: string): Promise<void> {
+  const { error } = await supabase.rpc('hide_message', { message: messageId });
+  if (error) throw error;
+}
+
+// "Clear chat": hides every message in your chat with a friend, from your side only.
+export async function clearChat(friend: string): Promise<void> {
+  const { error } = await supabase.rpc('clear_chat', { friend });
+  if (error) throw error;
 }
 
 // Your recent messages with everyone, newest first (for the chat list).
 export async function fetchRecentMessages(me: string): Promise<Message[]> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
-    .order('created_at', { ascending: false })
-    .limit(500);
+  const [{ data, error }, hidden] = await Promise.all([
+    supabase
+      .from('messages')
+      .select('*')
+      .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    fetchHiddenIds(me),
+  ]);
   if (error) throw error;
-  return (data ?? []) as Message[];
+  return ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
 }
 
 export async function fetchMessage(id: string): Promise<Message | null> {

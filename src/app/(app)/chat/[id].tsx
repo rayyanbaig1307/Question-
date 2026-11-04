@@ -43,6 +43,7 @@ import {
   deleteMessage,
   fetchConversation,
   fetchDareStreak,
+  hideMessage,
   markChatRead,
   type Message,
   sendDare,
@@ -225,20 +226,33 @@ export default function ChatScreen() {
           : canSave(message)
             ? [{ label: 'Save in chat 📌', onPress: () => toggleSaved(message, true) }]
             : [];
+    const deleteForMe = {
+      label: 'Delete for me',
+      onPress: async () => {
+        try {
+          await hideMessage(message.id);
+          setMessages((current) => current?.filter((m) => m.id !== message.id) ?? null);
+          showToast(`Deleted for you – ${name || 'they'} still ${message.sender_id === userId ? 'has' : 'have'} it`);
+        } catch (error) {
+          Alert.alert('Could not delete', friendlyError(error));
+        }
+      },
+    };
     if (message.sender_id === userId) {
       showOptions({
         options: [
           ...saveOptions,
+          deleteForMe,
           {
-            label: 'Unsend',
+            label: 'Delete for everyone',
             destructive: true,
             onPress: async () => {
               try {
                 await deleteMessage(message);
                 setMessages((current) => current?.filter((m) => m.id !== message.id) ?? null);
-                showToast('Unsent');
+                showToast('Deleted for everyone');
               } catch (error) {
-                Alert.alert('Could not unsend', friendlyError(error));
+                Alert.alert('Could not delete', friendlyError(error));
               }
             },
           },
@@ -248,6 +262,7 @@ export default function ChatScreen() {
       showOptions({
         options: [
           ...saveOptions,
+          deleteForMe,
           {
             label: 'Report message',
             onPress: () => report({ user: friend, contentType: 'message', contentId: message.id }),

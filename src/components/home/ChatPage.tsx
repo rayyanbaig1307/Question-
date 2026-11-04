@@ -12,7 +12,7 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
 import { useMe } from '@/lib/auth';
-import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
+import { clearChat, fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
@@ -189,6 +189,27 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
           },
         },
         { label: '👤 See profile', onPress: () => router.push(`/profile/${friend.id}`) },
+        {
+          label: '🧹 Clear chat',
+          destructive: true,
+          onPress: () =>
+            Alert.alert(`Clear your chat with ${name}?`, `It's only cleared for you – ${name} still has it.`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Clear',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await clearChat(friend.id);
+                    showToast('Chat cleared 🧹');
+                    refresh();
+                  } catch (error) {
+                    Alert.alert('Could not clear', friendlyError(error));
+                  }
+                },
+              },
+            ]),
+        },
         { label: '🚫 Block', destructive: true, onPress: () => confirmBlock(friend, refresh) },
       ],
     });
