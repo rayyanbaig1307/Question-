@@ -88,7 +88,7 @@ export default function Settings() {
   function chooseHitUps() {
     showOptions({
       title: 'Who can hit you up? 👋',
-      message: 'Hit ups are only ever between people your age (teens with teens, adults with adults).',
+      message: 'Hit ups are only for people 18 and over.',
       options: HIT_UPS_FROM.map((option) => ({
         label: `${option.label}${profile?.hit_ups_from === option.key ? ' ✓' : ''}`,
         onPress: async () => {

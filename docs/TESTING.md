@@ -652,7 +652,7 @@ Needs the **new Android download (v9)** – it has the face tracking built in. E
 
 ## Step 43 – Hit ups 👋 (Peek Match is gone)
 
-You need 2 test accounts that **aren't friends**, both with a birthday saved, both 18+ (or both under 18).
+You need 2 test accounts that **aren't friends**, both with a birthday saved, both 18+ (hit ups are adults only).
 1. **The dating part is gone:** no Match tab, no dating profiles, no ID check, no Stripe. The bottom bar is just
    Chat · Camera · Home.
 2. **Birthday:** if an account has none, Peekaboo asks once when it opens (or Settings → **Birthday**). Saved
@@ -671,7 +671,10 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 8. **Both hit each other up** → you're connected straight away (B sees **👋 Hit back – A hit you up** on A's
    profile).
 9. **Safety rules:**
-   - A teen (13–17) and an adult (18+) never see a Hit up button on each other's profiles.
+   - **Under 18:** someone whose birthday makes them under 18 never sees a Hit up button on anyone, and nobody
+     sees one on them (it just looks unavailable – their age is never given away).
+   - **Birthday checks:** month 13, day 32, a future date, a year more than 100 years ago, or an age under 13
+     all show a red message under the boxes and the Save button stays off.
    - No birthday → tapping **👋 Hit up** says "Add your birthday first".
    - **They** have no birthday → tapping **👋 Hit up** says "<name> can't get hit ups yet" (they add it in Settings →
      Birthday, then it works).

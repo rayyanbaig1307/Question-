@@ -1,6 +1,6 @@
 # Peekaboo – Privacy Policy
 
-**Effective date:** 31 October 2026
+**Effective date:** 4 November 2026
 **Who is responsible for your data ("data controller"):** 2865113 Ontario Inc., [MAILING ADDRESS], rbaig18@z2automation.net
 
 This policy explains what Peekaboo collects, why, where it goes, and what you can do about it. It is written to match what the app really does. If we change how the app works, we update this policy and tell you in the app.
@@ -23,7 +23,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 | **Messages** | Text messages, peeks (photos/videos sent in chat), voice notes, when a message was opened, whether a peek was replayed or saved, and screenshot notices (we record that a screenshot of a chat or peek happened, not the screenshot itself). | To deliver chats and the features inside them. | Contract |
 | **Friends and safety** | Friend requests and friendships, close-friends list, groups, blocks, reports you make or that are made about you, forfeits given and received, dare chains and streaks. | To run the social features and keep people safe. | Contract; legitimate interest (safety) |
 | **Location** | Precise GPS position **only while you have the friend map's location sharing turned on**. Turning on ghost mode deletes your stored position. | Friend map. | Consent (phone permission + in-app switch) |
-| **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups between people of the same age group (under 18 / 18+), limit them to 10 a day, and run the feature. | Contract; legitimate interest (safety) |
+| **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups for adults only (18+), limit them to 10 a day, and run the feature. | Contract; legitimate interest (safety) |
 | **Device and technical data** | Push-notification token for your device, device type and app version, the IP address and timestamps of requests to our servers (kept in server logs), crash-free operation data from Expo's update service (device platform, app runtime version, when the app checked for updates). | To send notifications, keep the app updated, secure the service and fix problems. | Legitimate interest |
 | **Support** | Anything you send us by email. | To help you. | Legitimate interest |
 
@@ -68,7 +68,7 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 | Posts, peeks, messages, voice notes, comments, likes | Until you delete them, or your account. |
 | Location | Replaced each time it updates; deleted when you turn on ghost mode or stop sharing; deleted with your account. |
 | Reports and blocks | For as long as needed to keep people safe, then deleted with the account. |
-| Birthday and hit ups | Kept while your account exists (so the same-age-group rule and the daily limit keep working). |
+| Birthday and hit ups | Kept while your account exists (so the 18+ rule and the daily limit keep working). |
 | Server logs | Up to 90 days. |
 | Everything else | Deleted when you delete your account (see below). |
 
@@ -85,7 +85,7 @@ Wherever you live, you can: see the data we hold about you; correct it (most of 
 
 ## 8. Children
 
-Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission; Hit ups only connect people under 18 with other people under 18, and adults with adults.
+Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission, and hit ups are not available to them: hit ups are only for people 18 and over.
 
 ## 9. Security
 

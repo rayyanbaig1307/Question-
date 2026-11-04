@@ -9,8 +9,9 @@ import type { Profile } from './types';
 // Hit ups 👋: tap "Hit up" on someone's profile (with a short message if you want). They see it at the top
 // of Chat. If they hit back you're friends and your message is the first one in your chat; if they ignore it,
 // it just goes away (you're never told). Nothing else can be sent until they hit back.
-// Safety (checked by the database, see supabase/migrations/20261123000000_hit_ups.sql): teens and adults
-// can't hit each other up, 10 a day, and everyone picks who can hit them up in Settings.
+// Safety (checked by the database, see supabase/migrations/20261123000000_hit_ups.sql and
+// 20261202000000_birthday_rules_hit_ups_18.sql): hit ups are only for people 18 and over (under 18 there's no
+// button at all, and nobody can hit you up), 10 a day, and everyone picks who can hit them up in Settings.
 // ---------------------------------------------------------------------------
 
 export const HIT_UP_MAX_LENGTH = 150;
@@ -24,7 +25,8 @@ export type HitUp = {
 
 // What the Hit up button on someone's profile shows.
 // 'their_birthday' = they haven't added their birthday yet, so they can't get hit ups until they do.
-export type HitUpStatus = 'can' | 'sent' | 'theirs' | 'friends' | 'self' | 'no_birthday' | 'their_birthday' | 'unavailable';
+// 'under_18' = you're under 18, so hit ups are off for you (no button).
+export type HitUpStatus = 'can' | 'sent' | 'theirs' | 'friends' | 'self' | 'no_birthday' | 'their_birthday' | 'under_18' | 'unavailable';
 
 // Hit ups waiting for you, newest first.
 export async function fetchHitUpsForMe(me: string): Promise<HitUp[]> {

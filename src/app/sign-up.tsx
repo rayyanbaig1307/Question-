@@ -10,6 +10,7 @@ import { TextField } from '@/components/TextField';
 import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { TERMS_VERSION } from '@/lib/legal';
+import { checkPassword, PASSWORD_HINT } from '@/lib/password';
 import { checkUsernameFormat, cleanUsername, isUsernameAvailable, USERNAME_RULES } from '@/lib/profiles';
 import { supabase } from '@/lib/supabase';
 import { signUpWithUsername } from '@/lib/usernameAuth';
@@ -51,7 +52,7 @@ export default function SignUp() {
       ? 'Pick a username.'
       : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(`${username} ${name}`, 'identity'))),
     email: !withEmail || /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
-    password: password.length >= 6 ? null : 'Use at least 6 characters.',
+    password: checkPassword(password),
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',
     terms: agreed ? null : 'Please agree to the Terms to make an account.',
   };
@@ -162,7 +163,7 @@ export default function SignUp() {
         label="Password"
         value={password}
         onChangeText={setPassword}
-        placeholder="At least 6 characters"
+        placeholder={PASSWORD_HINT}
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"

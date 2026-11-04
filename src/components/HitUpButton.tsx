@@ -12,7 +12,8 @@ import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // The 👋 button on someone's profile (people you're not friends with yet):
 // "Hit up" (with a short message if you want) · "Hit up sent" · "Hit back" when they hit you up first.
-// Nothing shows when hit ups aren't possible (they turned them off, a different age group, or blocked).
+// Hit ups are only for people 18 and over. Nothing shows when they aren't possible (you're under 18, they
+// turned them off, they're under 18, or blocked).
 export function HitUpButton({ person, onConnected }: {
   person: { id: string; username: string; display_name: string };
   // You're friends now (they had hit you up too).
@@ -66,7 +67,7 @@ export function HitUpButton({ person, onConnected }: {
         title="👋 Hit up"
         variant="secondary"
         onPress={() =>
-          Alert.alert('Add your birthday first 🎂', 'Hit ups are only between people your age. Only you see your birthday.', [
+          Alert.alert('Add your birthday first 🎂', 'Hit ups are only for people 18 and over. Only you see your birthday.', [
             { text: 'Not now', style: 'cancel' },
             { text: 'Add birthday', onPress: () => router.push('/birthday') },
           ])
@@ -83,7 +84,7 @@ export function HitUpButton({ person, onConnected }: {
         onPress={() =>
           Alert.alert(
             `${name} can't get hit ups yet`,
-            "They haven't added their birthday – hit ups are only between people the same age. They can add it in Settings → Birthday. You can still add them as a friend.",
+            "They haven't added their birthday – hit ups are only for people 18 and over. They can add it in Settings → Birthday. You can still add them as a friend.",
           )
         }
       />

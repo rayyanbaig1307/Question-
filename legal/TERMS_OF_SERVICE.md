@@ -1,6 +1,6 @@
 # Peekaboo – Terms of Service
 
-**Effective date:** 31 October 2026
+**Effective date:** 4 November 2026
 **Operator:** 2865113 Ontario Inc., [MAILING ADDRESS], rbaig18@z2automation.net ("Peekaboo", "we", "us")
 
 Please read these Terms carefully. They are a legal agreement between you and the operator of the Peekaboo app. By creating an account or using Peekaboo you agree to them, to our [Privacy Policy](PRIVACY_POLICY.md), our [Community Guidelines](COMMUNITY_GUIDELINES.md) and our [Dare Safety Rules](DARE_SAFETY_RULES.md), which are all part of these Terms. If you do not agree, do not use Peekaboo.
@@ -9,9 +9,9 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 1.1 You must be **at least 13 years old**. If you are under 13, you may not create an account, and we delete accounts we learn belong to children under 13.
 
-1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app. Hit ups only connect you with other people under 18 (see section 6).
+1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app. Hit ups are not available to you (see section 6).
 
-1.3 **Hit ups are only between people of the same age group**: people under 18 can only hit up, and be hit up by, other people under 18, and adults only by adults. This is based on the birthday you give us (section 6).
+1.3 **Hit ups are only for adults (18+)**: people under 18 cannot hit anyone up and cannot be hit up. This is based on the birthday you give us (section 6).
 
 1.4 You may not use Peekaboo if we have previously banned you, or if the law where you live does not allow you to use it.
 
@@ -73,7 +73,7 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 6.1 A **hit up** lets you reach out to someone you are not friends with yet, with an optional short message. They can **hit back** (you become friends and can chat) or **ignore** it (we do not tell you). You cannot send them anything else until they hit back.
 
-6.2 To use hit ups you must give your **real birthday**. It is saved once, only you can see it, and it cannot be changed. Giving a false birthday to reach people of a different age group is a serious breach and leads to a permanent ban.
+6.2 To use hit ups you must be **18 or older** and give your **real birthday**. It is saved once, only you can see it, and it cannot be changed. A birthday must be a real date: not in the future, not more than 100 years ago, and showing you are at least 13. Giving a false birthday to use hit ups, or to reach people of a different age, is a serious breach and leads to a permanent ban.
 
 6.3 You can send up to **10 hit ups a day**, and one per person. You choose who can hit you up in **Settings → Who can hit me up** (everyone, friends of friends, or nobody). Blocking someone stops all hit ups between you, and every hit up can be reported.
 

@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
-// Your birthday: saved once, only you see it, and it can't be changed. Hit ups use it so teens (13–17) and
-// adults (18+) can't hit each other up.
+// Your birthday: saved once, only you see it, and it can't be changed. Hit ups use it: they're only for
+// people 18 and over.
 // ---------------------------------------------------------------------------
 
 // Your saved birthday ('YYYY-MM-DD'), or null if you haven't added it.

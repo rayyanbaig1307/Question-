@@ -57,7 +57,10 @@ Deno.serve(async (req) => {
     if (!USERNAME.test(username)) {
       return json({ error: 'Usernames are 3–20 characters: lowercase letters, numbers, dots and underscores' }, 400);
     }
-    if (password.length < 6) return json({ error: 'Use at least 6 characters for your password' }, 400);
+    // Same rule as the app: 8+ characters with a letter and a number.
+    if (password.length < 8 || password.length > 72 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return json({ error: 'Your password needs at least 8 characters, with a letter and a number' }, 400);
+    }
     const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
     if (await tooMany('signup', ip, 5, 60)) {
       return json({ error: 'Lots of new accounts from here already – try again in an hour' }, 429);
