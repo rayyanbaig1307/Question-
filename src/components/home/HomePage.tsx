@@ -226,7 +226,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   return (
     <View style={styles.fill}>
-      <PageHeader logo onCamera={onCamera} />
+      <PageHeader logo />
       <FlatList
         data={posts ?? []}
         keyExtractor={(post) => post.id}

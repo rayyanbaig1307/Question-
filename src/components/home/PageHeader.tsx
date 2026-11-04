@@ -4,26 +4,21 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
-import { IconButton } from '@/components/IconButton';
 import { Wordmark } from '@/components/Wordmark';
 import { useMe } from '@/lib/auth';
 import { colors, font, space } from '@/theme';
 
-// Top bar for the Chat and Home pages: a camera button on the left, a title (or the Peekaboo logo), and your
-// picture (→ profile) on the right – so your profile is always one tap away.
+// Top bar for the Chat and Home pages: a title (or the Peekaboo logo) in the middle, and your picture
+// (→ profile) on the right – so your profile is always one tap away. (No camera button: the bottom bar has one.)
 // `inbox`: a 🔔 bell next to your picture (Chat page) with a red number for new things in your Inbox.
-export function PageHeader({ title, logo = false, onCamera, inbox }: {
+export function PageHeader({ title, logo = false, inbox }: {
   title?: string;
   logo?: boolean;
-  onCamera: () => void;
   inbox?: { count: number; onPress: () => void };
 }) {
   const { userId, profile } = useMe();
   const insets = useSafeAreaInsets();
 
-  const camera = (
-    <IconButton icon="camera" label="Back to camera" background={colors.card} size={40} onPress={onCamera} />
-  );
   const me = (
     <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
       <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={40} />
@@ -32,7 +27,8 @@ export function PageHeader({ title, logo = false, onCamera, inbox }: {
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
-      <View style={[styles.side, inbox && styles.sideWide]}>{camera}</View>
+      {/* An empty space the same width as the right side, so the title stays in the middle. */}
+      <View style={[styles.side, inbox && styles.sideWide]} />
       {logo ? (
         <View style={styles.logo}>
           <Wordmark height={30} />

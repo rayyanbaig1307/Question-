@@ -104,7 +104,6 @@ export default function Home() {
     <Animated.View key="chat" style={swipe.pageStyles[CHAT].page}>
       <ChatPage
         visible={focused && page === CHAT}
-        onCamera={() => goTo(CAMERA)}
         inboxCount={inboxCount}
         onRefreshInbox={refreshInbox}
       />

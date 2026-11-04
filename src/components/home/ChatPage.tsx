@@ -35,9 +35,8 @@ type ChatRow = {
 
 // Left page: your chats, most recent first, with your Group Peek groups above them. Hit ups, friend requests
 // and activity live in the Inbox (the 🔔 bell), so the chat list stays clean. Pull down to refresh.
-export function ChatPage({ visible, onCamera, inboxCount, onRefreshInbox }: {
+export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   visible: boolean;
-  onCamera: () => void;
   // New things waiting in your Inbox 🔔 (hit ups, friend requests, activity) – the bell's red number.
   inboxCount: number;
   onRefreshInbox: () => void;
@@ -197,7 +196,7 @@ export function ChatPage({ visible, onCamera, inboxCount, onRefreshInbox }: {
 
   return (
     <View style={styles.fill}>
-      <PageHeader title="Chat" onCamera={onCamera} inbox={{ count: inboxCount, onPress: () => router.push('/inbox') }} />
+      <PageHeader title="Chat" inbox={{ count: inboxCount, onPress: () => router.push('/inbox') }} />
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
