@@ -139,6 +139,7 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - App: camera/editor take `group` / `groupDare` params (straight to the group chat); `useGroupTyping` in
   `lib/typing.ts`; "Seen by" from `peek_group_members.chat_read_at` (polled every 15 s); search in both chats
   (`searchConversation`, `searchGroupMessages`, ilike on body, jump to message if loaded).
+- **Live on `preview`** as update `9658dbdc-cbdb-4bb9-85ad-6a8cfa43f821` (head `90a1055`) after the owner OK'd it.
 
 ## Delete for me, Clear chat, Group chat (4 Nov)
 
