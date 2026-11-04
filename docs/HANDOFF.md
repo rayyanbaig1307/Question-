@@ -113,7 +113,9 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 
 At the top of Chat: likes, comments, replies, comment likes, "added you", "accepted your request" and "hit you
 back" from the last 30 days. It comes from `public.my_activity()` (`20261205000000_activity.sql`, applied live)
-and `src/lib/activity.ts`. The "seen" marker is kept on the phone. New items count on the Chat tab until you
+and `src/lib/activity.ts`. **Published** as update `9701c213-a6ed-4373-9bb7-b3ca20540406`, built from `dc54575`
+with only the Activity commit (`abb5aa3`) on top, so the unfinished Apple/Google sign-in code was left out. The
+"seen" marker is kept on the phone. New items count on the Chat tab until you
 leave Chat. There's no realtime listener: it refreshes on focus, when the app comes back to the front, and
 when a push arrives.
 

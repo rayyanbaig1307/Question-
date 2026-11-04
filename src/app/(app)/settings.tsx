@@ -278,7 +278,18 @@ export default function Settings() {
           <Row icon="people-circle" color={colors.purple} title="Community Guidelines" onPress={() => openLegal('guidelines')} />
           <Row icon="flame" color={colors.pink} title="Dare Safety Rules" onPress={() => openLegal('dare-rules')} />
           {CONTACT ? (
-            <Row icon="mail" color={colors.orange} title="Contact us" subtitle={CONTACT} onPress={() => Linking.openURL(`mailto:${CONTACT}`)} />
+            // Opens your mail app with our address already filled in (the address itself isn't shown here).
+            <Row
+              icon="mail"
+              color={colors.orange}
+              title="Contact us"
+              subtitle="Send us an email"
+              onPress={() =>
+                Linking.openURL(`mailto:${CONTACT}?subject=${encodeURIComponent('Peekaboo')}`).catch(() =>
+                  Alert.alert('No mail app found', 'Set up the Mail app on your phone to send us an email.'),
+                )
+              }
+            />
           ) : null}
         </Section>
 
