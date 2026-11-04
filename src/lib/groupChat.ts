@@ -1,4 +1,4 @@
-import { deleteMedia, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
+import { deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -21,6 +21,8 @@ export type GroupMessage = {
   audio_ms: number | null;
   waveform: number[] | null;
   dare_id: string | null;
+  // The earlier message in this group chat that this one replies to.
+  reply_to?: string | null;
   created_at: string;
 };
 
@@ -45,10 +47,10 @@ export async function fetchGroupMessages(groupId: string, limit = 150): Promise<
   return (data ?? []) as GroupMessage[];
 }
 
-export async function sendGroupMessage(groupId: string, body: string): Promise<GroupMessage> {
+export async function sendGroupMessage(groupId: string, body: string, replyTo?: string | null): Promise<GroupMessage> {
   const { data, error } = await supabase
     .from('group_messages')
-    .insert({ group_id: groupId, body: body.trim() })
+    .insert({ group_id: groupId, body: body.trim(), ...(replyTo ? { reply_to: replyTo } : {}) })
     .select('*')
     .single();
   if (error) throw error;
@@ -97,6 +99,29 @@ export async function sendGroupDare(groupId: string, dare: string): Promise<Grou
     .single();
   if (error) throw error;
   return data as GroupMessage;
+}
+
+// 📌 Pin a message to the top of the group chat (null = unpin). Any member can.
+export async function pinGroupMessage(groupId: string, messageId: string | null): Promise<void> {
+  const { error } = await supabase.rpc('pin_group_message', { grp: groupId, message: messageId });
+  if (error) throw error;
+}
+
+// The group's picture: uploaded like a profile picture (your own folder), then set for the group. null removes it.
+export async function setGroupPhoto(me: string, groupId: string, localUri: string | null): Promise<void> {
+  const photo = localUri ? await uploadAvatar(me, localUri) : null;
+  const { error } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
+  if (error) throw error;
+}
+
+// Live: the group itself changed (new pin, photo or name). Own channel name per listener.
+export function subscribeToGroup(groupId: string, onChange: () => void): () => void {
+  const channel = supabase.channel(`group-${groupId}-${++listener}`);
+  channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'peek_groups', filter: `id=eq.${groupId}` }, onChange);
+  channel.subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 // When each member last read the chat (for "Seen by …").

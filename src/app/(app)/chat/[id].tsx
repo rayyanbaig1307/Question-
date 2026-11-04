@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { DareComposer } from '@/components/DareComposer';
+import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -57,6 +58,7 @@ import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
 import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
+import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
 import { timeAgo } from '@/lib/time';
 import { useTyping } from '@/lib/typing';
 import { Audio, sendVoice } from '@/lib/voice';
@@ -68,7 +70,7 @@ import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 export default function ChatScreen() {
   const { id: friendId } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
-  const { showOptions, showToast } = useOverlays();
+  const { showToast } = useOverlays();
   const { report } = useSafetyActions();
 
   const [friend, setFriend] = useState<Profile | null>(null);
@@ -76,6 +78,10 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[] | null>(null);
   // Your dare streak with this friend 🔥 (dares you two completed in a row).
   const [streak, setStreak] = useState(0);
+  // Reactions on the messages, the message you're holding (its menu), and the message you're replying to.
+  const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
+  const [menuFor, setMenuFor] = useState<{ message: Message; actions: MessageAction[] } | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   // 🔎 Search: the box is open while `search` isn't null.
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: Message[] } | null>(null);
@@ -93,6 +99,12 @@ export default function ChatScreen() {
     try {
       const list = await fetchConversation(userId, friendId);
       setMessages(list);
+      fetchReactions(
+        list.map((m) => m.id),
+        false,
+      )
+        .then(setReactions)
+        .catch(() => {});
       fetchDareStreak(friendId)
         .then(setStreak)
         .catch(() => {});
@@ -119,7 +131,12 @@ export default function ChatScreen() {
       fetchRelation(userId, friendId)
         .then((relation) => setAreFriends(relation.kind === 'friends'))
         .catch(() => {});
-      return subscribeToMyMessages(`chat-${userId}-${friendId}`, loadMessages);
+      const stopMessages = subscribeToMyMessages(`chat-${userId}-${friendId}`, loadMessages);
+      const stopReactions = subscribeToReactions(false, loadMessages);
+      return () => {
+        stopMessages();
+        stopReactions();
+      };
     }, [friendId, userId, loadMessages]),
   );
 
@@ -130,7 +147,8 @@ export default function ChatScreen() {
     if (!body || sending) return;
     setSending(true);
     try {
-      const sent = await sendText(userId, friendId, body);
+      const sent = await sendText(userId, friendId, body, replyTo?.id);
+      setReplyTo(null);
       setText('');
       onTextChange('');
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
@@ -243,9 +261,12 @@ export default function ChatScreen() {
         }
       },
     };
+    const reply = { label: '↩ Reply', onPress: () => setReplyTo(message) };
     if (message.sender_id === userId) {
-      showOptions({
-        options: [
+      setMenuFor({
+        message,
+        actions: [
+          reply,
           ...saveOptions,
           deleteForMe,
           {
@@ -264,8 +285,10 @@ export default function ChatScreen() {
         ],
       });
     } else if (friend) {
-      showOptions({
-        options: [
+      setMenuFor({
+        message,
+        actions: [
+          reply,
           ...saveOptions,
           deleteForMe,
           {
@@ -276,6 +299,29 @@ export default function ChatScreen() {
       });
     }
   }
+
+  async function react(message: Message, emoji: string) {
+    const mine = reactions.get(message.id)?.find((r) => r.user_id === userId)?.emoji ?? null;
+    try {
+      await toggleReaction(userId, message.id, emoji, mine, false);
+      Haptics.selectionAsync();
+      loadMessages();
+    } catch (error) {
+      Alert.alert('Could not react', friendlyError(error));
+    }
+  }
+
+  // A short description of any message, for reply quotes.
+  const previewOf = (m: Message) =>
+    m.kind === 'text' || m.kind === 'dare'
+      ? (m.body ?? '')
+      : m.kind === 'snap'
+        ? '👀 Peek'
+        : m.kind === 'voice'
+          ? '🎤 Voice note'
+          : m.kind === 'reaction'
+            ? `${m.body} story reaction`
+            : 'Message';
 
   async function runSearch(query: string) {
     setSearch(query);
@@ -394,22 +440,55 @@ export default function ChatScreen() {
             keyboardDismissMode="interactive"
             // The list is upside down, so this "header" sits at the very bottom, under the newest message.
             ListHeaderComponent={friendTyping ? <TypingBubble /> : undefined}
-            renderItem={({ item }) => (
-              <MessageView
-                message={item}
-                me={userId}
-                friendName={name}
-                showStatus={item.id === myLatestId}
-                dareActions={{ doDare, claimDare, confirmDare, dareBack: () => setDareOpen(true) }}
-                onLongPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  openMenu(item);
-                }}
-              />
-            )}
+            renderItem={({ item }) => {
+              const mine = item.sender_id === userId;
+              const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
+              return (
+                <View style={styles.messageBlock}>
+                  {replied ? (
+                    <View style={mine ? styles.right : styles.left}>
+                      <ReplyQuote
+                        name={replied.sender_id === userId ? 'You' : name}
+                        text={previewOf(replied)}
+                        mine={mine}
+                      />
+                    </View>
+                  ) : null}
+                  <MessageView
+                    message={item}
+                    me={userId}
+                    friendName={name}
+                    showStatus={item.id === myLatestId}
+                    dareActions={{ doDare, claimDare, confirmDare, dareBack: () => setDareOpen(true) }}
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      openMenu(item);
+                    }}
+                  />
+                  <View style={mine ? styles.right : styles.left}>
+                    <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
+                  </View>
+                </View>
+              );
+            }}
           />
         )}
 
+        {areFriends && replyTo ? (
+          <View style={styles.replyBar}>
+            <View style={styles.replyBarText}>
+              <Text style={styles.replyBarName} numberOfLines={1}>
+                ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : name}
+              </Text>
+              <Text style={styles.replyBarBody} numberOfLines={1}>
+                {previewOf(replyTo)}
+              </Text>
+            </View>
+            <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
         {areFriends ? (
           <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
             <IconButton
@@ -451,6 +530,13 @@ export default function ChatScreen() {
         )}
       </KeyboardAvoidingView>
       <DareComposer visible={dareOpen} friendName={name} onClose={() => setDareOpen(false)} onSend={sendMyDare} />
+      <MessageActions
+        visible={menuFor !== null}
+        myReaction={menuFor ? (reactions.get(menuFor.message.id)?.find((r) => r.user_id === userId)?.emoji ?? null) : null}
+        onReact={(emoji) => menuFor && react(menuFor.message, emoji)}
+        actions={menuFor?.actions ?? []}
+        onClose={() => setMenuFor(null)}
+      />
     </View>
   );
 }
@@ -715,6 +801,30 @@ function TypingDot({ delay }: { delay: number }) {
 }
 
 const styles = StyleSheet.create({
+  messageBlock: {
+    gap: 2,
+  },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  replyBarText: {
+    flex: 1,
+  },
+  replyBarName: {
+    ...font.small,
+    fontWeight: '800',
+    color: colors.accent,
+  },
+  replyBarBody: {
+    ...font.small,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

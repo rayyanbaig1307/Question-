@@ -906,3 +906,16 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    Type a word → matching messages → tap one to jump to it.
 7. Someone outside the group can't open the group's photos or voice notes.
 
+## Step 61 – Reactions, replies, group photo, pinned message
+
+1. **Reactions:** hold any message (one-on-one or group) → a row of ❤️ 😂 🔥 😮 😢 👍 on top → tap one. It shows
+   under the message with a count; the sender gets "Ray · Reacted ❤️ to your message". Tap another to change it,
+   the same one (or the chip under the message) to take it back.
+2. **Reply:** hold a message → **↩ Reply** → a "Replying to …" bar above the box → send. Your message shows the
+   one you answered above it.
+3. **Group photo & name:** group chat → ••• → **📷 Change group photo** (pick a square photo) / **Remove group photo**
+   / **✏️ Change name & people**. The photo shows in the Chat list and at the top of the group chat.
+4. **Pinned message:** in a group chat hold a message → **📌 Pin to the top** → it shows in a bar under the name for
+   everyone; tap it to jump there, ✕ (or hold → Unpin) to unpin.
+5. People outside a chat can't react or pin; a reply can only point at a message in the same chat.
+

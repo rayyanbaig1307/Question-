@@ -129,6 +129,15 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Reactions, replies, group photo, pinned message (4 Nov)
+
+- `20261212000000_chat_extras.sql`: `message_reactions` and `group_message_reactions` (one per person per message;
+  push to the sender), `reply_to` on `messages` and `group_messages` (same-chat check), `peek_groups.photo_path`
+  (avatars bucket, `set_group_photo`), `pinned_message_id` (`pin_group_message`), realtime for both reaction
+  tables and `peek_groups`. **Not applied live yet** (owner's Allow pop-up timed out). Don't publish code from
+  this commit on before it's applied: replying and reactions would fail.
+- App: `components/MessageActions.tsx` (hold menu with reactions, ReactionChips, ReplyQuote), `lib/reactions.ts`.
+
 ## Group chats part 2 + chat search (4 Nov)
 
 - `20261211000000_group_chat_more.sql` (applied): `group_messages.kind` ('text','photo','video','voice','dare',

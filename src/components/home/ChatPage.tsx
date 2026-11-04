@@ -374,7 +374,11 @@ function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<stri
               onPress={() => router.push(`/groups/chat/${group.id}`)}
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
               <View style={styles.groupIcon}>
-                <GroupFaces members={group.members} size={24} />
+                {group.photo_path ? (
+                  <Avatar path={group.photo_path} name={group.name} size={48} />
+                ) : (
+                  <GroupFaces members={group.members} size={24} />
+                )}
               </View>
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>

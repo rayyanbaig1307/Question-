@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -18,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { DareComposer } from '@/components/DareComposer';
+import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
 import { GroupFaces } from '@/components/GroupFaces';
 import { IconButton } from '@/components/IconButton';
@@ -33,16 +35,20 @@ import {
   fetchGroupMessages,
   fetchGroupReads,
   markGroupChatRead,
+  pinGroupMessage,
   searchGroupMessages,
   sendGroupDare,
   sendGroupMessage,
   sendGroupVoice,
   setGroupChatMuted,
+  setGroupPhoto,
+  subscribeToGroup,
   subscribeToGroupChat,
   type GroupMessage,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
 import { useMediaUrls } from '@/lib/media';
+import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useGroupTyping } from '@/lib/typing';
@@ -73,12 +79,22 @@ export default function GroupChat() {
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: GroupMessage[] } | null>(null);
   const listRef = useRef<FlatList<GroupMessage>>(null);
+  // Reactions, the message you're holding (its menu), and the message you're replying to.
+  const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
+  const [menuFor, setMenuFor] = useState<{ message: GroupMessage; actions: MessageAction[] } | null>(null);
+  const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
 
   const load = useCallback(() => {
     fetchGroupMessages(groupId)
       .then((list) => {
         setMessages(list);
+        fetchReactions(
+          list.map((m) => m.id),
+          true,
+        )
+          .then(setReactions)
+          .catch(() => {});
         // Their message arrived: they've stopped typing.
         if (list[0]) clearTyping(list[0].sender_id);
         markGroupChatRead(groupId).catch(() => {});
@@ -102,6 +118,12 @@ export default function GroupChat() {
         .catch(() => {});
       load();
       const stop = subscribeToGroupChat(groupId, load);
+      const stopReactions = subscribeToReactions(true, load);
+      const stopGroup = subscribeToGroup(groupId, () => {
+        fetchGroup(groupId)
+          .then(setGroup)
+          .catch(() => {});
+      });
       const readsTimer = setInterval(() => {
         fetchGroupReads(groupId)
           .then(setReads)
@@ -109,6 +131,8 @@ export default function GroupChat() {
       }, READS_EVERY_MS);
       return () => {
         stop();
+        stopReactions();
+        stopGroup();
         clearInterval(readsTimer);
       };
     }, [groupId, load]),
@@ -142,7 +166,8 @@ export default function GroupChat() {
     if (!body || sending) return;
     setSending(true);
     try {
-      const sent = await sendGroupMessage(groupId, body);
+      const sent = await sendGroupMessage(groupId, body, replyTo?.id);
+      setReplyTo(null);
       setText('');
       onTextChange('');
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
@@ -181,43 +206,105 @@ export default function GroupChat() {
   const openCamera = (dareId?: string) =>
     router.push({ pathname: '/camera', params: { group: groupId, ...(dareId ? { groupDare: dareId } : {}) } });
 
+  const pinnedId = group?.pinned_message_id ?? null;
+
+  async function pin(message: GroupMessage | null) {
+    try {
+      await pinGroupMessage(groupId, message?.id ?? null);
+      setGroup((current) => (current ? { ...current, pinned_message_id: message?.id ?? null } : current));
+      showToast(message ? 'Pinned to the top 📌' : 'Unpinned');
+    } catch (error) {
+      Alert.alert('Could not pin', friendlyError(error));
+    }
+  }
+
   function openMessageMenu(message: GroupMessage) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const sender = people.get(message.sender_id);
+    const actions: MessageAction[] = [
+      { label: '↩ Reply', onPress: () => setReplyTo(message) },
+      pinnedId === message.id
+        ? { label: '📌 Unpin', onPress: () => pin(null) }
+        : { label: '📌 Pin to the top', onPress: () => pin(message) },
+    ];
     if (message.sender_id === userId) {
-      showOptions({
-        options: [
-          {
-            label: 'Delete for everyone',
-            destructive: true,
-            onPress: async () => {
-              try {
-                await deleteGroupMessage(message);
-                setMessages((current) => current?.filter((m) => m.id !== message.id) ?? null);
-                showToast('Deleted for everyone');
-              } catch (error) {
-                Alert.alert('Could not delete', friendlyError(error));
-              }
-            },
-          },
-        ],
+      actions.push({
+        label: 'Delete for everyone',
+        destructive: true,
+        onPress: async () => {
+          try {
+            await deleteGroupMessage(message);
+            setMessages((current) => current?.filter((m) => m.id !== message.id) ?? null);
+            showToast('Deleted for everyone');
+          } catch (error) {
+            Alert.alert('Could not delete', friendlyError(error));
+          }
+        },
       });
     } else if (sender) {
-      showOptions({
-        title: sender.display_name || `@${sender.username}`,
-        options: [
-          { label: '👤 See profile', onPress: () => router.push(`/profile/${sender.id}`) },
-          { label: 'Report', onPress: () => report({ user: sender, contentType: 'user', contentId: sender.id }) },
-        ],
-      });
+      actions.push(
+        { label: '👤 See profile', onPress: () => router.push(`/profile/${sender.id}`) },
+        { label: 'Report', onPress: () => report({ user: sender, contentType: 'user', contentId: sender.id }) },
+      );
+    }
+    setMenuFor({ message, actions });
+  }
+
+  async function react(message: GroupMessage, emoji: string) {
+    const mine = reactions.get(message.id)?.find((r) => r.user_id === userId)?.emoji ?? null;
+    try {
+      await toggleReaction(userId, message.id, emoji, mine, true);
+      Haptics.selectionAsync();
+      load();
+    } catch (error) {
+      Alert.alert('Could not react', friendlyError(error));
     }
   }
+
+  // The group's picture: choose one (square), or remove it.
+  async function changePhoto(remove = false) {
+    try {
+      if (remove) {
+        await setGroupPhoto(userId, groupId, null);
+      } else {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.9,
+        });
+        if (result.canceled || !result.assets[0]) return;
+        await setGroupPhoto(userId, groupId, result.assets[0].uri);
+      }
+      setGroup(await fetchGroup(groupId));
+      showToast(remove ? 'Group photo removed' : 'New group photo 📷');
+    } catch (error) {
+      Alert.alert('Could not change the photo', friendlyError(error));
+    }
+  }
+
+  // A short description of any group message, for reply quotes and the pinned banner.
+  const previewOf = (m: GroupMessage) =>
+    m.kind === 'text'
+      ? (m.body ?? '')
+      : m.kind === 'photo'
+        ? '📷 Photo'
+        : m.kind === 'video'
+          ? '🎬 Video'
+          : m.kind === 'voice'
+            ? '🎤 Voice note'
+            : m.kind === 'dare'
+              ? `🎯 ${m.body ?? ''}`
+              : '✅ Did the dare';
 
   function openGroupMenu() {
     showOptions({
       title: group?.name,
       options: [
         { label: '🔎 Search this chat', onPress: () => setSearch('') },
+        { label: '📷 Change group photo', onPress: () => changePhoto() },
+        ...(group?.photo_path ? [{ label: 'Remove group photo', onPress: () => changePhoto(true) }] : []),
+        { label: '✏️ Change name & people', onPress: () => router.push({ pathname: '/groups/new', params: { group: groupId } }) },
         { label: '👯 Group info & drops', onPress: () => router.push(`/groups/${groupId}`) },
         {
           label: muted ? '🔔 Unmute group chat' : '🔕 Mute group chat',
@@ -275,6 +362,7 @@ export default function GroupChat() {
     ? [...reads.entries()].filter(([id, at]) => id !== userId && at >= myLatest.created_at).map(([id]) => nameOf(id))
     : [];
   const memberCount = group?.members.length ?? 0;
+  const pinnedMessage = pinnedId ? (messages?.find((m) => m.id === pinnedId) ?? null) : null;
 
   return (
     <View style={styles.fill}>
@@ -282,7 +370,11 @@ export default function GroupChat() {
         titleContent={
           group ? (
             <Pressable style={styles.headerTitle} onPress={() => router.push(`/groups/${groupId}`)}>
-              <GroupFaces members={group.members} size={22} />
+              {group.photo_path ? (
+                <Avatar path={group.photo_path} name={group.name} size={32} />
+              ) : (
+                <GroupFaces members={group.members} size={22} />
+              )}
               <View style={styles.headerText}>
                 <Text style={styles.headerName} numberOfLines={1}>
                   {group.name}
@@ -323,6 +415,19 @@ export default function GroupChat() {
             <Text style={styles.searchCancel}>Cancel</Text>
           </Pressable>
         </View>
+      ) : null}
+
+      {pinnedMessage && search === null ? (
+        <Pressable style={styles.pinned} onPress={() => jumpTo(pinnedMessage)} accessibilityRole="button" accessibilityLabel="Go to the pinned message">
+          <Text style={styles.pinnedIcon}>📌</Text>
+          <Text style={styles.pinnedText} numberOfLines={1}>
+            <Text style={styles.pinnedName}>{pinnedMessage.sender_id === userId ? 'You' : nameOf(pinnedMessage.sender_id)}: </Text>
+            {previewOf(pinnedMessage)}
+          </Text>
+          <Pressable onPress={() => pin(null)} hitSlop={10} accessibilityLabel="Unpin">
+            <Ionicons name="close" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Pressable>
       ) : null}
 
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
@@ -369,6 +474,7 @@ export default function GroupChat() {
               const older = messages[index + 1];
               const firstOfRun = !older || older.sender_id !== item.sender_id;
               const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
+              const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
               return (
                 <View style={[styles.row, mine ? styles.right : styles.left]}>
                   {!mine ? (
@@ -378,6 +484,9 @@ export default function GroupChat() {
                   ) : null}
                   <View style={[styles.bubbleWrap, item.kind === 'dare' && styles.dareWrap, mine ? styles.alignRight : styles.alignLeft]}>
                     {!mine && firstOfRun ? <Text style={styles.sender}>{name}</Text> : null}
+                    {replied ? (
+                      <ReplyQuote name={replied.sender_id === userId ? 'You' : nameOf(replied.sender_id)} text={previewOf(replied)} mine={mine} />
+                    ) : null}
                     <Pressable onLongPress={() => openMessageMenu(item)} style={styles.stretch}>
                       {item.kind === 'text' ? (
                         <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
@@ -431,7 +540,9 @@ export default function GroupChat() {
                         </View>
                       ) : null}
                     </Pressable>
+                    <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
                     <Text style={styles.time}>
+                      {pinnedId === item.id ? '📌 ' : ''}
                       {timeAgo(item.created_at)}
                       {mine && item.id === myLatest?.id && seenBy.length > 0
                         ? ` · 👁 Seen by ${seenBy.length === memberCount - 1 ? 'everyone' : seenBy.join(', ')}`
@@ -444,6 +555,21 @@ export default function GroupChat() {
           />
         )}
 
+        {replyTo ? (
+          <View style={styles.replyBar}>
+            <View style={styles.replyBarText}>
+              <Text style={styles.replyBarName} numberOfLines={1}>
+                ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : nameOf(replyTo.sender_id)}
+              </Text>
+              <Text style={styles.replyBarBody} numberOfLines={1}>
+                {previewOf(replyTo)}
+              </Text>
+            </View>
+            <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
           <IconButton icon="camera" label="Send a photo or video" background={colors.accent} color={colors.onAccent} onPress={() => openCamera()} />
           <IconButton icon="flag" label="Dare the group" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
@@ -469,6 +595,13 @@ export default function GroupChat() {
         </View>
       </KeyboardAvoidingView>
       <DareComposer visible={dareOpen} friendName="the group" onClose={() => setDareOpen(false)} onSend={sendDare} />
+      <MessageActions
+        visible={menuFor !== null}
+        myReaction={menuFor ? (reactions.get(menuFor.message.id)?.find((r) => r.user_id === userId)?.emoji ?? null) : null}
+        onReact={(emoji) => menuFor && react(menuFor.message, emoji)}
+        actions={menuFor?.actions ?? []}
+        onClose={() => setMenuFor(null)}
+      />
     </View>
   );
 }
@@ -500,6 +633,49 @@ const styles = StyleSheet.create({
   headerTyping: {
     color: colors.accent,
     fontWeight: '700',
+  },
+  pinned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+  },
+  pinnedIcon: {
+    fontSize: 16,
+  },
+  pinnedText: {
+    ...font.small,
+    flex: 1,
+    color: colors.text,
+  },
+  pinnedName: {
+    fontWeight: '800',
+  },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  replyBarText: {
+    flex: 1,
+  },
+  replyBarName: {
+    ...font.small,
+    fontWeight: '800',
+    color: colors.accent,
+  },
+  replyBarBody: {
+    ...font.small,
   },
   searchBar: {
     flexDirection: 'row',

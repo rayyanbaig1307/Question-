@@ -23,6 +23,9 @@ export type PeekGroup = {
   name: string;
   created_by: string | null;
   created_at: string;
+  // The group's picture (in the profile-pictures storage), and the message pinned in its chat.
+  photo_path?: string | null;
+  pinned_message_id?: string | null;
   members: GroupMember[];
 };
 

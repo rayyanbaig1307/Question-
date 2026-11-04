@@ -36,6 +36,8 @@ export type Message = {
   // Dares: null = not done yet · 'claimed' = they say they did it · 'done' = you confirmed ✅ ·
   // 'nope' = you said it didn't count (they can try again).
   dare_state?: 'claimed' | 'done' | 'nope' | null;
+  // The earlier message in this chat that this one replies to.
+  reply_to?: string | null;
   dare_done_at?: string | null;
 };
 
@@ -152,10 +154,10 @@ export async function fetchMessage(id: string): Promise<Message | null> {
   return data as Message | null;
 }
 
-export async function sendText(me: string, friend: string, body: string): Promise<Message> {
+export async function sendText(me: string, friend: string, body: string, replyTo?: string | null): Promise<Message> {
   const { data, error } = await supabase
     .from('messages')
-    .insert({ sender_id: me, recipient_id: friend, kind: 'text', body: body.trim() })
+    .insert({ sender_id: me, recipient_id: friend, kind: 'text', body: body.trim(), ...(replyTo ? { reply_to: replyTo } : {}) })
     .select('*')
     .single();
   if (error) throw error;
