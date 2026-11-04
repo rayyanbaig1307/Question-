@@ -55,7 +55,7 @@ and the owner's standing preferences.
 
 `website/` is built by `node scripts/build-website.mjs` from `legal/*.md` (home, support, privacy, terms,
 guidelines, dare safety). Re-run it after legal changes, then re-upload the folder to Cloudflare Pages
-(project `peekaboo`). Its privacy/support/terms URLs go in App Store Connect and Google Auth Platform → Branding.
+(project `peekaboo`, live at https://peekaboo-4gz.pages.dev – `/privacy`, `/support`, `/terms`). Its URLs go in App Store Connect and Google Auth Platform → Branding.
 
 ## In progress: Sign in with Apple / Google (owner's call, 4 Nov)
 
