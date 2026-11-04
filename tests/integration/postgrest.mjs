@@ -329,7 +329,7 @@ try {
       assert.deepEqual([listed.status, listed.data], [200, []], path);
     }
   });
-  await check('the Community dares list loads with the app code (no ambiguous author link)', async () => {
+  await check('the Community dares list loads with the app code (no ambiguous author link, no idea without its writer)', async () => {
     // dare_ideas links to profiles directly (user_id) and also through dare_votes, so a plain
     // "author:profiles(*)" is ambiguous and PostgREST answers 300 / PGRST201. The app must name the link.
     const idea = await request('dare_ideas', { user: 35, method: 'POST', body: { user_id: users[35], text: 'Sing the chorus of a song you love' }, headers: { Prefer: 'return=representation' } });
@@ -351,6 +351,13 @@ try {
       assert.equal(mine.author.id, users[35]);
       assert.equal(mine.mine, false);
     }
+    // If the writer blocks you, their profile is hidden from you. Their idea must drop out of your list,
+    // not arrive with no author (the screen would crash reading the author's name).
+    const blocked = await request('rpc/block_user', { user: 35, method: 'POST', body: { target: users[36], expected_user_id: users[35] } });
+    assert.ok(blocked.status < 300, JSON.stringify(blocked.data));
+    const afterBlock = await fetchIdeas(users[36], 'new');
+    assert.ok(afterBlock.every(row => row.author), 'no idea without its writer');
+    assert.ok(!afterBlock.some(row => row.id === idea.data[0].id), "the blocker's idea is left out");
   });
   await check('a hidden dare idea cannot be reported directly through HTTP to learn who wrote it', async () => {
     // Final DB fix: with "return=representation" a direct report used to send back reported_user_id,

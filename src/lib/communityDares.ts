@@ -39,7 +39,11 @@ export async function fetchIdeas(me: string, sort: 'top' | 'new'): Promise<DareI
   if (ideas.error) throw ideas.error;
   if (votes.error) throw votes.error;
   const voted = new Set((votes.data ?? []).map((row) => row.idea_id as string));
-  return ((ideas.data ?? []) as Omit<DareIdea, 'mine'>[]).map((idea) => ({ ...idea, mine: voted.has(idea.id) }));
+  // If the writer blocked you, their profile is hidden from you, so their idea comes back with no author.
+  // Leave those ideas out (the list can't show an idea without its writer).
+  return ((ideas.data ?? []) as (Omit<DareIdea, 'mine' | 'author'> & { author: Profile | null })[])
+    .filter((idea): idea is Omit<DareIdea, 'mine'> => idea.author !== null)
+    .map((idea) => ({ ...idea, mine: voted.has(idea.id) }));
 }
 
 // Suggest a dare (one a day). The database says no to unsafe words.
