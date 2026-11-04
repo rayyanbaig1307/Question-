@@ -370,7 +370,9 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
               accessibilityRole="button"
               accessibilityLabel="Do the dare and send the proof">
               <Ionicons name="camera" size={16} color={colors.onAccent} />
-              <Text style={styles.dareButtonText}>Do it · send proof</Text>
+              <Text style={styles.dareButtonText} numberOfLines={1}>
+                Do it · send proof
+              </Text>
             </Pressable>
           )}
         </Pressable>
@@ -519,6 +521,8 @@ function TypingDot({ delay }: { delay: number }) {
 
 const styles = StyleSheet.create({
   dareCard: {
+    // Never narrower than the button needs, even for a short dare like "say hi".
+    minWidth: 250,
     maxWidth: '80%',
     borderRadius: radius.lg,
     borderWidth: 1.5,
@@ -541,8 +545,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: 8,
+    gap: space.sm,
+    paddingVertical: 11,
+    paddingHorizontal: space.lg,
+    marginTop: space.xs,
     borderRadius: radius.pill,
     backgroundColor: colors.pink,
   },
