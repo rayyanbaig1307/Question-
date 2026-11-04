@@ -82,13 +82,16 @@ export async function registerForPush(): Promise<void> {
       await supabase.rpc('unregister_push_token', { push_token: token });
       return;
     }
-    const { error } = await supabase.rpc('register_push_token', {
+    const phone = Platform.OS === 'ios' ? 'ios' : 'android';
+    // The phone's time zone, so the server can send the drop alert at your local drop time if you haven't
+    // opened Peekaboo for a while (see supabase/migrations/20261208000000_drop_reminders.sql).
+    let { error } = await supabase.rpc('register_push_token', {
       push_token: token,
-      phone: Platform.OS === 'ios' ? 'ios' : 'android',
-      // The phone's time zone, so the server can send the drop alert at your local drop time if you haven't
-      // opened Peekaboo for a while (see supabase/migrations/20261208000000_drop_reminders.sql).
+      phone,
       utc_offset: -new Date().getTimezoneOffset(),
     });
+    // A server without the time-zone part yet: sign up for pushes the old way.
+    if (error) ({ error } = await supabase.rpc('register_push_token', { push_token: token, phone }));
     if (error) throw error;
     myPushToken = token;
   } catch (error) {

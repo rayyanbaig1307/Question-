@@ -124,8 +124,9 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - `20261208000000_drop_reminders.sql`: `push_tokens.utc_offset_minutes`, `register_push_token(push_token, phone,
   utc_offset default null)`, `private.send_drop_reminders()` run every minute by pg_cron
   (`peekaboo-drop-reminders`). It sends to users whose last app open was 7–45 days ago at their local drop minute,
-  once a day. **The app code sends `utc_offset`, so this migration must be live before that code is published**
-  (otherwise `register_push_token` rejects the unknown argument).
+  once a day. The app sends `utc_offset` and falls back to the old 2-argument call if the server doesn't have
+  it yet, so publishing doesn't depend on this migration. **Not applied live yet** (owner's approval pop-up timed
+  out); until it is, there are no server drop reminders.
 
 ## Inbox 🔔 + chat dare streaks (done, 4 Nov)
 
