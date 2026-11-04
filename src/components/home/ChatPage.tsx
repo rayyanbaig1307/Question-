@@ -18,6 +18,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchFriends, fetchIncomingRequests, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
+import { describeActivity, type ActivityItem } from '@/lib/activity';
 import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
@@ -37,11 +38,14 @@ type ChatRow = {
 
 // Left page: hit ups and friend requests waiting for you at the top, then your Group Peek groups, then everyone
 // you can chat with, most recent first.
-export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
+export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity, activitySeenAt }: {
   visible: boolean;
   onCamera: () => void;
   hitUps: HitUp[];
   onHitUpsChanged: () => void;
+  // Activity 🔔 (newest first), and when you last looked – newer ones get a dot.
+  activity: ActivityItem[];
+  activitySeenAt: string | null;
 }) {
   const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
@@ -258,6 +262,7 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
                   )}
                 </View>
               ) : null}
+              {activity.length > 0 ? <ActivitySection items={activity} seenAt={activitySeenAt} /> : null}
               {rows.length > 0 ? (
                 <>
                   <GroupsSection groups={groups} />
@@ -316,6 +321,41 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
 }
 
 // Group Peek: your groups (how many posted today's drop), or one row to start your first group.
+// Activity 🔔: who liked, commented, replied, added you… The newest few, with "See all" for the rest.
+const ACTIVITY_PREVIEW = 4;
+function ActivitySection({ items, seenAt }: { items: ActivityItem[]; seenAt: string | null }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, ACTIVITY_PREVIEW);
+  return (
+    <View style={styles.hitUps}>
+      <Text style={styles.hitUpsTitle}>Activity 🔔</Text>
+      {shown.map((item) => {
+        const name = item.actor_name || `@${item.actor_username}`;
+        const isNew = seenAt !== null && item.at > seenAt;
+        return (
+          <Pressable
+            key={`${item.kind}-${item.actor_id}-${item.at}`}
+            style={styles.activity}
+            onPress={() => router.push(item.post_id ? `/post/${item.post_id}` : `/profile/${item.actor_id}`)}
+            accessibilityRole="button">
+            <Avatar path={item.actor_avatar} name={name} size={40} />
+            <Text style={styles.activityText} numberOfLines={2}>
+              <Text style={styles.name}>{name}</Text> {describeActivity(item)}
+              <Text style={styles.statusText}> · {timeAgo(item.at)}</Text>
+            </Text>
+            {isNew ? <View style={styles.activityDot} /> : null}
+          </Pressable>
+        );
+      })}
+      {items.length > ACTIVITY_PREVIEW ? (
+        <Pressable onPress={() => setAll(!all)} hitSlop={8} accessibilityRole="button">
+          <Text style={styles.sectionAction}>{all ? 'Show less' : `See all (${items.length})`}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function GroupsSection({ groups }: { groups: PeekGroup[] }) {
   return (
     <>
@@ -674,6 +714,24 @@ const styles = StyleSheet.create({
   },
   hitUpsTitle: {
     ...font.label,
+  },
+  activity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: space.sm,
+  },
+  activityText: {
+    ...font.body,
+    flex: 1,
+  },
+  activityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.accent,
   },
   request: {
     backgroundColor: colors.card,

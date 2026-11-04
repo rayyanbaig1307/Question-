@@ -9,6 +9,7 @@ import { CameraPage } from '@/components/home/CameraPage';
 import { ChatPage } from '@/components/home/ChatPage';
 import { HomePage } from '@/components/home/HomePage';
 import { HomeTabBar } from '@/components/home/HomeTabBar';
+import { useActivity } from '@/lib/activity';
 import { useMe } from '@/lib/auth';
 import { fetchMyBirthday, markAskedForBirthday, wasAskedForBirthday } from '@/lib/birthday';
 import { useUnreadCount } from '@/lib/chat';
@@ -36,6 +37,9 @@ export default function Home() {
   const { hitUps, reload: reloadHitUps } = useHitUps(userId, focused);
   // Friend requests waiting for you (shown at the top of Chat too).
   const requestCount = useIncomingRequestCount(userId, focused);
+  // Activity (likes, comments, new friends…) at the top of Chat. New ones count on the Chat tab until you've
+  // looked at Chat and moved on.
+  const activity = useActivity(userId, focused);
   // Other screens can send you back here with ?page=camera (or chat / home) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
@@ -94,6 +98,8 @@ export default function Home() {
         onCamera={() => goTo(CAMERA)}
         hitUps={hitUps}
         onHitUpsChanged={reloadHitUps}
+        activity={activity.items}
+        activitySeenAt={activity.seenAt}
       />
       <Animated.View style={swipe.pageStyles[CHAT].dim} pointerEvents="none" />
     </Animated.View>,
@@ -117,6 +123,8 @@ export default function Home() {
         onPageScrollStateChanged={(event) => setSwiping(event.nativeEvent.pageScrollState !== 'idle')}
         onPageSelected={(event) => {
           if (event.nativeEvent.position !== page) Haptics.selectionAsync();
+          // Leaving Chat: the activity you just saw isn't new any more.
+          if (page === CHAT && event.nativeEvent.position !== CHAT) activity.markSeen();
           setPage(event.nativeEvent.position);
         }}>
         {pages}
@@ -125,7 +133,7 @@ export default function Home() {
       <HomeTabBar
         page={page}
         onSelect={goTo}
-        unread={unread + hitUps.length + requestCount}
+        unread={unread + hitUps.length + requestCount + (page === CHAT ? 0 : activity.unseen)}
         solid={swipe.tabBarSolid}
       />
       {/* Light status bar over the camera; elsewhere it follows the app's colors. */}

@@ -838,3 +838,16 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    longer listed (needs the Apple key secrets, see `docs/HANDOFF.md`).
 8. **Sign-up guard** (once it's switched on): the old Create account button on an old download says "New accounts
    are made with Apple or Google now. Update Peekaboo to the newest version."
+
+## Step 56 – Activity 🔔
+
+1. With Account B: like Account A's post, comment on it, reply to A's comment, and like A's comment. Also add A
+   (public account), or have A's friend request accepted, or hit A back.
+2. As A: the **Chat** tab gets a red number for the new activity. Open Chat → an **Activity 🔔** box (under
+   friend requests) shows "B liked your post ❤️", "B commented on your post: “…”", "B added you as a friend 🎉"
+   and so on, newest first, each with a dot while it's new.
+3. Tap one: likes and comments open the post; friend things open B's profile. **See all** shows up to 60 items
+   from the last 30 days.
+4. Leave Chat → the dots and the red number for activity go away (other red numbers stay).
+5. Your own likes/comments never show, and nothing from someone you blocked (or who blocked you).
+
