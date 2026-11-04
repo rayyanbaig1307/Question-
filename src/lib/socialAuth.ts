@@ -16,7 +16,9 @@ import { supabase } from './supabase';
 
 // The "Web client ID" from Google Cloud (APIs & Services → Credentials). It's not a secret: it is built into
 // every copy of the app. The same ID goes in Supabase → Authentication → Sign In / Providers → Google.
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+  '687778288055-dt3jvvbqbtstek2im0ceoc1tav1g78i6.apps.googleusercontent.com';
 
 const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 

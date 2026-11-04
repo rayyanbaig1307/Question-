@@ -65,7 +65,8 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
   Create account button), `components/SocialSignIn.tsx` (buttons on welcome + sign-in), `components/ProfileSetup.tsx`
   (new Apple/Google people pick a username + agree to the Terms once; "setup done" = any `legal_acceptances`
   terms row). Google is Android-only (`react-native.config.js` + `expo.autolinking.ios.exclude` keep it out of
-  iOS). Google needs `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` at bundle time (not a secret).
+  iOS). Google's Web client ID (`687778288055-…apps.googleusercontent.com`, project `peekaboo-513706`, not a secret)
+  is in `socialAuth.ts`; `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` can override it.
 - Migration `20261204000000_apple_google_sign_in.sql`: new-user trigger takes Google's name; plus
   `public.hook_only_apple_or_google_sign_ups`, inert until the owner switches on the "Before User Created" auth
   hook (do that only after the new builds are out).
