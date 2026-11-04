@@ -53,7 +53,7 @@ and the owner's standing preferences.
 
 ## Done recently (newest first)
 
-- **Not published yet (needs an OTA):** pushes now go only to the real Peekaboo app. Expo Go showed its own
+- **Published (update `f947f748-1128-476d-9e5c-b40602268385`, commit `6c9a4db`):** pushes now go only to the real Peekaboo app. Expo Go showed its own
   logo on notifications, so it no longer signs up for pushes and takes itself off the list the next time it opens
   (`registerForPush` in `src/lib/notifications.ts`).
 
