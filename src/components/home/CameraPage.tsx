@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -25,7 +25,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
-import { FACE_LENS_AVAILABLE, SKIA_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
+import { FACE_LENS_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
@@ -46,9 +46,6 @@ const MAX_VIDEO_SECONDS = 30;
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
-  makeup: colors.pink,
-  glow: colors.yellow,
-  pup: colors.purple,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -84,7 +81,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
   const isHome = !sendTo && !dare && !drop && !guess && !forfeit;
-  // Lenses (googly, Glam, Glow, Pup) work on the home camera and on the camera inside a chat.
+  // The googly lens works on the home camera and on the camera inside a chat.
   const lensesHere = isHome || (!!sendTo && !dare && !drop && !guess && !forfeit);
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
@@ -118,21 +115,17 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
   const ringStyle = useAnimatedStyle(() => ({ width: `${recordProgress.get() * 100}%` }));
 
   // A face lens is on: the live camera with a drawing on every face (instead of the normal camera).
-  const faceLook: FaceLook | null =
-    lensesHere && (homeMode === 'googly' || homeMode === 'makeup' || homeMode === 'glow' || homeMode === 'pup') ? homeMode : null;
+  const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
   const [lensRecording, setLensRecording] = useState(false);
   const lensVideoItems = useRef<LensItem[]>([]);
-  // Glow without face tracking (Expo Go, older downloads): a warm wash, and the photo opens with the Glow filter.
-  const glowOn = lensesHere && homeMode === 'glow' && !lensOn;
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
     setHomeMode(next);
-    if ((next === 'googly' || next === 'makeup' || next === 'pup' || next === 'glow') && facing === 'back') setFacing('front');
+    if (next === 'googly' && facing === 'back') setFacing('front');
   }
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
@@ -144,7 +137,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         ...(video ? { video: '1' } : {}),
         // Face lens: where the drawings were, so they're on the photo as stickers you can still move.
         ...(lens.length > 0 ? { lens: JSON.stringify(lens) } : {}),
-        ...(glowOn && !video ? { filter: 'Glow ✨' } : {}),
         ...(sendTo ? { to: sendTo } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
@@ -168,18 +160,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     try {
       if (lensOn && lensRef.current) {
         const shot = await lensRef.current.capture();
-        let uri = shot.uri;
-        // Glam and Glow: paint the makeup / glow into the photo along the real face outlines.
-        if ((faceLook === 'makeup' || faceLook === 'glow') && SKIA_AVAILABLE) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { paintLook } = require('@/lib/lensPhoto') as typeof import('@/lib/lensPhoto');
-            uri = await paintLook(shot.uri, shot.shapes, faceLook, { width: screenWidth, height: screenHeight });
-          } catch (error) {
-            console.warn('Could not paint the lens', error);
-          }
-        }
-        openEditor(uri, 'cover', false, shot.items);
+        openEditor(shot.uri, 'cover', false, shot.items);
         return;
       }
       if (!cameraRef.current) return;
@@ -215,7 +196,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     setMode('video');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
-    // yet). Googly eyes and the pup go on the video as stickers where they were when you started.
+    // yet). The googly eyes go on the video as stickers where they were when you started.
     if (lensOn && lensRef.current) {
       lensVideoItems.current = lensRef.current.currentItems();
       setLensRecording(true);
@@ -319,7 +300,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
         lensOn && !lensRecording && FaceLens ? (
-          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} look={faceLook ?? 'googly'} zoom={camZoom} />
+          <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : active || warm ? (
           <CameraView
             ref={cameraRef}
@@ -357,8 +338,6 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
           <View style={StyleSheet.absoluteFill} accessible={false} />
         </GestureDetector>
       ) : null}
-      {/* Glow: a soft warm wash over the live camera (the photo gets the real Glow filter in the editor). */}
-      {glowOn ? <View style={styles.glow} pointerEvents="none" /> : null}
       <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
       {/* Flash during a selfie video: a bright ring light around the screen edges lights up your face. */}
       {recording && flash === 'on' && facing === 'front' ? (
@@ -587,10 +566,6 @@ const styles = StyleSheet.create({
     borderWidth: 12,
     borderColor: 'rgba(255, 248, 240, 0.95)',
     borderRadius: 28,
-  },
-  glow: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255, 196, 176, 0.16)',
   },
   shutterInner: {
     width: 62,
