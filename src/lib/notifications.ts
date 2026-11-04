@@ -162,6 +162,9 @@ function openFor(data: Record<string, unknown> | undefined) {
     case 'group':
       if (typeof data.group === 'string') router.push(`/groups/${data.group}`);
       break;
+    case 'group_chat':
+      if (typeof data.group === 'string') router.push(`/groups/chat/${data.group}`);
+      break;
     case 'dare':
       router.push('/dare');
       break;

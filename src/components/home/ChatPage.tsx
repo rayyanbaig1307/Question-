@@ -17,6 +17,7 @@ import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
+import { fetchGroupChats, subscribeToGroupChat, type GroupChatSummary } from '@/lib/groupChat';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
@@ -47,6 +48,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   const tabSpace = useTabBarSpace();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
   const [groups, setGroups] = useState<PeekGroup[]>([]);
+  // Each group's chat: unread count and latest message.
+  const [groupChats, setGroupChats] = useState<Map<string, GroupChatSummary>>(new Map());
   // Your per-friend options (pin, mute, hidden stories) and your close friends.
   const [settings, setSettings] = useState<Map<string, FriendSettings>>(new Map());
   const [closeFriends, setCloseFriends] = useState<Set<string>>(new Set());
@@ -72,6 +75,12 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     fetchGroups()
       .then(setGroups)
       .catch(() => {});
+    const loadGroupChats = () =>
+      fetchGroupChats()
+        .then(setGroupChats)
+        .catch(() => {});
+    loadGroupChats();
+    const stopGroupChats = subscribeToGroupChat(null, loadGroupChats);
     fetchFriendSettings(userId)
       .then(setSettings)
       .catch(() => {});
@@ -80,7 +89,11 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
       .catch(() => {});
     refresh();
     // Refresh instantly when a message arrives or gets opened.
-    return subscribeToMyMessages(`chat-list-${userId}`, refresh);
+    const stopMessages = subscribeToMyMessages(`chat-list-${userId}`, refresh);
+    return () => {
+      stopMessages();
+      stopGroupChats();
+    };
   }, [visible, userId, refresh]);
 
   // Look people up a moment after you stop typing (and know who you've already asked).
@@ -109,6 +122,9 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     onRefreshInbox();
     fetchGroups()
       .then(setGroups)
+      .catch(() => {});
+    fetchGroupChats()
+      .then(setGroupChats)
       .catch(() => {});
     try {
       setRows(await fetchRows(userId));
@@ -263,7 +279,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
               ) : null}
               {rows.length > 0 ? (
                 <>
-                  <GroupsSection groups={groups} />
+                  <GroupsSection groups={groups} chats={groupChats} />
                   <Text style={styles.sectionTitle}>💬 Chats</Text>
                 </>
               ) : null}
@@ -319,11 +335,11 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
 }
 
 // Group Peek: your groups (how many posted today's drop), or one row to start your first group.
-function GroupsSection({ groups }: { groups: PeekGroup[] }) {
+function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<string, GroupChatSummary> }) {
   return (
     <>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>👯 Group Peeks</Text>
+        <Text style={styles.sectionTitle}>👯 Groups</Text>
         {groups.length > 0 ? (
           <Pressable onPress={() => router.push('/groups/new')} hitSlop={10} accessibilityRole="button">
             <Text style={styles.sectionAction}>＋ New</Text>
@@ -348,10 +364,14 @@ function GroupsSection({ groups }: { groups: PeekGroup[] }) {
         groups.map((group) => {
           const total = counting(group).length;
           const left = stillToPost(group).length;
+          const chat = chats.get(group.id);
+          const lastSender = chat?.last_sender ? group.members.find((m) => m.userId === chat.last_sender)?.profile : null;
+          const unread = chat?.unread ?? 0;
           return (
             <Pressable
               key={group.id}
-              onPress={() => router.push(`/groups/${group.id}`)}
+              // Opens the group chat (its drops and members are one tap away from there).
+              onPress={() => router.push(`/groups/chat/${group.id}`)}
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
               <View style={styles.groupIcon}>
                 <GroupFaces members={group.members} size={24} />
@@ -360,11 +380,25 @@ function GroupsSection({ groups }: { groups: PeekGroup[] }) {
                 <Text style={styles.name} numberOfLines={1}>
                   {group.name}
                 </Text>
-                <Text style={[styles.statusText, left === 0 && styles.groupDone]}>
-                  {left === 0 ? "Everyone posted today's drop 🎉" : `${total - left} of ${total} posted today's drop`}
-                </Text>
+                {chat?.last_body ? (
+                  <Text style={[styles.statusText, unread > 0 && styles.groupUnreadText]} numberOfLines={1}>
+                    {chat.muted ? '🔕 ' : ''}
+                    {lastSender ? `${lastSender.display_name || lastSender.username}: ` : ''}
+                    {chat.last_body}
+                  </Text>
+                ) : (
+                  <Text style={[styles.statusText, left === 0 && styles.groupDone]}>
+                    {left === 0 ? "Everyone posted today's drop 🎉" : `${total - left} of ${total} posted today's drop`}
+                  </Text>
+                )}
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+              {unread > 0 ? (
+                <View style={styles.groupUnread}>
+                  <Text style={styles.groupUnreadCount}>{unread > 99 ? '99+' : unread}</Text>
+                </View>
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+              )}
             </Pressable>
           );
         })
@@ -603,6 +637,24 @@ const styles = StyleSheet.create({
   },
   groupEmoji: {
     fontSize: 26,
+  },
+  groupUnread: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.blue,
+  },
+  groupUnreadCount: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  groupUnreadText: {
+    color: colors.text,
+    fontWeight: '800',
   },
   groupDone: {
     color: colors.green,

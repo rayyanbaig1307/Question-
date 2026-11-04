@@ -878,3 +878,17 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    "⏰ Peekaboo drop!" at their local drop time (once a day; not if they turned Drops off in Settings →
    Notifications). People who open the app normally get the phone's own reminder instead, never two.
 
+## Step 59 – Delete for me, Clear chat, Group chat 💬
+
+1. **Delete for me:** hold any message in a chat → **Delete for me**: it's gone from your chat only (your friend
+   still has it). Your own messages also have **Delete for everyone** (gone for both).
+2. **Clear chat:** in Chat, hold a friend's row → **🧹 Clear chat** → confirm. The chat is empty for you only;
+   new messages show up as normal.
+3. **Group chat:** Chat → **👯 Groups** → tap a group → its chat. Messages show the sender's name and picture;
+   everyone in the group sees them live. Others get "👯 Group name · Ray: hey".
+4. In the Chat list a group shows its latest message and a blue unread number.
+5. **•••** in a group chat → **Group info & drops** (the Group Peek page) or **Mute group chat** (no notifications).
+   The Group Peek page has a **💬 Group chat** button too.
+6. Hold your own group message → **Delete for everyone**. Hold someone else's → See profile / Report.
+7. Someone not in the group can't read or write its chat. Leaving or being removed ends access.
+

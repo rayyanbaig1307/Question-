@@ -212,6 +212,13 @@ export default function GroupScreen() {
         title={group.name}
         right={<RoundIconButton icon="ellipsis-horizontal" label="Group options" onPress={openMenu} />}
       />
+      <Pressable
+        style={styles.chatButton}
+        onPress={() => router.push(`/groups/chat/${group.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel="Open the group chat">
+        <Text style={styles.chatButtonText}>💬 Group chat</Text>
+      </Pressable>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}>
@@ -344,6 +351,18 @@ export default function GroupScreen() {
 }
 
 const styles = StyleSheet.create({
+  chatButton: {
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+  },
+  chatButtonText: {
+    ...font.body,
+    fontWeight: '900',
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,

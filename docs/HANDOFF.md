@@ -116,6 +116,15 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Delete for me, Clear chat, Group chat (4 Nov)
+
+- `20261209000000_delete_for_me.sql` (applied): `message_hides`, `hide_message`, `clear_chat`.
+  `fetchConversation` / `fetchRecentMessages` filter hidden ids.
+- `20261210000000_group_chat.sql` (applied): `group_messages` (members only), `peek_group_members.chat_read_at`
+  and `chat_muted`, `mark_group_chat_read`, `set_group_chat_muted`, `my_group_chats()`, a push trigger, and
+  realtime. App: `lib/groupChat.ts`, `(app)/groups/chat/[id].tsx`. Chat list group rows open the chat and show
+  unread counts and the last message. Text only for now.
+
 ## Dare them back, live Inbox, server drop reminder (4 Nov)
 
 - `components/DareBackButton.tsx` on friends' dare posts (FeedCard `canDareBack`, post/[id]) → a chat dare.
