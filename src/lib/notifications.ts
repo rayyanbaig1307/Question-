@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
@@ -55,6 +55,12 @@ export async function registerForPush(): Promise<void> {
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
     const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    // Expo Go (the testing app) shows its own logo on notifications, not Peekaboo's. So pushes only go to the
+    // real Peekaboo app – and if this Expo Go was signed up for pushes before, it's taken off the list.
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      await supabase.rpc('unregister_push_token', { push_token: token });
+      return;
+    }
     const { error } = await supabase.rpc('register_push_token', {
       push_token: token,
       phone: Platform.OS === 'ios' ? 'ios' : 'android',

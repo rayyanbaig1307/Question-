@@ -53,6 +53,11 @@ and the owner's standing preferences.
 
 ## Done recently (newest first)
 
+- **Not published yet (needs an OTA):** pushes now go only to the real Peekaboo app. Expo Go showed its own
+  logo on notifications, so it no longer signs up for pushes and takes itself off the list the next time it opens
+  (`registerForPush` in `src/lib/notifications.ts`). The slur filter (names, bios, captions, comments – not chats) also catches short spellings like "nigg".
+  Note: the slur filter only runs in the app, not in the database.
+
 - **Name filter** (`src/lib/cleanWords.ts`): swearing is blocked in usernames and display names only.
   "Dick"/"Cock" are allowed when written like a real name ("Moby Dick"). Bios, captions, comments, hit ups and
   group names allow swearing but block slurs. **Private chats between friends aren't filtered at all** (the

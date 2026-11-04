@@ -10,7 +10,7 @@
 // Slurs and the like. Checked as whole words, and also with all gaps removed for the ones that can't be
 // part of an innocent word.
 const HATEFUL = [
-  'nigger', 'nigga', 'niggers', 'niggas', 'faggot', 'faggots', 'fag', 'fags', 'retard', 'retarded', 'retards',
+  'nigger', 'nigga', 'niggers', 'niggas', 'nigg', 'niggs', 'niggah', 'niggaz', 'nigguh', 'niga', 'nigas', 'faggot', 'faggots', 'fag', 'fags', 'retard', 'retarded', 'retards',
   'tranny', 'trannies', 'chink', 'chinks', 'spic', 'spics', 'kike', 'kikes', 'wetback', 'wetbacks', 'beaner',
   'beaners', 'raghead', 'towelhead', 'dyke', 'dykes', 'coon', 'coons', 'gook', 'gooks', 'paki', 'pakis',
   'rapist', 'molester', 'pedo', 'pedophile', 'paedophile',
@@ -29,7 +29,7 @@ const REAL_NAMES = ['dick', 'cock'];
 // names (Ishita, Pornsak, Nazir, Scunthorpe).
 const CRUDE_INSIDE = ['fuck', 'bitch', 'whore', 'dildo', 'asshole', 'cocksuck', 'blowjob', 'handjob', 'hitler'];
 
-const HATEFUL_SQUASHED = ['nigger', 'nigga', 'faggot', 'retard', 'tranny', 'wetback', 'beaner', 'raghead', 'towelhead', 'pedophile', 'paedophile'];
+const HATEFUL_SQUASHED = ['nigg', 'faggot', 'retard', 'tranny', 'wetback', 'beaner', 'raghead', 'towelhead', 'pedophile', 'paedophile'];
 
 
 // "n1gg3r" → "nigger", "F.A.G" → "f a g" (then "fag" once the gaps go).
@@ -81,7 +81,8 @@ function withoutRealNames(text: string): string {
 export function findBlockedWord(text: string, where: 'name' | 'content'): string | null {
   const clean = tidy(text);
   const joined = joinSingles(clean);
-  const squashed = clean.replace(/\s+/g, '');
+  // "niggle" and "niggard" are real words, so they're taken out before the squashed check.
+  const squashed = clean.replace(/\s+/g, '').replace(/niggl|niggard/g, '');
   const hateful = clean.match(HATEFUL_WORDS)?.[2] ?? joined.match(HATEFUL_WORDS)?.[2] ?? squashed.match(HATEFUL_ANYWHERE)?.[0];
   if (hateful) return hateful;
   if (where === 'name') {
