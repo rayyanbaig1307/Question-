@@ -1,6 +1,9 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readdir, readFile } from 'node:fs/promises';
 
+// The first QA fix migration. It and every migration that sorts after it are fixes.
+export const FIRST_FIX_MIGRATION = '20261213102659_qa_round2_security_hardening.sql';
+
 // This is a real, in-memory PostgreSQL instance. Only the Supabase platform
 // schemas are small local stand-ins. No network request or live project is used.
 export async function createLocalDatabase({ includeFixes = true } = {}) {
@@ -79,23 +82,30 @@ export async function initializeDatabase(db,{includeFixes=true}={}) {
     grant all on all sequences in schema net to anon, authenticated, service_role;
     alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
     alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+    -- A hosted Supabase project also gives every NEW function in "public" to these
+    -- roles. Copied here so the function allow-list test sees what the live project
+    -- would: a "revoke ... from public" alone does not take it away from them.
+    alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
   `);
   const folder = new URL('../../supabase/migrations/', import.meta.url);
   const migrations = (await readdir(folder)).filter(name => name.endsWith('.sql')).sort();
+  const applied = [];
+  // Every migration is loaded into an empty database: no accounts exist beforehand,
+  // just like a brand-new Supabase project.
   for (const name of migrations) {
-    if (!includeFixes && name.includes('qa_round2_security_hardening')) continue;
-    // The historic moderator migration assumes this account already exists.
-    // Seed a synthetic LOCAL row with its id; no account is fetched remotely.
-    if(name==='20261207000000_report_alerts.sql')await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[
-      'd3614487-2fa7-477c-8b64-be66ce1f5f3f','qa-moderator@example.invalid',{username:'qa_moderator',display_name:'Local moderator fixture'}
-    ]);
+    // includeFixes:false rebuilds the app as it was before the QA fixes, so it skips
+    // the QA hardening migration and every fix migration added after it.
+    if (!includeFixes && name >= FIRST_FIX_MIGRATION) continue;
     let sql = await readFile(new URL(name, folder), 'utf8');
     // pg_net is an external HTTP worker, replaced above by a local capture table.
     sql = sql.replace(/create extension if not exists pg_net with schema extensions;/gi, '');
     sql = sql.replace(/create extension if not exists pg_cron;/gi, '');
     try { await db.exec(sql); }
     catch (error) { await db.close(); throw new Error(`Migration ${name}: ${error.message}`, { cause: error }); }
+    applied.push(name);
   }
+  // Lets tests check which migration files were loaded.
+  db.appliedMigrations = applied;
   return db;
 }
 
@@ -126,4 +136,50 @@ export async function asUser(db, user, run, role = 'authenticated') {
 
 export async function friend(db, a, b) {
   await db.query("insert into public.friendships(requester_id,addressee_id,status,accepted_at) values ($1,$2,'accepted',now()) on conflict do nothing", [a,b]);
+}
+
+// ---------------------------------------------------------------------------
+// Release rehearsal helpers (tests/database/preflight-rehearsal.mjs).
+// They only add to what is above; initializeDatabase is unchanged.
+// ---------------------------------------------------------------------------
+
+// Every migration file name, in the order Supabase applies them (filename order).
+export async function migrationFiles() {
+  const folder = new URL('../../supabase/migrations/', import.meta.url);
+  return (await readdir(folder)).filter(name => name.endsWith('.sql')).sort();
+}
+
+// The SQL of one migration, with the same two small local changes initializeDatabase makes
+// (pg_net and pg_cron are replaced by local stand-ins).
+export async function migrationSql(name) {
+  const folder = new URL('../../supabase/migrations/', import.meta.url);
+  let sql = await readFile(new URL(name, folder), 'utf8');
+  sql = sql.replace(/create extension if not exists pg_net with schema extensions;/gi, '');
+  sql = sql.replace(/create extension if not exists pg_cron;/gi, '');
+  return sql;
+}
+
+// Applies ONE migration file in its own transaction, like a real deploy: either the whole
+// file is saved, or (on any error) nothing of it is. `session` must be ONE database
+// connection: a pg Client, or PGlite. Some files have their own begin/commit; that
+// is fine (PostgreSQL only warns about the extra begin).
+// A file holds many statements. A pg Client runs them all with query(sql). PGlite's
+// query() runs only one statement, so for PGlite (it has exec) exec(sql) is used.
+export async function applyMigrationFile(session, name) {
+  const sql = await migrationSql(name);
+  const runAll = typeof session.exec === 'function' ? (text) => session.exec(text) : (text) => session.query(text);
+  await session.query('begin');
+  try {
+    await runAll(sql);
+    // The file may already have committed itself; then this only warns.
+    await session.query('commit');
+  } catch (error) {
+    await session.query('rollback').catch(() => {});
+    throw new Error(`Migration ${name}: ${error.message}`, { cause: error });
+  }
+}
+
+// The migrations that initializeDatabase(db,{includeFixes:false}) skipped, in filename order.
+export async function remainingMigrations() {
+  return (await migrationFiles()).filter(name => name >= FIRST_FIX_MIGRATION);
 }

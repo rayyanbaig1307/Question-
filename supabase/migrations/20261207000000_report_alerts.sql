@@ -12,9 +12,14 @@ create table if not exists private.report_alert_people (
   user_id uuid primary key references public.profiles (id) on delete cascade
 );
 
--- The owner (@coolname).
+-- The owner (@coolname) gets the alerts – but only if that account exists in this database.
+-- On a brand-new, empty database (a fresh copy of the app, or a test database) the account is not
+-- there yet, so this simply adds nobody instead of stopping with an error.
+-- New owner? After you have made your account in the app, find your user id in
+-- Supabase → Authentication → Users and run the "insert into private.report_alert_people" line above.
 insert into private.report_alert_people (user_id)
-values ('d3614487-2fa7-477c-8b64-be66ce1f5f3f')
+select p.id from public.profiles p
+where p.id = 'd3614487-2fa7-477c-8b64-be66ce1f5f3f'
 on conflict do nothing;
 
 create or replace function private.alert_new_report()

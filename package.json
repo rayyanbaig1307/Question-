@@ -79,6 +79,7 @@
     "test:browser:build": "node tests/browser/build.mjs",
     "test:browser": "playwright test",
     "test:concurrency": "node tests/database/concurrency.mjs",
+    "test:preflight": "node tests/database/preflight-rehearsal.mjs",
     "test:rest": "node tests/integration/postgrest.mjs",
     "test:rest:setup": "node tests/integration/download-postgrest.mjs"
   },

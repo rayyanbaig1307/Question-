@@ -86,9 +86,14 @@ test('Hidden snap references still prevent sender cleanup of unread/saved media'
 test('Snap cleanup cannot target someone else and protects report evidence',async()=>{
   const path=`${users[0]}/snaps/old.jpg`;const m=await msg(0,1,{kind:'snap',body:null,media_path:path});
   await db.query("update messages set opened_at=now()-interval '2 days' where id=$1",[m.id]);
+  await rpc(0,"insert into storage.objects(bucket_id,name) values('media',$1)",[path]);
   await rpc(1,"insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'message',$3,'spam')",[users[1],users[0],m.id]);
-  assert.equal((await rpc(0,'select can_cleanup_snap($1) as ok',[path])).rows[0].ok,false);
+  // Review DB-1: the sender gets the same answer as without a report (no report oracle) ...
+  assert.equal((await rpc(0,'select can_cleanup_snap($1) as ok',[path])).rows[0].ok,true);
   assert.equal((await rpc(1,'select can_cleanup_snap($1) as ok',[path])).rows[0].ok,false);
+  // ... and the evidence is still protected: the delete looks done but the file is kept.
+  await rpc(0,"delete from storage.objects where bucket_id='media' and name=$1",[path]);
+  assert.equal((await db.query('select name from storage.objects where name=$1',[path])).rows.length,1);
 });
 test('Chat dares cannot be precompleted by sender or confirmed by recipient',async()=>{
   const m=await msg(0,1,{kind:'dare',body:'Wear a hat',dare_state:'done',dare_done_at:new Date()});assert.equal(m.dare_state,null);
@@ -176,6 +181,8 @@ test('Cleanup candidates are server-only and expired unreported story is eligibl
   assert.deepEqual((await server('select name from media_cleanup_candidates(100)')).rows,[{name:s.path}]);
 });
 test('Cleanup retains reported media and all group-chat references',async()=>{
+  // Review DB-1: only someone who could see the story may report it.
+  await friend(db,users[0],users[1]);
   const s=await oldStory();await rpc(1,"insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'story',$3,'spam')",[users[1],users[0],s.id]);
   assert.deepEqual((await server('select name from media_cleanup_candidates(100)')).rows,[]);
   await db.exec('delete from reports');const g=await group();
@@ -193,6 +200,7 @@ test('Cleanup keeps saved/unopened peeks and never touches voice notes',async()=
   assert.deepEqual((await server('select name from media_cleanup_candidates(100)')).rows,[]);
 });
 test('Cleanup claim is revalidated at Storage metadata deletion after a report',async()=>{
+  await friend(db,users[0],users[1]);// Review DB-1: the reporter must be able to see the story.
   const s=await oldStory();assert.deepEqual((await server('select name from claim_media_cleanup(100)')).rows,[{name:s.path}]);
   await rpc(1,"insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'story',$3,'spam')",[users[1],users[0],s.id]);
   await assert.rejects(()=>server("delete from storage.objects where bucket_id='media' and name=$1",[s.path]),/Cleanup cancelled/);
@@ -206,6 +214,7 @@ test('Cleanup claim is revalidated after a new Keep and blocks reuse after logic
   await reject(()=>rpc(0,"insert into keeps(user_id,media_path,media_type) values($1,$2,'photo')",[users[0],s.path]));
 });
 test('Explicit verified account deletion can remove claimed own media without affecting other accounts',async()=>{
+  await friend(db,users[0],users[1]);// Review DB-1: the reporter must be able to see the story.
   const s=await oldStory();await server('select * from claim_media_cleanup(100)');
   await rpc(1,"insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'story',$3,'spam')",[users[1],users[0],s.id]);
   await reject(()=>rpc(0,'select begin_account_media_deletion($1)',[users[0]]));
@@ -289,11 +298,16 @@ test('A reported photo remains protected after its author deletes the content ro
   const p=(await rpc(0,'insert into posts(user_id,media_path) values($1,$2) returning id',[users[0],path])).rows[0].id;
   await rpc(1,"insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'post',$3,'spam')",[users[1],users[0],p]);
   await rpc(0,'delete from posts where id=$1',[p]);
-  await assert.rejects(()=>rpc(0,"delete from storage.objects where bucket_id='media' and name=$1",[path]),/Cleanup cancelled/);
+  // Review DB-1: the author's delete must not fail visibly (that would reveal the report),
+  // but the file is kept as evidence and looks deleted to the author.
+  await rpc(0,"delete from storage.objects where bucket_id='media' and name=$1",[path]);
   assert.equal((await db.query('select name from storage.objects where name=$1',[path])).rows.length,1);
+  assert.equal((await rpc(0,'select name from storage.objects where name=$1',[path])).rows.length,0);
 });
 test('Report evidence survives deletion of story, peek, group, comment and anonymous content rows',async()=>{
-  for(const kind of['story','message','group_message','comment','mystery']){
+  await friend(db,users[0],users[1]);// Review DB-1: the reporter must be able to see what they report.
+  // Creates one piece of content with its own file, reported or not, then lets the author delete it all.
+  const run=async(kind,reported)=>{
     const folder=kind==='story'?'stories':kind==='message'?'snaps':kind==='group_message'?'group':kind==='comment'?'posts':'mystery';
     const path=folder==='mystery'?`mystery/${randomUUID()}.jpg`:`${users[0]}/${folder}/${randomUUID()}.jpg`;
     await rpc(0,"insert into storage.objects(bucket_id,name) values('media',$1)",[path]);let id,table,parentPost;
@@ -304,13 +318,44 @@ test('Report evidence survives deletion of story, peek, group, comment and anony
       table='comments';parentPost=(await rpc(0,'insert into posts(user_id,media_path) values($1,$2) returning id',[users[0],path])).rows[0].id;
       id=(await rpc(0,"insert into comments(user_id,post_id,body) values($1,$2,'reported comment') returning id",[users[0],parentPost])).rows[0].id;
     }
-    else{table='mystery_posts';await friend(db,users[0],users[1]);id=(await rpc(0,'insert into mystery_posts(user_id,media_path) values($1,$2) returning id',[users[0],path])).rows[0].id;}
-    if(kind==='mystery')await rpc(1,"select report_mystery($1,'spam')",[id]);
-    else await rpc(1,'insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,$3,$4,\'spam\')',[users[1],users[0],kind,id]);
+    else{table='mystery_posts';id=(await rpc(0,'insert into mystery_posts(user_id,media_path) values($1,$2) returning id',[users[0],path])).rows[0].id;}
+    if(reported){
+      if(kind==='mystery')await rpc(1,"select report_mystery($1,'spam')",[id]);
+      else await rpc(1,'insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,$3,$4,\'spam\')',[users[1],users[0],kind,id]);
+    }
     await rpc(0,`delete from ${table} where id=$1`,[id]);
     if(parentPost)await rpc(0,'delete from posts where id=$1',[parentPost]);
     assert.equal((await db.query(`select id from ${table} where id=$1`,[id])).rows.length,0);
-    await assert.rejects(()=>rpc(0,"delete from storage.objects where bucket_id='media' and name=$1",[path]),/Cleanup cancelled/);
+    // Exactly what Storage runs for remove([path]); the returned rows are the answer the author gets.
+    const removed=await rpc(0,"delete from storage.objects where bucket_id='media' and name=any($1) returning name",[[path]])
+      .then(r=>`ok, ${r.rows.length} rows`,e=>`error: ${e.message}`);
+    const listed=(await rpc(0,'select count(*)::int as n from storage.objects where name=$1',[path])).rows[0].n;
+    return {path,view:{removed,listed}};
+  };
+  // The daily cleanup, the way supabase/functions/cleanup-media runs it (service role).
+  const dailyCleanup=async()=>{
+    const swept=(await server('select name from claim_media_cleanup(1000)')).rows.map(r=>r.name);
+    if(swept.length)await server("delete from storage.objects where bucket_id='media' and name=any($1)",[swept]);
+    return swept;
+  };
+  const stored=async path=>(await db.query('select count(*)::int as n from storage.objects where name=$1',[path])).rows[0].n;
+  for(const kind of['story','message','group_message','comment','mystery']){
+    const reported=await run(kind,true);
+    const quiet=await run(kind,false);
+    // Review DB-1: the author gets the same answer with and without a report (no report oracle),
+    // and the file is gone for them at once (Storage gets no row back, so it deletes no bytes yet).
+    assert.deepEqual(reported.view,quiet.view,kind);
+    assert.deepEqual(quiet.view,{removed:'ok, 0 rows',listed:0},kind);
+    // Every app delete waits for the daily cleanup ...
+    assert.deepEqual([await stored(reported.path),await stored(quiet.path)],[1,1],kind);
+    const swept=await dailyCleanup();
+    // ... which really deletes the unreported file. The reported file stays stored as evidence,
+    // except for a comment report: it keeps nothing of the parent post's file.
+    assert.ok(swept.includes(quiet.path),kind);
+    assert.equal(swept.includes(reported.path),kind==='comment',kind);
+    assert.deepEqual([await stored(reported.path),await stored(quiet.path)],[kind==='comment'?0:1,0],kind);
+    // After the cleanup the author still sees the same (nothing) either way.
+    for(const item of[reported,quiet])assert.equal((await rpc(0,'select count(*)::int as n from storage.objects where name=$1',[item.path])).rows[0].n,0,kind);
   }
 });
 test('Rejected reports cannot leave orphan private evidence snapshots',async()=>{
