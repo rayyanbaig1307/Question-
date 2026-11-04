@@ -37,15 +37,18 @@ import { useMe } from '@/lib/auth';
 import {
   canReplay,
   canSave,
+  claimChatDare,
   cleanUpOpenedSnaps,
+  confirmChatDare,
   deleteMessage,
   fetchConversation,
+  fetchDareStreak,
   markChatRead,
+  type Message,
   sendDare,
   sendText,
   setSnapSaved,
   subscribeToMyMessages,
-  type Message,
 } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
@@ -69,6 +72,8 @@ export default function ChatScreen() {
   const [friend, setFriend] = useState<Profile | null>(null);
   const [areFriends, setAreFriends] = useState(true);
   const [messages, setMessages] = useState<Message[] | null>(null);
+  // Your dare streak with this friend 🔥 (dares you two completed in a row).
+  const [streak, setStreak] = useState(0);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
@@ -82,6 +87,9 @@ export default function ChatScreen() {
     try {
       const list = await fetchConversation(userId, friendId);
       setMessages(list);
+      fetchDareStreak(friendId)
+        .then(setStreak)
+        .catch(() => {});
       // Their message just arrived, so they're not typing any more.
       if (list[0]?.sender_id === friendId) clearFriendTyping();
       // Opening the chat means you've read their messages.
@@ -124,6 +132,38 @@ export default function ChatScreen() {
       Alert.alert('Message not sent', friendlyError(error));
     } finally {
       setSending(false);
+    }
+  }
+
+  // Their dare: open the camera – the peek you send is the proof, and the dare counts as done for you.
+  function doDare(dare: Message) {
+    router.push({ pathname: '/camera', params: { to: friendId, chatDare: dare.id } });
+  }
+  // Their dare, done some other way (e.g. "say hi" in the chat): tell them you did it.
+  async function claimDare(dare: Message) {
+    try {
+      await claimChatDare(dare.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(`Sent! Now ${name || 'they'} confirms it 🎯`);
+      loadMessages();
+    } catch (error) {
+      Alert.alert('Oops', friendlyError(error));
+    }
+  }
+  // Your dare: they say they did it – does it count?
+  async function confirmDare(dare: Message, ok: boolean) {
+    try {
+      const newStreak = await confirmChatDare(dare.id, ok);
+      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning);
+      if (ok) {
+        setStreak(newStreak);
+        showToast(newStreak > 1 ? `Dare completed ✅ 🔥 ${newStreak} dare streak!` : 'Dare completed ✅');
+      } else {
+        showToast("Told them it doesn't count ❌");
+      }
+      loadMessages();
+    } catch (error) {
+      Alert.alert('Oops', friendlyError(error));
     }
   }
 
@@ -232,7 +272,11 @@ export default function ChatScreen() {
                 <Text style={styles.headerName} numberOfLines={1}>
                   {name}
                 </Text>
-                {friendTyping ? <Text style={styles.headerTyping}>typing…</Text> : null}
+                {friendTyping ? (
+                  <Text style={styles.headerTyping}>typing…</Text>
+                ) : streak > 0 ? (
+                  <Text style={styles.headerStreak}>🔥 {streak} dare streak</Text>
+                ) : null}
               </View>
             </Pressable>
           ) : null
@@ -262,6 +306,7 @@ export default function ChatScreen() {
                 me={userId}
                 friendName={name}
                 showStatus={item.id === myLatestId}
+                dareActions={{ doDare, claimDare, confirmDare, dareBack: () => setDareOpen(true) }}
                 onLongPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   openMenu(item);
@@ -316,7 +361,37 @@ export default function ChatScreen() {
   );
 }
 
-function MessageView({ message, me, friendName, showStatus, onLongPress }: {
+// The pink pill buttons on a dare card.
+function DareButton({ icon, title, onPress, grow = false, quiet = false }: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  onPress: () => void;
+  grow?: boolean;
+  quiet?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.dareButton, grow && styles.dareButtonGrow, quiet && styles.dareButtonQuiet, pressed && styles.snapPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={title}>
+      <Ionicons name={icon} size={16} color={quiet ? colors.text : colors.onAccent} />
+      <Text style={[styles.dareButtonText, quiet && styles.dareButtonTextQuiet]} numberOfLines={1}>
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
+
+type DareActions = {
+  doDare: (dare: Message) => void;
+  claimDare: (dare: Message) => void;
+  confirmDare: (dare: Message, ok: boolean) => void;
+  dareBack: () => void;
+};
+
+function MessageView({ message, me, friendName, showStatus, onLongPress, dareActions }: {
+  dareActions: DareActions;
   message: Message;
   me: string;
   friendName: string;
@@ -356,25 +431,47 @@ function MessageView({ message, me, friendName, showStatus, onLongPress }: {
     );
   }
 
-  // A dare a friend wrote: the dare, and (for the one who got it) a button to do it and send the proof back.
+  // A dare a friend wrote, and how it ends:
+  // they do it (proof peek, or "I did it") → you confirm ✅ (or ❌ "doesn't count") → "Dare completed" + dare them back.
   if (message.kind === 'dare') {
+    const state = message.dare_state ?? null;
+    const who = friendName || 'they';
     return (
       <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
-        <Pressable onLongPress={onLongPress} style={styles.dareCard}>
-          <Text style={styles.dareLabel}>🎯 {mine ? `YOU DARED ${(friendName || 'them').toUpperCase()}` : 'YOU GOT DARED'}</Text>
+        <Pressable onLongPress={onLongPress} style={[styles.dareCard, state === 'done' && styles.dareCardDone]}>
+          <Text style={[styles.dareLabel, state === 'done' && styles.dareLabelDone]}>
+            {state === 'done' ? '✅ DARE COMPLETED' : `🎯 ${mine ? `YOU DARED ${(friendName || 'them').toUpperCase()}` : 'YOU GOT DARED'}`}
+          </Text>
           <Text style={styles.dareText}>{message.body}</Text>
-          {mine ? null : (
-            <Pressable
-              onPress={() => router.push({ pathname: '/camera', params: { to: message.sender_id } })}
-              style={({ pressed }) => [styles.dareButton, pressed && styles.snapPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Do the dare and send the proof">
-              <Ionicons name="camera" size={16} color={colors.onAccent} />
-              <Text style={styles.dareButtonText} numberOfLines={1}>
-                Do it · send proof
-              </Text>
-            </Pressable>
-          )}
+
+          {/* The one who got the dare */}
+          {!mine && (state === null || state === 'nope') ? (
+            <>
+              {state === 'nope' ? <Text style={styles.dareNote}>❌ {who} says that didn&apos;t count – try again!</Text> : null}
+              <DareButton icon="camera" title="Do it · send proof" onPress={() => dareActions.doDare(message)} />
+              <Pressable onPress={() => dareActions.claimDare(message)} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.dareLink}>Already did it? Tap ✅</Text>
+              </Pressable>
+            </>
+          ) : null}
+          {!mine && state === 'claimed' ? <Text style={styles.dareNote}>⏳ Waiting for {who} to confirm…</Text> : null}
+          {!mine && state === 'done' ? (
+            <DareButton icon="flag" title={`Dare ${friendName || 'them'} back 🎯`} onPress={dareActions.dareBack} />
+          ) : null}
+
+          {/* The one who sent the dare */}
+          {mine && state === null ? <Text style={styles.dareNote}>⏳ Waiting for {who} to do it…</Text> : null}
+          {mine && state === 'claimed' ? (
+            <>
+              <Text style={styles.dareNote}>🎯 {friendName || 'They'} says they did it! Check the proof, then:</Text>
+              <View style={styles.dareChoice}>
+                <DareButton icon="checkmark" title="Confirm" onPress={() => dareActions.confirmDare(message, true)} grow />
+                <DareButton icon="close" title="Nope" onPress={() => dareActions.confirmDare(message, false)} grow quiet />
+              </View>
+            </>
+          ) : null}
+          {mine && state === 'nope' ? <Text style={styles.dareNote}>You said it didn&apos;t count. They can try again.</Text> : null}
+          {mine && state === 'done' ? <Text style={styles.dareNote}>Nice! Now it&apos;s {friendName || 'their'}&apos;s turn to dare you 😈</Text> : null}
         </Pressable>
         <View style={styles.metaRow}>
           <Text style={styles.time}>{time}</Text>
@@ -555,6 +652,41 @@ const styles = StyleSheet.create({
   dareButtonText: {
     color: colors.onAccent,
     fontSize: 14,
+    fontWeight: '800',
+  },
+  dareButtonGrow: {
+    flex: 1,
+    paddingHorizontal: space.md,
+  },
+  dareButtonQuiet: {
+    backgroundColor: colors.bg,
+  },
+  dareButtonTextQuiet: {
+    color: colors.text,
+  },
+  dareChoice: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  dareCardDone: {
+    borderColor: colors.green,
+  },
+  dareLabelDone: {
+    color: colors.green,
+  },
+  dareNote: {
+    ...font.small,
+    lineHeight: 18,
+  },
+  dareLink: {
+    ...font.small,
+    color: colors.pink,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  headerStreak: {
+    color: colors.orange,
+    fontSize: 12,
     fontWeight: '800',
   },
   fill: {

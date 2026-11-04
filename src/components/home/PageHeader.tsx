@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +11,13 @@ import { colors, font, space } from '@/theme';
 
 // Top bar for the Chat and Home pages: a camera button on the left, a title (or the Peekaboo logo), and your
 // picture (→ profile) on the right – so your profile is always one tap away.
-export function PageHeader({ title, logo = false, onCamera }: { title?: string; logo?: boolean; onCamera: () => void }) {
+// `inbox`: a 🔔 bell next to your picture (Chat page) with a red number for new things in your Inbox.
+export function PageHeader({ title, logo = false, onCamera, inbox }: {
+  title?: string;
+  logo?: boolean;
+  onCamera: () => void;
+  inbox?: { count: number; onPress: () => void };
+}) {
   const { userId, profile } = useMe();
   const insets = useSafeAreaInsets();
 
@@ -25,7 +32,7 @@ export function PageHeader({ title, logo = false, onCamera }: { title?: string; 
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
-      <View style={styles.side}>{camera}</View>
+      <View style={[styles.side, inbox && styles.sideWide]}>{camera}</View>
       {logo ? (
         <View style={styles.logo}>
           <Wordmark height={30} />
@@ -33,7 +40,24 @@ export function PageHeader({ title, logo = false, onCamera }: { title?: string; 
       ) : (
         <Text style={styles.title}>{title}</Text>
       )}
-      <View style={[styles.side, styles.right]}>{me}</View>
+      <View style={[styles.side, styles.right, inbox && styles.sideWide]}>
+        {inbox ? (
+          <Pressable
+            onPress={inbox.onPress}
+            style={styles.bell}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={inbox.count > 0 ? `Inbox, ${inbox.count} new` : 'Inbox'}>
+            <Ionicons name={inbox.count > 0 ? 'notifications' : 'notifications-outline'} size={22} color={colors.text} />
+            {inbox.count > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{inbox.count > 99 ? '99+' : inbox.count}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+        {me}
+      </View>
     </View>
   );
 }
@@ -52,6 +76,40 @@ const styles = StyleSheet.create({
   },
   right: {
     alignItems: 'flex-end',
+  },
+  sideWide: {
+    width: 96,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: space.sm,
+  },
+  bell: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.red,
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '900',
   },
   title: {
     ...font.title,

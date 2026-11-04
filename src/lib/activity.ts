@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { onNotificationArrived } from './notifications';
@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 // Likes and comments on your posts, replies to your comments, likes on your comments, people who added you,
 // accepted your friend request, or hit you back. Worked out by the database
 // (supabase/migrations/20261205000000_activity.sql) – nothing extra is saved.
-// "New" means newer than the last time you looked at Chat (remembered on this phone).
+// "New" means newer than the last time you looked at your Inbox (remembered on this phone).
 // ---------------------------------------------------------------------------
 
 export type ActivityKind = 'like' | 'comment' | 'reply' | 'comment_like' | 'added_you' | 'accepted' | 'hit_back';
@@ -56,23 +56,35 @@ export function describeActivity(item: ActivityItem): string {
 }
 
 const seenKey = (me: string) => `peekaboo-activity-seen:${me}`;
+const clearedKey = (me: string) => `peekaboo-activity-cleared:${me}`;
 
 // Your activity, fresh whenever `active` turns on, the app comes back to the front, or a like / comment /
 // friend notification arrives. No live database listener on purpose (one less thing that can break at launch).
+// "Seen" (no dot, not counted) and "Cleared" (gone from the Inbox) are remembered on this phone.
 export function useActivity(me: string, active: boolean) {
-  const [items, setItems] = useState<ActivityItem[]>([]);
+  const [all, setAll] = useState<ActivityItem[]>([]);
   const [seenAt, setSeenAt] = useState<string | null>(null);
+  const [clearedAt, setClearedAt] = useState<string | null>(null);
+  // The newest item, for "seen" / "clear" (kept out of render so the callbacks below never change).
+  const newest = useRef<string | null>(null);
 
   const reload = useCallback(() => {
     fetchActivity()
-      .then(setItems)
+      .then((items) => {
+        newest.current = items[0]?.at ?? null;
+        setAll(items);
+      })
       .catch((error) => console.warn('Could not load activity', error));
-  }, []);
-
-  useEffect(() => {
-    AsyncStorage.getItem(seenKey(me))
-      .then((value) => setSeenAt(value ?? new Date(0).toISOString()))
-      .catch(() => setSeenAt(new Date(0).toISOString()));
+    // Another screen may have marked things seen or cleared since.
+    AsyncStorage.multiGet([seenKey(me), clearedKey(me)])
+      .then(([[, seen], [, cleared]]) => {
+        setSeenAt(seen ?? new Date(0).toISOString());
+        setClearedAt(cleared ?? new Date(0).toISOString());
+      })
+      .catch(() => {
+        setSeenAt(new Date(0).toISOString());
+        setClearedAt(new Date(0).toISOString());
+      });
   }, [me]);
 
   useEffect(() => {
@@ -88,15 +100,28 @@ export function useActivity(me: string, active: boolean) {
     };
   }, [active, reload]);
 
-  // Everything up to now counts as seen (called when you look at Chat).
+  // Everything up to now counts as seen (called when you leave the Inbox).
   const markSeen = useCallback(() => {
-    const newest = items[0]?.at;
-    if (!newest || (seenAt && newest <= seenAt)) return;
-    setSeenAt(newest);
-    AsyncStorage.setItem(seenKey(me), newest).catch(() => {});
-  }, [items, seenAt, me]);
+    const at = newest.current;
+    if (!at) return;
+    setSeenAt((current) => (current && current >= at ? current : at));
+    AsyncStorage.setItem(seenKey(me), at).catch(() => {});
+  }, [me]);
 
+  // "Clear": everything up to now disappears from the Inbox (and counts as seen).
+  const clear = useCallback(() => {
+    const at = newest.current;
+    if (!at) return;
+    setClearedAt(at);
+    setSeenAt(at);
+    AsyncStorage.multiSet([
+      [clearedKey(me), at],
+      [seenKey(me), at],
+    ]).catch(() => {});
+  }, [me]);
+
+  const items = clearedAt === null ? [] : all.filter((item) => item.at > clearedAt);
   // While we don't know yet when you last looked, nothing counts as new.
   const unseen = seenAt === null ? 0 : items.filter((item) => item.at > seenAt).length;
-  return { items, unseen, seenAt, markSeen, reload };
+  return { items, unseen, seenAt, markSeen, clear, reload };
 }

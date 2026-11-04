@@ -33,6 +33,10 @@ export type Message = {
   // Reactions: the story it was for (empty once the story is gone), and – in a chat – a little bit of it to show.
   story_id: string | null;
   story?: Pick<MediaFields, 'media_path' | 'media_type' | 'poster_path'> | null;
+  // Dares: null = not done yet · 'claimed' = they say they did it · 'done' = you confirmed ✅ ·
+  // 'nope' = you said it didn't count (they can try again).
+  dare_state?: 'claimed' | 'done' | 'nope' | null;
+  dare_done_at?: string | null;
 };
 
 // The emojis you can send while watching a friend's story.
@@ -117,6 +121,26 @@ export async function sendDare(me: string, friend: string, dare: string): Promis
     .single();
   if (error) throw error;
   return data as Message;
+}
+
+// "I did it": you did the dare a friend sent you (also done for you after you send the proof peek).
+export async function claimChatDare(dare: string): Promise<void> {
+  const { error } = await supabase.rpc('claim_chat_dare', { dare });
+  if (error) throw error;
+}
+
+// You sent the dare: confirm they did it (true) or say it doesn't count (false). Returns your dare streak.
+export async function confirmChatDare(dare: string, ok: boolean): Promise<number> {
+  const { data, error } = await supabase.rpc('confirm_chat_dare', { dare, ok });
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
+// Your dare streak with a friend 🔥: dares you two completed in a row (no gap longer than 3 days).
+export async function fetchDareStreak(friend: string): Promise<number> {
+  const { data, error } = await supabase.rpc('chat_dare_streak', { friend });
+  if (error) throw error;
+  return (data as number) ?? 0;
 }
 
 // The same dare to several friends at once (each gets it in their chat with you).

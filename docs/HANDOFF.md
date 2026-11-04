@@ -110,6 +110,18 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Inbox 🔔 + chat dare streaks (done, 4 Nov)
+
+- **Inbox** (`src/app/(app)/inbox.tsx`): hit ups, friend requests and Activity moved out of the Chat list into
+  an Inbox behind a 🔔 bell in the Chat header (`PageHeader` `inbox` prop), with a red number and a slim
+  "N new in your Inbox" row. There's a **Clear** for activity and pull-to-refresh in Chat and the Inbox. Opening
+  the app clears delivered notifications and the badge (`useClearNotificationsWhenOpen` in `lib/notifications.ts`).
+  Foreground notifications show as a banner only (`shouldShowList: false`).
+- **Chat dares** (`20261206000000_chat_dare_streaks.sql`, applied live): `messages.dare_state` (null → 'claimed'
+  → 'done', or 'nope'), `claim_chat_dare`, `confirm_chat_dare`, `chat_dare_streak`. Proof peek: chat → `/camera?
+  to=…&chatDare=<id>` → editor claims after sending. A streak counts completed dares between two people with no
+  gap over 3 days; it shows under the name in the chat header.
+
 ## Activity 🔔 (done, 4 Nov)
 
 At the top of Chat: likes, comments, replies, comment likes, "added you", "accepted your request" and "hit you

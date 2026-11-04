@@ -21,7 +21,7 @@ import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
-import { sendSnap } from '@/lib/chat';
+import { claimChatDare, sendSnap } from '@/lib/chat';
 import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
@@ -35,7 +35,9 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
+  const { uri, fit, video, to, chatDare, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
+    // A peek from a chat camera that's the proof for the friend's dare (marks the dare as done for you).
+    chatDare?: string;
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -284,8 +286,10 @@ export default function Editor() {
           return;
         }
         await sendSnap(userId, [to ?? ''], photo);
+        // The proof for their dare: tell them you did it (they confirm it in the chat).
+        if (chatDare) await claimChatDare(chatDare).catch(() => {});
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast('Peek sent 👀');
+        showToast(chatDare ? 'Proof sent 🎯 Now they confirm it' : 'Peek sent 👀');
         router.dismissTo(`/chat/${to}`);
         return;
       }

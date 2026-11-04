@@ -839,15 +839,31 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
 8. **Sign-up guard** (once it's switched on): the old Create account button on an old download says "New accounts
    are made with Apple or Google now. Update Peekaboo to the newest version."
 
-## Step 56 – Activity 🔔
+## Step 56 – Inbox 🔔 (activity, hit ups, friend requests)
 
-1. With Account B: like Account A's post, comment on it, reply to A's comment, and like A's comment. Also add A
-   (public account), or have A's friend request accepted, or hit A back.
-2. As A: the **Chat** tab gets a red number for the new activity. Open Chat → an **Activity 🔔** box (under
-   friend requests) shows "B liked your post ❤️", "B commented on your post: “…”", "B added you as a friend 🎉"
-   and so on, newest first, each with a dot while it's new.
-3. Tap one: likes and comments open the post; friend things open B's profile. **See all** shows up to 60 items
-   from the last 30 days.
-4. Leave Chat → the dots and the red number for activity go away (other red numbers stay).
-5. Your own likes/comments never show, and nothing from someone you blocked (or who blocked you).
+1. **Chat** now shows only your chats (and Group Peeks). A **🔔 bell** next to your picture has a red number for
+   new things; a slim "🔔 3 new in your Inbox" row shows above the chats while there's something new.
+2. Tap the bell → **Inbox**: **Hit ups 👋** (Hit back / Ignore), **Friend requests 💌** (Accept / ✕) and
+   **Activity** – "B liked your post ❤️", "B commented: “…”", "B replied to your comment", "B liked your comment",
+   "B added you as a friend 🎉", "B accepted your friend request 🎉", "B hit you back 👋". New ones have a dot.
+3. Tap an activity: likes/comments open the post, friend things open the profile.
+4. **Clear** (next to Activity) empties the activity list. Leaving the Inbox marks everything as seen (the red
+   numbers for activity go away; hit ups and requests stay until you answer them).
+5. **Pull down** to refresh in Chat and in the Inbox.
+6. **No more pile-ups:** opening Peekaboo clears its notifications off the lock screen and the number on the app
+   icon. While the app is open, a new notification shows as a quick banner only.
+7. Blocked people never show up; your own likes/comments never show up.
+
+## Step 57 – Dares in chat: confirm + dare streak 🔥
+
+1. A dares B in chat (🚩 button). B sees **Do it · send proof** and **Already did it? Tap ✅**.
+2. B taps **Do it · send proof** → camera → sends a peek → "Proof sent 🎯 Now they confirm it". (Or B taps
+   **Already did it? Tap ✅**.) A gets a notification "🎯 B did your dare!".
+3. A's dare card: "B says they did it! Check the proof, then:" **✅ Confirm** / **❌ Nope**.
+   - **Confirm** → the card turns green "✅ DARE COMPLETED"; B gets "✅ Dare completed!"; B's card shows
+     **Dare A back 🎯**.
+   - **Nope** → B sees "A says that didn't count – try again!" and can do it again.
+4. **Dare streak:** each dare you two complete adds to "🔥 N dare streak" under the name at the top of the chat.
+   More than 3 days without a completed dare resets it.
+5. Nobody can confirm their own dare or fake a completed one.
 

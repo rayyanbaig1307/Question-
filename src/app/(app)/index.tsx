@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 
@@ -15,6 +15,7 @@ import { fetchMyBirthday, markAskedForBirthday, wasAskedForBirthday } from '@/li
 import { useUnreadCount } from '@/lib/chat';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { useHitUps } from '@/lib/hitups';
+import { useClearNotificationsWhenOpen } from '@/lib/notifications';
 import { colors, isDark } from '@/theme';
 
 const CHAT = 0;
@@ -37,9 +38,17 @@ export default function Home() {
   const { hitUps, reload: reloadHitUps } = useHitUps(userId, focused);
   // Friend requests waiting for you (shown at the top of Chat too).
   const requestCount = useIncomingRequestCount(userId, focused);
-  // Activity (likes, comments, new friends…) at the top of Chat. New ones count on the Chat tab until you've
-  // looked at Chat and moved on.
+  // Activity (likes, comments, new friends…) lives in the Inbox; new ones count on the bell and the Chat tab.
   const activity = useActivity(userId, focused);
+  // Everything waiting in the Inbox 🔔 (the bell at the top of Chat).
+  const inboxCount = hitUps.length + requestCount + activity.unseen;
+  const { reload: reloadActivity } = activity;
+  const refreshInbox = useCallback(() => {
+    reloadHitUps();
+    reloadActivity();
+  }, [reloadHitUps, reloadActivity]);
+  // Opening the app clears Peekaboo's old notifications off the lock screen and the app icon's number.
+  useClearNotificationsWhenOpen(focused);
   // Other screens can send you back here with ?page=camera (or chat / home) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
@@ -96,10 +105,8 @@ export default function Home() {
       <ChatPage
         visible={focused && page === CHAT}
         onCamera={() => goTo(CAMERA)}
-        hitUps={hitUps}
-        onHitUpsChanged={reloadHitUps}
-        activity={activity.items}
-        activitySeenAt={activity.seenAt}
+        inboxCount={inboxCount}
+        onRefreshInbox={refreshInbox}
       />
       <Animated.View style={swipe.pageStyles[CHAT].dim} pointerEvents="none" />
     </Animated.View>,
@@ -123,8 +130,6 @@ export default function Home() {
         onPageScrollStateChanged={(event) => setSwiping(event.nativeEvent.pageScrollState !== 'idle')}
         onPageSelected={(event) => {
           if (event.nativeEvent.position !== page) Haptics.selectionAsync();
-          // Leaving Chat: the activity you just saw isn't new any more.
-          if (page === CHAT && event.nativeEvent.position !== CHAT) activity.markSeen();
           setPage(event.nativeEvent.position);
         }}>
         {pages}
@@ -133,7 +138,7 @@ export default function Home() {
       <HomeTabBar
         page={page}
         onSelect={goTo}
-        unread={unread + hitUps.length + requestCount + (page === CHAT ? 0 : activity.unseen)}
+        unread={unread + inboxCount}
         solid={swipe.tabBarSolid}
       />
       {/* Light status bar over the camera; elsewhere it follows the app's colors. */}

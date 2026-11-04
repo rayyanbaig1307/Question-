@@ -5,13 +5,15 @@ import { CameraPage } from '@/components/home/CameraPage';
 
 // The camera on its own screen:
 // - opened from a chat (?to=friend): whatever you take goes to that friend as a peek;
+//   (&chatDare=<message id>: it's the proof for their dare, so the dare is marked as done for you);
 // - opened from the Daily Dare (?dare=1): your photo becomes your answer to today's dare;
 // - opened for the Peekaboo drop (?drop=1): your photo becomes today's drop;
 // - opened from Guess Who (?guess=1): your photo is posted anonymously for friends to guess;
 // - opened to pay a forfeit (?forfeit=<id>&ftext=…): your photo pays that forfeit.
 export default function SoloCamera() {
-  const { to, dare, drop, guess, forfeit, ftext } = useLocalSearchParams<{
+  const { to, chatDare, dare, drop, guess, forfeit, ftext } = useLocalSearchParams<{
     to?: string;
+    chatDare?: string;
     dare?: string;
     drop?: string;
     guess?: string;
@@ -25,6 +27,7 @@ export default function SoloCamera() {
       <CameraPage
         active={focused}
         sendTo={to}
+        chatDare={chatDare}
         dare={dare === '1'}
         drop={drop === '1'}
         guess={guess === '1'}

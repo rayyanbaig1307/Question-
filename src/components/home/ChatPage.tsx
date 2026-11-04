@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
@@ -15,15 +15,12 @@ import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
-import { fetchFriends, fetchIncomingRequests, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
+import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
-import { describeActivity, type ActivityItem } from '@/lib/activity';
-import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
@@ -36,16 +33,14 @@ type ChatRow = {
   newChats: number;
 };
 
-// Left page: hit ups and friend requests waiting for you at the top, then your Group Peek groups, then everyone
-// you can chat with, most recent first.
-export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity, activitySeenAt }: {
+// Left page: your chats, most recent first, with your Group Peek groups above them. Hit ups, friend requests
+// and activity live in the Inbox (the 🔔 bell), so the chat list stays clean. Pull down to refresh.
+export function ChatPage({ visible, onCamera, inboxCount, onRefreshInbox }: {
   visible: boolean;
   onCamera: () => void;
-  hitUps: HitUp[];
-  onHitUpsChanged: () => void;
-  // Activity 🔔 (newest first), and when you last looked – newer ones get a dot.
-  activity: ActivityItem[];
-  activitySeenAt: string | null;
+  // New things waiting in your Inbox 🔔 (hit ups, friend requests, activity) – the bell's red number.
+  inboxCount: number;
+  onRefreshInbox: () => void;
 }) {
   const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
@@ -60,8 +55,7 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
   const [links, setLinks] = useState<FriendLink[]>([]);
-  // Friend requests waiting for you (private accounts only – public ones are friends straight away).
-  const [requests, setRequests] = useState<FriendLink[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const trimmed = query.trim().replace(/^@/, '');
   const searching = trimmed.length > 0;
 
@@ -86,25 +80,8 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
       .then(setCloseFriends)
       .catch(() => {});
     refresh();
-    // Friend requests: load now, and again the moment one arrives or is answered.
-    const loadRequests = () =>
-      fetchIncomingRequests(userId)
-        .then(setRequests)
-        .catch(() => {});
-    loadRequests();
-    const requestChannel = supabase
-      .channel(`chat-requests-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
-        loadRequests();
-        refresh();
-      })
-      .subscribe();
     // Refresh instantly when a message arrives or gets opened.
-    const stopMessages = subscribeToMyMessages(`chat-list-${userId}`, refresh);
-    return () => {
-      stopMessages();
-      supabase.removeChannel(requestChannel);
-    };
+    return subscribeToMyMessages(`chat-list-${userId}`, refresh);
   }, [visible, userId, refresh]);
 
   // Look people up a moment after you stop typing (and know who you've already asked).
@@ -126,6 +103,21 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
       .catch(() => {});
     refresh();
   };
+
+  // Pull down: fresh chats, groups and Inbox.
+  async function pullToRefresh() {
+    setRefreshing(true);
+    onRefreshInbox();
+    fetchGroups()
+      .then(setGroups)
+      .catch(() => {});
+    try {
+      setRows(await fetchRows(userId));
+    } catch {
+      // Keep what's on screen.
+    }
+    setRefreshing(false);
+  }
 
   // Pinned chats stay at the top.
   const shown = rows
@@ -205,7 +197,7 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
 
   return (
     <View style={styles.fill}>
-      <PageHeader title="Chat" onCamera={onCamera} />
+      <PageHeader title="Chat" onCamera={onCamera} inbox={{ count: inboxCount, onPress: () => router.push('/inbox') }} />
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
@@ -233,36 +225,22 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
           keyExtractor={(row) => row.friend.id}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={pullToRefresh} tintColor={colors.accent} />}
           contentContainerStyle={[styles.list, { paddingBottom: tabSpace + space.lg }]}
           ListHeaderComponent={
             searching ? (
               matching.length > 0 ? <Text style={styles.sectionTitle}>💬 Chats</Text> : undefined
             ) : (
             <>
-              {hitUps.length > 0 ? (
-                <View style={styles.hitUps}>
-                  <Text style={styles.hitUpsTitle}>Hit ups 👋</Text>
-                  {hitUps.map((hitUp) => (
-                    <HitUpRow key={hitUp.id} hitUp={hitUp} onDone={onHitUpsChanged} />
-                  ))}
-                </View>
+              {inboxCount > 0 ? (
+                <Pressable style={styles.inboxRow} onPress={() => router.push('/inbox')} accessibilityRole="button">
+                  <Text style={styles.inboxEmoji}>🔔</Text>
+                  <Text style={styles.inboxText}>
+                    {inboxCount} new in your Inbox
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
               ) : null}
-              {requests.length > 0 ? (
-                <View style={styles.hitUps}>
-                  <Text style={styles.hitUpsTitle}>Friend requests 💌</Text>
-                  {requests.map((link) =>
-                    link.requester ? (
-                      <View key={link.id} style={styles.request}>
-                        <PersonRow
-                          person={link.requester}
-                          right={<FriendButton person={link.requester} relation={relationFrom(link, userId)} onChanged={reloadLinks} small />}
-                        />
-                      </View>
-                    ) : null,
-                  )}
-                </View>
-              ) : null}
-              {activity.length > 0 ? <ActivitySection items={activity} seenAt={activitySeenAt} /> : null}
               {rows.length > 0 ? (
                 <>
                   <GroupsSection groups={groups} />
@@ -321,41 +299,6 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged, activity,
 }
 
 // Group Peek: your groups (how many posted today's drop), or one row to start your first group.
-// Activity 🔔: who liked, commented, replied, added you… The newest few, with "See all" for the rest.
-const ACTIVITY_PREVIEW = 4;
-function ActivitySection({ items, seenAt }: { items: ActivityItem[]; seenAt: string | null }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, ACTIVITY_PREVIEW);
-  return (
-    <View style={styles.hitUps}>
-      <Text style={styles.hitUpsTitle}>Activity 🔔</Text>
-      {shown.map((item) => {
-        const name = item.actor_name || `@${item.actor_username}`;
-        const isNew = seenAt !== null && item.at > seenAt;
-        return (
-          <Pressable
-            key={`${item.kind}-${item.actor_id}-${item.at}`}
-            style={styles.activity}
-            onPress={() => router.push(item.post_id ? `/post/${item.post_id}` : `/profile/${item.actor_id}`)}
-            accessibilityRole="button">
-            <Avatar path={item.actor_avatar} name={name} size={40} />
-            <Text style={styles.activityText} numberOfLines={2}>
-              <Text style={styles.name}>{name}</Text> {describeActivity(item)}
-              <Text style={styles.statusText}> · {timeAgo(item.at)}</Text>
-            </Text>
-            {isNew ? <View style={styles.activityDot} /> : null}
-          </Pressable>
-        );
-      })}
-      {items.length > ACTIVITY_PREVIEW ? (
-        <Pressable onPress={() => setAll(!all)} hitSlop={8} accessibilityRole="button">
-          <Text style={styles.sectionAction}>{all ? 'Show less' : `See all (${items.length})`}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 function GroupsSection({ groups }: { groups: PeekGroup[] }) {
   return (
     <>
@@ -410,86 +353,6 @@ function GroupsSection({ groups }: { groups: PeekGroup[] }) {
   );
 }
 
-// Someone hit you up: Hit back (friends + the chat opens with their message) or Ignore (they're never told).
-function HitUpRow({ hitUp, onDone }: { hitUp: HitUp; onDone: () => void }) {
-  const { showOptions, showToast } = useOverlays();
-  const { report, confirmBlock } = useSafetyActions();
-  const [busy, setBusy] = useState<'back' | 'ignore' | null>(null);
-  const sender = hitUp.sender;
-  const name = sender.display_name || sender.username;
-
-  async function respond(hitBack: boolean) {
-    setBusy(hitBack ? 'back' : 'ignore');
-    try {
-      await respondToHitUp(hitUp.id, hitBack);
-      onDone();
-      if (hitBack) {
-        showToast(`You and ${name} can chat now 🎉`);
-        router.push(`/chat/${sender.id}`);
-      } else {
-        showToast("Ignored – they won't be told");
-      }
-    } catch (error) {
-      Alert.alert('Oops', friendlyError(error));
-      onDone();
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  function openMenu() {
-    showOptions({
-      title: `@${sender.username}`,
-      options: [
-        { label: 'See profile', onPress: () => router.push(`/profile/${sender.id}`) },
-        { label: 'Report', onPress: () => report({ user: sender, contentType: 'user', contentId: sender.id, onBlocked: onDone }) },
-        { label: 'Block', destructive: true, onPress: () => confirmBlock(sender, onDone) },
-      ],
-    });
-  }
-
-  return (
-    <View style={styles.hitUp}>
-      <View style={styles.hitUpTop}>
-        <Pressable onPress={() => router.push(`/profile/${sender.id}`)} accessibilityLabel={`See ${name}'s profile`}>
-          <Avatar path={sender.avatar_path} name={name} size={48} />
-        </Pressable>
-        <View style={styles.rowText}>
-          <Text style={styles.name} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text style={styles.statusText}>
-            @{sender.username} · {timeAgo(hitUp.created_at)}
-          </Text>
-        </View>
-        <Pressable onPress={openMenu} hitSlop={10} accessibilityLabel="Report or block">
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
-        </Pressable>
-      </View>
-      <Text style={styles.hitUpMessage}>{hitUp.message ? `“${hitUp.message}”` : '👋 Hit you up'}</Text>
-      <View style={styles.hitUpButtons}>
-        <Button
-          title="Hit back"
-          icon="hand-right"
-          small
-          style={styles.hitUpButton}
-          loading={busy === 'back'}
-          disabled={busy !== null}
-          onPress={() => respond(true)}
-        />
-        <Button
-          title="Ignore"
-          variant="secondary"
-          small
-          style={styles.hitUpButton}
-          loading={busy === 'ignore'}
-          disabled={busy !== null}
-          onPress={() => respond(false)}
-        />
-      </View>
-    </View>
-  );
-}
 
 async function fetchRows(me: string): Promise<ChatRow[]> {
   const [friends, messages] = await Promise.all([fetchFriends(me), fetchRecentMessages(me)]);
@@ -598,6 +461,25 @@ function ChatRowView({ row, me, pinned, muted, onMenu }: {
 }
 
 const styles = StyleSheet.create({
+  inboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    marginBottom: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.card,
+  },
+  inboxEmoji: {
+    fontSize: 18,
+  },
+  inboxText: {
+    ...font.body,
+    fontWeight: '800',
+    flex: 1,
+  },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -705,59 +587,5 @@ const styles = StyleSheet.create({
   groupDone: {
     color: colors.green,
     fontWeight: '800',
-  },
-  hitUps: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.md,
-    gap: space.sm,
-  },
-  hitUpsTitle: {
-    ...font.label,
-  },
-  activity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: space.sm,
-  },
-  activityText: {
-    ...font.body,
-    flex: 1,
-  },
-  activityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.accent,
-  },
-  request: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    paddingHorizontal: space.md,
-  },
-  hitUp: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: space.md,
-    gap: space.sm,
-  },
-  hitUpTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-  },
-  hitUpMessage: {
-    ...font.body,
-    fontWeight: '700',
-  },
-  hitUpButtons: {
-    flexDirection: 'row',
-    gap: space.sm,
-  },
-  hitUpButton: {
-    flex: 1,
   },
 });

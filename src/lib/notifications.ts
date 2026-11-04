@@ -2,7 +2,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { dropAt, localDay } from './drop';
 import { supabase } from './supabase';
@@ -14,6 +14,25 @@ const Notifications: typeof import('expo-notifications') | null = requireOptiona
     require('expo-notifications')
   : null;
 
+// Clears Peekaboo's notifications off the lock screen / notification list, and the red number on the app icon.
+// Done whenever you open the app (like Instagram and Snapchat), so old ones never pile up.
+export function clearDeliveredNotifications() {
+  if (!Notifications) return;
+  Notifications.dismissAllNotificationsAsync().catch(() => {});
+  Notifications.setBadgeCountAsync(0).catch(() => {});
+}
+
+export function useClearNotificationsWhenOpen(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    clearDeliveredNotifications();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') clearDeliveredNotifications();
+    });
+    return () => subscription.remove();
+  }, [enabled]);
+}
+
 const DROP_DAYS_AHEAD = 7;
 const DROP_ID = 'peekaboo-drop-';
 
@@ -22,9 +41,11 @@ const DROP_ID = 'peekaboo-drop-';
 async function getReady(): Promise<boolean> {
   if (!Notifications) return false;
   Notifications.setNotificationHandler({
+    // While Peekaboo is open: a quick banner, but it isn't kept in the phone's notification list
+    // (you're already in the app, so it would only pile up there).
     handleNotification: async () => ({
       shouldShowBanner: true,
-      shouldShowList: true,
+      shouldShowList: false,
       shouldPlaySound: true,
       shouldSetBadge: false,
     }),

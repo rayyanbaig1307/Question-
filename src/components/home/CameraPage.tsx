@@ -53,13 +53,15 @@ const MODE_RING: Record<CameraMode, string> = {
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
+export function CameraPage({ active, warm = false, sendTo, chatDare, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
   warm?: boolean;
   // A friend's id: the photo goes straight to them as a peek.
   sendTo?: string;
+  // The friend's chat dare this peek is the proof for (see chat/[id].tsx).
+  chatDare?: string;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
   // Taking your Peekaboo drop photo (2-minute countdown at the top).
@@ -138,6 +140,7 @@ export function CameraPage({ active, warm = false, sendTo, dare = false, drop = 
         // Face lens: where the drawings were, so they're on the photo as stickers you can still move.
         ...(lens.length > 0 ? { lens: JSON.stringify(lens) } : {}),
         ...(sendTo ? { to: sendTo } : {}),
+        ...(sendTo && chatDare ? { chatDare } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
         ...(guessOn ? { guess: '1' } : {}),
