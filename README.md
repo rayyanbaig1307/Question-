@@ -34,14 +34,22 @@ npm install
 
 1. Go to [supabase.com](https://supabase.com), log in and **create a new project**.
 2. The app needs every migration in `supabase/migrations/`, applied in filename order;
-   the first core schema alone is no longer enough. Use a disposable test project
-   and the Supabase migration workflow. The historical report-alert migration
-   assumes the owner's profile already exists, so a completely fresh hosted setup
-   needs that assumption resolved first. The automated local fixture supplies an
-   invented owner row and runs the full schema without contacting a hosted project.
-   Before later releasing the QA hardening migration, review the read-only checks
-   in `tests/database/deployment-preflight.sql` on a test copy for older duplicate
-   or malformed rows. This audit did not deploy any migration.
+   the first core schema alone is no longer enough. Use a disposable test project.
+   Two pairs of files share a version number (`20261207000000_…` and
+   `20261208000000_…`), and the Supabase CLI keys migrations by version, so
+   `supabase db push` / `db reset` may stop at the second file of each pair (not
+   tested; see `docs/HANDOFF.md`). If it does, apply the files one at a time in
+   filename order, for example in the SQL editor. The report-alert migration adds
+   the owner to the report alert list only if that owner's profile already exists.
+   On a fresh database it adds nobody, so nobody gets report alerts yet: after
+   signing up in the app, find your user id in **Authentication → Users** and run
+   `insert into private.report_alert_people (user_id) values ('<your id>');`
+   in the SQL editor. The automated local tests run the full schema the same way,
+   with no owner account, and never contact a hosted project.
+   Before releasing the QA migrations (`20261213102659` and later) on the live
+   project, run the read-only checks in `tests/database/deployment-preflight.sql`
+   one query at a time, and follow the release order in `docs/HANDOFF.md`.
+   None of the QA migrations has been deployed yet.
 3. **Make testing easy:** go to **Authentication → Sign In / Providers → Email** and turn **off** "Confirm email".
    (Otherwise every new test account has to click a link in an email first. Turn it back on before launching.)
 

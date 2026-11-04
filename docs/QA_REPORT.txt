@@ -1,6 +1,86 @@
 PEEKABOO — SECOND QA AND SECURITY REPORT
 4 November 2026
 
+INTEGRATION UPDATE (2026-11-04)
+
+This report came with the supplied QA patch. Its findings below are kept as
+written; a few out-of-date sentences are marked "[Update 2026-11-04]". Since
+then the patch was added to the branch (commit ac246c3) and a further review
+fixed the open items and more. Everything is still LOCAL ONLY: nothing was
+pushed, deployed, migrated on the hosted project or published as an OTA.
+Release order: docs/HANDOFF.md, "Release order". Current test counts: see
+tests/README.md, "Latest results". The counts further down are the supplied
+patch's own. Some database details further down also describe the supplied
+patch; for example, an author's delete of a reported file used to fail, and
+now it succeeds quietly while the file is kept hidden for the report.
+
+What happened to each OPEN item:
+- OPEN-01 (public-name moderation bypass): FIXED. Migration
+  20261214000000_public_word_filter.sql makes the database check public text
+  (usernames, display names, bios, post and Guess Who captions, comments, hit
+  ups, dare ideas, group names) with the same rules as src/lib/cleanWords.ts,
+  keeping the real-name and private-chat exceptions. Both sides also see
+  through invisible characters, look-alike letters and accents. username-auth
+  refuses a blocked name before a username sign-up.
+  tests/unit/word-filter-parity.test.mjs keeps the app and the database the
+  same. Left on purpose: private chat (1:1 and group, chat dares) and profile
+  song title/artist are not filtered; the hit-back note and a word split
+  across username + display name are checked by the app only.
+- OPEN-02 (signed-in web app crashed in the native pager): FIXED. Phones keep
+  the native pager (src/components/home/HomePager.tsx); the browser uses a
+  small web pager (HomePager.web.tsx), with web stand-ins for the friend map
+  and scratch reveal. QA_FULL_WEB is gone and no browser check is skipped.
+  The web editor now says Send/Save need the phone app. A link opened at
+  start-up is kept while the saved login loads (src/app/_layout.tsx).
+- OPEN-03 (fresh setup assumed an owner row): FIXED. The report-alert
+  migration (20261207000000_report_alerts.sql) now adds the owner only if
+  that profile exists; this changes nothing on the live database. The local
+  fixture no longer makes up an owner row. On a fresh database the owner adds
+  themselves to private.report_alert_people by hand. Not tested: the Supabase
+  CLI with the two duplicate migration version prefixes (20261207000000,
+  20261208000000).
+- OPEN-04 (moderate dependency advisories): MOSTLY FIXED (commit 468e792).
+  Scoped overrides move glob and minimatch to fixed versions in the build and
+  lint tools. Left: minimatch 3.1.5 inside eslint-plugin-import and
+  eslint-plugin-react (lint only; no fixed version exists yet). No app or
+  native package changed.
+- OPEN-05 (underscore as an ILIKE wildcard): FIXED. Friend search escapes _,
+  % and \ (likePrefix in src/lib/friends.ts). The other username lookups
+  already used exact matches.
+
+Main extra fixes from the integration review:
+- R2-API-02 changed: a mismatching Apple ID is never revoked; the Apple
+  disconnect is skipped and the verified caller's own account is still
+  deleted. delete-account now opens the deletion and loads the Guess Who file
+  list before contacting Apple, so it is deployed just before the migrations.
+- Reports: only for content the reporter can see; the reported person comes
+  from the content; a comment report no longer holds the parent post's file;
+  dismissing a report lets go of its files; public.release_report_evidence
+  lets the owner let go of one report's files. Every app delete now waits for
+  the daily cleanup, so nobody can tell whether they were reported.
+- Keeps can only use your own files. A hidden dare idea can't be reported to
+  learn who wrote it.
+- Very busy accounts can be deleted again: one small lock row per file name
+  (private.media_path_locks) replaces PostgreSQL's shared lock table.
+- Old malformed messages keep working: the message rules are now triggers,
+  not NOT VALID checks, so nothing needs to be validated later.
+- Username login limits are fairer: only wrong passwords count (8 per name
+  and address, 40 per name, 30 per address, each per 15 minutes); a server
+  outage says so instead of "wrong password" and uses up no try.
+- The daily cleanup only checks files that still exist, so it stays fast.
+- App: the Terms check uses one pop-up (a plain cover for people who already
+  agreed); photos stay on screen when a new photo arrives; the Community
+  dares list loads again (it failed with PGRST201 in the live app); chat-dare
+  proof for a deleted dare says "Photo sent" and goes back; Settings still
+  saves a queued privacy choice after you leave; upload clean-up and logout
+  fixes.
+- Tests: many new suites, a real-PostgreSQL release rehearsal
+  (npm run test:preflight), and the tests run on Linux too. See
+  tests/README.md.
+
+Still open or decided by the owner: docs/HANDOFF.md, "Owner decisions and
+known issues".
+
 RESULT
 
 The latest finished branch was tested, including its updated Android invitation
@@ -13,6 +93,8 @@ Related findings overlap across frontend, API and database; they are not counted
 as separate bugs simply because several tests fail.
 
 Final result: 547 passing automated checks, 3 explicit browser skips.
+[Update 2026-11-04: those were the supplied patch's numbers. No browser check
+is skipped now; see tests/README.md, "Latest results".]
 The final bounded HTTP load test performed 12,400 requests using invented
 accounts. No corrected automated check failed. This is substantial local QA,
 not a complete native release sign-off. I reviewed every screen and feature
@@ -65,6 +147,11 @@ three Edge Functions, scripts, configuration and generated/legal website content
 Unchanged material was compared with the earlier full review. New source was read
 in full. The database has 39 public tables; all 39 have RLS. The added hardening
 migration is appended after existing migrations; historical migrations are intact.
+[Update 2026-11-04: one old migration, 20261207000000_report_alerts.sql, was later
+edited for OPEN-03: it now adds the owner only if that account exists. The live
+database already ran it, so nothing changes there. Five more fix migrations now
+follow the hardening one: 20261213200000, 20261213210000, 20261213220000,
+20261214000000 and 20261214100000.]
 
                                    Original code         Corrected code
 Database rules/feature checks       94 pass / 48 fail      142 pass / 0 fail
@@ -109,8 +196,9 @@ external requests. They covered logged-out forms, availability, wrong credential
 timeouts/retry, protected deep links, refresh/back, and all seven website pages in
 light/dark mode at 320px, 412px and desktop sizes. Website images, links, overflow
 and a true 404 passed. The small-phone welcome screenshot was visually inspected.
-Three signed-in cases are skipped because the native pager crashes on web; the
-failure is preserved rather than counted as success.
+At the time, three signed-in cases were skipped because the native pager
+crashed on web. [Update 2026-11-04: fixed (OPEN-02). The signed-in cases now
+run and pass, and none is skipped.]
 
 TypeScript, Expo lint, Expo dependency compatibility, web export and whitespace
 checks passed. Dependency auditing found a HIGH development-only Zod advisory
@@ -129,34 +217,44 @@ format/length but does not enforce the nuanced client word policy. Fix: put the
 same public-name/public-text policy at a trusted write boundary, preserving real
 name and private-chat exceptions. This needs a shared product policy; it was not
 silently replaced with a crude SQL denylist. This is not an access-control bypass.
+[Update 2026-11-04: FIXED – see INTEGRATION UPDATE.]
 
 OPEN-02 — MEDIUM — Signed-in web app crashes in the native pager.
-Reproduce: build the browser fixture, run QA_FULL_WEB=1 npm run test:browser for the
-signed-in settings case. It raises codegenNativeCommands is not a function before
-the private page loads. Fix: add a web-safe pager implementation or explicitly
-declare the phone app native-only and test the equivalent native flow on devices.
+Reproduce (on the original code): build the browser fixture and open the
+signed-in settings page in the web build. It raised codegenNativeCommands is not
+a function before the private page loaded. (The QA_FULL_WEB switch this report
+used to reproduce it has been removed.) Fix: add a web-safe pager
+implementation or explicitly declare the phone app native-only and test the
+equivalent native flow on devices.
 The public website and logged-out browser screens pass. This finding does not
-prove a native build launch crash. Three browser cases remain explicitly skipped.
+prove a native build launch crash.
+[Update 2026-11-04: FIXED with a web pager; no browser case is skipped now –
+see INTEGRATION UPDATE.]
 
 OPEN-03 — MEDIUM — A completely fresh hosted setup has an owner-row assumption.
 The historical report-alert migration expects an existing owner profile, while
 the old README instructed running only the first schema. Fix for a future setup:
 make that owner/report configuration explicit and idempotent, then apply the full
-migration history in a disposable full Supabase instance. The README now explains
-this limit; the local test fixture supplies a synthetic owner row, not a real
-owner login. This is not a claim that a fresh hosted installation was validated.
+migration history in a disposable full Supabase instance. This is not a claim
+that a fresh hosted installation was validated.
+[Update 2026-11-04: FIXED. The migration now adds the owner only if that
+profile exists, and the local test fixture has no owner row at all (the
+earlier made-up owner row is gone). On a fresh database the owner adds
+themselves by hand; see README.md and the INTEGRATION UPDATE.]
 
 OPEN-04 — MEDIUM dependency findings remain in Expo/build tooling chains.
 Reproduce: npm ci; npm audit. See the saved audit JSON for affected versions and
 chains. Fix: take upstream compatible updates and recheck Expo native versions;
 avoid force-upgrading core native packages across SDK versions. Zero high or
 critical advisories remain. No exploit of these moderate entries was demonstrated.
+[Update 2026-11-04: MOSTLY FIXED with scoped overrides – see INTEGRATION UPDATE.]
 
 OPEN-05 — LOW — Username ILIKE treats underscore as a one-character wildcard.
 Reproduce the documented username availability/auth lookup with an underscore
 pattern matching another name. Fix: exact normalized matching or escaped LIKE
 metacharacters. This can cause misleading availability/lookup results; credentials
 are still checked. No authentication bypass was demonstrated.
+[Update 2026-11-04: FIXED in friend search – see INTEGRATION UPDATE.]
 
 Other boundaries still need a disposable integrated environment or real devices:
 - Real Apple/Google login and configuration, Apple token revocation, Supabase Auth,
@@ -187,10 +285,12 @@ known failures. SHA256.json verifies the output files.
 
 Before any later release, review tests/database/deployment-preflight.sql on an
 approved test copy. Old duplicate forfeit payments deliberately block the unique
-index; older malformed rows are preserved by NOT VALID constraints. Review those
-rows rather than deleting them automatically. Later deployment order is the new
-database migration, all changed server functions, then the client. Username auth
+index. Review those rows rather than deleting them automatically. Username auth
 fails closed until its trusted quota helper exists. Nothing was deployed here.
+[Update 2026-11-04: older malformed messages are no longer kept by NOT VALID
+constraints; triggers now check new rows and changed fields, and old rows keep
+working. The deployment order changed too (delete-account goes just before the
+migrations); the final order is in docs/HANDOFF.md, "Release order".]
 
 DETAILED FINDINGS — REPRODUCTIONS AND FIXES
 
@@ -206,11 +306,13 @@ Fix and proof: The screen passes the account that opened the confirmation; the h
 
 R2-API-02 — HIGH — FIXED
 What broke / reproduce: The Apple code was not tied to the account being deleted. Deleting A while supplying an authorization code for Apple identity B caused the handler to send B's token for revocation. A password-only account could also submit somebody else's code.
-Fix and proof: Compare the subject of the token returned directly by Apple's HTTPS token endpoint with the Apple identities Supabase verified for the caller. Reject a mismatch before revocation or deletion. Tests verify mismatching and matching identities, ignored request-body identity claims, password-only callers and linked Apple accounts.
+Fix and proof: Compare the subject of the token returned directly by Apple's HTTPS token endpoint with the Apple identities Supabase verified for the caller. A mismatching Apple ID is never revoked; the Apple disconnect is skipped and the verified caller's own account is still deleted. A code from an account with no Apple login is never sent to Apple, and that account is still deleted. Tests verify mismatching and matching identities, ignored request-body identity claims, password-only callers and linked Apple accounts.
+[Update 2026-11-04: the first version rejected a mismatch before deletion, which stopped real owners whose iPhone uses another Apple ID; it was changed as described above.]
 
 R2-API-03 — HIGH — FIXED
 What broke / reproduce: Username throttling still counted first and logged later. A burst of 100 wrong passwords reached 100 credential checks despite an eight-try limit; 30 parallel signups exceeded the five-account limit. Database failures removed the protection.
 Fix and proof: Reserve attempts atomically through a service-only SQL function before credential checks, and fail closed when it is unavailable. Handler tests allow 8/reject 92 logins and allow 5/reject 25 signups. Database tests independently verify the actual SQL locking and permissions. The limit now counts reserved tries, including successful ones.
+[Update 2026-11-04: tries are still reserved first, but a correct login or a server problem now gives its try back, and the limits are per username and address, per username and per address – see INTEGRATION UPDATE.]
 
 R2-API-04 — HIGH — FIXED
 What broke / reproduce: Account deletion ignored storage/query failures, skipped files after the first 1,000 entries or anonymous-post rows, and missed anonymous uploads whose row had already been removed.
@@ -387,7 +489,9 @@ chat dares, drop reminders, cleanup, hides, group messages/media/reactions/repli
 pins. The new fix migration is 20261213102659_qa_round2_security_hardening.sql.
 It was created by the Supabase CLI, then moved after the existing future-dated
 20261212 migration so execution order is correct. Original live migrations were
-not edited. The new OAuth/group behaviors were preserved when fixing older rules.
+not edited. [Update 2026-11-04: except 20261207000000_report_alerts.sql, edited
+later for OPEN-03; five more fix migrations follow this one. See INTEGRATION
+UPDATE.] The new OAuth/group behaviors were preserved when fixing older rules.
 
 Final database checks
 ---------------------
@@ -421,9 +525,9 @@ token, notification, cron job or media object was contacted or changed.
 Supabase platform schemas are local stand-ins: auth.uid() understands both SQL
 test claims and real PostgREST request.jwt.claims; cron only records schedules;
 Vault contains a locally generated key; net.http_post records rows, never sends
-HTTP. One historical report-alert migration assumes its owner account already
-exists, so the harness seeds a synthetic LOCAL auth/profile row with that id.
-It does not retrieve or log in to the real account. Actual OAuth, Apple/Google,
+HTTP. [Update 2026-11-04: the report-alert migration no longer assumes its
+owner account exists, and the harness no longer seeds a made-up owner row; it
+runs every migration with no accounts.] Actual OAuth, Apple/Google,
 GoTrue, S3 byte deletion, Expo push and device behavior are separate boundaries.
 Root additionally owns real local PostgREST/JWT tests and browser checks.
 
@@ -559,6 +663,9 @@ N13 HIGH - Ordinary author deletion could still erase reported media evidence.
   Regression covers reported post, story, peek, group message, comment plus its
   parent post, and anonymous content deletion; rejected reports roll back their
   snapshots. Native concurrent report/author-delete now retains the file.
+  [Update 2026-11-04: a comment report now keeps nothing of the parent post's
+  file. Setting a report to dismissed, or running public.release_report_evidence,
+  lets go of its files. See INTEGRATION UPDATE.]
   Intentional verified account deletion still overrides retention as designed.
   Old reports whose source/path or physical file was already deleted cannot be
   reconstructed by this migration. No recovery of those files is claimed.
@@ -594,12 +701,14 @@ minutes, checks only that account's owner id/path prefix, and cascades on Auth
 deletion. Report/file/reference path loops use distinct sorted paths. Complex
 multi-row transactions can still produce a PostgreSQL deadlock/retry under an
 opposite cross-record lock order; they fail closed rather than bypass retention.
-An already committed comment report retains its snapshot even if both the
-comment and parent post disappear. A report that starts after its source was
-already deleted cannot recover unknown paths by design.
+[Update 2026-11-04: a comment report no longer keeps any file; comments have no
+files of their own and the parent post's file is not kept.] A report that starts
+after its source was already deleted cannot recover unknown paths by design.
 
 NOT VALID content constraints preserve older malformed data for review while
-blocking new bad rows. The new unique forfeit index deliberately refuses old
+blocking new bad rows. [Update 2026-11-04: replaced by triggers in
+20261213210000; old rows keep working and there is nothing to validate later.]
+The new unique forfeit index deliberately refuses old
 duplicates. Run deployment-preflight.sql only on an approved test copy; review
 bad rows before a separate release. No remote migration/advisor/apply/push ran.
 
@@ -609,9 +718,11 @@ and formats only. A direct allowed-format offensive username such as f.u.c.k can
 bypass the client name rule. Porting its real-name and private-chat exceptions
 blindly would risk blocking legitimate content; the parent was informed. This
 is not an authorization or arbitrary-code execution claim.
+[Update 2026-11-04: FIXED (OPEN-01) – the database now runs the same rules,
+with the real-name and private-chat exceptions.]
 
-Historic report-alert setup assumes an owner row. The test fixture supplies a
-synthetic one; generic fresh-environment bootstrap still needs that assumption
-documented. Cron scheduling and Vault are stand-ins, not proof of hosted job
+[Update 2026-11-04: the report-alert setup no longer assumes an owner row, and
+the test fixture no longer supplies one. On a fresh database the owner adds
+themselves by hand (README.md).] Cron scheduling and Vault are stand-ins, not proof of hosted job
 execution. Signed links already issued may remain valid until their expiry even
 after access changes. No real users' data or device/native/OAuth flows were used.
