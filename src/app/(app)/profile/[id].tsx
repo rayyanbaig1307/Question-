@@ -137,7 +137,10 @@ export default function ProfileScreen() {
         </Pressable>
         <View style={styles.stats}>
           <Stat number={data.stats.posts} label={data.stats.posts === 1 ? 'Post' : 'Posts'} />
-          <Pressable disabled={!isMe} onPress={() => router.push('/friends')} accessibilityLabel="My friends">
+          <Pressable
+            disabled={locked}
+            onPress={() => router.push(isMe ? '/friends' : `/friends-of/${profile.id}`)}
+            accessibilityLabel={isMe ? 'My friends' : `${profile.username}'s friends`}>
             <Stat number={data.stats.friends} label={data.stats.friends === 1 ? 'Friend' : 'Friends'} />
           </Pressable>
         </View>

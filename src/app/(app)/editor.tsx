@@ -22,6 +22,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { sendSnap } from '@/lib/chat';
+import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
 import { addKeep, CAN_SAVE_TO_PHOTOS, saveToPhotos } from '@/lib/keeps';
@@ -109,6 +110,10 @@ export default function Editor() {
   const { showToast } = useOverlays();
   // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
   const straightToChat = !!to && !dare && !drop && !guess && !forfeit;
+  // Opened from the Guess Who camera: it posts straight to Guess Who (the 🕵️ circle on Home) with no name on it.
+  // Never to your story or your profile grid, so there's no "Send to…" choice.
+  const straightToGuess = !!guess && !to && !dare && !drop && !forfeit;
+  const straightAway = straightToChat || straightToGuess;
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
   const [filterIndex, setFilterIndex] = useState(() => Math.max(0, FILTERS.findIndex((f) => f.name === startFilter)));
   const [filterFlash, setFilterFlash] = useState(0);
@@ -263,7 +268,7 @@ export default function Editor() {
         ...(guess ? { guess } : {}),
         ...(forfeit ? { forfeit } : {}),
       };
-      if (straightToChat) {
+      if (straightAway) {
         const photo: Capture = isVideo
           ? {
               kind: 'video',
@@ -271,7 +276,14 @@ export default function Editor() {
               overlayUri: await videoLayer(),
             }
           : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
-        await sendSnap(userId, [to], photo);
+        if (straightToGuess) {
+          await postMystery(userId, photo, '');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast("Guess Who posted 🕵️ Let's see who figures it out!");
+          router.dismissTo('/guess');
+          return;
+        }
+        await sendSnap(userId, [to ?? ''], photo);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast('Peek sent 👀');
         router.dismissTo(`/chat/${to}`);
@@ -287,7 +299,7 @@ export default function Editor() {
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
-      Alert.alert(straightToChat ? 'Could not send' : 'Could not save the photo', friendlyError(error));
+      Alert.alert(straightToChat ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));
     } finally {
       setBusy(false);
     }
@@ -397,7 +409,9 @@ export default function Editor() {
                 disabled={busy}
                 style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
                 accessibilityRole="button">
-                <Text style={styles.sendText}>{busy ? (straightToChat ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : 'Send to'}</Text>
+                <Text style={styles.sendText}>
+                  {busy ? (straightAway ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : straightToGuess ? 'Post Guess Who' : 'Send to'}
+                </Text>
                 <Ionicons name="send" size={18} color={colors.onAccent} />
               </Pressable>
             </View>

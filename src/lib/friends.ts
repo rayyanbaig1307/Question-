@@ -120,6 +120,19 @@ export function useIncomingRequestCount(me: string, active: boolean): number {
   return count;
 }
 
+// Someone's friends (their own, a public account's, or a friend's). Empty for a private stranger.
+export async function fetchFriendsOf(person: string): Promise<Profile[]> {
+  const { data, error } = await supabase.rpc('friends_of', { person });
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+// Friend requests waiting for you, newest first.
+export async function fetchIncomingRequests(me: string): Promise<FriendLink[]> {
+  const links = await fetchMyFriendLinks(me);
+  return links.filter((link) => link.status === 'pending' && link.addressee_id === me && link.requester);
+}
+
 // Just your friends (not pending requests), sorted by name.
 export async function fetchFriends(me: string): Promise<Profile[]> {
   const links = await fetchMyFriendLinks(me);

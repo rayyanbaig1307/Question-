@@ -15,13 +15,14 @@ import { useMe } from '@/lib/auth';
 import { fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
-import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
+import { fetchFriends, fetchIncomingRequests, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { respondToHitUp, type HitUp } from '@/lib/hitups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
@@ -34,8 +35,8 @@ type ChatRow = {
   newChats: number;
 };
 
-// Left page: hit ups waiting for you at the top, then your Group Peek groups, then everyone you can chat with,
-// most recent first.
+// Left page: hit ups and friend requests waiting for you at the top, then your Group Peek groups, then everyone
+// you can chat with, most recent first.
 export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   visible: boolean;
   onCamera: () => void;
@@ -55,6 +56,8 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
   const [links, setLinks] = useState<FriendLink[]>([]);
+  // Friend requests waiting for you (private accounts only – public ones are friends straight away).
+  const [requests, setRequests] = useState<FriendLink[]>([]);
   const trimmed = query.trim().replace(/^@/, '');
   const searching = trimmed.length > 0;
 
@@ -79,8 +82,25 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
       .then(setCloseFriends)
       .catch(() => {});
     refresh();
+    // Friend requests: load now, and again the moment one arrives or is answered.
+    const loadRequests = () =>
+      fetchIncomingRequests(userId)
+        .then(setRequests)
+        .catch(() => {});
+    loadRequests();
+    const requestChannel = supabase
+      .channel(`chat-requests-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+        loadRequests();
+        refresh();
+      })
+      .subscribe();
     // Refresh instantly when a message arrives or gets opened.
-    return subscribeToMyMessages(`chat-list-${userId}`, refresh);
+    const stopMessages = subscribeToMyMessages(`chat-list-${userId}`, refresh);
+    return () => {
+      stopMessages();
+      supabase.removeChannel(requestChannel);
+    };
   }, [visible, userId, refresh]);
 
   // Look people up a moment after you stop typing (and know who you've already asked).
@@ -221,6 +241,21 @@ export function ChatPage({ visible, onCamera, hitUps, onHitUpsChanged }: {
                   {hitUps.map((hitUp) => (
                     <HitUpRow key={hitUp.id} hitUp={hitUp} onDone={onHitUpsChanged} />
                   ))}
+                </View>
+              ) : null}
+              {requests.length > 0 ? (
+                <View style={styles.hitUps}>
+                  <Text style={styles.hitUpsTitle}>Friend requests 💌</Text>
+                  {requests.map((link) =>
+                    link.requester ? (
+                      <View key={link.id} style={styles.request}>
+                        <PersonRow
+                          person={link.requester}
+                          right={<FriendButton person={link.requester} relation={relationFrom(link, userId)} onChanged={reloadLinks} small />}
+                        />
+                      </View>
+                    ) : null,
+                  )}
                 </View>
               ) : null}
               {rows.length > 0 ? (
@@ -639,6 +674,11 @@ const styles = StyleSheet.create({
   },
   hitUpsTitle: {
     ...font.label,
+  },
+  request: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.md,
   },
   hitUp: {
     backgroundColor: colors.card,

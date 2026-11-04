@@ -12,6 +12,7 @@ import { HomeTabBar } from '@/components/home/HomeTabBar';
 import { useMe } from '@/lib/auth';
 import { fetchMyBirthday, markAskedForBirthday, wasAskedForBirthday } from '@/lib/birthday';
 import { useUnreadCount } from '@/lib/chat';
+import { useIncomingRequestCount } from '@/lib/friends';
 import { useHitUps } from '@/lib/hitups';
 import { colors, isDark } from '@/theme';
 
@@ -33,6 +34,8 @@ export default function Home() {
   const unread = useUnreadCount(userId, focused);
   // Hit ups waiting for you (shown at the top of Chat, and counted on the Chat tab).
   const { hitUps, reload: reloadHitUps } = useHitUps(userId, focused);
+  // Friend requests waiting for you (shown at the top of Chat too).
+  const requestCount = useIncomingRequestCount(userId, focused);
   // Other screens can send you back here with ?page=camera (or chat / home) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
@@ -122,7 +125,7 @@ export default function Home() {
       <HomeTabBar
         page={page}
         onSelect={goTo}
-        unread={unread + hitUps.length}
+        unread={unread + hitUps.length + requestCount}
         solid={swipe.tabBarSolid}
       />
       {/* Light status bar over the camera; elsewhere it follows the app's colors. */}

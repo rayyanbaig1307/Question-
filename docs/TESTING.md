@@ -96,12 +96,17 @@ person when the steps say so (Settings → Log out).
 
 1. As **Person A**: on the camera, tap the **👤+ button** (next to your picture, top-left) → **Friends**.
    - It says "Find your friends".
-2. Type part of Person B's username → they show up. Tap **Add** → "Friend request sent 💌".
-   The button changes to **Requested**, and they appear under **Waiting for them**.
-3. As **Person B**: the 👤+ button on the camera now has a **red 1**. (If B is already on the camera screen,
-   it appears by itself within a second or two – no refresh needed.)
-4. Tap it → **Friend requests (1)** → **Accept** → "You and @personA are friends! 🎉".
-   Both of you now see each other under **My friends**, and the **Friends** count on your profiles went up.
+2. Type part of Person B's username → they show up. Tap **Add**:
+   - B's account is **public** (the normal setting) → "You and @personB are friends! 🎉" straight away. No request.
+     B gets a notification "You have a new friend 🎉 · personA added you as a friend".
+   - B's account is **private** (Settings → Private account) → "Friend request sent 💌". The button changes to
+     **Requested**, and they appear under **Waiting for them**.
+3. (Private B only) As **Person B**: the **Chat** tab has a red number, and a **Friend requests 💌** box sits at
+   the top of Chat with A's row and **Accept** / **✕**. (The 👤+ button on the camera shows a red 1 too.)
+4. (Private B only) Tap **Accept** → "You and @personA are friends! 🎉". Both of you now see each other under
+   **My friends**, and the **Friends** count on your profiles went up.
+   **Someone's friends:** on any profile, tap the **Friends** number → their friends list, each with an **Add**
+   button. A private account's list only opens for their friends ("🔒 This account is private" otherwise).
 5. Tap Person A's row → their profile. You see a **Friends** button and a **👯 Friends** badge.
 6. **Private accounts:** make Person B private (Settings). Log in as someone who is **not** B's friend and open
    B's profile → "🔒 This account is private". Friends of B can still see B's photos.
@@ -418,9 +423,9 @@ You need 2 friends on Peekaboo (or 2 test accounts) for this.
 ## Step 24 – Guess Who 🕵️
 
 You need at least 2 friends on Peekaboo (with 4+ friends the guessing is harder).
-1. **Post one:** Discover → tap **🕵️ Guess Who** at the top → ＋ (or take a photo/video and, on **Send to…**,
-   pick **🕵️ Guess Who**). Picking Guess Who un-ticks everything else, so the photo can't give you away.
-   Add a hint if you like → **Send**. It lasts 24 hours.
+1. **Post one:** Home → tap the **🕵️ Guess Who** circle → ＋ (or pick the 🕵️ mode on the camera). Take a
+   photo/video, add text or stickers if you like → **Post Guess Who**. There's no "Send to…" step: it only
+   ever goes to Guess Who, never to your story or your profile grid. It lasts 24 hours.
 2. On your own card: "Your Guess Who 🤫" and, later, "3 guessed · 1 got it · 2 fooled 😈".
 3. **On a friend's phone:** Discover → **🕵️ Guess Who · 1 to guess** → the card says "Who posted this?" with
    up to 4 names. Tap one → the real poster's picture pops in with flying emojis:
