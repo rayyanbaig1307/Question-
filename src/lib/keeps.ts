@@ -14,9 +14,11 @@ export type Keep = MediaFields & { id: string; user_id: string; created_at: stri
 
 // Saving to the phone's Photos is a native part of the app: Expo Go and new downloads have it, older
 // downloads don't – then only the in-app Keeps copy is saved.
-const MediaLibrary: typeof import('expo-media-library') | null = requireOptionalNativeModule('ExpoMediaLibrary')
+// (The "legacy" part of the library: its old saveToLibraryAsync now throws "deprecated" when loaded from the
+// main entry, so saving silently failed.)
+const MediaLibrary: typeof import('expo-media-library/legacy') | null = requireOptionalNativeModule('ExpoMediaLibrary')
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('expo-media-library')
+    require('expo-media-library/legacy')
   : null;
 
 export const CAN_SAVE_TO_PHOTOS = MediaLibrary !== null;
