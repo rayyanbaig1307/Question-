@@ -35,9 +35,13 @@ export default function Welcome() {
     <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
       <SafeScreen style={styles.fill}>
         <View style={styles.hero}>
-          <Animated.View style={mascotStyle}>
-            <Image source={logoEyes} style={styles.mascot} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
-          </Animated.View>
+          {/* Hidden way in for accounts with a username and password (like the App Store review account):
+              press and hold the eyes. Everyone else just uses the Apple / Google button. */}
+          <Pressable onLongPress={() => router.push('/sign-in')} delayLongPress={600} disabled={!SOCIAL_SIGN_IN_AVAILABLE}>
+            <Animated.View style={mascotStyle}>
+              <Image source={logoEyes} style={styles.mascot} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
+            </Animated.View>
+          </Pressable>
           {/* Plain letters here – the big eyes above are the logo, no need for them twice. */}
           <Text style={styles.title}>peekaboo</Text>
           <Text style={styles.tagline}>Peek it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
@@ -45,20 +49,8 @@ export default function Welcome() {
         <View style={styles.buttons}>
           {SOCIAL_SIGN_IN_AVAILABLE ? (
             // One button for everyone: Apple (iPhone) or Google (Android) makes a new account the first time and
-            // logs you back in after that – no password, no email to confirm. Only people who made an account the
-            // old way (username + password) need the small link underneath.
-            <>
-              <SocialSignInButtons onDark />
-              <Pressable
-                onPress={() => router.push('/sign-in')}
-                hitSlop={12}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}>
-                <Text style={styles.linkText}>
-                  Have a username and password? <Text style={styles.linkBold}>Log in</Text>
-                </Text>
-              </Pressable>
-            </>
+            // logs you back in after that – no password, no email to confirm.
+            <SocialSignInButtons onDark />
           ) : (
             // Expo Go and older downloads don't have Apple/Google sign-in.
             <>
@@ -117,23 +109,5 @@ const styles = StyleSheet.create({
   },
   secondary: {
     backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  link: {
-    alignSelf: 'center',
-    paddingVertical: space.sm,
-  },
-  linkPressed: {
-    opacity: 0.6,
-  },
-  linkText: {
-    ...font.body,
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-  },
-  linkBold: {
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textDecorationLine: 'underline',
   },
 });
