@@ -74,7 +74,7 @@ export default function NewGroup() {
 
   async function save() {
     if (!canSave || saving) return;
-    const notAllowed = checkClean(name, 'identity');
+    const notAllowed = checkClean(name, 'content');
     if (notAllowed) {
       Alert.alert('Pick another name', notAllowed);
       return;

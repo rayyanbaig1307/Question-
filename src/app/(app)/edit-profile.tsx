@@ -83,7 +83,8 @@ export default function EditProfile() {
       setUsernameError(formatError);
       return;
     }
-    const notAllowed = checkClean(`${username} ${displayName} ${bio}`, 'identity');
+    // No swearing in your username or name; your bio can say anything but slurs.
+    const notAllowed = checkClean(`${username} ${displayName}`, 'name') ?? checkClean(bio, 'content');
     if (notAllowed) {
       Alert.alert('Pick something else', notAllowed);
       return;

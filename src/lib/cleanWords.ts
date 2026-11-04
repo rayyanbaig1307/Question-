@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // Keeps hateful slurs out of Peekaboo (the app stores require a filter like this).
 // * Slurs are blocked everywhere: names, bios, captions, comments, chats, hit ups, dare ideas.
-// * Swearing is allowed everywhere, including usernames, names and bios (the owner's choice).
+// * Swearing is blocked in usernames and display names only. Bios, chats, captions and comments allow it.
+// * Real names are fine: "Moby Dick" or "Alex Cock" as a display name (written with a capital letter, like a name).
 // People try to sneak words past filters with numbers and dots ("n1gg3r", "s.l.u.r"), so text is tidied first.
 // ---------------------------------------------------------------------------
 
@@ -13,6 +14,20 @@ const HATEFUL = [
   'beaners', 'raghead', 'towelhead', 'dyke', 'dykes', 'coon', 'coons', 'gook', 'gooks', 'paki', 'pakis',
   'rapist', 'molester', 'pedo', 'pedophile', 'paedophile',
 ];
+// Swearing that can't be in a username or display name.
+const CRUDE = [
+  'fuck', 'fucker', 'fucking', 'motherfucker', 'shit', 'bullshit', 'cunt', 'bitch', 'bitches', 'whore', 'slut',
+  'sluts', 'asshole', 'pussy', 'cock', 'cocksucker', 'dick', 'dildo', 'porn', 'porno', 'blowjob', 'handjob',
+  'jerkoff', 'wanker', 'twat', 'nazi', 'hitler',
+];
+// Swear words that are also real first or last names (Dick, Cock). In a display name they're allowed when
+// written like a name, with a capital letter ("Moby Dick"), but not in lowercase ("big dick").
+const REAL_NAMES = ['dick', 'cock'];
+// Swear words that never turn up inside a real name, so they're caught inside longer names too ("fuckboy").
+// Shorter ones like "shit", "porn" or "nazi" are only caught as whole words, because they hide inside real
+// names (Ishita, Pornsak, Nazir, Scunthorpe).
+const CRUDE_INSIDE = ['fuck', 'bitch', 'whore', 'dildo', 'asshole', 'cocksuck', 'blowjob', 'handjob', 'hitler'];
+
 const HATEFUL_SQUASHED = ['nigger', 'nigga', 'faggot', 'retard', 'tranny', 'wetback', 'beaner', 'raghead', 'towelhead', 'pedophile', 'paedophile'];
 
 
@@ -31,6 +46,7 @@ function tidy(text: string): string {
 
 const wholeWord = (words: string[]) => new RegExp(`(^|\\s)(${words.join('|')})(?=\\s|$)`);
 const HATEFUL_WORDS = wholeWord(HATEFUL);
+const CRUDE_WORDS = wholeWord(CRUDE);
 const HATEFUL_ANYWHERE = new RegExp(HATEFUL_SQUASHED.join('|'));
 
 // "f u c k" → "fuck": single letters in a row are joined, so spaced-out words are caught as whole words.
@@ -52,19 +68,36 @@ function joinSingles(clean: string): string {
   return merged.join(' ');
 }
 
-// The offending word, or null if the text is fine. (`where` only changes the message: the same words are
-// blocked everywhere.)
-export function findBlockedWord(text: string, _where: 'identity' | 'content' = 'content'): string | null {
+// Real names written like names ("Dick", but not "dick" or "DICK") are taken out before the swear check.
+function withoutRealNames(text: string): string {
+  return text.replace(/[A-Za-z]+/g, (word) =>
+    REAL_NAMES.includes(word.toLowerCase()) && /^[A-Z][a-z]+$/.test(word) ? ' ' : word,
+  );
+}
+
+// The offending word, or null if the text is fine.
+// 'name' = a username or display name (no swearing); 'content' = everything else (only slurs are blocked).
+export function findBlockedWord(text: string, where: 'name' | 'content'): string | null {
   const clean = tidy(text);
   const joined = joinSingles(clean);
   const squashed = clean.replace(/\s+/g, '');
   const hateful = clean.match(HATEFUL_WORDS)?.[2] ?? joined.match(HATEFUL_WORDS)?.[2] ?? squashed.match(HATEFUL_ANYWHERE)?.[0];
   if (hateful) return hateful;
+  if (where === 'name') {
+    const named = tidy(withoutRealNames(text));
+    const namedJoined = joinSingles(named);
+    const namedSquashed = named.replace(/\s+/g, '');
+    const crude =
+      named.match(CRUDE_WORDS)?.[2] ??
+      namedJoined.match(CRUDE_WORDS)?.[2] ??
+      (CRUDE_INSIDE.find((word) => namedSquashed.includes(word)) ?? null);
+    if (crude) return crude;
+  }
   return null;
 }
 
 // A friendly error for the screen, or null if the text is fine.
-export function checkClean(text: string, where: 'identity' | 'content'): string | null {
+export function checkClean(text: string, where: 'name' | 'content'): string | null {
   if (!findBlockedWord(text, where)) return null;
-  return where === 'identity' ? "That word can't be in a name or bio on Peekaboo." : "That word isn't allowed on Peekaboo.";
+  return where === 'name' ? "Let's keep it clean – that word can't be in a username or name." : "That word isn't allowed on Peekaboo.";
 }

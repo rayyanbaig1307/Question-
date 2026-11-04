@@ -788,10 +788,12 @@ arrive with the normal update.
 
 ## Step 53 – Clean words 🧼
 
-1. **Swearing is allowed everywhere** – usernames, names, bios, chats, comments, captions, hit ups.
-2. **Slurs are blocked everywhere** (also sneaky spellings like "n1gg3r" or "f.a.g"): a name or bio says "That
-   word can't be in a name or bio", anything else says "That word isn't allowed on Peekaboo". Normal words like
-   "scunthorpe" or "cocktail" are fine.
+1. **Usernames and display names: no swearing.** "big dick", "fuckboy", "f.u.c.k", "the_shit" say "Let's keep it
+   clean…" and won't save.
+2. **Real names are fine:** a display name like "Moby Dick", "Dick Smith" or "Alex Cock" (written with a capital
+   letter, like a name) saves. So do names like Ishita, Nazir, Pornsak, Hancock, Scunthorpe.
+3. **Bios, chats, comments, captions, hit ups, group names:** swearing is allowed.
+4. **Slurs are blocked everywhere** (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo".
 
 ## Step 54 – Reports (owner, in Supabase) 🚩
 

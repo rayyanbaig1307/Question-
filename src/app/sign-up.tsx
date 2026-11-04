@@ -50,7 +50,7 @@ export default function SignUp() {
   const problems = {
     username: !username
       ? 'Pick a username.'
-      : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(`${username} ${name}`, 'identity'))),
+      : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(`${username} ${name}`, 'name'))),
     email: !withEmail || /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
     password: checkPassword(password),
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',
