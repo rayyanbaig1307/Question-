@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
+import { ProfileSetup, useNeedsSetup } from '@/components/ProfileSetup';
 import { TermsGate } from '@/components/TermsGate';
 import { useAuth } from '@/lib/auth';
 import { syncCommunityDares } from '@/lib/communityDares';
@@ -31,6 +32,11 @@ export default function AppLayout() {
     if (!userId) return;
     syncCommunityDares().catch((error) => console.warn('Could not load community dares', error));
   }, [userId]);
+
+  // Just made your account with Apple or Google: pick a username first (shown instead of the app).
+  const [needsSetup, setupDone] = useNeedsSetup();
+  if (needsSetup === null) return null;
+  if (needsSetup) return <ProfileSetup onDone={setupDone} />;
 
   return (
     <>

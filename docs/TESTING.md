@@ -818,3 +818,23 @@ day and act within 24 hours.
 2. Your profile → **Keeps** → a grid of everything you saved (only you can see it). Tap one → full screen with
    **Save to Photos**, **Post it** (goes through the normal Send to… screen) and 🗑 delete.
 3. The first save asks for permission to add to Photos; saying no still keeps it in Peekaboo.
+
+## Step 56 – Sign in with Apple / Google 🍎
+
+Needs the newest download (new TestFlight / APK). Expo Go and older downloads still show the old
+"Create account" button.
+
+1. **iPhone:** log out → the welcome screen shows **Continue with Apple** and **Log in with username or email**.
+   Tap Continue with Apple → Face ID → the **Almost there! 🎉** screen.
+2. **Android:** the same, with **Continue with Google** → pick a Google account → Almost there.
+3. Almost there: your name is filled in (from Apple the first time, or from Google). Pick a username (✅ when it's
+   free), tick **I'm 13 or older** and **I agree to the Terms** → **Let's go!** → the camera opens.
+4. Back arrow or **Cancel and log out** on that screen → back to the welcome screen. Signing in again shows
+   Almost there again (until you finish it).
+5. Log out, then **Continue with Apple/Google** again → straight into the app (no setup the second time).
+6. **Old accounts:** **Log in with username or email** still works with the password, e.g. @coolname.
+7. **Delete account** on an Apple account: Settings → Delete account → Apple asks for Face ID once more → the
+   account is gone. On iPhone: Settings → your name → Sign-In & Security → Sign in with Apple → Peekaboo is no
+   longer listed (needs the Apple key secrets, see `docs/HANDOFF.md`).
+8. **Sign-up guard** (once it's switched on): the old Create account button on an old download says "New accounts
+   are made with Apple or Google now. Update Peekaboo to the newest version."

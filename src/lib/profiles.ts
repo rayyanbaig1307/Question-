@@ -1,3 +1,4 @@
+import { appleCodeForDeleting, SignInCancelled } from './socialAuth';
 import { supabase } from './supabase';
 import type { Profile } from './types';
 
@@ -65,8 +66,23 @@ export async function updateMyProfile(
 // Deletes your account for good: your photo files, your login, and with it your profile, posts, stories,
 // chats, friends and likes. Done by the "delete-account" server helper (supabase/functions/delete-account),
 // which only ever deletes the person who's logged in.
+// Accounts made with Apple: Apple asks once more (Face ID), so the server can also disconnect Peekaboo from
+// the person's Apple ID – Apple's rules require that.
 export async function deleteMyAccount(): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+  const { data: current } = await supabase.auth.getSession();
+  let appleCode: string | null = null;
+  if (current.session?.user.app_metadata?.provider === 'apple') {
+    try {
+      appleCode = await appleCodeForDeleting();
+    } catch (appleError) {
+      if (appleError instanceof SignInCancelled) throw new Error('To delete your account, confirm it with Apple first.');
+      throw appleError;
+    }
+  }
+  const { data, error } = await supabase.functions.invoke('delete-account', {
+    method: 'POST',
+    body: appleCode ? { apple_code: appleCode } : {},
+  });
   if (error) throw error;
   if (!data?.deleted) throw new Error(data?.error ?? 'Could not delete your account');
 }

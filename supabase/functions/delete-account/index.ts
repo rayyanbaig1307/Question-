@@ -2,6 +2,7 @@
 // Deleting the login also removes their profile, posts, stories, chats, friends, likes and comments
 // (the database's "on delete cascade" links do that part).
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -23,6 +24,61 @@ async function listAll(bucket: string, prefix: string): Promise<string[]> {
   return paths;
 }
 
+// ---------------------------------------------------------------------------
+// Accounts made with "Sign in with Apple": Apple's rules say deleting the account must also disconnect the
+// app from the person's Apple ID. The app sends a fresh one-time code from Apple; we swap it for a login
+// token and tell Apple to cancel it. Needs these Edge Function secrets (Supabase → Edge Functions → Secrets):
+//   APPLE_KEY_ID       – the Key ID of a "Sign in with Apple" key (Apple Developer → Keys)
+//   APPLE_PRIVATE_KEY  – the text inside that key's .p8 file
+// Without them (or if Apple says no) the account is still deleted – this part is best effort.
+// ---------------------------------------------------------------------------
+const APPLE_TEAM_ID = Deno.env.get('APPLE_TEAM_ID') ?? 'TMFHJ8D3H5';
+const APPLE_CLIENT_ID = Deno.env.get('APPLE_CLIENT_ID') ?? 'com.rbaig18.peekaboo';
+
+async function disconnectFromApple(code: string): Promise<void> {
+  const keyId = Deno.env.get('APPLE_KEY_ID');
+  const privateKey = Deno.env.get('APPLE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+  if (!keyId || !privateKey) {
+    console.warn('Apple key secrets are not set – skipping the Apple disconnect');
+    return;
+  }
+  // Apple's "client secret": a short-lived note signed with our Apple key.
+  const clientSecret = await new SignJWT({})
+    .setProtectedHeader({ alg: 'ES256', kid: keyId })
+    .setIssuer(APPLE_TEAM_ID)
+    .setSubject(APPLE_CLIENT_ID)
+    .setAudience('https://appleid.apple.com')
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(await importPKCS8(privateKey, 'ES256'));
+  const post = (path: 'token' | 'revoke', fields: Record<string, string>) =>
+    fetch(`https://appleid.apple.com/auth/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields),
+    });
+
+  const tokens = await post('token', {
+    grant_type: 'authorization_code',
+    code,
+    client_id: APPLE_CLIENT_ID,
+    client_secret: clientSecret,
+  });
+  const body = await tokens.json().catch(() => ({}));
+  const token = body.refresh_token ?? body.access_token;
+  if (!tokens.ok || !token) {
+    console.warn('Apple did not accept the code', tokens.status, body.error);
+    return;
+  }
+  const revoked = await post('revoke', {
+    client_id: APPLE_CLIENT_ID,
+    client_secret: clientSecret,
+    token,
+    token_type_hint: body.refresh_token ? 'refresh_token' : 'access_token',
+  });
+  if (!revoked.ok) console.warn('Apple did not cancel the token', revoked.status);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
 
@@ -32,6 +88,12 @@ Deno.serve(async (req) => {
   const { data: who, error: whoError } = await admin.auth.getUser(token);
   if (whoError || !who.user) return json({ error: 'Not logged in' }, 401);
   const userId = who.user.id;
+
+  // 0. Made with Apple? Disconnect Peekaboo from their Apple ID.
+  const { apple_code: appleCode } = await req.json().catch(() => ({}));
+  if (typeof appleCode === 'string' && appleCode) {
+    await disconnectFromApple(appleCode).catch((error) => console.warn('Apple disconnect failed', error));
+  }
 
   // 1. Their photo files – in their own folders, plus their Guess Who files (kept in a shared "mystery"
   // folder so the file names don't give away who posted them).

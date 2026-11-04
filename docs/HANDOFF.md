@@ -51,7 +51,25 @@ and the owner's standing preferences.
 - Last good published update: `2805de80-32fd-4d0b-b2ea-859a479862b0` (commit `6c768aa`). Every app change up
   to then is live. Commits after it only touch docs.
 
-## Done recently (newest first)
+## In progress: Sign in with Apple / Google (owner's call, 4 Nov)
+
+New accounts are made with **Sign in with Apple (iPhone)** or **Sign in with Google (Android)**. That means no
+passwords, no confirmation email and no Resend/domain. Old accounts (username or email + password) still log in.
+- Code: `src/lib/socialAuth.ts` (native modules guarded; hidden in Expo Go/old builds, which keep the old
+  Create account button), `components/SocialSignIn.tsx` (buttons on welcome + sign-in), `components/ProfileSetup.tsx`
+  (new Apple/Google people pick a username + agree to the Terms once; "setup done" = any `legal_acceptances`
+  terms row). Google is Android-only (`react-native.config.js` + `expo.autolinking.ios.exclude` keep it out of
+  iOS). Google needs `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` at bundle time (not a secret).
+- Migration `20261204000000_apple_google_sign_in.sql`: new-user trigger takes Google's name; plus
+  `public.hook_only_apple_or_google_sign_ups`, inert until the owner switches on the "Before User Created" auth
+  hook (do that only after the new builds are out).
+- `delete-account` revokes the Apple token when the app sends `apple_code` (needs secrets `APPLE_KEY_ID`,
+  `APPLE_PRIVATE_KEY`; skipped without them).
+- Owner's steps, in order: Supabase Apple provider (Client IDs `com.rbaig18.peekaboo`); Google Cloud project with
+  Web + Android OAuth clients (Android SHA-1 from expo.dev → Credentials); Supabase Google provider (web client
+  ID + secret); give us the web client ID; the Apple "Sign in with Apple" key → Edge Function secrets; then "build
+  it"; then switch on the hook.
+
 
 - **Published (update `f947f748-1128-476d-9e5c-b40602268385`, commit `6c9a4db`):** pushes now go only to the real Peekaboo app. Expo Go showed its own
   logo on notifications, so it no longer signs up for pushes and takes itself off the list the next time it opens

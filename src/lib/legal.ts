@@ -53,6 +53,18 @@ export async function hasAccepted(me: string, document: Document, version: strin
   return (count ?? 0) > 0;
 }
 
+// Has this person ever agreed to any version of the Terms? Accounts made with Apple or Google haven't until
+// they finish the setup screen (components/ProfileSetup.tsx).
+export async function hasAcceptedAnyTerms(me: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('legal_acceptances')
+    .select('version', { count: 'exact', head: true })
+    .eq('user_id', me)
+    .eq('document', 'terms');
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 // Has this person agreed to the current Dare Safety Rules? `accepted` is null while checking.
 // `accept()` records it.
 export function useDareRulesAccepted(me: string) {

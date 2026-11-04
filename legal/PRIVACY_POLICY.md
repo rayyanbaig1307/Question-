@@ -17,7 +17,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 
 | What | Examples | Why (purpose) | Legal basis (where one is required) |
 | --- | --- | --- | --- |
-| **Account** | Email address (optional – you can sign up with just a username), password (stored only as a cryptographic hash by our login provider), account creation date, your confirmation that you are 13 or older. To stop people guessing passwords or mass-creating accounts, we briefly keep failed username log-ins and the internet address of new username-only sign-ups (deleted after a day). | To create and secure your account and contact you about it. | Contract |
+| **Account** | New accounts are made with Sign in with Apple (iPhone) or Sign in with Google (Android). From Apple or Google we receive an account ID, your email address (with Apple you can choose "Hide My Email", and then we only get a stand-in address that forwards to you) and, if you allow it, your name. We never see your Apple or Google password. Older accounts made before this may have an email address or just a username, and a password (stored only as a cryptographic hash by our login provider). We also keep your account creation date and your confirmation that you are 13 or older. To stop people guessing passwords, we briefly keep failed username log-ins and the internet address of username sign-ups (deleted after a day). | To create and secure your account and contact you about it. | Contract |
 | **Profile** | Username, display name, bio, profile photo, profile song choice (song name/ID from Apple's catalogue), theme and notification settings. | To show who you are to other users and run the app the way you set it. | Contract |
 | **Content you post** | Photos, videos (up to 30 s), captions, stickers/filters applied, stories (24 h), Peekaboo drops and whether they were on time, dares you did, Guess Who posts (shown without your name until guessed), group posts, comments, replies, likes, story reactions, dare ideas and votes. | To deliver your content to the people you chose and run those features. | Contract |
 | **Messages** | Text messages, peeks (photos/videos sent in chat), voice notes, when a message was opened, whether a peek was replayed or saved, and screenshot notices (we record that a screenshot of a chat or peek happened, not the screenshot itself). | To deliver chats and the features inside them. | Contract |
@@ -49,8 +49,8 @@ We share data only with companies that help run Peekaboo, under contracts that l
 | --- | --- | --- |
 | **Supabase, Inc.** | Database, file storage, login/authentication, server functions and server logs. | United States (AWS us-east-1) |
 | **Expo (650 Industries, Inc.)** | Delivers app updates and routes push notifications to Apple and Google. | United States |
-| **Apple Inc.** | App Store, push notifications on iPhone, iTunes Search for profile-song previews (your search words are sent to Apple). | United States and worldwide |
-| **Google LLC** | Google Play, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google). | United States and worldwide |
+| **Apple Inc.** | App Store, Sign in with Apple, push notifications on iPhone, iTunes Search for profile-song previews (your search words are sent to Apple). | United States and worldwide |
+| **Google LLC** | Google Play, Sign in with Google, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google). | United States and worldwide |
 
 We also disclose data when the law requires it, to respond to a valid legal request, to protect someone's safety, to enforce our Terms, or as part of a sale or transfer of Peekaboo (we would tell you).
 
@@ -72,7 +72,7 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 | Server logs | Up to 90 days. |
 | Everything else | Deleted when you delete your account (see below). |
 
-**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, hit ups and all your files right away. Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things that can outlive the deletion.
+**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, hit ups and all your files right away. If you made your account with Apple, we also disconnect Peekaboo from your Apple ID. Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things that can outlive the deletion.
 
 ## 7. Your rights
 

@@ -6,16 +6,18 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { colors, font, space } from '@/theme';
 
 // Layout for form screens: back button, big title, and fields that stay above the keyboard.
-export function FormScreen({ title, subtitle, children }: {
+export function FormScreen({ title, subtitle, onBack, children }: {
   title: string;
   subtitle?: string;
+  // What the back button does (normally: go back one screen).
+  onBack?: () => void;
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.fill}>
-      <ScreenHeader />
+      <ScreenHeader onBack={onBack} />
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xl }]}

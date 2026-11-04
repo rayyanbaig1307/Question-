@@ -14,6 +14,7 @@ import Animated, {
 import logoEyes from '../../assets/images/logo-eyes.png';
 import { Button } from '@/components/Button';
 import { SafeScreen } from '@/components/SafeEdge';
+import { SOCIAL_SIGN_IN_AVAILABLE, SocialSignInButtons } from '@/components/SocialSignIn';
 import { font, space } from '@/theme';
 
 // The same pink → purple as the app icon.
@@ -42,13 +43,30 @@ export default function Welcome() {
           <Text style={styles.tagline}>Peek it. Share it.{'\n'}Gone in 24h – or forever on your profile.</Text>
         </View>
         <View style={styles.buttons}>
-          <Button title="Create account" onPress={() => router.push('/sign-up')} />
-          <Button
-            title="I already have an account"
-            variant="secondary"
-            style={styles.secondary}
-            onPress={() => router.push('/sign-in')}
-          />
+          {SOCIAL_SIGN_IN_AVAILABLE ? (
+            // New accounts are made with Apple (iPhone) or Google (Android) – no password, no email to confirm.
+            // The same button logs you back in. Older accounts log in with their username or email.
+            <>
+              <SocialSignInButtons onDark />
+              <Button
+                title="Log in with username or email"
+                variant="secondary"
+                style={styles.secondary}
+                onPress={() => router.push('/sign-in')}
+              />
+            </>
+          ) : (
+            // Expo Go and older downloads don't have Apple/Google sign-in.
+            <>
+              <Button title="Create account" onPress={() => router.push('/sign-up')} />
+              <Button
+                title="I already have an account"
+                variant="secondary"
+                style={styles.secondary}
+                onPress={() => router.push('/sign-in')}
+              />
+            </>
+          )}
         </View>
       </SafeScreen>
     </LinearGradient>

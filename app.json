@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.rbaig18.peekaboo",
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.rbaig18.peekaboo",
@@ -77,7 +78,8 @@
           "savePhotosPermission": "Peekaboo saves the photos and videos you keep to your Photos.",
           "isAccessMediaLocationEnabled": false
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "reactCompiler": true
