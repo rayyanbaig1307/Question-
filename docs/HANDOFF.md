@@ -157,7 +157,9 @@ Owner's to-do:
    - 5 screenshots
    - confirm the app name
    - a fresh story on the review account
-4. After launch: check the Supabase `reports` table daily and act within 24 hours.
+4. After launch: act on reports within 24 hours. Every new report sends the owner a push ("🚩 New report"), from
+   the `alert_new_report` trigger on `public.reports` (`20261207000000_report_alerts.sql`, live). Who gets it:
+   `private.report_alert_people`. Then open the `reports` table in Supabase.
 
 Waiting on the owner's word:
 - **"build it"**: new native builds (TestFlight + Android APK). They're needed for Save to Photos
