@@ -134,8 +134,7 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - `20261212000000_chat_extras.sql`: `message_reactions` and `group_message_reactions` (one per person per message;
   push to the sender), `reply_to` on `messages` and `group_messages` (same-chat check), `peek_groups.photo_path`
   (avatars bucket, `set_group_photo`), `pinned_message_id` (`pin_group_message`), realtime for both reaction
-  tables and `peek_groups`. **Not applied live yet** (owner's Allow pop-up timed out). Don't publish code from
-  this commit on before it's applied: replying and reactions would fail.
+  tables and `peek_groups`. Applied live on 4 Nov (owner said "go"); safe to publish.
 - App: `components/MessageActions.tsx` (hold menu with reactions, ReactionChips, ReplyQuote), `lib/reactions.ts`.
 
 ## Group chats part 2 + chat search (4 Nov)
