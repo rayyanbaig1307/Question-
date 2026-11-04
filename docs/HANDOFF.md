@@ -48,8 +48,8 @@ and the owner's standing preferences.
   after `subscribe()`. Every `supabase.channel(name)` must use a unique name per listener (see
   `useIncomingRequestCount` in `src/lib/friends.ts`). If a launch crash happens, republish the last good update
   group first, then fix.
-- Last good published update: `71703a7f-6fc0-494a-b994-a682f3bcfcc6` (commit `3328445`).
-- **Not yet published:** commit `00137f3` (name filter, see below). Publish it next.
+- Last good published update: `d96d6f03-7157-44ff-a449-37f78b3972f0` (commit `00137f3`). Every app change up
+  to then is live. Commits after it only touch docs.
 
 ## Done recently (newest first)
 
