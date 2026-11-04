@@ -136,7 +136,8 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - `20261210000000_group_chat.sql` (applied): `group_messages` (members only), `peek_group_members.chat_read_at`
   and `chat_muted`, `mark_group_chat_read`, `set_group_chat_muted`, `my_group_chats()`, a push trigger, and
   realtime. App: `lib/groupChat.ts`, `(app)/groups/chat/[id].tsx`. Chat list group rows open the chat and show
-  unread counts and the last message. Text only for now.
+  unread counts and the last message. Text only for now. **Live on `preview`** as update
+  `f5e1ac5c-3d97-43cd-8499-73802a97812d` (head `c2abb68`), after the owner tested it on `testing`.
 
 ## Dare them back, live Inbox, server drop reminder (4 Nov)
 
