@@ -72,6 +72,11 @@ function RootNavigator() {
     if (!initializing) SplashScreen.hideAsync();
   }, [initializing]);
 
+  // Wait for the saved login before showing any screen. Otherwise a link opened at start-up (like /settings,
+  // or a tapped notification) is sent to /welcome for a moment and then lands on home. (The splash screen
+  // stays up meanwhile.)
+  if (initializing) return null;
+
   return (
     <Stack key={session?.user.id ?? 'signed-out'} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={loggedIn} redirectTo="/welcome">

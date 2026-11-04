@@ -11,9 +11,12 @@ type AuthContextValue = {
   userId: string | null;
   profile: Profile | null;
   initializing: boolean;
-  refreshProfile: () => Promise<void>;
+  // Loads your profile again. Gives back what it loaded, or null if it couldn't.
+  refreshProfile: () => Promise<Profile | null>;
   setProfile: (profile: Profile) => void;
   signOut: (expectedUserId?: string) => Promise<void>;
+  // Who is logged in at this very moment (also works after the screen that asks has closed).
+  currentUserId: () => string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -52,13 +55,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id ?? null;
 
   const refreshProfile = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) return null;
     try {
-      setProfile(await fetchProfile(userId));
+      const loaded = await fetchProfile(userId);
+      // Someone else may have logged in while this was loading: never show this profile for them.
+      if (sessionUser.current === userId) setProfile(loaded);
+      return loaded;
     } catch (error) {
       console.warn('Could not load your profile', error);
+      return null;
     }
   }, [userId]);
+
+  const currentUserId = useCallback(() => sessionUser.current, []);
 
   // Load the profile whenever someone logs in.
   useEffect(() => {
@@ -88,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await unregisterPush().catch(() => {});
     await checkAccount();
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    // If the server can't be reached, Supabase still removes the login from this phone (and then reports
+    // the error). Only say "could not log out" when this account really is still logged in here.
+    if (error && (await stillLoggedIn(target))) throw error;
     // A newer login event must not be overwritten by this older operation finishing.
     if (sessionUser.current !== null && sessionUser.current !== target) return;
     sessionUser.current = null;
@@ -101,10 +112,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, userId, profile: currentProfile, initializing, refreshProfile, setProfile, signOut }}>
+      value={{ session, userId, profile: currentProfile, initializing, refreshProfile, setProfile, signOut, currentUserId }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+// Is this account still logged in on the phone? If we can't even tell, we say yes (to be safe).
+async function stillLoggedIn(userId: string | null): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return true;
+    return data.session?.user.id === userId;
+  } catch {
+    return true;
+  }
 }
 
 export function useAuth(): AuthContextValue {

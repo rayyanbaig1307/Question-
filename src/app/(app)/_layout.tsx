@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
 import { ProfileSetup, useNeedsSetup } from '@/components/ProfileSetup';
-import { TermsGate } from '@/components/TermsGate';
+import { CouldNotCheck, TermsGate } from '@/components/TermsGate';
 import { useAuth } from '@/lib/auth';
 import { syncCommunityDares } from '@/lib/communityDares';
 import { useShareLocationWhileOpen } from '@/lib/location';
@@ -34,8 +34,13 @@ export default function AppLayout() {
   }, [userId]);
 
   // Just made your account with Apple or Google: pick a username first (shown instead of the app).
-  const [needsSetup, setupDone] = useNeedsSetup();
+  // If we couldn't check (no internet?), or your profile isn't loaded yet, say so and offer "Try again" –
+  // never the app, and never an empty setup form.
+  const [needsSetup, setupDone, setupCheck] = useNeedsSetup();
   if (needsSetup === null) return null;
+  if (setupCheck.failed || (needsSetup && !profile)) {
+    return <CouldNotCheck onRetry={setupCheck.retry} checking={setupCheck.checking} />;
+  }
   if (needsSetup) return <ProfileSetup onDone={setupDone} />;
 
   return (

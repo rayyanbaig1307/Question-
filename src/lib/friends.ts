@@ -54,14 +54,21 @@ export async function fetchRelation(me: string, other: string): Promise<Relation
   return relationFrom(data, me);
 }
 
-// Finds people whose username starts with what you typed.
+// In a search pattern "_" means "any one letter" and "%" means "anything", so typing "a_b" would also find
+// "axb". Putting a "\" in front of them makes the search look for the real letters only.
+export function likePrefix(text: string): string {
+  return text.replace(/[\\%_]/g, (letter) => `\\${letter}`);
+}
+
+// Finds people whose username starts with what you typed (only letters, numbers, "_" and "." are kept;
+// "*" is dropped too, because the server would read it as "anything").
 export async function searchUsers(query: string, me: string): Promise<Profile[]> {
   const clean = query.toLowerCase().replace(/[^a-z0-9_.]/g, '');
   if (clean.length === 0) return [];
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
-    .ilike('username', `${clean}%`)
+    .ilike('username', `${likePrefix(clean)}%`)
     .neq('id', me)
     .order('username')
     .limit(20);

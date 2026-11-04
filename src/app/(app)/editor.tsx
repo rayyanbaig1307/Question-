@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
@@ -32,6 +32,12 @@ import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
 
 const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, colors.green, colors.orange];
+
+// In a web browser the editor can't turn the photo and its text and stickers into one picture yet
+// (react-native-view-shot needs an extra package there that the app doesn't have). So on the web,
+// Send and Save say so in a message people can see, instead of failing quietly (pop-up alerts don't show on the web).
+const CAN_MAKE_PICTURE = Platform.OS !== 'web';
+const PICTURE_NOT_ON_WEB = "Sending and saving from the web isn't ready yet. Please use the Peekaboo phone app.";
 
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
@@ -250,10 +256,19 @@ export default function Editor() {
     return { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
   }
 
+  // On the web: when this needs the finished picture, which the web can't make yet, show why and stop.
+  // (A video with no text or stickers needs no picture.)
+  function pictureNotPossible() {
+    if (CAN_MAKE_PICTURE || (isVideo && items.length === 0 && !track)) return false;
+    showToast(PICTURE_NOT_ON_WEB);
+    return true;
+  }
+
   // Save it with everything on it: to the phone's Photos and to your Keeps in Peekaboo.
   const [saved, setSaved] = useState(false);
   async function keep() {
     if (working.current || saved) return;
+    if (pictureNotPossible()) return;
     working.current = true;
     setBusy(true);
     try {
@@ -273,6 +288,7 @@ export default function Editor() {
 
   async function next() {
     if (working.current || finishedDirect.current) return;
+    if (pictureNotPossible()) return;
     working.current = true;
     setBusy(true);
     try {
@@ -329,7 +345,13 @@ export default function Editor() {
       const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
-      if (straightToChat && chatDare && sentToChat.current) {
+      const dareGone = /This dare is gone/i.test(String((error as { message?: unknown } | null)?.message ?? ''));
+      if (straightToChat && chatDare && sentToChat.current && dareGone) {
+        // The dare was deleted (or you can't chat any more), so trying again can never work: go back to the chat.
+        finishedDirect.current = true;
+        Alert.alert('Photo sent', "That dare isn't there any more, so it can't be marked as done. Your photo is already sent.");
+        router.dismissTo(`/chat/${to}`);
+      } else if (straightToChat && chatDare && sentToChat.current) {
         Alert.alert('Photo sent, dare not updated', `${friendlyError(error)}\n\nYour photo is already sent. Tap Send again to update the dare.`);
       } else {
         Alert.alert(straightToChat || straightToGroup ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));

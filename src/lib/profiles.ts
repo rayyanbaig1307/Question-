@@ -91,6 +91,25 @@ export async function deleteMyAccount(expectedUserId?: string): Promise<void> {
     method: 'POST',
     body: { expected_user_id: deletingUser, ...(appleCode ? { apple_code: appleCode } : {}) },
   });
-  if (error) throw error;
-  if (!data?.deleted) throw new Error(data?.error ?? 'Could not delete your account');
+  if (error) throw new Error(await deleteServerMessage(error));
+  if (!data?.deleted) throw new Error(data?.error ?? 'Could not delete your account. Please try again.');
+}
+
+// When the delete server says no, it explains why in its reply (for example "The signed-in account
+// changed…" or "Please try again"). The supabase library only says "non-2xx status code", so we read
+// the server's own words from the reply and show those instead.
+async function deleteServerMessage(error: unknown): Promise<string> {
+  const name = (error as { name?: unknown } | null)?.name;
+  if (name === 'FunctionsFetchError') return 'Could not reach the server. Check your connection and try again.';
+  const reply = (error as { context?: unknown } | null)?.context as { json?: () => Promise<unknown> } | undefined;
+  if (name === 'FunctionsHttpError' && typeof reply?.json === 'function') {
+    try {
+      const body = await reply.json();
+      const text = (body as { error?: unknown } | null)?.error;
+      if (typeof text === 'string' && text.trim() && text.length <= 300) return text;
+    } catch {
+      // The reply was not readable – use the plain message below.
+    }
+  }
+  return 'Could not delete your account. Please try again.';
 }

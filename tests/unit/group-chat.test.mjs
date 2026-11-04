@@ -2,15 +2,73 @@ import { expect, it, vi } from 'vitest';
 import { query } from '../api/edgeHarness.mjs';
 import { loadLibrary } from './libHarness.mjs';
 
-it('a failed group-photo save removes its new public upload and preserves the real error', async () => {
-  const failure = { message: 'Not a group member' };
-  const remove = vi.fn(async () => {});
+// setGroupPhoto uploads the new picture first, then asks the server to use it. If that request fails, the new
+// file is removed only when the server clearly said no. When the answer is lost on the way (bad signal), the
+// server may still have saved the picture (even a moment after we look), so the file is kept.
+function groupPhotoLibrary(rpcResult, { remove = vi.fn(async () => {}), groupRead = vi.fn(() => query({ data: { photo_path: 'B/older.jpg' }, error: null })) } = {}) {
   const lib = loadLibrary('groupChat', {
-    supabase: { rpc: async () => ({ data: null, error: failure }) },
+    supabase: { rpc: async () => { if (rpcResult instanceof Error) throw rpcResult; return rpcResult; }, from: groupRead },
     mocks: { './media': { uploadAvatar: async () => 'A/group-photo.jpg', deleteAvatar: remove } },
   });
+  return { lib, remove, groupRead };
+}
+
+it('a group-photo save the server refuses (an error with a code) removes the new upload and keeps the real error', async () => {
+  // What the real server sends when set_group_photo says no, e.g. "Not a group member" (HTTP 400, code P0001).
+  const failure = { message: 'Not a group member', code: 'P0001', details: null, hint: null };
+  const { lib, remove, groupRead } = groupPhotoLibrary({ data: null, error: failure, status: 400 });
   await expect(lib.setGroupPhoto('A', 'foreign-group', 'file:///photo.jpg')).rejects.toMatchObject(failure);
   expect(remove).toHaveBeenCalledExactlyOnceWith('A/group-photo.jpg');
+  expect(groupRead).not.toHaveBeenCalled();
+});
+
+it('a group-photo save refused with an HTTP error status (no code) also removes the new upload', async () => {
+  const failure = { message: 'permission denied' };
+  const { lib, remove } = groupPhotoLibrary({ data: null, error: failure, status: 403 });
+  await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).rejects.toMatchObject(failure);
+  expect(remove).toHaveBeenCalledExactlyOnceWith('A/group-photo.jpg');
+});
+
+it('a lost answer (network error, no code) keeps the new upload and still reports the error', async () => {
+  // This is how supabase-js reports a request that never got an answer: no code, status 0.
+  const failure = { message: 'TypeError: fetch failed', details: '', hint: '', code: '' };
+  // Even if the group shows an older picture right now, the server may still save the new one a moment later.
+  const { lib, remove, groupRead } = groupPhotoLibrary({ data: null, error: failure, status: 0 });
+  await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).rejects.toMatchObject(failure);
+  expect(remove).not.toHaveBeenCalled();
+  expect(groupRead).not.toHaveBeenCalled();
+});
+
+it('a request that fails before any answer (thrown error) keeps the new upload and still reports the error', async () => {
+  const failure = new Error('Network request failed');
+  const { lib, remove } = groupPhotoLibrary(failure);
+  await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).rejects.toBe(failure);
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it('a gateway timeout without a code keeps the new upload (the server may still have saved it)', async () => {
+  const failure = { message: 'upstream request timeout' };
+  const { lib, remove } = groupPhotoLibrary({ data: null, error: failure, status: 504 });
+  await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).rejects.toMatchObject(failure);
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it('if removing a refused group photo fails too, the real reason is still reported', async () => {
+  const failure = { message: 'Not a group member', code: 'P0001' };
+  const remove = vi.fn(async () => { throw new Error('Synthetic cleanup failure'); });
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const { lib } = groupPhotoLibrary({ data: null, error: failure, status: 400 }, { remove });
+    await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).rejects.toMatchObject(failure);
+    expect(remove).toHaveBeenCalledExactlyOnceWith('A/group-photo.jpg');
+    expect(warning).toHaveBeenCalled();
+  } finally { warning.mockRestore(); }
+});
+
+it('a saved group photo is not removed', async () => {
+  const { lib, remove } = groupPhotoLibrary({ data: null, error: null, status: 204 });
+  await expect(lib.setGroupPhoto('A', 'my-group', 'file:///photo.jpg')).resolves.toBeUndefined();
+  expect(remove).not.toHaveBeenCalled();
 });
 
 it('a failed group capture never leaves successful uploads after a rejected message insert', async () => {

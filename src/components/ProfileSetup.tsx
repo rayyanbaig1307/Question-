@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { FormScreen } from '@/components/FormScreen';
@@ -21,30 +21,79 @@ import { colors, font, radius, space } from '@/theme';
 // ---------------------------------------------------------------------------
 
 // Does the logged-in person still need the setup screen? null while checking.
-export function useNeedsSetup(): [boolean | null, () => void] {
-  const { session, userId } = useAuth();
+// If the check doesn't work (no internet?) or takes too long, `failed` is true: the app then shows "Couldn't check – Try again"
+// instead of the app or the setup form. It never skips setup on an error. It also tries again by itself
+// when you come back to the app.
+export type SetupCheck = { failed: boolean; checking: boolean; retry: () => void };
+
+// How long the check may take before we stop waiting and show "Couldn't check – Try again".
+const SETUP_CHECK_TIME_LIMIT_MS = 15_000;
+
+export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
+  const { session, userId, profile, refreshProfile } = useAuth();
   // The answer, and whose account it's about (so a different login is checked again).
-  const [answer, setAnswer] = useState<{ user: string; needed: boolean } | null>(null);
+  const [answer, setAnswer] = useState<{ user: string; needed: boolean; failed: boolean } | null>(null);
+  // Goes up by one for every new try; `retrying` shows a spinner on "Try again".
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const social = madeWithAppleOrGoogle(session?.user.app_metadata?.provider);
+  // The setup form needs your profile (so the username you already have counts as yours, not "taken").
+  const haveProfile = useRef(false);
+  const reloadProfile = useRef(refreshProfile);
+  useEffect(() => {
+    haveProfile.current = !!profile;
+    reloadProfile.current = refreshProfile;
+  }, [profile, refreshProfile]);
 
   useEffect(() => {
     if (!userId || !social) return;
     let cancelled = false;
-    hasAcceptedAnyTerms(userId)
-      .then((agreed) => {
-        if (!cancelled) setAnswer({ user: userId, needed: !agreed });
-      })
+    let answered = false;
+    // Taking too long counts as "couldn't check" (a request can hang forever on Android). If the real answer
+    // still comes later, it wins.
+    const timer = setTimeout(() => {
+      if (cancelled || answered) return;
+      setAnswer({ user: userId, needed: true, failed: true });
+      setRetrying(false);
+    }, SETUP_CHECK_TIME_LIMIT_MS);
+    (async () => {
+      if (await hasAcceptedAnyTerms(userId)) return { needed: false, failed: false };
+      const loaded = haveProfile.current || !!(await reloadProfile.current());
+      return { needed: true, failed: !loaded };
+    })()
       // A failed check must not skip the name, age and Terms confirmations.
-      .catch(() => {
-        if (!cancelled) setAnswer({ user: userId, needed: true });
+      .catch(() => ({ needed: true, failed: true }))
+      .then((result) => {
+        answered = true;
+        clearTimeout(timer);
+        if (cancelled) return;
+        setAnswer({ user: userId, ...result });
+        setRetrying(false);
       });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [userId, social]);
+  }, [userId, social, attempt]);
 
-  const needed = !userId || !social ? false : answer?.user === userId ? answer.needed : null;
-  return [needed, () => userId && setAnswer({ user: userId, needed: false })];
+  const current = userId && social && answer?.user === userId ? answer : null;
+  const failed = current?.failed ?? false;
+  const retry = useCallback(() => {
+    setRetrying(true);
+    setAttempt((count) => count + 1);
+  }, []);
+
+  // The check failed: try again by itself as soon as you come back to the app.
+  useEffect(() => {
+    if (!failed) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') retry();
+    });
+    return () => subscription.remove();
+  }, [failed, retry]);
+
+  const needed = !userId || !social ? false : current ? current.needed : null;
+  return [needed, () => userId && setAnswer({ user: userId, needed: false, failed: false }), { failed, checking: retrying, retry }];
 }
 
 // A stand-in username from the database ("user" + 6 letters/numbers) isn't worth showing as a suggestion.

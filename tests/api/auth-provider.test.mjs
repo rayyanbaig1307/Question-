@@ -50,6 +50,59 @@ it('does not report a successful logout when auth rejected it', async () => {
   } finally { await unmount(tree); }
 });
 
+// How @supabase/auth-js 2.118 really behaves when the logout request fails with a network error or a 5xx:
+// it still removes the saved login from the phone (and sends SIGNED_OUT), then returns the error.
+// (node_modules/@supabase/auth-js/dist/main/GoTrueClient.js, _signOut)
+it('a logout whose server request fails still counts as logged out when the login is gone from the phone', async () => {
+  let saved = { user: { id: 'A' } }, h;
+  h = harness(async () => ({ data: { session: saved }, error: null }), async () => {
+    saved = null;
+    h.event('SIGNED_OUT', null);
+    return { error: new Error('Failed to fetch') };
+  });
+  const tree = await h.render();
+  try {
+    await act(async () => { await expect(h.current.signOut('A')).resolves.toBeUndefined(); });
+    expect(h.current.userId).toBeNull();
+    expect(h.current.profile).toBeNull();
+  } finally { await unmount(tree); }
+});
+
+it('a logout that leaves the login on the phone is still reported as failed', async () => {
+  const failure = new Error('Simulated storage failure');
+  const h = harness(async () => ({ data: { session: { user: { id: 'A' } } }, error: null }), async () => ({ error: failure }));
+  const tree = await h.render();
+  try {
+    await expect(h.current.signOut('A')).rejects.toThrow('Simulated storage failure');
+    expect(h.current.userId).toBe('A');
+  } finally { await unmount(tree); }
+});
+
+it('reloading the profile never puts an old account in place of a newer login', async () => {
+  let h, finish, holdNext = false;
+  h = harness(async () => ({ data: { session: { user: { id: 'A' } } }, error: null }));
+  // Only the reload started below is held back (a slow connection); every other profile load answers at once.
+  h.screen.modules['./profiles'].fetchProfile = async (id) => {
+    if (!holdNext) return { id, username: id };
+    holdNext = false;
+    return new Promise((resolve) => { finish = () => resolve({ id, username: id }); });
+  };
+  const tree = await h.render();
+  try {
+    expect(h.current.profile).toMatchObject({ id: 'A' });
+    let reload;
+    const oldRefresh = h.current.refreshProfile;
+    holdNext = true;
+    await act(async () => { reload = oldRefresh(); await Promise.resolve(); });
+    await act(() => h.event('SIGNED_IN', { user: { id: 'B' } }));
+    let result;
+    await act(async () => { finish(); result = await reload; });
+    expect(h.current.userId).toBe('B');
+    expect(h.current.profile).toMatchObject({ id: 'B' }); // B's own profile is still there
+    expect(result).toMatchObject({ id: 'A' }); // the caller still learns what was loaded
+  } finally { await unmount(tree); }
+});
+
 it('a successful logout clears the local session even before its auth event arrives', async () => {
   const h = harness(async () => ({ data: { session: { user: { id: 'A' } } } }));
   const tree = await h.render();

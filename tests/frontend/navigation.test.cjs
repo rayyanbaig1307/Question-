@@ -57,3 +57,35 @@ test('account changes also discard open menus and their pending actions', async 
     assert.notEqual(tree.root.findByType('AccountOverlay').props.instance, old, 'menus must not carry actions from the previous login into another account');
   } finally { await unmount(tree); }
 });
+
+test('no screen is shown (and the splash screen stays up) until the saved login has loaded', async () => {
+  // While the saved login loads, the app doesn't know yet whether you are logged in. Showing the screens
+  // then would send a link like /settings to /welcome and the app would land on home instead.
+  let initializing = true;
+  let hidden = 0;
+  function Stack(props) { return React.createElement('Stack', null, props.children); }
+  Stack.Protected = props => props.guard ? React.createElement('Protected', { guard: props.guard }, props.children) : null;
+  Stack.Screen = () => null;
+  const screen = loadScreen('src/app/_layout.tsx', {
+    expo: { reloadAppAsync: async () => {} },
+    'expo-router': { Stack, ThemeProvider: props => props.children },
+    'expo-splash-screen': { preventAutoHideAsync() {}, hideAsync: async () => { hidden++; } },
+    'expo-status-bar': { StatusBar: () => null },
+    'react-native-gesture-handler': { GestureHandlerRootView: props => props.children },
+    '@/components/Overlays': { OverlayProvider: props => props.children },
+    '@/components/SetupNeeded': { SetupNeeded: () => null },
+    '@/lib/appUpdates': { useStayUpToDate() {} },
+    '@/lib/auth': { useAuth: () => ({ session: initializing ? null : { user: { id: 'alice' } }, initializing }) },
+    '@/lib/supabase': { isSupabaseConfigured: true },
+  });
+  screen.Component = screen.getBinding('RootNavigator');
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(tree.root.findAllByType('Stack').length, 0, 'no screens (and no redirect to /welcome) while the login loads');
+    assert.equal(hidden, 0, 'the splash screen stays up meanwhile');
+    initializing = false;
+    await act(() => tree.update(React.createElement(screen.Component)));
+    assert.equal(tree.root.findAllByType('Stack').length, 1, 'the screens appear once the login has loaded');
+    assert.equal(hidden, 1, 'and the splash screen goes away');
+  } finally { await unmount(tree); }
+});

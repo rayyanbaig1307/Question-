@@ -245,7 +245,8 @@ export async function sendSnap(me: string, friendIds: string[], capture: Capture
     .from('messages')
     .insert(friendIds.map((friend) => ({ sender_id: me, recipient_id: friend, kind: 'snap', ...fields })));
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }
@@ -285,7 +286,11 @@ export async function markChatRead(friend: string): Promise<void> {
 export async function deleteMessage(message: Message): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('id', message.id);
   if (error) throw error;
-  if (message.media_path) await cleanUpSnapFile(message);
+  // The message is deleted now. Tidying up its photo or voice file is extra: if that fails, it is only
+  // noted (the daily clean-up can still remove the file), and the delete still counts as done.
+  if (message.media_path) {
+    await cleanUpSnapFile(message).catch((cleanupError) => console.warn('Could not remove the file of a deleted message', cleanupError));
+  }
 }
 
 // A peek's photo is no longer needed once it was opened over a day ago (no replay or save left) and isn't saved.

@@ -37,7 +37,8 @@ export async function addKeep(userId: string, capture: Capture): Promise<Keep> {
   const { fields } = await uploadCapture(userId, 'keeps', capture);
   const { data, error } = await supabase.from('keeps').insert({ user_id: userId, ...fields }).select('*').single();
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
   return data as Keep;

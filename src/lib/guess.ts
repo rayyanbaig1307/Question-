@@ -59,7 +59,8 @@ export async function postMystery(userId: string, capture: Capture, caption: str
   const { fields } = await uploadCapture(userId, 'mystery', capture);
   const { error } = await supabase.from('mystery_posts').insert({ user_id: userId, ...fields, caption: caption.trim() });
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Remove the files we just uploaded. If that fails too, still show the real reason the post didn't work.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }

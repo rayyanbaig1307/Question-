@@ -190,7 +190,7 @@ export async function getMediaUrls(paths: string[]): Promise<Record<string, stri
 // React helper: gives you { [path]: url } for a list of photo paths.
 export function useMediaUrls(paths: string[]): Record<string, string> {
   const key = paths.join('|');
-  const [loaded, setLoaded] = useState<{ key: string; version: number; urls: Record<string, string> } | null>(null);
+  const [loaded, setLoaded] = useState<{ version: number; urls: Record<string, string> } | null>(null);
   const version = useSyncExternalStore(
     (listener) => { cacheListeners.add(listener); return () => { cacheListeners.delete(listener); }; },
     () => cacheVersion,
@@ -202,7 +202,17 @@ export function useMediaUrls(paths: string[]): Record<string, string> {
     let cancelled = false;
     getMediaUrls(list)
       .then((found) => {
-        if (!cancelled) setLoaded({ key, version, urls: found });
+        if (cancelled) return;
+        // Keep the links we already have for photos still in the list, so photos on screen don't
+        // blink out (and videos don't restart) each time a new photo arrives. Links from an older
+        // login are never kept: a login change bumps the version.
+        setLoaded((prev) => {
+          const urls: Record<string, string> = {};
+          if (prev && prev.version === version) {
+            for (const path of list) if (prev.urls[path]) urls[path] = prev.urls[path];
+          }
+          return { version, urls: { ...urls, ...found } };
+        });
       })
       .catch((error) => console.warn('Could not load photos', error));
     return () => {
@@ -210,7 +220,8 @@ export function useMediaUrls(paths: string[]): Record<string, string> {
     };
   }, [key, version]);
 
-  return loaded?.key === key && loaded.version === version ? loaded.urls : {};
+  // While a changed list is still loading, keep showing the links we already have (same login only).
+  return loaded && loaded.version === version ? loaded.urls : {};
 }
 
 export function useMediaUrl(path: string | null | undefined): string | null {

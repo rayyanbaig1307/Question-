@@ -23,7 +23,7 @@ import type { HitUpsFrom, Profile } from '@/lib/types';
 import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
 
 export default function Settings() {
-  const { userId, profile, setProfile, signOut } = useMe();
+  const { userId, profile, setProfile, signOut, currentUserId, refreshProfile } = useMe();
   const { showToast, showOptions } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
@@ -44,8 +44,17 @@ export default function Settings() {
   }, [profile]);
 
   // Keep privacy saves in the order you chose them, even if the connection is slow.
-  function savePrivacyInOrder(action: () => Promise<void>): Promise<void> {
-    const saved = profileWrites.current.then(async () => { if (active.current) await action(); });
+  // A save waiting in line is still sent if you leave Settings (it's your choice, for your account),
+  // but never if someone else has logged in on this phone in the meantime.
+  function savePrivacyInOrder(save: () => Promise<Profile>, show: (updated: Profile) => void): Promise<void> {
+    const saved = profileWrites.current.then(async () => {
+      if (currentUserId() !== userId) return;
+      const updated = await save();
+      if (active.current) show(updated);
+      // Settings is closed: just bring the app's copy of your profile up to date. This waits in the same
+      // line as the saves, so an older refresh can never come back after a newer one and undo your choice.
+      else await refreshProfile();
+    });
     profileWrites.current = saved.catch(() => {});
     return saved;
   }
@@ -100,11 +109,13 @@ export default function Settings() {
 
   async function setPrivate(value: boolean) {
     try {
-      await savePrivacyInOrder(async () => {
-        const updated = await updateMyProfile(userId, { is_private: value });
-        showProfileChange(updated, { is_private: updated.is_private });
-        showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
-      });
+      await savePrivacyInOrder(
+        () => updateMyProfile(userId, { is_private: value }),
+        (updated) => {
+          showProfileChange(updated, { is_private: updated.is_private });
+          showToast(value ? 'Your account is private 🔒' : 'Your account is public 🌍');
+        },
+      );
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     }
@@ -118,11 +129,13 @@ export default function Settings() {
         label: `${option.label}${profile?.hit_ups_from === option.key ? ' ✓' : ''}`,
         onPress: async () => {
           try {
-            await savePrivacyInOrder(async () => {
-              const updated = await updateMyProfile(userId, { hit_ups_from: option.key });
-              showProfileChange(updated, { hit_ups_from: updated.hit_ups_from });
-              showToast(`Hit ups: ${option.label.toLowerCase()}`);
-            });
+            await savePrivacyInOrder(
+              () => updateMyProfile(userId, { hit_ups_from: option.key }),
+              (updated) => {
+                showProfileChange(updated, { hit_ups_from: updated.hit_ups_from });
+                showToast(`Hit ups: ${option.label.toLowerCase()}`);
+              },
+            );
           } catch (error) {
             Alert.alert('Could not save', friendlyError(error));
           }
@@ -171,9 +184,9 @@ export default function Settings() {
                   deleting.current = true;
                   try {
                     await deleteMyAccount(userId);
-                    if (!active.current) return;
-                    showToast('Your account was deleted. Bye 👋');
-                    // The login no longer exists, so this just clears it from the phone.
+                    if (active.current) showToast('Your account was deleted. Bye 👋');
+                    // The login no longer exists, so this just clears it from the phone – even if you left
+                    // Settings while it was deleting. signOut(userId) does nothing if someone else is logged in now.
                     await signOut(userId).catch(() => {});
                   } catch (error) {
                     if (active.current) Alert.alert('Could not delete your account', friendlyError(error));
@@ -396,11 +409,8 @@ function Row({ icon, color, title, subtitle, right, onPress }: {
   right?: ReactNode;
   onPress?: () => void;
 }) {
-  return (
-    <Pressable
-      disabled={!onPress}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+  const inside = (
+    <>
       <View style={[styles.icon, { backgroundColor: color }]}>
         <Ionicons name={icon} size={18} color={colors.white} />
       </View>
@@ -409,6 +419,14 @@ function Row({ icon, color, title, subtitle, right, onPress }: {
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
       {right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textFaint} /> : null)}
+    </>
+  );
+  // A row you can't tap (for example one with a switch) is a plain row that looks the same. It is not a
+  // "disabled" button: screen readers would then call the switch inside it disabled.
+  if (!onPress) return <View style={styles.row}>{inside}</View>;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      {inside}
     </Pressable>
   );
 }

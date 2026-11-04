@@ -3,6 +3,8 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { asUser, friend } from '../database/local-db.mjs';
 import { startLocalRest } from './runtime.mjs';
+import { createClient } from '@supabase/supabase-js';
+import { loadLibrary } from '../unit/libHarness.mjs';
 
 const original = process.env.QA_ORIGINAL === '1';
 const stress = process.env.QA_STRESS === '1';
@@ -60,6 +62,60 @@ try {
   await check('owner can update and read their profile through HTTP', async () => {
     const result = await request(`profiles?id=eq.${users[0]}`, { method: 'PATCH', body: { bio: 'QA 👀 bio' }, headers: { Prefer: 'return=representation' } });
     assert.equal(result.status, 200); assert.equal(result.data[0].bio, 'QA 👀 bio');
+  });
+  // OPEN-05: in a search pattern "_" means "any one letter". The app now sends "\_" so that a search for
+  // "qsrch_ab_c" finds only that exact start, not look-alikes such as "qsrch_abxc".
+  await check('username search with an escaped underscore is an exact "starts with" through REST', async () => {
+    const names = ['qsrch_ab_c', 'qsrch_ab_c.two', 'qsrch_abxc', 'qsrchxab_c'];
+    for (const [n, username] of names.entries()) {
+      await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [
+        `00000000-0000-4000-8005-${String(n + 1).padStart(12, '0')}`, `search${n}@example.invalid`, { username, display_name: `Search ${n}` },
+      ]);
+    }
+    const search = async pattern => {
+      const result = await request(`profiles?select=username&username=ilike.${encodeURIComponent(pattern)}&order=username`, { user: 1 });
+      assert.equal(result.status, 200); return result.data.map(row => row.username);
+    };
+    // What the app sends now (likePrefix in src/lib/friends.ts).
+    assert.deepEqual(await search('qsrch\\_ab\\_c%'), ['qsrch_ab_c', 'qsrch_ab_c.two']);
+    // What the app used to send: the look-alikes slipped in.
+    assert.deepEqual(await search('qsrch_ab_c%'), ['qsrch_ab_c', 'qsrch_ab_c.two', 'qsrch_abxc', 'qsrchxab_c']);
+  });
+  // OPEN-05, end to end: the check above sends a hand-written pattern. This one runs the app's own
+  // searchUsers (src/lib/friends.ts) through the real supabase-js client, so it fails if the app stops
+  // escaping "_" (QA_ORIGINAL=1 loads the old friends.ts and this check fails there, as it should).
+  await check("the app's own searchUsers through supabase-js finds only real \"starts with\" matches", async () => {
+    const names = ['qapp_ab_c', 'qapp_ab_c.two', 'qapp_abxc', 'qappxab_c'];
+    for (const [n, username] of names.entries()) {
+      await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [
+        `00000000-0000-4000-8006-${String(n + 1).padStart(12, '0')}`, `appsearch${n}@example.invalid`, { username, display_name: `App search ${n}` },
+      ]);
+    }
+    // supabase-js builds <url>/rest/v1/...; the local PostgREST serves the same API at its root.
+    const sent = [];
+    const supabase = createClient('http://local.invalid', 'local-test-key', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: {
+        headers: { Authorization: `Bearer ${token(1)}` },
+        fetch: (url, init) => {
+          const local = String(url).replace('http://local.invalid/rest/v1', runtime.base);
+          sent.push(decodeURIComponent(new URL(local).search));
+          return fetch(local, init);
+        },
+      },
+    });
+    const { searchUsers } = loadLibrary('friends', { supabase });
+    const find = async typed => (await searchUsers(typed, users[1])).map(row => row.username);
+
+    assert.deepEqual(await find('qapp_ab_c'), ['qapp_ab_c', 'qapp_ab_c.two']);
+    assert.ok(sent.at(-1).includes('username=ilike.qapp\\_ab\\_c%'), sent.at(-1));
+    // Capital letters and a leading "@" are cleaned the same way.
+    assert.deepEqual(await find('@QAPP_AB'), ['qapp_ab_c', 'qapp_ab_c.two', 'qapp_abxc']);
+    // A search wildcard the person types does not widen the search.
+    assert.deepEqual(await find('qapp%c'), []);
+    assert.deepEqual(await find('qapp*c'), []);
+    // A lone "_" finds only names that really start with "_", never every account.
+    assert.ok((await find('_')).every(name => name.startsWith('_')));
   });
   await own(0, 'update profiles set is_private=true where id=$1', [users[0]]);
   await check('private profile posts stay hidden from a stranger through REST', async () => {
@@ -197,6 +253,25 @@ try {
       const result = await request(`rpc/${name}`, { user: 2, method: 'POST', body }); assert.ok([403,404].includes(result.status));
     });
   }
+  // Username login limits: app users (signed in or not) cannot reserve tries or give them back.
+  if (!original) {
+    const reservation = '7c1f6a1e-2b4d-4c8a-9e0f-123456789abc';
+    for (const [name, body] of [
+      ['reserve_username_auth_attempt', { attempt_kind: 'fail', attempt_key: 'pair:rest@198.51.100.1', max_attempts: 8, window_minutes: 15, attempt_id: reservation }],
+      ['refund_username_auth_attempt', { attempt_id: reservation }],
+    ]) {
+      for (const [who, user] of [['anonymous request', null], ['ordinary JWT', 2]]) {
+        await check(`${who} cannot call username limit function ${name}`, async () => {
+          await asUser(db, null, tx => tx.query("select public.reserve_username_auth_attempt('fail','pair:rest@198.51.100.1',8,15,$1)", [reservation]), 'service_role');
+          const before = (await db.query('select count(*)::int as n from public.username_auth_log where reservation=$1', [reservation])).rows[0].n;
+          const result = await request(`rpc/${name}`, { user, method: 'POST', body });
+          assert.ok([401, 403, 404].includes(result.status), `status ${result.status}`);
+          const after = (await db.query('select count(*)::int as n from public.username_auth_log where reservation=$1', [reservation])).rows[0].n;
+          assert.equal(after, before);
+        });
+      }
+    }
+  }
   await check('HEAD count and pagination preserve authorization', async () => {
     const result = await request(`posts?id=eq.${post}&select=id&limit=1`, { user: 2, method: 'HEAD', headers: { Prefer: 'count=exact' } });
     assert.equal(result.status, 200); assert.match(result.headers.get('content-range'), /\/0$/);
@@ -210,21 +285,91 @@ try {
     assert.equal(result.status, 403);
   });
   await check('reported file survives author content deletion through real HTTP', async () => {
-    const path = `${users[0]}/posts/rest-reported-evidence.jpg`;
+    // Review DB-1: an app delete never fails and never shows whether the file was reported.
+    // Two posts are made the same way; one is reported. The author deletes both posts and files.
     const storageHeaders = { 'Content-Profile': 'storage' };
-    assert.equal((await request('objects', { method: 'POST', body: { bucket_id: 'media', name: path }, headers: storageHeaders })).status, 201);
-    const inserted = await request('posts', { method: 'POST', body: { user_id: users[0], media_path: path, caption: 'reported fixture' }, headers: { Prefer: 'return=representation' } });
-    assert.equal(inserted.status, 201);
-    const id = inserted.data[0].id;
-    assert.equal((await request('reports', { user: 1, method: 'POST', body: { reporter_id: users[1], reported_user_id: users[0], content_type: 'post', content_id: id, reason: 'spam' } })).status, 201);
-    assert.equal((await request(`posts?id=eq.${id}`, { method: 'DELETE' })).status, 204);
-    const deleted = await request(`objects?name=eq.${encodeURIComponent(path)}`, { method: 'DELETE', headers: storageHeaders });
-    assert.ok(deleted.status >= 400 && deleted.status < 500, JSON.stringify(deleted));
-    assert.equal((await db.query('select count(*)::int as n from storage.objects where name=$1', [path])).rows[0].n, 1);
-    // Ordinary unreported content still deletes normally.
-    const ordinary = `${users[0]}/posts/rest-unreported-delete.jpg`;
-    assert.equal((await request('objects', { method: 'POST', body: { bucket_id: 'media', name: ordinary }, headers: storageHeaders })).status, 201);
-    assert.equal((await request(`objects?name=eq.${encodeURIComponent(ordinary)}`, { method: 'DELETE', headers: storageHeaders })).status, 204);
+    const views = {};
+    const paths = {};
+    for (const kind of ['reported', 'quiet']) {
+      const path = `${users[0]}/posts/rest-${kind}-evidence.jpg`;
+      paths[kind] = path;
+      assert.equal((await request('objects', { method: 'POST', body: { bucket_id: 'media', name: path }, headers: storageHeaders })).status, 201);
+      const inserted = await request('posts', { method: 'POST', body: { user_id: users[0], media_path: path, caption: `${kind} fixture` }, headers: { Prefer: 'return=representation' } });
+      assert.equal(inserted.status, 201);
+      const id = inserted.data[0].id;
+      if (kind === 'reported') {
+        assert.equal((await request('reports', { user: 1, method: 'POST', body: { reporter_id: users[1], reported_user_id: users[0], content_type: 'post', content_id: id, reason: 'spam' } })).status, 201);
+      }
+      assert.equal((await request(`posts?id=eq.${id}`, { method: 'DELETE' })).status, 204);
+      const answer = async (result) => [result.status, result.data];
+      const file = `objects?name=eq.${encodeURIComponent(path)}`;
+      views[kind] = {
+        // With return=representation the author sees how many file rows were really removed.
+        remove: await answer(await request(file, { method: 'DELETE', headers: { ...storageHeaders, Prefer: 'return=representation' } })),
+        listed: await answer(await request(`objects?select=name&name=eq.${encodeURIComponent(path)}`, { headers: { 'Accept-Profile': 'storage' } })),
+        removeAgain: await answer(await request(file, { method: 'DELETE', headers: storageHeaders })),
+      };
+    }
+    assert.deepEqual(views.reported, views.quiet, 'the author must get the same answers with and without a report');
+    // The file is gone for the author at once; Storage gets no row back, so it deletes no bytes yet.
+    assert.deepEqual(views.quiet.remove, [200, []]);
+    assert.deepEqual(views.quiet.listed, [200, []]);
+    const stored = async (path) => (await db.query('select count(*)::int as n from storage.objects where name=$1', [path])).rows[0].n;
+    assert.deepEqual([await stored(paths.reported), await stored(paths.quiet)], [1, 1]);
+    // The daily cleanup (service role, like supabase/functions/cleanup-media) really deletes the
+    // unreported file and keeps the reported one as evidence.
+    const service = (sql, args) => asUser(db, null, (tx) => tx.query(sql, args), 'service_role');
+    const swept = (await service('select name from claim_media_cleanup(1000)')).rows.map((r) => r.name);
+    assert.ok(swept.includes(paths.quiet) && !swept.includes(paths.reported), JSON.stringify(swept));
+    await service("delete from storage.objects where bucket_id='media' and name = any($1)", [swept]);
+    assert.deepEqual([await stored(paths.reported), await stored(paths.quiet)], [1, 0]);
+    // After the cleanup the author still sees nothing either way.
+    for (const path of Object.values(paths)) {
+      const listed = await request(`objects?select=name&name=eq.${encodeURIComponent(path)}`, { headers: { 'Accept-Profile': 'storage' } });
+      assert.deepEqual([listed.status, listed.data], [200, []], path);
+    }
+  });
+  await check('the Community dares list loads with the app code (no ambiguous author link)', async () => {
+    // dare_ideas links to profiles directly (user_id) and also through dare_votes, so a plain
+    // "author:profiles(*)" is ambiguous and PostgREST answers 300 / PGRST201. The app must name the link.
+    const idea = await request('dare_ideas', { user: 35, method: 'POST', body: { user_id: users[35], text: 'Sing the chorus of a song you love' }, headers: { Prefer: 'return=representation' } });
+    assert.equal(idea.status, 201, JSON.stringify(idea.data));
+    const supabase = createClient('http://local.invalid', 'local-test-key', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: {
+        headers: { Authorization: `Bearer ${token(36)}` },
+        fetch: (url, init) => fetch(String(url).replace('http://local.invalid/rest/v1', runtime.base), init),
+      },
+    });
+    const memory = new Map();
+    const AsyncStorage = { getItem: async key => memory.get(key) ?? null, setItem: async (key, value) => { memory.set(key, value); }, removeItem: async key => { memory.delete(key); } };
+    const { fetchIdeas } = loadLibrary('communityDares', { supabase, mocks: { '@react-native-async-storage/async-storage': { __esModule: true, default: AsyncStorage } } });
+    for (const sort of ['top', 'new']) {
+      const ideas = await fetchIdeas(users[36], sort);
+      const mine = ideas.find(row => row.id === idea.data[0].id);
+      assert.ok(mine, `the new idea is listed (${sort})`);
+      assert.equal(mine.author.id, users[35]);
+      assert.equal(mine.mine, false);
+    }
+  });
+  await check('a hidden dare idea cannot be reported directly through HTTP to learn who wrote it', async () => {
+    // Final DB fix: with "return=representation" a direct report used to send back reported_user_id,
+    // the writer of an idea that three reports had hidden.
+    const made = await request('dare_ideas', { user: 30, method: 'POST', body: { user_id: users[30], text: 'Hop on one foot for a minute' }, headers: { Prefer: 'return=representation' } });
+    assert.equal(made.status, 201);
+    const idea = made.data[0].id;
+    for (const n of [31, 32, 33]) assert.equal((await request('rpc/report_dare_idea', { user: n, method: 'POST', body: { idea, reason: 'spam' } })).status, 204);
+    assert.equal((await db.query('select hidden from dare_ideas where id=$1', [idea])).rows[0].hidden, true);
+    const direct = async (content_id) => {
+      const result = await request('reports', { user: 34, method: 'POST', body: { reporter_id: users[34], reported_user_id: users[34], content_type: 'dare_idea', content_id, reason: 'spam' }, headers: { Prefer: 'return=representation' } });
+      return [result.status, result.data?.message ?? result.data];
+    };
+    const hidden = await direct(idea);
+    assert.equal(hidden[0], 400, JSON.stringify(hidden));
+    assert.match(hidden[1], /gone or you can't see it/);
+    assert.doesNotMatch(JSON.stringify(hidden), new RegExp(users[30]));
+    // Same answer as for an idea that never existed.
+    assert.deepEqual(hidden, await direct('00000000-0000-4000-8000-0000000000ff'));
   });
   await check('a still-valid deleted-account JWT cannot upload orphan media', async () => {
     const jwt = token(39);
@@ -281,13 +426,79 @@ try {
     durations.sort((a,b) => a-b);
     metrics.push({ name: 'real REST load metrics', requests: readRequests, syntheticUsers: users.length, concurrency: readConcurrency, durationMs: Math.round(performance.now()-start), p95Ms: Math.round(durations[Math.ceil(readRequests*.95)-1]) });
   });
-  // Keep a demonstrated, accepted-scope medium finding separate from passing
-  // regressions. Public names are filtered only by the current phone code.
-  const moderation = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { username: 'f.u.c.k' } });
-  if (moderation.status === 204 || moderation.status === 200) {
-    knownIssues.push({ severity: 'medium', name: 'Direct REST bypasses the client-only public-name word filter', status: moderation.status, reproduction: 'PATCH own profiles row with username f.u.c.k bypasses the documented name ban', proposedFix: 'Share the exact nuanced word policy with trusted server/database writes; preserve real-name exceptions.' });
-    console.log('KNOWN MEDIUM: client-only public name moderation bypass confirmed by HTTP');
-  }
+  // OPEN-01 (was "KNOWN MEDIUM: client-only public name moderation bypass"): the database now runs the same
+  // word filter as the app, so skipping the app and calling the REST API directly no longer gets a bad name in.
+  await check('HTTP PATCH of own username to f.u.c.k is rejected by the database word filter', async () => {
+    const before = (await db.query('select username from profiles where id=$1', [users[38]])).rows[0].username;
+    const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { username: 'f.u.c.k' } });
+    assert.equal(result.status, 400);
+    assert.equal(result.data.code, '23514');
+    assert.equal(result.data.message, "Let's keep it clean – that word can't be in a username or name.");
+    assert.equal((await db.query('select username from profiles where id=$1', [users[38]])).rows[0].username, before);
+  });
+  await check('HTTP PATCH of a display name written in fancy letters (ｆｕｃｋ) is rejected', async () => {
+    const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: 'ｆｕｃｋ' } });
+    assert.equal(result.status, 400); assert.equal(result.data.code, '23514');
+  });
+  await check('HTTP rename to a legitimate username and real-name display name still works', async () => {
+    const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { username: 'rest_clean_name', display_name: 'Moby Dick' }, headers: { Prefer: 'return=representation' } });
+    assert.equal(result.status, 200); assert.equal(result.data.length, 1);
+    assert.deepEqual((await db.query('select username, display_name from profiles where id=$1', [users[38]])).rows[0], { username: 'rest_clean_name', display_name: 'Moby Dick' });
+  });
+  // OPEN-01 review: characters you can't see (zero-width space, soft hyphen…) and Cyrillic/Greek look-alike
+  // letters must not split or hide a word on this older PostgreSQL either.
+  await check('HTTP PATCH with an invisible character or a Cyrillic look-alike letter inside a word is rejected', async () => {
+    for (const body of [{ display_name: 'cu​nt' }, { display_name: 'сunt' }, { bio: 'nіgger' }, { bio: 'sh­it n⁠igger' }]) {
+      const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body });
+      assert.equal(result.status, 400, JSON.stringify(body)); assert.equal(result.data.code, '23514', JSON.stringify(body));
+    }
+    const cases = [
+      ['cu​nt', 'name', 'cunt'], ['sh­it', 'name', 'shit'], ['c⁠unt', 'name', 'cunt'], ['fu﻿ck', 'name', 'fuck'],
+      ['fu\u{E0020}ck', 'name', 'fuck'], ['сunt', 'name', 'cunt'], ['СUNT', 'name', 'cunt'], ['nіgger', 'content', 'nigger'],
+      ['fυck', 'name', 'fuck'], ['Moby Dіck', 'name', null], ['Алексей', 'name', null],
+      ['Love ❤️', 'name', null],
+    ];
+    for (const [text, place, word] of cases) {
+      assert.equal((await db.query('select private.blocked_word($1,$2) as w', [text, place])).rows[0].w, word, JSON.stringify(text));
+    }
+  });
+  // OPEN-01 review: accents ("fück") must not split a word on this PostgreSQL either, and real names with
+  // accents ("José", "Moby Dïck") must still save.
+  await check('HTTP PATCH with an accented letter inside a word is rejected; accented real names still save', async () => {
+    for (const body of [{ display_name: 'fück' }, { display_name: 'cünt' }, { display_name: 'shït' }, { display_name: 'fu\u0308ck' }, { bio: 'nïgger' }]) {
+      const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body });
+      assert.equal(result.status, 400, JSON.stringify(body)); assert.equal(result.data.code, '23514', JSON.stringify(body));
+    }
+    for (const name of ['José', 'Zoë', 'Björk', 'Renée', 'Łukasz', 'Ñandú', 'Ågot', 'Алёна', 'Νίκος', 'Moby Dïck']) {
+      const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: name }, headers: { Prefer: 'return=representation' } });
+      assert.equal(result.status, 200, `${name}: ${JSON.stringify(result.data)}`); assert.equal(result.data[0].display_name, name);
+    }
+    const cases = [
+      ['fück', 'name', 'fuck'], ['cünt', 'name', 'cunt'], ['nïgger', 'content', 'nigger'], ['shït', 'name', 'shit'],
+      ['fu\u1ab0ck', 'name', 'fuck'], ['fu\u1dc0ck', 'name', 'fuck'], ['fu\u20ddck', 'name', 'fuck'], ['fu\ufe20ck', 'name', 'fuck'],
+      ['n\u0457gger', 'content', 'nigger'], ['Dïck', 'name', null], ['José', 'name', null], ['Ζωή', 'name', null],
+    ];
+    for (const [text, place, word] of cases) {
+      assert.equal((await db.query('select private.blocked_word($1,$2) as w', [text, place])).rows[0].w, word, JSON.stringify(text));
+    }
+  });
+  // OPEN-01 review: a huge text is refused by the access rules or the length limit without the word filter
+  // reading through it first.
+  await check('HTTP POST of a multi-megabyte comment on someone else\'s behalf is refused quickly', async () => {
+    const huge = `${'nigger '.repeat(300_000)}x`;
+    const started = performance.now();
+    const result = await request('comments', { user: 38, method: 'POST', body: { user_id: users[0], post_id: post, body: huge } });
+    assert.ok([401, 403].includes(result.status), `${result.status} ${JSON.stringify(result.data).slice(0, 200)}`);
+    assert.equal(result.data.code, '42501');
+    const ownBio = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { bio: huge } });
+    assert.equal(ownBio.status, 400); assert.equal(ownBio.data.code, '23514');
+    assert.match(ownBio.data.message, /profiles_bio_length/);
+    metrics.push({ name: 'huge word-filter text refused', durationMs: Math.round(performance.now() - started) });
+  });
+  await check('HTTP dare card in a 1:1 chat is private chat and is not word-filtered', async () => {
+    const result = await request('messages', { method: 'POST', body: { sender_id: users[0], recipient_id: users[1], kind: 'dare', body: 'Be an errand runner for the day' }, headers: { Prefer: 'return=representation' } });
+    assert.equal(result.status, 201, JSON.stringify(result.data)); assert.equal(result.data[0].body, 'Be an errand runner for the day');
+  });
 } finally {
   await mkdir(new URL('../../.qa/', import.meta.url), { recursive: true });
   const result = { engine: 'PostgreSQL 16 + PostgREST 16.5, real HTTP/JWT/roles/RLS; Auth signup and Storage service not running', revision: 'a9e5ddf88e785bd8378b2b7d9dcd7e341df439b1', original, stress, checks, metrics, knownIssues };

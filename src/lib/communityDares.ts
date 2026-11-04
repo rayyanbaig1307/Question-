@@ -29,7 +29,7 @@ export async function fetchIdeas(me: string, sort: 'top' | 'new'): Promise<DareI
   const [ideas, votes] = await Promise.all([
     supabase
       .from('dare_ideas')
-      .select('*, author:profiles(*)')
+      .select('*, author:profiles!dare_ideas_user_id_fkey(*)')
       .is('used_on', null)
       .order(sort === 'top' ? 'votes' : 'created_at', { ascending: false })
       .order('created_at', { ascending: sort === 'top' })
