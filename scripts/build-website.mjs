@@ -1,0 +1,124 @@
+// Builds Peekaboo's small public website (website/) from the legal documents in legal/*.md:
+// a home page, Support, Privacy Policy, Terms of Service, Community Guidelines and Dare Safety Rules.
+// Apple and Google both need the Privacy Policy (and Support) at a public web address.
+//
+//   node scripts/build-website.mjs
+//
+// Run it after changing anything in legal/ (together with scripts/sync-legal.mjs), then upload the website/
+// folder again (Cloudflare → Workers & Pages → peekaboo → Create deployment → upload the folder).
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { marked } from 'marked';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const out = join(root, 'website');
+const read = (name) => readFileSync(join(root, 'legal', name), 'utf8').replace(/\r\n/g, '\n').trim();
+// Everything from `heading` onwards is for the operator, not users (same as scripts/sync-legal.mjs).
+const cutFrom = (text, heading) => {
+  const at = text.indexOf(heading);
+  return at === -1 ? text : text.slice(0, at).trim();
+};
+
+// Each page: the web address (file), the document and the short name in the menu.
+const pages = [
+  { file: 'support.html', md: 'SUPPORT.md', title: 'Support' },
+  { file: 'privacy.html', md: 'PRIVACY_POLICY.md', title: 'Privacy Policy' },
+  { file: 'terms.html', md: 'TERMS_OF_SERVICE.md', title: 'Terms of Service' },
+  { file: 'guidelines.html', md: 'COMMUNITY_GUIDELINES.md', title: 'Community Guidelines' },
+  { file: 'dare-safety.html', md: 'DARE_SAFETY_RULES.md', title: 'Dare Safety Rules', cut: '## The "I understand" screen' },
+];
+// Links between the documents point at the .md files – on the website they go to the pages.
+const linkFor = Object.fromEntries(pages.map((page) => [page.md, page.file]));
+const fixLinks = (html) => html.replace(/href="([A-Z_]+\.md)(#[^"]*)?"/g, (all, md, hash = '') =>
+  linkFor[md] ? `href="${linkFor[md]}${hash}"` : all);
+
+const contact = (read('SUPPORT.md').match(/[\w.+-]+@[\w-]+\.[\w.-]+/) ?? [''])[0];
+const year = new Date().getFullYear();
+
+const css = `
+:root{--bg:#fff;--text:#14121f;--muted:#5d5873;--card:#f5f2fb;--line:#e6e0f2;--accent:#8650db;--pink:#fe59a5}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0b10;--text:#f4f2fa;--muted:#a9a3bf;--card:#17151f;--line:#2a2638;--accent:#b18cff;--pink:#ff7ab8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent)}
+header.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header.bar a.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--text);text-decoration:none;letter-spacing:-.5px}
+header.bar img{width:40px;height:32px;object-fit:contain}
+nav{display:flex;gap:14px;flex-wrap:wrap;font-size:15px}
+nav a{color:var(--muted);text-decoration:none}nav a:hover,nav a.on{color:var(--text)}
+main{max-width:760px;margin:0 auto;padding:28px 20px 60px}
+main h1{font-size:34px;line-height:1.2;letter-spacing:-.5px}
+main h2{margin-top:2em;font-size:23px}main h3{font-size:19px}
+table{width:100%;border-collapse:collapse;display:block;overflow-x:auto;font-size:15px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--card)}
+blockquote{margin:1em 0;padding:4px 16px;border-left:4px solid var(--pink);background:var(--card);border-radius:8px}
+code{background:var(--card);padding:2px 5px;border-radius:5px}
+footer{border-top:1px solid var(--line);padding:24px 20px;text-align:center;color:var(--muted);font-size:14px}
+footer a{color:var(--muted)}
+.hero{background:linear-gradient(135deg,#fe59a5,#e469c7 50%,#8650db);color:#fff;text-align:center;padding:72px 20px 80px}
+.hero img{width:190px;max-width:60%;height:auto}
+.hero h1{margin:14px 0 6px;font-size:56px;letter-spacing:-2px;line-height:1}
+.hero p{margin:0 auto;max-width:520px;font-size:20px;font-weight:700;opacity:.92}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;max-width:900px;margin:-40px auto 0;padding:0 20px}
+.features div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+.features b{display:block;font-size:18px;margin-bottom:4px}
+.features span{color:var(--muted);font-size:15px}
+`;
+
+const nav = (current) =>
+  pages.map((page) => `<a href="${page.file}"${page.file === current ? ' class="on"' : ''}>${page.title}</a>`).join('');
+
+const layout = ({ title, current, body, home = false }) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<meta name="description" content="Peekaboo – a camera-first app for close friends: stories, disappearing peeks, chat and a daily dare.">
+<link rel="icon" href="favicon.png">
+<style>${css}</style>
+</head>
+<body>
+<header class="bar"><a class="brand" href="index.html"><img src="logo-eyes.png" alt="">peekaboo</a><nav>${nav(current)}</nav></header>
+${home ? body : `<main>${body}</main>`}
+<footer>© ${year} 2865113 Ontario Inc. · <a href="mailto:${contact}">${contact}</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="support.html">Support</a></footer>
+</body>
+</html>
+`;
+
+rmSync(out, { recursive: true, force: true });
+mkdirSync(out, { recursive: true });
+copyFileSync(join(root, 'assets/images/logo-eyes.png'), join(out, 'logo-eyes.png'));
+copyFileSync(join(root, 'assets/images/favicon.png'), join(out, 'favicon.png'));
+
+for (const page of pages) {
+  const text = page.cut ? cutFrom(read(page.md), page.cut) : read(page.md);
+  const body = fixLinks(marked.parse(text, { breaks: true }));
+  writeFileSync(join(out, page.file), layout({ title: `${page.title} – Peekaboo`, current: page.file, body }));
+}
+
+writeFileSync(
+  join(out, 'index.html'),
+  layout({
+    title: 'Peekaboo',
+    home: true,
+    body: `<section class="hero"><img src="logo-eyes.png" alt="Peekaboo eyes"><h1>peekaboo</h1>
+<p>Peek it. Share it. Gone in 24h – or forever on your profile.</p></section>
+<section class="features">
+<div><b>👀 Peeks</b><span>Photos and videos for your friends that disappear after they're seen.</span></div>
+<div><b>🎯 Daily dare</b><span>A new dare every day. Do it, post it, see who else did.</span></div>
+<div><b>⏰ The drop</b><span>Once a day, everyone gets 2 minutes to show what they're doing.</span></div>
+<div><b>🕵️ Guess Who</b><span>Post a mystery photo and let your friends guess who it is.</span></div>
+</section>
+<main><h2>For close friends only</h2>
+<p>Your stories, peeks and chats go to the people you choose. No ads, and we never sell your data.
+Peekaboo is for ages 13 and up.</p>
+<p>Questions? See <a href="support.html">Support</a> or email <a href="mailto:${contact}">${contact}</a>.</p></main>`,
+  }),
+);
+
+// A missing page says so instead of showing the host's default error.
+writeFileSync(join(out, '404.html'), layout({ title: 'Not found – Peekaboo', body: '<h1>Page not found</h1><p><a href="index.html">Go to the home page</a></p>' }));
+console.log(`Wrote website/ (${['index.html', ...pages.map((page) => page.file)].join(', ')})`);

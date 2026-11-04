@@ -51,6 +51,12 @@ and the owner's standing preferences.
 - Last good published update: `2805de80-32fd-4d0b-b2ea-859a479862b0` (commit `6c768aa`). Every app change up
   to then is live. Commits after it only touch docs.
 
+## Website (for the App Store / Google links)
+
+`website/` is built by `node scripts/build-website.mjs` from `legal/*.md` (home, support, privacy, terms,
+guidelines, dare safety). Re-run it after legal changes, then re-upload the folder to Cloudflare Pages
+(project `peekaboo`). Its privacy/support/terms URLs go in App Store Connect and Google Auth Platform → Branding.
+
 ## In progress: Sign in with Apple / Google (owner's call, 4 Nov)
 
 New accounts are made with **Sign in with Apple (iPhone)** or **Sign in with Google (Android)**. That means no

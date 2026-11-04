@@ -21,6 +21,7 @@ npm run typecheck            # tsc --noEmit
 npm run lint                 # expo lint (eslint-config-expo)
 npx expo install --check     # native package versions must match the SDK – see "Native builds"
 node scripts/sync-legal.mjs  # after editing anything in legal/ (regenerates src/lib/legalDocs.ts)
+node scripts/build-website.mjs  # also after legal/ changes (regenerates the public website/ folder)
 ```
 
 There is no automated test suite; `docs/TESTING.md` is the manual, per-feature test script. Validate changes with typecheck + lint.
