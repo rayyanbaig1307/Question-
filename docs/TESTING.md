@@ -788,10 +788,10 @@ arrive with the normal update.
 
 ## Step 53 – Clean words 🧼
 
-1. **Sign up / Edit profile:** a username, name or bio with a swear word or slur (also "f.u.c.k", "n1gg3r")
-   says "Let's keep it clean…" and won't save. Normal names like "scunthorpe" or "cocktail" are fine.
-2. **Chat, comments, captions, hit ups, dare ideas, group names:** slurs are blocked ("That word isn't allowed on
-   Peekaboo"); ordinary swearing between friends still goes through in chats and captions.
+1. **Swearing is allowed everywhere** – usernames, names, bios, chats, comments, captions, hit ups.
+2. **Slurs are blocked everywhere** (also sneaky spellings like "n1gg3r" or "f.a.g"): a name or bio says "That
+   word can't be in a name or bio", anything else says "That word isn't allowed on Peekaboo". Normal words like
+   "scunthorpe" or "cocktail" are fine.
 
 ## Step 54 – Reports (owner, in Supabase) 🚩
 
