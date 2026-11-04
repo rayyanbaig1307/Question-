@@ -39,6 +39,11 @@ and the owner's standing preferences.
 
 ## Publishing (OTA) and builds
 
+**Test channel:** there's a `testing` channel/branch for trying changes in Expo Go before they go live
+(`exp://u.expo.dev/3c421eae-c4ec-47ea-92da-4b2d07b7d13e?channel-name=testing`). Installed builds use `preview`, so
+nothing on `testing` reaches users or Apple's reviewer. The Inbox + chat dare streaks (`d636971`) are on `testing`
+as update `b9693978-610a-43e9-b6bd-9236ca3559de`, waiting for the owner's OK before they go to `preview`.
+
 - Earlier sessions used a second "publishing" session to run `eas update` and native builds, because it holds
   the Expo/App Store Connect credentials. A new session can publish itself if `EXPO_TOKEN` is set
   (`npx eas-cli@27.1.0 whoami`). Follow the OTA recipe in `CLAUDE.md` and check the bundle for the Supabase
