@@ -53,7 +53,7 @@ const MODE_RING: Record<CameraMode, string> = {
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, chatDare, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
+export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -62,6 +62,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, dare = fals
   sendTo?: string;
   // The friend's chat dare this peek is the proof for (see chat/[id].tsx).
   chatDare?: string;
+  // Opened from a group chat: what you take goes to that group (or is your proof for `groupDare`).
+  sendToGroup?: string;
+  groupDare?: string;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
   // Taking your Peekaboo drop photo (2-minute countdown at the top).
@@ -82,9 +85,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, dare = fals
   const zoomStart = useSharedValue(0);
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [busy, setBusy] = useState(false);
-  const isHome = !sendTo && !dare && !drop && !guess && !forfeit;
+  const isHome = !sendTo && !sendToGroup && !dare && !drop && !guess && !forfeit;
   // The googly lens works on the home camera and on the camera inside a chat.
-  const lensesHere = isHome || (!!sendTo && !dare && !drop && !guess && !forfeit);
+  const lensesHere = isHome || ((!!sendTo || !!sendToGroup) && !dare && !drop && !guess && !forfeit);
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
@@ -141,6 +144,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, dare = fals
         ...(lens.length > 0 ? { lens: JSON.stringify(lens) } : {}),
         ...(sendTo ? { to: sendTo } : {}),
         ...(sendTo && chatDare ? { chatDare } : {}),
+        ...(sendToGroup ? { group: sendToGroup } : {}),
+        ...(sendToGroup && groupDare ? { groupDare } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
         ...(guessOn ? { guess: '1' } : {}),

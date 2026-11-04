@@ -22,6 +22,7 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { claimChatDare, sendSnap } from '@/lib/chat';
+import { sendGroupCapture } from '@/lib/groupChat';
 import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
@@ -35,9 +36,12 @@ const WORD_COLORS = [colors.pink, colors.purple, colors.blue, colors.yellow, col
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, chatDare, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
+  const { uri, fit, video, to, chatDare, group, groupDare, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
     // A peek from a chat camera that's the proof for the friend's dare (marks the dare as done for you).
     chatDare?: string;
+    // From a group chat's camera: send it to that group (as proof for `groupDare` if set).
+    group?: string;
+    groupDare?: string;
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -115,7 +119,9 @@ export default function Editor() {
   // Opened from the Guess Who camera: it posts straight to Guess Who (the 🕵️ circle on Home) with no name on it.
   // Never to your story or your profile grid, so there's no "Send to…" choice.
   const straightToGuess = !!guess && !to && !dare && !drop && !forfeit;
-  const straightAway = straightToChat || straightToGuess;
+  // Opened from a group chat's camera: it goes straight back to that group chat.
+  const straightToGroup = !!group && !to && !dare && !drop && !guess && !forfeit;
+  const straightAway = straightToChat || straightToGuess || straightToGroup;
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
   const [filterIndex, setFilterIndex] = useState(() => Math.max(0, FILTERS.findIndex((f) => f.name === startFilter)));
   const [filterFlash, setFilterFlash] = useState(0);
@@ -278,6 +284,13 @@ export default function Editor() {
               overlayUri: await videoLayer(),
             }
           : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+        if (straightToGroup && group) {
+          await sendGroupCapture(userId, group, photo, groupDare);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast(groupDare ? 'Proof posted in the group 🎯' : 'Sent to the group 📸');
+          router.dismissTo(`/groups/chat/${group}`);
+          return;
+        }
         if (straightToGuess) {
           await postMystery(userId, photo, '');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -414,7 +427,7 @@ export default function Editor() {
                 style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
                 accessibilityRole="button">
                 <Text style={styles.sendText}>
-                  {busy ? (straightAway ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : straightToGuess ? 'Post Guess Who' : 'Send to'}
+                  {busy ? (straightAway ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : straightToGuess ? 'Post Guess Who' : straightToGroup ? 'Send to group' : 'Send to'}
                 </Text>
                 <Ionicons name="send" size={18} color={colors.onAccent} />
               </Pressable>

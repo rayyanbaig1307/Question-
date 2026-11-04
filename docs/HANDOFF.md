@@ -129,6 +129,17 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Group chats part 2 + chat search (4 Nov)
+
+- `20261211000000_group_chat_more.sql` (applied): `group_messages.kind` ('text','photo','video','voice','dare',
+  'proof') + media columns + `dare_id`; files must be the sender's own; proof must be for a dare in the same
+  group; a new `group` storage folder; `can_read_media` lets members read `<owner>/group/…` and group voice
+  notes; pushes and `my_group_chats` use `private.group_message_preview`; typing channel `typing-group:<id>`
+  (members only, realtime.messages policies).
+- App: camera/editor take `group` / `groupDare` params (straight to the group chat); `useGroupTyping` in
+  `lib/typing.ts`; "Seen by" from `peek_group_members.chat_read_at` (polled every 15 s); search in both chats
+  (`searchConversation`, `searchGroupMessages`, ilike on body, jump to message if loaded).
+
 ## Delete for me, Clear chat, Group chat (4 Nov)
 
 - `20261209000000_delete_for_me.sql` (applied): `message_hides`, `hide_message`, `clear_chat`.

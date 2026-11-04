@@ -892,3 +892,17 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
 6. Hold your own group message → **Delete for everyone**. Hold someone else's → See profile / Report.
 7. Someone not in the group can't read or write its chat. Leaving or being removed ends access.
 
+## Step 60 – Group chats: photos, voice, group dares, typing, Seen, search
+
+1. **Photos/videos:** in a group chat tap 📷 → take a photo or video → **Send to group** → it shows in the chat
+   for everyone in the group (stays there). Others get "👯 Squad · Ray: 📷 Photo".
+2. **Voice notes:** with nothing typed, hold 🎤, talk, let go → a voice note in the group chat.
+3. **Group dares:** tap 🚩 → write a dare → "🎯 Ray dared the group". Each person taps **Do it · post proof** →
+   camera → their photo/video appears as "✅ Did the dare". The card shows "2 of 4 did it: …" and turns green
+   with "🔥 Everyone did it!" when the whole group has.
+4. **Typing:** while someone types, the top says "Sam is typing…".
+5. **Seen:** under your newest message, "👁 Seen by Sam, Ali" (or "everyone") once they've opened the chat.
+6. **Search:** group chat → ••• → **🔎 Search this chat**; one-on-one chat → the 🔎 button at the top right.
+   Type a word → matching messages → tap one to jump to it.
+7. Someone outside the group can't open the group's photos or voice notes.
+

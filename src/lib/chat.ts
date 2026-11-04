@@ -87,6 +87,25 @@ export async function fetchConversation(me: string, friend: string, limit = 100)
   return ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
 }
 
+// 🔎 Messages in your chat with a friend containing `text` (newest first, hidden ones left out).
+export async function searchConversation(me: string, friend: string, text: string): Promise<Message[]> {
+  const needle = text.trim().replace(/[%_,()]/g, ' ');
+  if (!needle) return [];
+  const [{ data, error }, hidden] = await Promise.all([
+    supabase
+      .from('messages')
+      .select('*')
+      .or(pairFilter(me, friend))
+      .in('kind', ['text', 'dare'])
+      .ilike('body', `%${needle}%`)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    fetchHiddenIds(me),
+  ]);
+  if (error) throw error;
+  return ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
+}
+
 // Messages you deleted "for me" (or cleared): hidden from your side only.
 async function fetchHiddenIds(me: string): Promise<Set<string>> {
   const { data, error } = await supabase

@@ -1,6 +1,8 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,31 +17,45 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
+import { DareComposer } from '@/components/DareComposer';
 import { EmptyState } from '@/components/EmptyState';
 import { GroupFaces } from '@/components/GroupFaces';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { VideoClip } from '@/components/VideoClipSafe';
+import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import {
   deleteGroupMessage,
   fetchGroupChats,
   fetchGroupMessages,
+  fetchGroupReads,
   markGroupChatRead,
+  searchGroupMessages,
+  sendGroupDare,
   sendGroupMessage,
+  sendGroupVoice,
   setGroupChatMuted,
   subscribeToGroupChat,
   type GroupMessage,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
+import { useMediaUrls } from '@/lib/media';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
+import { useGroupTyping } from '@/lib/typing';
 import { useSafetyActions } from '@/lib/useSafetyActions';
+import { Audio } from '@/lib/voice';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
-// A Group Peek group's chat 💬: everyone in the group, live. Tap the top to see the group (drops, members).
-// Hold a message: your own → delete for everyone; someone else's → report them.
+// How often to check who has read the chat (for "Seen by …") while it's open.
+const READS_EVERY_MS = 15_000;
+
+// A group's chat 💬: texts, photos and videos (📷), voice notes (hold 🎤), and group dares (🚩) where everyone
+// posts their proof. "Typing…" and "Seen by" like a one-on-one chat. 🔎 searches the chat.
+// Tap the top to see the group (drops, members). Hold a message: yours → delete for everyone; theirs → report.
 export default function GroupChat() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
@@ -48,21 +64,33 @@ export default function GroupChat() {
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState<PeekGroup | null | undefined>(undefined);
   const [messages, setMessages] = useState<GroupMessage[] | null>(null);
+  const [reads, setReads] = useState<Map<string, string>>(new Map());
   const [muted, setMuted] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [dareOpen, setDareOpen] = useState(false);
+  // Search: the box is open while `search` isn't null.
+  const [search, setSearch] = useState<string | null>(null);
+  const [results, setResults] = useState<{ query: string; list: GroupMessage[] } | null>(null);
+  const listRef = useRef<FlatList<GroupMessage>>(null);
+  const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
 
   const load = useCallback(() => {
     fetchGroupMessages(groupId)
       .then((list) => {
         setMessages(list);
+        // Their message arrived: they've stopped typing.
+        if (list[0]) clearTyping(list[0].sender_id);
         markGroupChatRead(groupId).catch(() => {});
       })
       .catch((error) => {
         console.warn('Could not load the group chat', error);
         setMessages((current) => current ?? []);
       });
-  }, [groupId]);
+    fetchGroupReads(groupId)
+      .then(setReads)
+      .catch(() => {});
+  }, [groupId, clearTyping]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,12 +101,41 @@ export default function GroupChat() {
         .then((chats) => setMuted(chats.get(groupId)?.muted ?? false))
         .catch(() => {});
       load();
-      return subscribeToGroupChat(groupId, load);
+      const stop = subscribeToGroupChat(groupId, load);
+      const readsTimer = setInterval(() => {
+        fetchGroupReads(groupId)
+          .then(setReads)
+          .catch(() => {});
+      }, READS_EVERY_MS);
+      return () => {
+        stop();
+        clearInterval(readsTimer);
+      };
     }, [groupId, load]),
   );
 
   const people = new Map<string, Profile>();
   for (const member of group?.members ?? []) if (member.profile) people.set(member.userId, member.profile);
+  const nameOf = (id: string) => {
+    const person = people.get(id);
+    return person ? person.display_name || person.username : 'Someone';
+  };
+
+  // Photos, videos and proofs need their links.
+  const paths = (messages ?? []).flatMap((m) => [m.media_path, m.poster_path, m.overlay_path]).filter(
+    (p): p is string => !!p && !p.includes('/voice/'),
+  );
+  const urls = useMediaUrls(paths);
+
+  // Group dares: who has posted proof for each one.
+  const proofsByDare = new Map<string, Set<string>>();
+  for (const m of messages ?? []) {
+    if (m.kind === 'proof' && m.dare_id) {
+      const set = proofsByDare.get(m.dare_id) ?? new Set<string>();
+      set.add(m.sender_id);
+      proofsByDare.set(m.dare_id, set);
+    }
+  }
 
   async function send() {
     const body = text.trim();
@@ -87,6 +144,7 @@ export default function GroupChat() {
     try {
       const sent = await sendGroupMessage(groupId, body);
       setText('');
+      onTextChange('');
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
     } catch (error) {
       Alert.alert('Message not sent', friendlyError(error));
@@ -94,6 +152,34 @@ export default function GroupChat() {
       setSending(false);
     }
   }
+
+  async function sendVoiceNote(recording: Recording) {
+    setSending(true);
+    try {
+      const sent = await sendGroupVoice(userId, groupId, recording.uri, recording.durationMs, recording.waveform);
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Voice note not sent', friendlyError(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendDare(dare: string): Promise<boolean> {
+    try {
+      const sent = await sendGroupDare(groupId, dare);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+      showToast('Dared the whole group 🎯');
+      return true;
+    } catch (error) {
+      Alert.alert('Dare not sent', friendlyError(error));
+      return false;
+    }
+  }
+
+  const openCamera = (dareId?: string) =>
+    router.push({ pathname: '/camera', params: { group: groupId, ...(dareId ? { groupDare: dareId } : {}) } });
 
   function openMessageMenu(message: GroupMessage) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -106,7 +192,7 @@ export default function GroupChat() {
             destructive: true,
             onPress: async () => {
               try {
-                await deleteGroupMessage(message.id);
+                await deleteGroupMessage(message);
                 setMessages((current) => current?.filter((m) => m.id !== message.id) ?? null);
                 showToast('Deleted for everyone');
               } catch (error) {
@@ -131,6 +217,7 @@ export default function GroupChat() {
     showOptions({
       title: group?.name,
       options: [
+        { label: '🔎 Search this chat', onPress: () => setSearch('') },
         { label: '👯 Group info & drops', onPress: () => router.push(`/groups/${groupId}`) },
         {
           label: muted ? '🔔 Unmute group chat' : '🔕 Mute group chat',
@@ -148,6 +235,31 @@ export default function GroupChat() {
     });
   }
 
+  async function runSearch(query: string) {
+    setSearch(query);
+    if (!query.trim()) {
+      setResults(null);
+      return;
+    }
+    try {
+      setResults({ query, list: await searchGroupMessages(groupId, query) });
+    } catch (error) {
+      Alert.alert('Search failed', friendlyError(error));
+    }
+  }
+
+  // Tap a search result: jump to it in the chat (if it's one of the loaded messages).
+  function jumpTo(message: GroupMessage) {
+    const index = messages?.findIndex((m) => m.id === message.id) ?? -1;
+    setSearch(null);
+    setResults(null);
+    if (index < 0) {
+      showToast(`From ${timeAgo(message.created_at)} ago – too far back to jump to`);
+      return;
+    }
+    setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 }), 250);
+  }
+
   if (group === null) {
     return (
       <View style={styles.fill}>
@@ -156,6 +268,13 @@ export default function GroupChat() {
       </View>
     );
   }
+
+  // "Seen by": under your newest message, who has read the chat since.
+  const myLatest = messages?.find((m) => m.sender_id === userId);
+  const seenBy = myLatest
+    ? [...reads.entries()].filter(([id, at]) => id !== userId && at >= myLatest.created_at).map(([id]) => nameOf(id))
+    : [];
+  const memberCount = group?.members.length ?? 0;
 
   return (
     <View style={styles.fill}>
@@ -168,9 +287,10 @@ export default function GroupChat() {
                 <Text style={styles.headerName} numberOfLines={1}>
                   {group.name}
                 </Text>
-                <Text style={styles.headerSub} numberOfLines={1}>
-                  {muted ? '🔕 Muted · ' : ''}
-                  {group.members.length} people
+                <Text style={[styles.headerSub, typing.length > 0 && styles.headerTyping]} numberOfLines={1}>
+                  {typing.length > 0
+                    ? `${typing.map(nameOf).join(', ')} ${typing.length === 1 ? 'is' : 'are'} typing…`
+                    : `${muted ? '🔕 Muted · ' : ''}${memberCount} people`}
                 </Text>
               </View>
             </Pressable>
@@ -179,27 +299,76 @@ export default function GroupChat() {
         right={<RoundIconButton icon="ellipsis-horizontal" label="Group chat options" onPress={openGroupMenu} />}
       />
 
+      {search !== null ? (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            value={search}
+            onChangeText={runSearch}
+            placeholder="Search this chat"
+            placeholderTextColor={colors.textMuted}
+            autoFocus
+            autoCapitalize="none"
+            keyboardAppearance={keyboardAppearance}
+            selectionColor={colors.accent}
+            style={styles.searchInput}
+          />
+          <Pressable
+            onPress={() => {
+              setSearch(null);
+              setResults(null);
+            }}
+            hitSlop={10}
+            accessibilityLabel="Close search">
+            <Text style={styles.searchCancel}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
-        {messages === null ? (
+        {search !== null && search.trim() ? (
+          <FlatList
+            data={results?.query === search ? results.list : []}
+            keyExtractor={(m) => m.id}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
+            }
+            renderItem={({ item }) => (
+              <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
+                <Text style={styles.resultName}>
+                  {item.sender_id === userId ? 'You' : nameOf(item.sender_id)} · {timeAgo(item.created_at)}
+                </Text>
+                <Text style={styles.resultText} numberOfLines={2}>
+                  {item.body}
+                </Text>
+              </Pressable>
+            )}
+          />
+        ) : messages === null ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : messages.length === 0 ? (
           <View style={styles.fill}>
-            <EmptyState emoji="💬" title="Say hi to the group!" message="Everyone in the group sees what you send here." />
+            <EmptyState emoji="💬" title="Say hi to the group!" message="Text, send a photo 📷, a voice note 🎤, or dare everyone 🚩." />
           </View>
         ) : (
           <FlatList
+            ref={listRef}
             data={messages}
             inverted
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.list}
             keyboardDismissMode="interactive"
+            onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
             renderItem={({ item, index }) => {
               const mine = item.sender_id === userId;
               const sender = people.get(item.sender_id);
-              const name = sender ? sender.display_name || sender.username : 'Someone';
+              const name = nameOf(item.sender_id);
               // The list is upside down: the message "after" this one on screen is the one before it in time.
               const older = messages[index + 1];
               const firstOfRun = !older || older.sender_id !== item.sender_id;
+              const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
               return (
                 <View style={[styles.row, mine ? styles.right : styles.left]}>
                   {!mine ? (
@@ -207,14 +376,67 @@ export default function GroupChat() {
                       {firstOfRun ? <Avatar path={sender?.avatar_path} name={name} size={28} /> : null}
                     </View>
                   ) : null}
-                  <View style={[styles.bubbleWrap, mine ? styles.alignRight : styles.alignLeft]}>
+                  <View style={[styles.bubbleWrap, item.kind === 'dare' && styles.dareWrap, mine ? styles.alignRight : styles.alignLeft]}>
                     {!mine && firstOfRun ? <Text style={styles.sender}>{name}</Text> : null}
-                    <Pressable
-                      onLongPress={() => openMessageMenu(item)}
-                      style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                      <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
+                    <Pressable onLongPress={() => openMessageMenu(item)} style={styles.stretch}>
+                      {item.kind === 'text' ? (
+                        <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                          <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
+                        </View>
+                      ) : item.kind === 'voice' ? (
+                        <VoiceBubble path={item.media_path} durationMs={item.audio_ms ?? 0} waveform={item.waveform} mine={mine} />
+                      ) : item.kind === 'dare' && proofs ? (
+                        <View style={[styles.dareCard, proofs.size >= memberCount && memberCount > 0 && styles.dareCardDone]}>
+                          <Text style={styles.dareLabel}>
+                            🎯 {mine ? 'YOU DARED THE GROUP' : `${name.toUpperCase()} DARED THE GROUP`}
+                          </Text>
+                          <Text style={styles.dareText}>{item.body}</Text>
+                          <Text style={styles.dareNote}>
+                            {proofs.size >= memberCount && memberCount > 0
+                              ? '🔥 Everyone did it!'
+                              : proofs.size === 0
+                                ? 'Nobody has done it yet'
+                                : `${proofs.size} of ${memberCount} did it: ${[...proofs].map((id) => (id === userId ? 'you' : nameOf(id))).join(', ')}`}
+                          </Text>
+                          {proofs.has(userId) ? (
+                            <Text style={styles.dareDone}>✅ You did it</Text>
+                          ) : (
+                            <Pressable
+                              onPress={() => openCamera(item.id)}
+                              style={({ pressed }) => [styles.dareButton, pressed && styles.pressed]}
+                              accessibilityRole="button"
+                              accessibilityLabel="Do it and post proof">
+                              <Ionicons name="camera" size={16} color={colors.onAccent} />
+                              <Text style={styles.dareButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                                Do it · post proof
+                              </Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      ) : item.media_path ? (
+                        <View>
+                          {item.kind === 'proof' ? <Text style={styles.proofTag}>✅ Did the dare</Text> : null}
+                          {item.media_type === 'video' ? (
+                            <VideoClip
+                              uri={urls[item.media_path] ?? ''}
+                              posterUri={item.poster_path ? urls[item.poster_path] : null}
+                              overlayUri={item.overlay_path ? urls[item.overlay_path] : null}
+                              playing={false}
+                              muted
+                              style={styles.media}
+                            />
+                          ) : (
+                            <Image source={{ uri: urls[item.media_path] }} style={styles.media} contentFit="cover" transition={150} />
+                          )}
+                        </View>
+                      ) : null}
                     </Pressable>
-                    <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
+                    <Text style={styles.time}>
+                      {timeAgo(item.created_at)}
+                      {mine && item.id === myLatest?.id && seenBy.length > 0
+                        ? ` · 👁 Seen by ${seenBy.length === memberCount - 1 ? 'everyone' : seenBy.join(', ')}`
+                        : ''}
+                    </Text>
                   </View>
                 </View>
               );
@@ -223,9 +445,14 @@ export default function GroupChat() {
         )}
 
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
+          <IconButton icon="camera" label="Send a photo or video" background={colors.accent} color={colors.onAccent} onPress={() => openCamera()} />
+          <IconButton icon="flag" label="Dare the group" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
           <TextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={(value) => {
+              setText(value);
+              onTextChange(value);
+            }}
             placeholder="Message the group"
             placeholderTextColor={colors.textFaint}
             keyboardAppearance={keyboardAppearance}
@@ -234,9 +461,14 @@ export default function GroupChat() {
             maxLength={2000}
             style={styles.input}
           />
-          <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} />
+          {text.trim() || !Audio ? (
+            <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} />
+          ) : (
+            <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
+          )}
         </View>
       </KeyboardAvoidingView>
+      <DareComposer visible={dareOpen} friendName="the group" onClose={() => setDareOpen(false)} onSend={sendDare} />
     </View>
   );
 }
@@ -265,6 +497,49 @@ const styles = StyleSheet.create({
   headerSub: {
     ...font.small,
   },
+  headerTyping: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: space.sm,
+    color: colors.text,
+    fontSize: 16,
+  },
+  searchCancel: {
+    ...font.small,
+    color: colors.accent,
+    fontWeight: '800',
+  },
+  searchEmpty: {
+    ...font.small,
+    textAlign: 'center',
+    marginTop: space.lg,
+  },
+  result: {
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    gap: 2,
+  },
+  resultName: {
+    ...font.small,
+    fontWeight: '800',
+  },
+  resultText: {
+    ...font.body,
+  },
   list: {
     paddingHorizontal: space.md,
     paddingVertical: space.md,
@@ -287,6 +562,12 @@ const styles = StyleSheet.create({
   bubbleWrap: {
     maxWidth: '78%',
     gap: 3,
+  },
+  dareWrap: {
+    width: '78%',
+  },
+  stretch: {
+    alignSelf: 'stretch',
   },
   alignRight: {
     alignItems: 'flex-end',
@@ -318,6 +599,70 @@ const styles = StyleSheet.create({
   },
   bubbleTextMine: {
     color: colors.white,
+  },
+  media: {
+    width: 220,
+    height: 300,
+    borderRadius: radius.lg,
+    backgroundColor: colors.card,
+    overflow: 'hidden',
+  },
+  proofTag: {
+    ...font.small,
+    color: colors.green,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  dareCard: {
+    alignSelf: 'stretch',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.pink,
+    backgroundColor: colors.card,
+    padding: space.md,
+    gap: space.sm,
+  },
+  dareCardDone: {
+    borderColor: colors.green,
+  },
+  dareLabel: {
+    color: colors.pink,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  dareText: {
+    ...font.body,
+    fontWeight: '700',
+  },
+  dareNote: {
+    ...font.small,
+    lineHeight: 18,
+  },
+  dareDone: {
+    ...font.small,
+    color: colors.green,
+    fontWeight: '900',
+  },
+  dareButton: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    paddingVertical: 11,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.pink,
+  },
+  dareButtonText: {
+    flexShrink: 1,
+    color: colors.onAccent,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  pressed: {
+    opacity: 0.8,
   },
   time: {
     ...font.small,

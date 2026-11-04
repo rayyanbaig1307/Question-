@@ -32,7 +32,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
-import { ScreenHeader } from '@/components/ScreenHeader';
+import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import {
   canReplay,
@@ -46,6 +46,7 @@ import {
   hideMessage,
   markChatRead,
   type Message,
+  searchConversation,
   sendDare,
   sendText,
   setSnapSaved,
@@ -75,6 +76,10 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[] | null>(null);
   // Your dare streak with this friend 🔥 (dares you two completed in a row).
   const [streak, setStreak] = useState(0);
+  // 🔎 Search: the box is open while `search` isn't null.
+  const [search, setSearch] = useState<string | null>(null);
+  const [results, setResults] = useState<{ query: string; list: Message[] } | null>(null);
+  const listRef = useRef<FlatList<Message>>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
@@ -272,6 +277,31 @@ export default function ChatScreen() {
     }
   }
 
+  async function runSearch(query: string) {
+    setSearch(query);
+    if (!query.trim()) {
+      setResults(null);
+      return;
+    }
+    try {
+      setResults({ query, list: await searchConversation(userId, friendId, query) });
+    } catch (error) {
+      Alert.alert('Search failed', friendlyError(error));
+    }
+  }
+
+  // Tap a search result: jump to it in the chat (if it's one of the loaded messages).
+  function jumpTo(message: Message) {
+    const index = messages?.findIndex((m) => m.id === message.id) ?? -1;
+    setSearch(null);
+    setResults(null);
+    if (index < 0) {
+      showToast(`From ${timeAgo(message.created_at)} ago – too far back to jump to`);
+      return;
+    }
+    setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 }), 250);
+  }
+
   const name = friend ? friend.display_name || friend.username : '';
   // Show "Delivered / Seen" under your most recent message (peeks always show theirs).
   const myLatestId = messages?.find((m) => m.sender_id === userId && m.kind !== 'screenshot')?.id;
@@ -296,11 +326,58 @@ export default function ChatScreen() {
             </Pressable>
           ) : null
         }
+        right={<RoundIconButton icon="search" label="Search this chat" onPress={() => setSearch(search === null ? '' : null)} />}
       />
+
+      {search !== null ? (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            value={search}
+            onChangeText={runSearch}
+            placeholder="Search this chat"
+            placeholderTextColor={colors.textMuted}
+            autoFocus
+            autoCapitalize="none"
+            keyboardAppearance={keyboardAppearance}
+            selectionColor={colors.accent}
+            style={styles.searchInput}
+          />
+          <Pressable
+            onPress={() => {
+              setSearch(null);
+              setResults(null);
+            }}
+            hitSlop={10}
+            accessibilityLabel="Close search">
+            <Text style={styles.searchCancel}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* The negative offset stops a gap appearing between the message box and the keyboard. */}
       <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
-        {messages === null ? (
+        {search !== null && search.trim() ? (
+          <FlatList
+            data={results?.query === search ? results.list : []}
+            keyExtractor={(m) => m.id}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.searchList}
+            ListEmptyComponent={
+              results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
+            }
+            renderItem={({ item }) => (
+              <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
+                <Text style={styles.resultName}>
+                  {item.sender_id === userId ? 'You' : name} · {timeAgo(item.created_at)}
+                </Text>
+                <Text style={styles.resultText} numberOfLines={2}>
+                  {item.kind === 'dare' ? `🎯 ${item.body}` : item.body}
+                </Text>
+              </Pressable>
+            )}
+          />
+        ) : messages === null ? (
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : messages.length === 0 ? (
           <View style={styles.empty}>
@@ -308,8 +385,10 @@ export default function ChatScreen() {
           </View>
         ) : (
           <FlatList
+            ref={listRef}
             data={messages}
             inverted
+            onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
             keyExtractor={(m) => m.id}
             contentContainerStyle={styles.list}
             keyboardDismissMode="interactive"
@@ -636,6 +715,49 @@ function TypingDot({ delay }: { delay: number }) {
 }
 
 const styles = StyleSheet.create({
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    marginBottom: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: space.sm,
+    color: colors.text,
+    fontSize: 16,
+  },
+  searchCancel: {
+    ...font.small,
+    color: colors.accent,
+    fontWeight: '800',
+  },
+  searchList: {
+    padding: space.md,
+    gap: space.sm,
+  },
+  searchEmpty: {
+    ...font.small,
+    textAlign: 'center',
+    marginTop: space.lg,
+  },
+  result: {
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    gap: 2,
+  },
+  resultName: {
+    ...font.small,
+    fontWeight: '800',
+  },
+  resultText: {
+    ...font.body,
+  },
   // A dare card is always the same width (never shrunk to a short dare like "say hi"), so its buttons fit
   // even with a big text size.
   dareWrap: {

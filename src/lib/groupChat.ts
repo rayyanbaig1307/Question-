@@ -1,3 +1,4 @@
+import { deleteMedia, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -5,11 +6,21 @@ import { supabase } from './supabase';
 // Members read and write; you can delete your own messages; everyone else gets a push unless they muted it.
 // ---------------------------------------------------------------------------
 
+// 'text' · 'photo' / 'video' (stay in the chat) · 'voice' · 'dare' (a dare for the whole group) ·
+// 'proof' (someone's photo/video for a group dare – dare_id says which).
 export type GroupMessage = {
   id: string;
   group_id: string;
   sender_id: string;
-  body: string;
+  kind: 'text' | 'photo' | 'video' | 'voice' | 'dare' | 'proof';
+  body: string | null;
+  media_path: string | null;
+  media_type: 'photo' | 'video' | null;
+  poster_path: string | null;
+  overlay_path: string | null;
+  audio_ms: number | null;
+  waveform: number[] | null;
+  dare_id: string | null;
   created_at: string;
 };
 
@@ -44,10 +55,78 @@ export async function sendGroupMessage(groupId: string, body: string): Promise<G
   return data as GroupMessage;
 }
 
-// Deletes your own message for everyone in the group.
-export async function deleteGroupMessage(id: string): Promise<void> {
-  const { error } = await supabase.from('group_messages').delete().eq('id', id);
+// A photo or video for the group chat (or, with `dareId`, your proof for a group dare).
+export async function sendGroupCapture(me: string, groupId: string, capture: Capture, dareId?: string): Promise<void> {
+  const { fields } = await uploadCapture(me, 'group', capture);
+  const { error } = await supabase
+    .from('group_messages')
+    .insert({ group_id: groupId, kind: dareId ? 'proof' : fields.media_type, dare_id: dareId ?? null, ...fields });
+  if (error) {
+    await deleteMedia(mediaFiles(fields));
+    throw error;
+  }
+}
+
+// A voice note for the group chat.
+export async function sendGroupVoice(
+  me: string,
+  groupId: string,
+  uri: string,
+  durationMs: number,
+  waveform: number[],
+): Promise<GroupMessage> {
+  const media_path = await uploadMedia(me, 'voice', uri, 'audio');
+  const { data, error } = await supabase
+    .from('group_messages')
+    .insert({ group_id: groupId, kind: 'voice', media_path, audio_ms: Math.round(durationMs), waveform })
+    .select('*')
+    .single();
+  if (error) {
+    await deleteMedia([media_path]);
+    throw error;
+  }
+  return data as GroupMessage;
+}
+
+// 🎯 Dare the whole group: everyone can post their proof in the chat.
+export async function sendGroupDare(groupId: string, dare: string): Promise<GroupMessage> {
+  const { data, error } = await supabase
+    .from('group_messages')
+    .insert({ group_id: groupId, kind: 'dare', body: dare.trim() })
+    .select('*')
+    .single();
   if (error) throw error;
+  return data as GroupMessage;
+}
+
+// When each member last read the chat (for "Seen by …").
+export async function fetchGroupReads(groupId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('peek_group_members').select('user_id, chat_read_at').eq('group_id', groupId);
+  if (error) return new Map();
+  return new Map((data ?? []).map((row) => [row.user_id as string, row.chat_read_at as string]));
+}
+
+// 🔎 Messages in this group chat containing `text` (newest first).
+export async function searchGroupMessages(groupId: string, text: string): Promise<GroupMessage[]> {
+  const needle = text.trim().replace(/[%_,()]/g, ' ');
+  if (!needle) return [];
+  const { data, error } = await supabase
+    .from('group_messages')
+    .select('*')
+    .eq('group_id', groupId)
+    .ilike('body', `%${needle}%`)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as GroupMessage[];
+}
+
+// Deletes your own message for everyone in the group.
+export async function deleteGroupMessage(message: GroupMessage): Promise<void> {
+  const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
+  if (error) throw error;
+  const files = [message.media_path, message.poster_path, message.overlay_path].filter((f): f is string => !!f);
+  if (files.length > 0) await deleteMedia(files).catch(() => {});
 }
 
 export async function markGroupChatRead(groupId: string): Promise<void> {
