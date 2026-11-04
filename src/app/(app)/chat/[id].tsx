@@ -391,7 +391,11 @@ function DareButton({ icon, title, onPress, grow = false, quiet = false }: {
       accessibilityRole="button"
       accessibilityLabel={title}>
       <Ionicons name={icon} size={16} color={quiet ? colors.text : colors.onAccent} />
-      <Text style={[styles.dareButtonText, quiet && styles.dareButtonTextQuiet]} numberOfLines={1}>
+      <Text
+        style={[styles.dareButtonText, quiet && styles.dareButtonTextQuiet]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}>
         {title}
       </Text>
     </Pressable>
@@ -452,7 +456,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
     const state = message.dare_state ?? null;
     const who = friendName || 'they';
     return (
-      <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+      <View style={[styles.bubbleWrap, styles.dareWrap, mine ? styles.right : styles.left]}>
         <Pressable onLongPress={onLongPress} style={[styles.dareCard, state === 'done' && styles.dareCardDone]}>
           <Text style={[styles.dareLabel, state === 'done' && styles.dareLabelDone]}>
             {state === 'done' ? '✅ DARE COMPLETED' : `🎯 ${mine ? `YOU DARED ${(friendName || 'them').toUpperCase()}` : 'YOU GOT DARED'}`}
@@ -632,10 +636,13 @@ function TypingDot({ delay }: { delay: number }) {
 }
 
 const styles = StyleSheet.create({
+  // A dare card is always the same width (never shrunk to a short dare like "say hi"), so its buttons fit
+  // even with a big text size.
+  dareWrap: {
+    width: '80%',
+  },
   dareCard: {
-    // Never narrower than the button needs, even for a short dare like "say hi".
-    minWidth: 250,
-    maxWidth: '80%',
+    alignSelf: 'stretch',
     borderRadius: radius.lg,
     borderWidth: 1.5,
     borderColor: colors.pink,
@@ -658,13 +665,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
+    alignSelf: 'stretch',
     paddingVertical: 11,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.md,
     marginTop: space.xs,
     borderRadius: radius.pill,
     backgroundColor: colors.pink,
   },
   dareButtonText: {
+    flexShrink: 1,
     color: colors.onAccent,
     fontSize: 14,
     fontWeight: '800',
