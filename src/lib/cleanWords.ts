@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
 // Keeps hateful slurs out of Peekaboo (the app stores require a filter like this).
-// * Slurs are blocked everywhere: names, bios, captions, comments, chats, hit ups, dare ideas.
+// * Slurs are blocked in everything strangers can see: names, bios, captions, comments, hit ups, dare ideas,
+//   group names. Private chats between friends aren't filtered at all (the owner's choice).
 // * Swearing is blocked in usernames and display names only. Bios, chats, captions and comments allow it.
 // * Real names are fine: "Moby Dick" or "Alex Cock" as a display name (written with a capital letter, like a name).
 // People try to sneak words past filters with numbers and dots ("n1gg3r", "s.l.u.r"), so text is tidied first.

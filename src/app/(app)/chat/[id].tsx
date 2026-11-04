@@ -47,7 +47,6 @@ import {
   subscribeToMyMessages,
   type Message,
 } from '@/lib/chat';
-import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
@@ -112,12 +111,9 @@ export default function ChatScreen() {
 
   async function send() {
     const body = text.trim();
+    // Private chats between friends aren't filtered: people can say whatever they want here (the owner's
+    // choice). Report and Block still work on every message.
     if (!body || sending) return;
-    const notAllowed = checkClean(body, 'content');
-    if (notAllowed) {
-      Alert.alert('Message not sent', notAllowed);
-      return;
-    }
     setSending(true);
     try {
       const sent = await sendText(userId, friendId, body);
@@ -131,14 +127,9 @@ export default function ChatScreen() {
     }
   }
 
-  // Your own dare for this friend: checked for bad words, then sent as a dare card.
+  // Your own dare for this friend, sent as a dare card (private, so not word-filtered like the chat).
   const [dareOpen, setDareOpen] = useState(false);
   async function sendMyDare(dare: string): Promise<boolean> {
-    const notAllowed = checkClean(dare, 'content');
-    if (notAllowed) {
-      Alert.alert('Dare not sent', notAllowed);
-      return false;
-    }
     try {
       const sent = await sendDare(userId, friendId, dare);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

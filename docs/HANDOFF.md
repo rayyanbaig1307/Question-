@@ -54,8 +54,9 @@ and the owner's standing preferences.
 ## Done recently (newest first)
 
 - **Name filter** (`src/lib/cleanWords.ts`): swearing is blocked in usernames and display names only.
-  "Dick"/"Cock" are allowed when written like a real name ("Moby Dick"). Bios, chats, captions, comments, hit
-  ups and group names allow swearing. Slurs are blocked everywhere (the App Store needs this, so keep it).
+  "Dick"/"Cock" are allowed when written like a real name ("Moby Dick"). Bios, captions, comments, hit ups and
+  group names allow swearing but block slurs. **Private chats between friends aren't filtered at all** (the
+  owner's call, "free speech"). Report/Block still work in chats.
 - **iOS push notifications fixed.** APNs key `RYQ8XWNZP4` was uploaded to EAS and attached to
   `com.rbaig18.peekaboo`. Receipts came back "ok". No rebuild was needed.
 - **Reports are handled in the Supabase dashboard only.** The in-app owner screen was removed at the owner's

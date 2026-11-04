@@ -793,7 +793,9 @@ arrive with the normal update.
 2. **Real names are fine:** a display name like "Moby Dick", "Dick Smith" or "Alex Cock" (written with a capital
    letter, like a name) saves. So do names like Ishita, Nazir, Pornsak, Hancock, Scunthorpe.
 3. **Bios, chats, comments, captions, hit ups, group names:** swearing is allowed.
-4. **Slurs are blocked everywhere** (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo".
+4. **Slurs are blocked in public places** – names, bios, captions, comments, hit ups, dare ideas, group names
+   (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo".
+5. **Private chats aren't filtered at all**: any word goes through in a chat or a chat dare to a friend.
 
 ## Step 54 – Reports (owner, in Supabase) 🚩
 
