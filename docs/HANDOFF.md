@@ -117,7 +117,11 @@ back" from the last 30 days. It comes from `public.my_activity()` (`202612050000
 and `src/lib/activity.ts`. **Published** as update `9701c213-a6ed-4373-9bb7-b3ca20540406`, built from `dc54575`
 with only the Activity commit (`abb5aa3`) on top, so the unfinished Apple/Google sign-in code was left out.
 Newest published update: `c1a737b9-e5d0-444e-8c21-22d7b5ecae34` = `dc54575` + `abb5aa3` + `5fa9b29` (Contact us
-opens the mail app without showing the address). Still without the sign-in work. The
+opens the mail app without showing the address). Still without the sign-in work.
+**From now on, publish OTAs from branch head only.** The new native builds (iOS 4 / Android v12) share runtime
+`exposdk:58.0.0` and the `preview` channel. They would download any newer old-base update and lose the sign-in
+work, or crash on mismatched JS patch versions. Make sure the newest preview update is head-based before or as
+those builds go out. The
 "seen" marker is kept on the phone. New items count on the Chat tab until you
 leave Chat. There's no realtime listener: it refreshes on focus, when the app comes back to the front, and
 when a push arrives.
