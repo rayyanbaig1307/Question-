@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "168232212010",
+    "project_id": "peekaboo-53964",
+    "storage_bucket": "peekaboo-53964.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168232212010:android:1acec1a656952874d05553",
+        "android_client_info": {
+          "package_name": "com.rbaig18.peekaboo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-f5g7LIbJg3Vy8lhE0ByYh1-4D4YD6-o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
