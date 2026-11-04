@@ -1,7 +1,7 @@
 # Peekaboo – Privacy Policy
 
 **Effective date:** 4 November 2026
-**Who is responsible for your data ("data controller"):** 2865113 Ontario Inc., [MAILING ADDRESS], rbaig18@z2automation.net
+**Who is responsible for your data ("data controller"):** 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net
 
 This policy explains what Peekaboo collects, why, where it goes, and what you can do about it. It is written to match what the app really does. If we change how the app works, we update this policy and tell you in the app.
 
@@ -101,6 +101,5 @@ We will post changes here and, for significant changes, show a notice in the app
 
 ## 12. Contact
 
-2865113 Ontario Inc.
-[MAILING ADDRESS]
+2865113 Ontario Inc. (Ontario, Canada)
 rbaig18@z2automation.net

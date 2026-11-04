@@ -16,7 +16,7 @@ The effective date is filled in (31 October 2026). Search all files for `[` and 
 
 - `[OPERATOR NAME]` – your legal name, or your company's name if you set one up (recommended – see below).
 - `[CONTACT EMAIL]` – an email you check, e.g. `hello@peekaboo.app`. Apple requires a working contact.
-- `[MAILING ADDRESS]` – a postal address (a P.O. box is fine). Required for privacy-law notices.
+- Mailing address: left out on purpose (a free app with no payments doesn't need one; the company's registered office is public in the Ontario Business Registry anyway). Add one here and in the Contact sections if that ever changes.
 
 ## Honest note on liability (please read)
 
