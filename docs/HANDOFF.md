@@ -109,6 +109,14 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo
   everywhere, hit ups, and much more (see `git log`).
 
+## Activity 🔔 (done, 4 Nov)
+
+At the top of Chat: likes, comments, replies, comment likes, "added you", "accepted your request" and "hit you
+back" from the last 30 days. It comes from `public.my_activity()` (`20261205000000_activity.sql`, applied live)
+and `src/lib/activity.ts`. The "seen" marker is kept on the phone. New items count on the Chat tab until you
+leave Chat. There's no realtime listener: it refreshes on focus, when the app comes back to the front, and
+when a push arrives.
+
 ## Open items
 
 Owner's to-do:
@@ -131,7 +139,6 @@ Waiting on the owner's word:
   first set up custom SMTP (for example Resend) under Auth → Emails → Set up SMTP.
 
 Optional ideas the owner may ask for:
-- An in-app list of likes and comments next to friend requests in Chat.
 
 ## Database changes
 
