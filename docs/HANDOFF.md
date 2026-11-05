@@ -37,7 +37,7 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Now: QA round 2 database part is LIVE (5 Nov); the app update is not published yet
+## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
 **Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes.
 On 5 Nov the owner said "go" and the **server side was released** to the live project, in this order:
@@ -52,11 +52,11 @@ On 5 Nov the owner said "go" and the **server side was released** to the live pr
 5. Checked afterwards: every function, privacy rule, trigger and permission on the live database matches the
    tested local copy (only differences: line endings and code comments in old functions that predate this
    work). Supabase's security advisor shows nothing new.
-**Not applied:** `20261215000000_peekaboo_plus` (another session's, after RevenueCat) and
-`20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go). (Since then another
-session applied `20261215000000_peekaboo_plus` live, it says. `20261216` can be applied before or after that
-session's `20261218000000_plus_extras`: if the Peekaboo+ dare streak, with Peek-a-Save, is already there,
-`20261216` leaves it as it is – it counts group dares by itself.)
+**Applied later the same day:** `20261215000000_peekaboo_plus` (by the Peekaboo+ session) and
+`20261216000000_group_dare_votes` (see "Group votes live" below). Not applied: that session's
+`20261217000000_plus_insights` and `20261218000000_plus_extras` (they are its own; it waits for the owner's OK).
+`20261218` can come after `20261216` safely: it replaces the dare streak with its Peek-a-Save version, which
+counts group dares too.
 **App update published (5 Nov, owner's "Ok do both"):** OTA `346a8ad8-384b-4a95-885d-929ff02c69f2` on branch
 `preview` (runtime `exposdk:58.0.0`, Android + iOS), built from `e3fbac4`: all the QA app fixes, group dare
 Legit / Cap votes, the Inbox-bell header (`23853ae`) and the crop Rotate fix (`a6a4c62`). Checked after
@@ -64,11 +64,16 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
-**Not applied yet:** `20261216000000_group_dare_votes` on the live database. Supabase's connector asks the owner
-to approve every database change; the question timed out twice (5 Nov) and nothing was applied (checked). Until
-it is applied, the new app shows group proofs the old way ("✅ Did the dare", no vote buttons) – that pairing is
-covered by the screen tests. Send the file (with `set local lock_timeout = '15s';` after `begin;`) once the
-owner is ready to tap Approve, then compare the functions with a local copy as before.
+**Group votes live (5 Nov, 20:40 UTC):** `20261216000000_group_dare_votes` is applied to the live database.
+Supabase's approval question never showed in the owner's app, so the owner pasted the file (with
+`set local lock_timeout = '15s';` after `begin;` and a migration-history row before `commit;`) into the SQL
+Editor; history shows `20261105204027 group_dare_votes`. Checked afterwards: all 9 new or changed functions
+match a local copy exactly; the one old proof is marked as an old proof (it keeps counting until someone votes)
+with its "legit" push marked as sent; app users have only SELECT on `group_proof_votes` and lost INSERT/UPDATE
+on `peek_group_members`; visitors can't call `vote_group_proof`. The security advisor shows only the two
+expected new entries (the private `group_proof_alerts` table and the app's `vote_group_proof`).
+For the next database change: Supabase's approval question does not appear in the owner's app. Put the SQL on a
+page with a Copy button for the SQL Editor instead (that worked).
 **Done after the release (5 Nov):** the 14 old photo files of deleted accounts were deleted. They were put on
 the cleanup waiting list (`private.media_deferred_deletions`) and the daily cleanup was started once by hand
 (the same call the pg_cron job makes); it answered `removed 14 of 14`, and the leftover-file check below now
