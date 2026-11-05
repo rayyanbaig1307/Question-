@@ -575,6 +575,7 @@ const AUTHENTICATED_ALLOWED = [
   'public.hide_message(message uuid)',
   'public.hit_up(target uuid, note text)',
   'public.hit_up_status(target uuid)',
+  'public.is_plus(person uuid)',
   'public.mark_chat_read(friend uuid)',
   'public.mark_drop_seen(post uuid, did_reveal boolean)',
   'public.mark_group_chat_read(grp uuid)',
