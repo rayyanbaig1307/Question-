@@ -79,7 +79,16 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
     console.warn('Face filter', error);
   }
 
-  const meshOutput = useFaceMeshOutput({ maxFaces: MAX_LENS_FACES, blendshapes: true, onFaces: handleFaces, onError: handleError });
+  // A problem with one frame must never close the app: skip that frame.
+  function safeHandleFaces(found: FaceMeshFace[]) {
+    try {
+      handleFaces(found);
+    } catch (error) {
+      console.warn('Face filter frame', error);
+    }
+  }
+
+  const meshOutput = useFaceMeshOutput({ maxFaces: MAX_LENS_FACES, blendshapes: true, onFaces: safeHandleFaces, onError: handleError });
   const outputs: CameraOutput[] = meshOutput ? [photoOutput, meshOutput] : [photoOutput];
 
   useImperativeHandle(

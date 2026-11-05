@@ -61,19 +61,82 @@ const RIM = 0.5; // the golden edge
 const HAZE = 0.34; // the glow from the top-left corner
 const FLARE = 0.08; // the little lens-flare circles
 
-// Draws `look` for these faces. `width`/`height` is the camera view. `fill` is the area the whole-picture
-// parts (warm wash, corners) must cover – the view itself live, the whole photo when saving. `time` is in
-// seconds (for the twinkle and a slow shimmer).
-export function paintLook(canvas: SkCanvas, look: LensLook, faces: LensFace[], width: number, height: number, time: number, fill?: SkRect) {
+// Each drawing step comes after the steps it uses: the worklet copies of these functions (for the camera's
+// drawing thread) are made in file order, and a step used before it is made would be missing there and
+// crash the app. tests/unit/worklet-order.test.mjs checks this.
+
+// ---------------------------------------------------------------------------
+// Little drawing helpers.
+// ---------------------------------------------------------------------------
+
+// A fill paint with a colour, a see-through amount and a soft edge.
+function soft(color: string, alpha: number, blur: number, style: BlurStyle = BlurStyle.Normal) {
   'worklet';
-  if (width <= 0 || height <= 0) return;
-  if (look === 'golden') paintGoldenHour(canvas, faces, width, height, time, fill ?? Skia.XYWHRect(0, 0, width, height));
-  else for (const face of faces) paintSoftGlow(canvas, face, time);
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  paint.setColor(Skia.Color(color));
+  paint.setAlphaf(Math.max(0, Math.min(1, alpha)));
+  if (blur > 0) paint.setMaskFilter(Skia.MaskFilter.MakeBlur(style, blur, true));
+  return paint;
+}
+
+function distance(pts: number[], a: number, b: number) {
+  'worklet';
+  return Math.hypot(pts[a * 2] - pts[b * 2], pts[a * 2 + 1] - pts[b * 2 + 1]);
+}
+
+// A smooth closed shape through the given points, grown or shrunk around its middle by `scale`.
+function addSmoothLoop(builder: SkPathBuilder, pts: number[], loop: readonly number[], scale: number) {
+  'worklet';
+  const n = loop.length;
+  if (n < 3) return;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < n; i++) {
+    cx += pts[loop[i] * 2];
+    cy += pts[loop[i] * 2 + 1];
+  }
+  cx /= n;
+  cy /= n;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i < n; i++) {
+    xs.push(cx + (pts[loop[i] * 2] - cx) * scale);
+    ys.push(cy + (pts[loop[i] * 2 + 1] - cy) * scale);
+  }
+  // Curves through the midpoints, using each point as the bend – no sharp corners.
+  builder.moveTo((xs[n - 1] + xs[0]) / 2, (ys[n - 1] + ys[0]) / 2);
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    builder.quadTo(xs[i], ys[i], (xs[i] + xs[next]) / 2, (ys[i] + ys[next]) / 2);
+  }
+  builder.close();
+}
+
+// A four-pointed sparkle with thin, curved arms.
+function addSparkle(builder: SkPathBuilder, x: number, y: number, size: number) {
+  'worklet';
+  if (size <= 0.5) return;
+  const waist = size * 0.16;
+  builder.moveTo(x, y - size);
+  builder.quadTo(x + waist, y - waist, x + size, y);
+  builder.quadTo(x + waist, y + waist, x, y + size);
+  builder.quadTo(x - waist, y + waist, x - size, y);
+  builder.quadTo(x - waist, y - waist, x, y - size);
+  builder.close();
 }
 
 // ---------------------------------------------------------------------------
 // ✨ Soft Glow
 // ---------------------------------------------------------------------------
+
+function drawCatchlight(canvas: SkCanvas, pts: number[], iris: number, edge: number, paint: ReturnType<typeof soft>) {
+  'worklet';
+  const cx = pts[iris * 2];
+  const cy = pts[iris * 2 + 1];
+  const radius = distance(pts, iris, edge);
+  canvas.drawCircle(cx - radius * 0.3, cy - radius * 0.35, Math.max(0.8, radius * 0.22), paint);
+}
 
 function paintSoftGlow(canvas: SkCanvas, face: LensFace, time: number) {
   'worklet';
@@ -133,17 +196,65 @@ function paintSoftGlow(canvas: SkCanvas, face: LensFace, time: number) {
   canvas.drawPath(sparkles.detach(), soft('#FFFDF7', SPARKLE, Math.max(0.5, w * 0.003), BlurStyle.Solid));
 }
 
-function drawCatchlight(canvas: SkCanvas, pts: number[], iris: number, edge: number, paint: ReturnType<typeof soft>) {
-  'worklet';
-  const cx = pts[iris * 2];
-  const cy = pts[iris * 2 + 1];
-  const radius = distance(pts, iris, edge);
-  canvas.drawCircle(cx - radius * 0.3, cy - radius * 0.35, Math.max(0.8, radius * 0.22), paint);
-}
-
 // ---------------------------------------------------------------------------
 // 🌅 Golden Hour
 // ---------------------------------------------------------------------------
+
+function paintSunOnFace(canvas: SkCanvas, face: LensFace) {
+  'worklet';
+  const w = distance(face.pts, MESH.leftFaceSide, MESH.rightFaceSide);
+  if (w < 4 || face.light.length !== LIGHT_SPOTS.length) return;
+
+  // The light and shade stay on the skin: the face outline (a hair bigger), with the eyes cut out.
+  const skin = Skia.PathBuilder.Make();
+  skin.setFillType(FillType.EvenOdd);
+  addSmoothLoop(skin, face.pts, MESH.faceOval, 1.02);
+  addSmoothLoop(skin, face.pts, MESH.leftEye, 1.15);
+  addSmoothLoop(skin, face.pts, MESH.rightEye, 1.15);
+  canvas.save();
+  canvas.clipPath(skin.detach(), ClipOp.Intersect, true);
+  for (let i = 0; i < LIGHT_SPOTS.length; i++) {
+    const spot = LIGHT_SPOTS[i];
+    const x = face.pts[spot.point * 2];
+    const y = face.pts[spot.point * 2 + 1];
+    const r = w * spot.size;
+    const lit = spotBrightness(face.light[i]);
+    if (lit > 0.01) canvas.drawCircle(x, y, r, soft('#FFB25A', SUN_LIGHT * lit, r * 0.6));
+    const shade = spotShade(face.light[i]);
+    if (shade > 0.01) canvas.drawCircle(x, y, r, soft('#3C1A08', SHADE * shade, r * 0.7));
+  }
+  canvas.restore();
+
+  // The golden rim: a soft line along the face edge, strongest on the side the sun comes from.
+  if (face.rim > 0.02) {
+    let cx = 0;
+    let cy = 0;
+    for (const i of MESH.faceOval) {
+      cx += face.pts[i * 2];
+      cy += face.pts[i * 2 + 1];
+    }
+    cx /= MESH.faceOval.length;
+    cy /= MESH.faceOval.length;
+    const edge = Skia.PathBuilder.Make();
+    addSmoothLoop(edge, face.pts, MESH.faceOval, 1.0);
+    const rim = Skia.Paint();
+    rim.setAntiAlias(true);
+    rim.setStyle(PaintStyle.Stroke);
+    rim.setStrokeWidth(w * 0.028);
+    rim.setShader(
+      Skia.Shader.MakeLinearGradient(
+        { x: cx + SUN_ON_SCREEN.x * w * 0.55, y: cy + SUN_ON_SCREEN.y * w * 0.55 },
+        { x: cx - SUN_ON_SCREEN.x * w * 0.1, y: cy - SUN_ON_SCREEN.y * w * 0.1 },
+        [Skia.Color('rgba(255,208,138,1)'), Skia.Color('rgba(255,208,138,0)')],
+        [0, 1],
+        TileMode.Clamp,
+      ),
+    );
+    rim.setAlphaf(RIM * face.rim);
+    rim.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, w * 0.018, true));
+    canvas.drawPath(edge.detach(), rim);
+  }
+}
 
 function paintGoldenHour(canvas: SkCanvas, faces: LensFace[], width: number, height: number, time: number, fill: SkRect) {
   'worklet';
@@ -216,119 +327,12 @@ function paintGoldenHour(canvas: SkCanvas, faces: LensFace[], width: number, hei
   }
 }
 
-function paintSunOnFace(canvas: SkCanvas, face: LensFace) {
+// Draws `look` for these faces. `width`/`height` is the camera view. `fill` is the area the whole-picture
+// parts (warm wash, corners) must cover – the view itself live, the whole photo when saving. `time` is in
+// seconds (for the twinkle and a slow shimmer).
+export function paintLook(canvas: SkCanvas, look: LensLook, faces: LensFace[], width: number, height: number, time: number, fill?: SkRect) {
   'worklet';
-  const w = distance(face.pts, MESH.leftFaceSide, MESH.rightFaceSide);
-  if (w < 4 || face.light.length !== LIGHT_SPOTS.length) return;
-
-  // The light and shade stay on the skin: the face outline (a hair bigger), with the eyes cut out.
-  const skin = Skia.PathBuilder.Make();
-  skin.setFillType(FillType.EvenOdd);
-  addSmoothLoop(skin, face.pts, MESH.faceOval, 1.02);
-  addSmoothLoop(skin, face.pts, MESH.leftEye, 1.15);
-  addSmoothLoop(skin, face.pts, MESH.rightEye, 1.15);
-  canvas.save();
-  canvas.clipPath(skin.detach(), ClipOp.Intersect, true);
-  for (let i = 0; i < LIGHT_SPOTS.length; i++) {
-    const spot = LIGHT_SPOTS[i];
-    const x = face.pts[spot.point * 2];
-    const y = face.pts[spot.point * 2 + 1];
-    const r = w * spot.size;
-    const lit = spotBrightness(face.light[i]);
-    if (lit > 0.01) canvas.drawCircle(x, y, r, soft('#FFB25A', SUN_LIGHT * lit, r * 0.6));
-    const shade = spotShade(face.light[i]);
-    if (shade > 0.01) canvas.drawCircle(x, y, r, soft('#3C1A08', SHADE * shade, r * 0.7));
-  }
-  canvas.restore();
-
-  // The golden rim: a soft line along the face edge, strongest on the side the sun comes from.
-  if (face.rim > 0.02) {
-    let cx = 0;
-    let cy = 0;
-    for (const i of MESH.faceOval) {
-      cx += face.pts[i * 2];
-      cy += face.pts[i * 2 + 1];
-    }
-    cx /= MESH.faceOval.length;
-    cy /= MESH.faceOval.length;
-    const edge = Skia.PathBuilder.Make();
-    addSmoothLoop(edge, face.pts, MESH.faceOval, 1.0);
-    const rim = Skia.Paint();
-    rim.setAntiAlias(true);
-    rim.setStyle(PaintStyle.Stroke);
-    rim.setStrokeWidth(w * 0.028);
-    rim.setShader(
-      Skia.Shader.MakeLinearGradient(
-        { x: cx + SUN_ON_SCREEN.x * w * 0.55, y: cy + SUN_ON_SCREEN.y * w * 0.55 },
-        { x: cx - SUN_ON_SCREEN.x * w * 0.1, y: cy - SUN_ON_SCREEN.y * w * 0.1 },
-        [Skia.Color('rgba(255,208,138,1)'), Skia.Color('rgba(255,208,138,0)')],
-        [0, 1],
-        TileMode.Clamp,
-      ),
-    );
-    rim.setAlphaf(RIM * face.rim);
-    rim.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, w * 0.018, true));
-    canvas.drawPath(edge.detach(), rim);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Little drawing helpers.
-// ---------------------------------------------------------------------------
-
-// A fill paint with a colour, a see-through amount and a soft edge.
-function soft(color: string, alpha: number, blur: number, style: BlurStyle = BlurStyle.Normal) {
-  'worklet';
-  const paint = Skia.Paint();
-  paint.setAntiAlias(true);
-  paint.setColor(Skia.Color(color));
-  paint.setAlphaf(Math.max(0, Math.min(1, alpha)));
-  if (blur > 0) paint.setMaskFilter(Skia.MaskFilter.MakeBlur(style, blur, true));
-  return paint;
-}
-
-function distance(pts: number[], a: number, b: number) {
-  'worklet';
-  return Math.hypot(pts[a * 2] - pts[b * 2], pts[a * 2 + 1] - pts[b * 2 + 1]);
-}
-
-// A smooth closed shape through the given points, grown or shrunk around its middle by `scale`.
-function addSmoothLoop(builder: SkPathBuilder, pts: number[], loop: readonly number[], scale: number) {
-  'worklet';
-  const n = loop.length;
-  if (n < 3) return;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0; i < n; i++) {
-    cx += pts[loop[i] * 2];
-    cy += pts[loop[i] * 2 + 1];
-  }
-  cx /= n;
-  cy /= n;
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (let i = 0; i < n; i++) {
-    xs.push(cx + (pts[loop[i] * 2] - cx) * scale);
-    ys.push(cy + (pts[loop[i] * 2 + 1] - cy) * scale);
-  }
-  // Curves through the midpoints, using each point as the bend – no sharp corners.
-  builder.moveTo((xs[n - 1] + xs[0]) / 2, (ys[n - 1] + ys[0]) / 2);
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    builder.quadTo(xs[i], ys[i], (xs[i] + xs[next]) / 2, (ys[i] + ys[next]) / 2);
-  }
-  builder.close();
-}
-
-// A four-pointed sparkle with thin, curved arms.
-function addSparkle(builder: SkPathBuilder, x: number, y: number, size: number) {
-  'worklet';
-  if (size <= 0.5) return;
-  const waist = size * 0.16;
-  builder.moveTo(x, y - size);
-  builder.quadTo(x + waist, y - waist, x + size, y);
-  builder.quadTo(x + waist, y + waist, x, y + size);
-  builder.quadTo(x - waist, y + waist, x - size, y);
-  builder.quadTo(x - waist, y - waist, x, y - size);
-  builder.close();
+  if (width <= 0 || height <= 0) return;
+  if (look === 'golden') paintGoldenHour(canvas, faces, width, height, time, fill ?? Skia.XYWHRect(0, 0, width, height));
+  else for (const face of faces) paintSoftGlow(canvas, face, time);
 }

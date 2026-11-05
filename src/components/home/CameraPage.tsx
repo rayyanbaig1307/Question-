@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions, type Camera
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -33,6 +33,7 @@ import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
 import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
+import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
 import { usePlus } from '@/lib/plus';
 import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
 import { ModeDial, type CameraMode } from './ModeDial';
@@ -118,12 +119,29 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // A quick white flash on screen when a photo is taken.
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
+  // True while the selfie flash is on: the flash then covers the buttons too, so the whole screen lights you up.
+  const [flashing, setFlashing] = useState(false);
 
   // Videos: hold the shutter to record (up to 30 seconds, or 60 with Peekaboo+). The camera switches to video
   // while you hold.
   const [mic, requestMic] = useMicrophonePermissions();
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recording, setRecording] = useState(false);
+  // A selfie video with the flash on: full screen brightness for the ring light while recording.
+  const selfieLight = recording && flash === 'on' && facing === 'front';
+  useEffect(() => {
+    if (!selfieLight) return;
+    let restore: (() => Promise<void>) | null = null;
+    let stopped = false;
+    brightenScreen().then((undo) => {
+      if (stopped) undo();
+      else restore = undo;
+    });
+    return () => {
+      stopped = true;
+      restore?.();
+    };
+  }, [selfieLight]);
   const stopAsked = useRef(false);
   const cameraReady = useRef<(() => void)[]>([]);
   const recordProgress = useSharedValue(0);
@@ -177,11 +195,15 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     if (busy || (glowOn ? !glowRef.current : lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Selfie cameras have no flash, so the screen becomes the flash: bright white for a moment, then the photo.
+    // Selfie cameras have no flash, so the screen becomes the flash (like the iPhone's own): warm white at full
+    // brightness, held a moment so the camera can adjust to the light, then the photo (lib/screenFlash.ts).
     const screenFlash = flash === 'on' && facing === 'front';
+    let restoreBrightness: (() => Promise<void>) | null = null;
     if (screenFlash) {
-      flashOverlay.set(withTiming(1, { duration: 80 }));
-      await new Promise((resolve) => setTimeout(resolve, 280));
+      setFlashing(true);
+      flashOverlay.set(withTiming(1, { duration: 60 }));
+      restoreBrightness = await brightenScreen();
+      await new Promise((resolve) => setTimeout(resolve, SCREEN_FLASH_WARMUP_MS));
     } else {
       flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
     }
@@ -202,7 +224,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     } catch (error) {
       Alert.alert('Could not take photo', friendlyError(error));
     } finally {
-      if (screenFlash) flashOverlay.set(withTiming(0, { duration: 250 }));
+      if (screenFlash) {
+        flashOverlay.set(withTiming(0, { duration: 250 }));
+        setFlashing(false);
+        restoreBrightness?.();
+      }
       setBusy(false);
     }
   }
@@ -394,7 +420,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           <View style={StyleSheet.absoluteFill} accessible={false} />
         </GestureDetector>
       ) : null}
-      <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.flash, flashing && styles.screenFlash, flashStyle]} pointerEvents="none" />
       {/* Flash during a selfie video: a bright ring light around the screen edges lights up your face. */}
       {recording && flash === 'on' && facing === 'front' ? (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -610,6 +636,12 @@ const styles = StyleSheet.create({
   flash: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.white,
+  },
+  // The selfie flash: warm white, on top of everything (buttons too).
+  screenFlash: {
+    backgroundColor: SCREEN_FLASH_COLOR,
+    zIndex: 1000,
+    elevation: 1000,
   },
   // A see-through wash of light over the preview plus a bright thin edge – lights your face in the dark
   // without hiding any of the picture.

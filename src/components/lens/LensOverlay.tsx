@@ -12,8 +12,18 @@ import { paintLook, type LensFace, type LensLook } from './lensPaint';
 export function LensOverlay({ faces, look }: { faces: SharedValue<LensFace[]>; look: LensLook }) {
   const clock = useClock();
   const size = useSharedValue({ width: 0, height: 0 });
+  // Safety net: if the drawing ever fails, the filter stops drawing instead of closing the app (an error on
+  // the drawing thread would otherwise stop the whole app).
+  const broken = useSharedValue(false);
   const picture = useDerivedValue(() =>
-    createPicture((canvas) => paintLook(canvas, look, faces.value, size.value.width, size.value.height, clock.value / 1000)),
+    createPicture((canvas) => {
+      if (broken.value) return;
+      try {
+        paintLook(canvas, look, faces.value, size.value.width, size.value.height, clock.value / 1000);
+      } catch {
+        broken.value = true;
+      }
+    }),
   );
   return (
     <Canvas style={StyleSheet.absoluteFill} pointerEvents="none" onSize={size}>

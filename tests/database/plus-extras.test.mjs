@@ -165,8 +165,9 @@ async function dropPost(i, offset, rewind) {
 }
 
 test('A Plus member can post one late drop a week without the late label; the server checks it', async () => {
+  // (The zones span 26 hours, so some zone is always past its drop, whatever the time now.)
   const offsets = await lateOffsets();
-  assert.ok(offsets.length >= 2, 'need two time zones where the drop is late');
+  assert.ok(offsets.length >= 1, 'need a time zone where the drop is late');
   // Without Plus, asking for a rewind changes nothing.
   const free = await dropPost(0, offsets[0], true);
   assert.equal(free.drop_rewound, false);
@@ -185,8 +186,11 @@ test('A Plus member can post one late drop a week without the late label; the se
   await rpc(1, 'update posts set drop_rewound=false, drop_late_seconds=999 where id=$1', [rewound.id]);
   assert.deepEqual(await one(1, 'select drop_rewound, drop_late_seconds from posts where id=$1', [rewound.id]),
     { drop_rewound: true, drop_late_seconds: 0 });
-  // A second late drop the same week is posted late.
-  const second = await dropPost(1, offsets[1], true);
+  // A second late drop the same week is posted late – even after deleting the rewound one (it still used up
+  // the rewind; deleting it also frees that day, so this works at any time of day).
+  await rpc(1, 'delete from posts where id=$1', [rewound.id]);
+  assert.equal((await one(1, 'select rewinds_left from plus_allowances()')).rewinds_left, 0);
+  const second = await dropPost(1, offsets[0], true);
   assert.equal(second.drop_rewound, false);
   assert.ok(second.drop_late_seconds > 120);
   // A late drop posted later can't be rewound by changing it either.
