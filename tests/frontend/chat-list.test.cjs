@@ -67,7 +67,7 @@ test('each friend\'s picture in the Chat list is a story picture: tap = their st
     '@/lib/groups': { fetchGroups: async () => [] },
     '@/lib/invite': { inviteFriends: noop }, '@/lib/time': { timeAgo: () => 'now' },
     '@/lib/useSafetyActions': { useSafetyActions: () => ({ confirmBlock: noop }) },
-    '@/lib/storyRings': { refreshStoryBadges: async (...args) => { refreshed.push(args); } },
+    '@/lib/storyRings': { refreshStoryBadges: async (...args) => { refreshed.push(args); }, useStoryBadge: (_me, id) => (id === 'bob' ? { allSeen: false, closeFriends: false } : null) },
     './HomeTabBar': { useTabBarSpace: () => 60 }, './PageHeader': { PageHeader: host('PageHeader') },
   });
   screen.Component = () => React.createElement(screen.exports.ChatPage, { visible: true, inboxCount: 0, onRefreshInbox: noop });
@@ -82,5 +82,10 @@ test('each friend\'s picture in the Chat list is a story picture: tap = their st
     assert.deepEqual(screen.calls.routes.at(-1), ['push', '/chat/bob']);
     await act(() => picture.props.onLongPress());
     assert.equal(menus.length, 1, 'holding the picture opens the same menu as holding the row');
+    // Screen readers: the row offers "Watch their story" when they have one.
+    const row = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityActions);
+    assert.deepEqual(JSON.parse(JSON.stringify(row.props.accessibilityActions)), [{ name: 'watchStory', label: 'Watch their story' }]);
+    await act(() => row.props.onAccessibilityAction({ nativeEvent: { actionName: 'watchStory' } }));
+    assert.deepEqual(JSON.parse(JSON.stringify(screen.calls.routes.at(-1))), ['push', { pathname: '/stories/[user]', params: { user: 'bob' } }]);
   } finally { await unmount(tree); }
 });

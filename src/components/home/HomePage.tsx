@@ -18,7 +18,7 @@ import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
 import { fetchStoryRings } from '@/lib/stories';
-import { setStoryRings } from '@/lib/storyRings';
+import { setStoryRings, storyRingsTicket } from '@/lib/storyRings';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
@@ -60,11 +60,12 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   );
 
   const loadAll = useCallback(async () => {
+    const ticket = storyRingsTicket();
     const [rings, page, days, toGuess] = await Promise.all([
       fetchStoryRings(userId)
         .then((loaded) => {
           // The same list gives the rings on profile pictures everywhere else.
-          setStoryRings(userId, loaded);
+          setStoryRings(userId, loaded, ticket);
           return loaded;
         })
         .catch((error) => {

@@ -2,19 +2,25 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/Avatar';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
 // One person in a list: picture, name, @username (tap → their profile), and a button on the right.
-export function PersonRow({ person, right }: { person: Profile; right?: ReactNode }) {
+// The picture shows their story ring (tap → their story), unless `plain` (lists inside a sheet).
+export function PersonRow({ person, right, plain = false }: { person: Profile; right?: ReactNode; plain?: boolean }) {
   return (
     <View style={styles.row}>
       <Pressable
         style={styles.person}
         onPress={() => router.push(`/profile/${person.id}`)}
         accessibilityLabel={`Open @${person.username}`}>
-        <StoryAvatar person={person} size={48} />
+        {plain ? (
+          <Avatar path={person.avatar_path} name={person.display_name || person.username} size={48} />
+        ) : (
+          <StoryAvatar person={person} size={48} />
+        )}
         <View style={styles.names}>
           <Text style={styles.name} numberOfLines={1}>
             {person.display_name || person.username}

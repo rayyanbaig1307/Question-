@@ -87,24 +87,38 @@ test('Android keeps KeyboardAvoidingView exactly as before', async () => {
   } finally { await act(() => tree.unmount()); }
 });
 
-test('how much the keyboard covers: its height; only without a height, from where it starts', () => {
+test('how much the keyboard covers: its height; a position that is really on screen can only make it smaller (hardware keyboard)', () => {
   const { keyboardOverlap } = load('ios').keyboard;
-  assert.equal(keyboardOverlap({ height: 336, screenY: 508 }, 844), 336);
-  assert.equal(keyboardOverlap({ height: 336, screenY: 0 }, 844), 336);
+  assert.equal(keyboardOverlap({ height: 336, screenY: 508 }, 844), 336);       // a normal keyboard
+  assert.equal(keyboardOverlap({ height: 336, screenY: 0 }, 844), 336);         // "Prefer Cross-Fade Transitions"
+  assert.equal(keyboardOverlap({ height: 336, screenY: 900 }, 844), 336);       // a position off the screen is not trusted
+  assert.equal(keyboardOverlap({ height: 336, screenY: 789 }, 844), 55);        // hardware keyboard: only its small bar shows
   assert.equal(keyboardOverlap({ height: 0, screenY: 500 }, 844), 344);
   assert.equal(keyboardOverlap({ height: 0, screenY: 0 }, 844), 0);
-  assert.equal(keyboardOverlap({ height: 0, screenY: 900 }, 844), 0);
   assert.equal(keyboardOverlap(undefined, 844), 0);
 });
 
-test('both chat screens and the dare and hit-up boxes use it (the iPhone path), with the home-bar space taken off in chats', () => {
+test('iPhone: taps can pass through the keyboard area when asked (the comments sheet lets you tap the backdrop)', async () => {
+  for (const os of ['ios', 'android']) {
+    const phone = load(os);
+    const tree = await render(phone, { pointerEvents: 'box-none' });
+    const outer = tree.root.findByType(os === 'ios' ? 'View' : 'KeyboardAvoidingView');
+    assert.equal(outer.props.pointerEvents, 'box-none', os);
+    await act(() => tree.unmount());
+  }
+});
+
+test('both chat screens, comments, and the dare and hit-up boxes use it, with the home-bar space taken off where the box keeps it', () => {
   for (const file of ['src/app/(app)/chat/[id].tsx', 'src/app/(app)/groups/chat/[id].tsx']) {
     const source = readSource(file);
     assert.match(source, /<KeyboardSafeView style=\{styles\.fill\} bottomInset=\{insets\.bottom\} androidBehavior="padding">/, file);
     assert.doesNotMatch(source, /<KeyboardAvoidingView/, file);
   }
-  for (const file of ['src/components/DareComposer.tsx', 'src/components/HitUpButton.tsx']) {
-    assert.match(readSource(file), /<KeyboardSafeView /, file);
+  const comments = readSource('src/app/(app)/comments/[postId].tsx');
+  assert.match(comments, /<KeyboardSafeView\s+style=\{\[styles\.sheetArea[^>]*bottomInset=\{insets\.bottom\}\s+androidBehavior="padding"\s+pointerEvents="box-none">/);
+  assert.match(readSource('src/components/HitUpButton.tsx'), /<KeyboardSafeView style=\{styles\.fill\} bottomInset=\{insets\.bottom\} androidBehavior="padding">/);
+  assert.match(readSource('src/components/DareComposer.tsx'), /<KeyboardSafeView style=\{styles\.fill\}>/);
+  for (const file of ['src/app/(app)/comments/[postId].tsx', 'src/components/DareComposer.tsx', 'src/components/HitUpButton.tsx']) {
     assert.doesNotMatch(readSource(file), /<KeyboardAvoidingView/, file);
   }
 });

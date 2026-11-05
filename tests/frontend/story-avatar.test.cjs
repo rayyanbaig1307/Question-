@@ -112,3 +112,22 @@ test('no person yet (still loading): a plain picture, nothing to tap', async () 
   assert.equal(tree.root.findByType('Avatar').props.size, 32);
   await act(() => tree.unmount());
 });
+
+test('a person row shows the story picture, but a plain one inside a sheet (the story viewer\'s "Seen by" list)', async () => {
+  const screen = loadScreen('src/components/PersonRow.tsx', {});
+  for (const [plain, type] of [[false, 'StoryAvatar'], [true, 'Avatar']]) {
+    let tree;
+    await renderer.act(async () => { tree = renderer.create(React.createElement(screen.exports.PersonRow, { person: bob, plain })); });
+    assert.equal(tree.root.findAllByType(type).length, 1, type);
+    assert.equal(tree.root.findAllByType(plain ? 'StoryAvatar' : 'Avatar').length, 0);
+    await act(() => tree.unmount());
+  }
+  const { readSource } = require('./harness.cjs');
+  assert.match(readSource('src/app/(app)/stories/[user].tsx'), /<PersonRow person=\{item\} plain \/>/);
+});
+
+test('where the picture sits in a row that opens something, it does the same without a story (members, comments, chat list)', () => {
+  const { readSource } = require('./harness.cjs');
+  assert.match(readSource('src/app/(app)/groups/[id].tsx'), /<StoryAvatar\s+person=\{member\.profile\}\s+size=\{40\}\s+onPress=\{\(\) => router\.push\(`\/profile\/\$\{member\.userId\}`\)\}\s+onLongPress=\{\(\) => memberMenu\(member\)\}/);
+  assert.match(readSource('src/app/(app)/comments/[postId].tsx'), /<StoryAvatar[\s\S]{0,120}onPress=\{\(\) => item\.author && openProfile\(item\.author\.id\)\}/);
+});

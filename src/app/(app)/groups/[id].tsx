@@ -258,7 +258,12 @@ export default function GroupScreen() {
                 style={styles.member}
                 onPress={() => router.push(`/profile/${member.userId}`)}
                 onLongPress={() => memberMenu(member)}>
-                <StoryAvatar person={member.profile} size={40} onLongPress={() => memberMenu(member)} />
+                <StoryAvatar
+                  person={member.profile}
+                  size={40}
+                  onPress={() => router.push(`/profile/${member.userId}`)}
+                  onLongPress={() => memberMenu(member)}
+                />
                 <View style={styles.memberText}>
                   <Text style={styles.memberName} numberOfLines={1}>
                     {name}

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { KeyboardSafeView } from '@/components/KeyboardSafeView';
@@ -21,6 +22,7 @@ export function HitUpButton({ person, onConnected }: {
   onConnected: () => void;
 }) {
   const { showToast } = useOverlays();
+  const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<HitUpStatus | null>(null);
   const [writing, setWriting] = useState(false);
   const [note, setNote] = useState('');
@@ -112,7 +114,7 @@ export function HitUpButton({ person, onConnected }: {
     <>
       <Button title="👋 Hit up" variant="pink" onPress={() => setWriting(true)} />
       <Modal visible={writing} transparent animationType="slide" onRequestClose={() => setWriting(false)}>
-        <KeyboardSafeView style={styles.fill} androidBehavior="padding">
+        <KeyboardSafeView style={styles.fill} bottomInset={insets.bottom} androidBehavior="padding">
           <Pressable style={styles.backdrop} onPress={() => setWriting(false)}>
             <SafeEdge edge="bottom" style={styles.sheet}>
               <Pressable style={styles.inner}>

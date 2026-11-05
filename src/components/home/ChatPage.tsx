@@ -24,7 +24,7 @@ import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
-import { refreshStoryBadges } from '@/lib/storyRings';
+import { refreshStoryBadges, useStoryBadge } from '@/lib/storyRings';
 import { colors, font, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
@@ -508,9 +508,17 @@ function ChatRowView({ row, me, pinned, muted, onMenu }: {
   onMenu: () => void;
 }) {
   const status = describe(row, me);
+  // Screen readers treat the row as one button, so their story is offered as an extra action on it.
+  const story = useStoryBadge(me, row.friend.id);
   return (
     <Pressable
       onPress={() => router.push(`/chat/${row.friend.id}`)}
+      accessibilityActions={story ? [{ name: 'watchStory', label: 'Watch their story' }] : undefined}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'watchStory') {
+          router.push({ pathname: '/stories/[user]', params: { user: row.friend.id } });
+        }
+      }}
       onLongPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onMenu();

@@ -89,3 +89,13 @@ it('another account never sees the previous account\'s rings, not even from a lo
   await flush();
   expect(lib.useStoryBadge('zed', 'cara')).not.toBe(null);
 });
+
+it('Home\'s list counts as old as when Home started loading: a newer forced check is not replaced by it', async () => {
+  const { lib, loads } = setup();
+  const ticket = lib.storyRingsTicket();          // Home starts loading
+  const forced = lib.refreshStoryBadges('me', true); // meanwhile you close a story: a newer check
+  loads[0].resolve({ mine: null, friends: [] });
+  await forced;
+  lib.setStoryRings('me', { mine: null, friends: [ring('bob')] }, ticket); // Home's older answer arrives last
+  expect(lib.useStoryBadge('me', 'bob')).toBe(null);
+});

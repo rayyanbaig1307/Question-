@@ -44,9 +44,14 @@ export function badgesFromRings(rings: Rings): Map<string, StoryBadge> {
   return next;
 }
 
-// Home already loads everyone's stories for its row: share them instead of asking again.
-export function setStoryRings(me: string, rings: Rings) {
-  publish(me, badgesFromRings(rings), ++requests);
+// Home already loads everyone's stories for its row: share them instead of asking again. Home takes a ticket
+// when it starts loading, so its answer counts as old as it really is.
+export function storyRingsTicket(): number {
+  return ++requests;
+}
+export function setStoryRings(me: string, rings: Rings, ticket: number = ++requests) {
+  if (owner !== null && owner !== me) loading = null;
+  publish(me, badgesFromRings(rings), ticket);
 }
 
 // Load the badges again (only if they're older than 30 seconds, unless `force`). Never throws: on a failure the

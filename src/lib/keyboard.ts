@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Keyboard, LayoutAnimation, Platform, type KeyboardEvent } from 'react-native';
 
 // How much of the screen the keyboard covers, from the bottom up.
-// An iPhone keyboard always sits at the bottom, so its height is the answer. Only when the phone reports no
-// height do we work it out from where the keyboard starts (screenY). We never rely on screenY alone: with
-// "Prefer Cross-Fade Transitions" (Settings → Accessibility → Motion) iOS reports it as 0, and then React
-// Native's own KeyboardAvoidingView decides the keyboard covers nothing – the message box stays hidden.
+// It's the keyboard's height. We don't trust where iOS says the keyboard starts (screenY) on its own: with
+// "Prefer Cross-Fade Transitions" (Settings → Accessibility → Motion) it reports 0, and React Native's own
+// KeyboardAvoidingView then decides the keyboard covers nothing – the message box stayed hidden.
+// The one time screenY helps: with a hardware keyboard only a small bar is on screen, so when screenY really is
+// on the screen and leaves less than the keyboard's height below it, only that part counts.
 export function keyboardOverlap(end: { height: number; screenY: number } | undefined, windowHeight: number): number {
   if (!end) return 0;
-  if (end.height > 0) return Math.round(end.height);
-  if (end.screenY > 0 && end.screenY < windowHeight) return Math.round(windowHeight - end.screenY);
-  return 0;
+  const height = end.height > 0 ? end.height : 0;
+  const onScreen = end.screenY > 0 && end.screenY < windowHeight;
+  if (!onScreen) return Math.round(height);
+  const covered = windowHeight - end.screenY;
+  return Math.round(height > 0 ? Math.min(height, covered) : covered);
 }
 
 // The keyboard's height while it's open on an iPhone (0 when it's closed, and always 0 on other phones – they

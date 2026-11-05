@@ -8,7 +8,6 @@ import {
   Animated,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -23,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bouncy } from '@/components/Bouncy';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
+import { KeyboardSafeView } from '@/components/KeyboardSafeView';
 import { useOverlays } from '@/components/Overlays';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
@@ -188,11 +188,11 @@ export default function Comments() {
       <Animated.View style={[styles.backdrop, { opacity: backdrop }]}>
         <Pressable style={styles.screen} onPress={close} accessibilityLabel="Close comments" />
       </Animated.View>
-      {/* The negative offset stops a gap appearing between the comment box and the keyboard. */}
-      <KeyboardAvoidingView
+      {/* Keeps the comment box just above the keyboard (bottomInset: no gap for the home-bar space). */}
+      <KeyboardSafeView
         style={[styles.sheetArea, { paddingTop: insets.top + space.lg }]}
-        behavior="padding"
-        keyboardVerticalOffset={-insets.bottom}
+        bottomInset={insets.bottom}
+        androidBehavior="padding"
         pointerEvents="box-none">
         <Animated.View style={[styles.sheet, { height: sheetHeight, transform: [{ translateY: slide }] }]}>
           <View style={styles.sheetTop} {...drag.panHandlers}>
@@ -294,7 +294,7 @@ export default function Comments() {
             />
           </View>
         </Animated.View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </View>
   );
 }

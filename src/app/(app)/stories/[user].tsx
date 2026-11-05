@@ -337,7 +337,7 @@ export default function StoryViewer() {
                 contentContainerStyle={styles.sheetList}
                 style={styles.sheetScroll}
                 ListEmptyComponent={<Text style={styles.sheetEmpty}>Nobody yet – check back soon!</Text>}
-                renderItem={({ item }) => <PersonRow person={item} />}
+                renderItem={({ item }) => <PersonRow person={item} plain />}
               />
             </Pressable>
           </SafeEdge>
