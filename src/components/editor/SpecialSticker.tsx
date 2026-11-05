@@ -63,7 +63,7 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
 
 // A cartoon googly eye: a white ball with a black pupil looking somewhere (x/y from -1 to 1).
 // On a photo each eye looks a random way, and the pupil jiggles into place when it appears – like the real thing.
-function GooglyEye({ size, look }: { size: number; look?: { x: number; y: number } }) {
+export function GooglyEye({ size, look }: { size: number; look?: { x: number; y: number } }) {
   const pupil = size * 0.46;
   const room = (size - pupil) / 2 - size * 0.06;
   const [target] = useState(() => look ?? randomLook());

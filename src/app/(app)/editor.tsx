@@ -97,10 +97,17 @@ export default function Editor() {
     }
   }
 
+  // Takes the "screenshot" of the photo and everything on it. Moving text is stopped first (`still` is on while
+  // busy), so the picture shows it at rest.
+  async function snapshot(options: Parameters<typeof captureRef>[1]): Promise<string> {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return captureRef(canvasRef, options);
+  }
+
   // A video's text and stickers as a see-through picture (with the moving eyes' track tucked inside).
   async function videoLayer(): Promise<string | null> {
     if (items.length === 0 && !track) return null;
-    const png = await captureRef(canvasRef, { format: 'png', result: 'tmpfile' });
+    const png = await snapshot({ format: 'png', result: 'tmpfile' });
     return track ? addTrackToPng(png, track) : png;
   }
   const [dragging, setDragging] = useState(false);
@@ -206,7 +213,8 @@ export default function Editor() {
   function editItem(id: string) {
     const item = items.find((entry) => entry.id === id);
     if (item?.kind === 'text') {
-      setComposer({ editingId: id, draft: { content: item.content, color: item.color, look: item.look } });
+      const { content, color, look, font, effect, animation, align, background, size, googly } = item;
+      setComposer({ editingId: id, draft: { content, color, look, font, effect, animation, align, background, size, googly } });
     }
   }
 
@@ -244,7 +252,7 @@ export default function Editor() {
         overlayUri: await videoLayer(),
       };
     }
-    return { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+    return { kind: 'photo', uri: await resizePhoto(await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
   }
 
   // Save it with everything on it: to the phone's Photos and to your Keeps in Peekaboo.
@@ -283,7 +291,7 @@ export default function Editor() {
               uri,
               overlayUri: await videoLayer(),
             }
-          : { kind: 'photo', uri: await resizePhoto(await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+          : { kind: 'photo', uri: await resizePhoto(await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
         if (straightToGroup && group) {
           await sendGroupCapture(userId, group, photo, groupDare);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -313,7 +321,7 @@ export default function Editor() {
         return;
       }
       // Take a "screenshot" of the photo with all the text and stickers on it.
-      const finished = await captureRef(canvasRef, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
+      const finished = await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
       Alert.alert(straightToChat ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));
@@ -357,6 +365,7 @@ export default function Editor() {
             onDragChange={setDragging}
             onDelete={removeItem}
             onTap={editItem}
+            still={busy}
           />
         ))}
       </View>
@@ -459,7 +468,7 @@ export default function Editor() {
         </View>
       ) : null}
 
-      {composer ? <TextComposer initial={composer.draft} onDone={finishText} /> : null}
+      {composer ? <TextComposer initial={composer.draft} onDone={finishText} onCancel={() => setComposer(null)} /> : null}
 
       <StickerPicker
         visible={stickersOpen}

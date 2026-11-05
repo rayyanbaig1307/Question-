@@ -11,7 +11,8 @@ import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanima
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { SpecialSticker } from './SpecialSticker';
-import { textOn, type OverlayItem } from './stickers';
+import { type OverlayItem } from './stickers';
+import { PlacedText, resolveText } from './TextLook';
 
 export type TrashZone = { top: number; left: number; right: number };
 
@@ -21,11 +22,13 @@ type Props = {
   onDragChange: (dragging: boolean) => void;
   onDelete: (id: string) => void;
   onTap: (id: string) => void;
+  // True while the editor takes the final picture: animated text sits still at its resting look.
+  still?: boolean;
 };
 
 // A piece of text or a sticker you can drag (1 finger), resize and turn (2 fingers),
 // tap to edit, or drop on the trash can to remove.
-export function DraggableItem({ item, trash, onDragChange, onDelete, onTap }: Props) {
+export function DraggableItem({ item, trash, onDragChange, onDelete, onTap, still = false }: Props) {
   const { width } = useWindowDimensions();
   const x = useSharedValue(item.startX);
   const y = useSharedValue(item.startY);
@@ -98,16 +101,7 @@ export function DraggableItem({ item, trash, onDragChange, onDelete, onTap }: Pr
           ) : item.kind === 'sticker' ? (
             <Text style={styles.sticker}>{item.content}</Text>
           ) : (
-            <Text
-              style={[
-                styles.text,
-                { maxWidth: width * 0.85 },
-                item.look === 'pill'
-                  ? [styles.pill, { backgroundColor: item.color, color: textOn(item.color) }]
-                  : [styles.shadow, { color: item.color }],
-              ]}>
-              {item.content}
-            </Text>
+            <PlacedText spec={resolveText(item)} maxWidth={width * 0.85} still={still} />
           )}
         </Animated.View>
       </GestureDetector>
@@ -123,21 +117,5 @@ const styles = StyleSheet.create({
   },
   sticker: {
     fontSize: 84,
-  },
-  text: {
-    fontSize: 34,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  shadow: {
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  pill: {
-    overflow: 'hidden',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
   },
 });
