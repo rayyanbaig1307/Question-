@@ -916,7 +916,8 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    for everyone in the group (stays there). Others get "👯 Squad · Ray: 📷 Photo".
 2. **Voice notes:** with nothing typed, hold 🎤, talk, let go → a voice note in the group chat.
 3. **Group dares:** tap 🚩 → write a dare → "🎯 Ray dared the group". Each person taps **Do it · post proof** →
-   camera → their photo/video appears as "✅ Did the dare". The card shows "2 of 4 did it: …" and turns green
+   camera → their photo/video appears as "⏳ Legit or cap? Vote!" for everyone else ("⏳ Waiting for votes" for
+   them), and the rest of the group votes on it (see Step 62, check 14). The card shows "2 of 4 did it: …" (only proofs the group said are legit) and turns green
    with "🔥 Everyone did it!" when the whole group has.
 4. **Typing:** while someone types, the top says "Sam is typing…".
 5. **Seen:** under your newest message, "👁 Seen by Sam, Ali" (or "everyone") once they've opened the chat.
@@ -991,4 +992,28 @@ real person's account (deleting can't be undone).
     save button → "Sending and saving from the web isn't ready yet. Please use the Peekaboo phone app." In Chrome
     on Android, swiping right on Chat doesn't leave the app. (On iPhone Safari the edge swipe-back can still go
     back – a web page can't block it.)
+14. **Group dares: Legit or Cap** (needs three phones with test accounts in one group – call them A, B and C):
+    - A dares the group (🚩). B taps **Do it · post proof** and sends a photo. Everyone sees "⏳ Legit or cap?
+      Vote!" on it (B sees "⏳ Waiting for votes"). The dare card still says "Nobody has done it yet", and B
+      still has the **Do it · post proof** button. A and C got the usual "👯 Squad · B: 📸 Posted proof – legit or
+      cap?" notification (not "Did the dare").
+    - B's photo has no Legit / Cap buttons for B. A (who sent the dare) and C do have them.
+    - C taps **Legit 🔥** → "You said legit 🔥", the button turns pink, and within a second or two all three
+      phones show "🔥 1 · 🧢 0" and "✅ Legit – it counts". The card says "1 of 3 did it: B", B sees "✅ You
+      did it", and B gets "The group says legit 🔥".
+    - A taps **Cap 🧢** → all phones show "🔥 1 · 🧢 1" and "⚖️ Tie – not decided". The card goes back to "Nobody
+      has done it yet" and B gets the **Do it** button back. B gets "Someone called cap on your proof 🧢".
+    - C taps **Legit 🔥** again → "Vote taken back"; now "🔥 0 · 🧢 1" and "🧢 Cap – doesn't count" (cap
+      majority). C taps **Cap 🧢**, then **Legit 🔥**: the totals follow, but B gets no more notifications.
+    - Tap a button twice very quickly → only one vote is counted.
+    - In the one-to-one chat between A and B, the 🔥 dare streak goes up while B's proof counts, and down
+      again when it doesn't. A proof for your own dare never changes a streak.
+    - Turn on airplane mode and tap a vote → "Vote not saved – …" and nothing changes. Try it on the web
+      version too: you see the message there (no silent failure).
+    - C leaves the group (or A, if A made the group, removes C) → on A's and B's phones C's vote disappears from
+      the totals within a second or two ("🔥 0 · 🧢 1"). Add C back: C's buttons are not highlighted and C can
+      vote again.
+    - A proof posted before the update still shows "✅ Did the dare" and counts until someone votes on it. After
+      the first vote it follows the normal rule, even if that vote is taken back (then "⏳ Legit or cap? Vote!"),
+      and its poster gets no "The group says legit 🔥" for it.
 

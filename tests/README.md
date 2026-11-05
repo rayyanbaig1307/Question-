@@ -66,6 +66,25 @@ Database (PGlite, part of `npm test`):
   and finds what it should on an untouched database; its "names must still be free" list matches the names
   in the migration files.
 - `local-db.test.mjs`: the `applyMigrationFile` helper works on PGlite and keeps nothing of a file that fails.
+- `group-dare-votes.test.mjs`: group dares get a group vote, Legit 🔥 or Cap 🧢
+  (`20261216000000_group_dare_votes.sql`). A new proof starts at 0/0 and doesn't count, even if the app sends
+  totals or the "old proof" flag; the poster, people outside the group, a blocked pair, a different logged-in
+  account and visitors can't vote, the dare's sender can; one vote each, changeable and taken back, with the
+  totals always equal to the votes table (also after 120 votes in separate transactions; PGlite runs them one
+  at a time, so votes at the very same moment are only checked by `npm run test:concurrency`); a vote only
+  counts while the voter is in the group (spare accounts that join, vote Legit and leave change nothing;
+  being removed takes your votes away; your votes in other groups and the votes on your own proofs stay; a
+  group with votes can still be deleted); votes are anonymous
+  and the votes table is not sent live; more Legit than Cap counts, a tie or more Cap doesn't; the dare streak
+  counts a counting proof for both the doer and the dare's sender, mixes with one-to-one chat dares, keeps the
+  3-day rule, stops when the votes flip and never counts your own dare; proofs from before the update (built on
+  a database without this migration) keep counting until someone votes – after that the normal rule applies
+  for good, also when the vote is taken back or its voter's account is deleted – their doers get a "cap" push
+  but no "legit" push, and running the migration again changes nothing; app users can't change the totals or
+  write votes; the proof push and the Chat list say
+  "📸 Posted proof – legit or cap?"; the doer gets at most one "cap" and one "legit" push per proof, none when
+  the group is muted, notifications are off or they left; a deleted account's votes are removed and the totals
+  counted again; files, reports, the clean-up and the message rules still work for proofs.
 
 API and library (Vitest, part of `npm test`):
 
@@ -90,6 +109,14 @@ API and library (Vitest, part of `npm test`):
   clean-up fails; a delete the server refuses still shows the error.
 - `tests/unit/media-urls-hook.test.mjs`: photos stay on screen when a new photo arrives, links for photos that
   left are dropped, and nothing carries over to a different login.
+- `tests/unit/group-chat.test.mjs` (added to): a vote sends the account on screen, the proof and the choice,
+  and passes on whether the proof still counts as an old one; a refused vote keeps the real reason; your own
+  votes are read in one request for the proofs on screen, and a failed read gives the error back (so the screen
+  keeps the votes it shows); the app's "does this proof count?" rule; live changes say what happened to which
+  message.
+- `tests/unit/group-proof-parity.test.mjs`: the app's "does this proof count?" rule (`proofCounts`) and the
+  database's (`private.group_proof_counts`) give the same answer for every mix of 0–4 Legit, 0–4 Cap votes and
+  the old-proof flag (PGlite).
 - Changed: `edge-security.test.mjs` (word filter in username sign-up: a display name may swear, a slur in it
   or swearing in the username is refused before any account is made, with the same message as the app),
   `apple-deletion.test.mjs` (a password-only account that sends an Apple code is now deleted, still without
@@ -104,6 +131,18 @@ Frontend (rendered screens, part of `npm test`):
   go back.
 - `web-capture.test.cjs`: in a browser, Send to and Save in the editor say they need the phone app; on phones
   they work as before.
+- `group-chat.test.cjs` (added to): group dare votes. Each proof's label follows the votes (waiting, legit,
+  tie, cap, old proof), with the totals; Legit / Cap buttons for everyone except the poster (the dare's sender
+  has them too), your own vote highlighted; tapping it again takes it back; a second tap while a vote is sent
+  does nothing; a refused vote shows a toast (not an alert); the dare card counts only counting proofs and "Do
+  it · post proof" comes back while none of yours counts; an old proof counts until someone votes and can be
+  voted on; a live vote changes only the totals, without loading the chat again; old answers never win: an
+  answer to your vote that arrives after a newer live update, a chat reload that set off before a live update
+  or before your vote was answered, and an older "your votes" answer all leave the newer totals and your vote
+  on screen (a failed "your votes" read too); a reply quote and the pinned banner say "📸 Dare proof"; a
+  server without votes yet keeps the old rule.
+- `chat-list.test.cjs` (added to): a vote (a message `UPDATE`) doesn't reload the Chat list; a new message
+  does.
 - Changed: `terms.test.cjs` (one pop-up only: a plain cover while checking, the Terms page only when agreeing
   is needed, "Couldn't check" after 15 seconds), `social-setup.test.cjs` (the Apple/Google setup check with
   Try again), `settings.test.cjs` (queued privacy saves, deletion after leaving Settings, switch rows not
@@ -139,13 +178,23 @@ The old "known medium" public-name moderation bypass is fixed (OPEN-01) and is n
 word-filter checks over HTTP (swearing refused in a username, saved in a display name; slurs refused in a
 display name or bio, including fancy, invisible, look-alike and accented letters).
 
-Newer HTTP checks: username search escaping (a hand-written pattern, and the app's own `searchUsers`
+Newer HTTP checks: group dare votes through `/rpc/vote_group_proof` (a member and the dare's sender can vote;
+the poster, an outsider, a different logged-in account and a visitor are refused; members read the totals
+over REST, an outsider can't; only your own vote is readable; PATCHing the totals or POSTing a vote directly
+changes nothing; the app's own `voteGroupProof` and `fetchMyProofVotes` through supabase-js; leaving the group
+over REST takes your vote away and you can't vote any more); username search escaping (a hand-written pattern, and the app's own `searchUsers`
 through supabase-js); the Community dares list loaded with the app's own `fetchIdeas`; a hidden dare idea
 cannot be reported to learn who wrote it; app users cannot call the username-limit functions; the word
 filter over HTTP (f.u.c.k, fancy letters, invisible and look-alike letters, accents, real names still save,
 a huge comment refused quickly, a 1:1 chat dare not filtered).
 
-Newer concurrency scenarios: report and delete races (evidence kept quietly, dismissal releases it, a
+Newer concurrency scenarios: ten people voting on one proof at once while changing and taking back votes, and
+the voter whose account is deleted at that moment voting too (the totals equal the votes table, no deadlock,
+one "cap" and one "legit" push); six people leaving the group while they and others vote (no vote from
+someone who left stays, the totals stay exact); a voter deleting their account while the poster deletes the
+proof, the dare's sender deletes the dare, the poster or another voter deletes their account, the group's
+maker removes the voter or deletes the group (each pair takes turns, never a deadlock, with a pause widening
+the gap); report and delete races (evidence kept quietly, dismissal releases it, a
 report that loses the race keeps nothing), parallel username logins (correct ones never use up the
 wrong-password allowance; wrong ones stop at 8 per name and address and 40 per name), a 25,000-peek account
 deletion and other heavy deletes racing posts, reports, file deletes and uploads, and a daily cleanup that
@@ -207,6 +256,9 @@ It rehearses the release on a throw-away local PostgreSQL 16 server:
    read-only) and checks that every query lists exactly those rows.
 3. It applies the new migrations one file at a time, each in its own transaction. The hardening migration
    must stop cleanly while a forfeit is paid twice; the rehearsal then fixes that by hand and applies the rest.
+   After `20261216000000_group_dare_votes` it checks that the two old proofs (including a broken one) are
+   marked as old proofs with no votes and as already having had their "legit" push, that nothing else was
+   marked, and that the broken one can be voted on (and is no longer an old proof after that).
 4. It checks the old rows still work, then runs the preflight again on the finished database (twice) and on a
    brand-new empty one.
 
@@ -273,7 +325,8 @@ the fixed tests but not the original-source loaders.
 
 See `docs/QA_API_ROUND2.md`, `docs/QA_FRONTEND_FINDINGS.md`, `tests/database/findings.txt` and
 `docs/QA_REPORT.txt` (its INTEGRATION UPDATE says what happened to each open item) for severity,
-reproduction, fixes and evidence. 39/39 public tables have RLS; this flag alone does not prove every possible
+reproduction, fixes and evidence. 41/41 public tables have RLS (counted again on 5 Nov, with the Peekaboo+ and
+group dare vote tables); this flag alone does not prove every possible
 policy combination.
 
 Before the release, run `deployment-preflight.sql` read-only on a copy, one query at a time; the full release
@@ -318,6 +371,21 @@ Type check and lint: no errors. `npm run test:rest`: 66 passed, 0 failed. `QA_OR
 `safe.directory` settings above, so the old app code really loads): 48 passed, 14 failed, and every one of
 the 14 is the old code failing a check, none a git setup error. `npm run test:preflight`: 155 passed,
 0 failed, 1 NOTE. Browser: 72 passed (one run). The concurrency and HTTP stress runs were not repeated.
+
+Re-run on 2026-11-05, after group dare votes (Legit 🔥 / Cap 🧢, `20261216000000_group_dare_votes.sql`) and the
+fixes from its two reviews (votes leave with the voter, account deletion takes the proofs in a fixed order,
+old proofs follow the normal rule after the first vote and get no "legit" push, old totals never come back on
+screen): `npm test` node part 385 passed, 0 failed, 0 skipped (20 database checks in
+`group-dare-votes.test.mjs`, 18 new screen checks in `group-chat.test.cjs`, 1 in `chat-list.test.cjs`), and
+the Vitest part 26 files, 337 passed (7 new in `tests/unit/group-chat.test.mjs`, 1 in
+`group-proof-parity.test.mjs`). Type check and lint: no errors. `npm run test:rest`: 67 passed, 0 failed.
+`npm run test:preflight`: 159 passed, 0 failed, 1 NOTE (20261214100000 and 20261215000000 have no extra checks
+of their own there). `npm run test:concurrency`: qa_fixed 33 passed, 0 failed (qa_original 16 failed, as
+expected). Browser: 72 passed (one run). Each new check was also run without the new code (the migration
+moved away or one of its parts taken out, the old screen put back, or one line of the fix undone) and failed
+there; on real PostgreSQL, taking out the account-deletion lock makes "the poster deletes the proof" deadlock,
+and taking out the leave trigger or the vote's hold on your place in the group leaves votes behind. The HTTP
+stress run and `QA_ORIGINAL=1` were not repeated.
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

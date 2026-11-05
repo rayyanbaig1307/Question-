@@ -23,8 +23,37 @@ export type GroupMessage = {
   dare_id: string | null;
   // The earlier message in this group chat that this one replies to.
   reply_to?: string | null;
+  // A proof: the group's votes (anonymous totals, see voteGroupProof), and whether it was posted before voting
+  // existed (those keep counting while nobody has a vote on them). Missing on a server without votes yet.
+  proof_legit?: number;
+  proof_cap?: number;
+  proof_legacy?: boolean;
   created_at: string;
 };
+
+// What the group decided about a proof:
+// 'counts' (more Legit 🔥 than Cap 🧢 votes) · 'legacy' (posted before voting existed, and nobody has voted on
+// it yet: it counts, like before) · 'waiting' (no votes yet) · 'tie' · 'cap' (more Cap votes: it doesn't count).
+// The database has the same rule (private.group_proof_counts in
+// supabase/migrations/20261216000000_group_dare_votes.sql) for dare streaks. Keep the two the same
+// (tests/unit/group-proof-parity.test.mjs checks that they agree).
+export type ProofOutcome = 'counts' | 'legacy' | 'waiting' | 'tie' | 'cap';
+
+export function proofOutcome(proof: Pick<GroupMessage, 'proof_legit' | 'proof_cap' | 'proof_legacy'>): ProofOutcome {
+  // A server without votes yet (no totals at all): the old rule, a proof counts at once.
+  if (proof.proof_legit === undefined && proof.proof_cap === undefined) return 'legacy';
+  const legit = proof.proof_legit ?? 0;
+  const cap = proof.proof_cap ?? 0;
+  if (legit === 0 && cap === 0) return proof.proof_legacy ? 'legacy' : 'waiting';
+  if (legit > cap) return 'counts';
+  return legit === cap ? 'tie' : 'cap';
+}
+
+// Does this proof count as doing the dare (for "X of N did it", "✅ You did it" and dare streaks)?
+export function proofCounts(proof: Pick<GroupMessage, 'proof_legit' | 'proof_cap' | 'proof_legacy'>): boolean {
+  const outcome = proofOutcome(proof);
+  return outcome === 'counts' || outcome === 'legacy';
+}
 
 // Your groups' chat summaries for the Chat list: unread count, latest message, muted or not.
 export type GroupChatSummary = {
@@ -101,6 +130,39 @@ export async function sendGroupDare(groupId: string, dare: string): Promise<Grou
     .single();
   if (error) throw error;
   return data as GroupMessage;
+}
+
+// 🔥 / 🧢 Vote on someone's proof for a group dare: legit = true (it's real), false (cap, it's fake), or null to
+// take your vote back. Everyone in the group except the poster can vote, once each. `me` is the account on
+// screen: the server refuses the vote if a different account is logged in by now. Gives back the new totals,
+// your vote, and whether it still counts as a proof from before voting existed (false once anyone has voted).
+export async function voteGroupProof(
+  me: string,
+  proofId: string,
+  legit: boolean | null,
+): Promise<{ legit: number; cap: number; mine: boolean | null; legacy?: boolean }> {
+  const { data, error } = await supabase.rpc('vote_group_proof', { proof: proofId, legit, expected_user_id: me });
+  if (error) throw error;
+  const result = (data ?? {}) as { legit?: number; cap?: number; mine?: boolean | null; legacy?: boolean };
+  return {
+    legit: result.legit ?? 0,
+    cap: result.cap ?? 0,
+    mine: result.mine ?? null,
+    ...(typeof result.legacy === 'boolean' ? { legacy: result.legacy } : {}),
+  };
+}
+
+// Your own votes on these proofs (proof id → true for legit, false for cap). Votes are anonymous: the server only
+// ever shows you your own. If it fails, the screen keeps what it already shows.
+export async function fetchMyProofVotes(me: string, proofIds: string[]): Promise<Map<string, boolean>> {
+  if (proofIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('group_proof_votes')
+    .select('proof_id, legit')
+    .eq('user_id', me)
+    .in('proof_id', proofIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((row) => [row.proof_id as string, row.legit as boolean]));
 }
 
 // 📌 Pin a message to the top of the group chat (null = unpin). Any member can.
@@ -202,16 +264,24 @@ export async function fetchGroupChats(): Promise<Map<string, GroupChatSummary>> 
   return new Map(((data ?? []) as GroupChatSummary[]).map((row) => [row.group_id, row]));
 }
 
+// What changed in a group chat: a new message, a deleted one, or an 'UPDATE' (a proof's vote totals changed).
+// `message` is the changed row as the server sent it (only its id for a deleted one).
+export type GroupChatChange = { event: 'INSERT' | 'UPDATE' | 'DELETE'; message: Partial<GroupMessage> };
+
 // Each listener gets its own channel name (two listeners on one name crash the realtime library).
 let listener = 0;
-export function subscribeToGroupChat(groupId: string | null, onChange: () => void): () => void {
+export function subscribeToGroupChat(groupId: string | null, onChange: (change: GroupChatChange) => void): () => void {
   const channel = supabase.channel(`group-chat-${groupId ?? 'all'}-${++listener}`);
   channel.on(
     'postgres_changes',
     groupId
       ? { event: '*', schema: 'public', table: 'group_messages', filter: `group_id=eq.${groupId}` }
       : { event: '*', schema: 'public', table: 'group_messages' },
-    onChange,
+    (payload) =>
+      onChange({
+        event: payload.eventType,
+        message: ((payload.eventType === 'DELETE' ? payload.old : payload.new) ?? {}) as Partial<GroupMessage>,
+      }),
   );
   channel.subscribe();
   return () => {

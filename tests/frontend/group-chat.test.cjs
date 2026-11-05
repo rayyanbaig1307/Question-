@@ -1,11 +1,20 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScreen, renderScreen, act, button, unmount, host } = require('./harness.cjs');
+const vm = require('node:vm');
+const ts = require('typescript');
+const { loadScreen, renderScreen, act, button, unmount, host, textOf, readSource } = require('./harness.cjs');
 
 const message = (changes = {}) => ({ id: 'message1', group_id: 'squad', sender_id: 'bob', kind: 'text', body: 'Hello group 👋', media_path: null, poster_path: null, overlay_path: null, media_type: null, created_at: '2026-11-04T12:00:00Z', ...changes });
-function fixture({ messages = [message()], send, search, missing = false } = {}) {
-  const calls = { sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0 };
-  const group = { id: 'squad', name: 'Squad', pinned_message_id: null, members: ['alice', 'bob'].map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
+// The app's real "does this proof count?" rule from src/lib/groupChat.ts (the rest of that file is mocked below).
+function realProofRules() {
+  const compiled = ts.transpileModule(readSource('src/lib/groupChat.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module = { exports: {} };
+  vm.runInNewContext(compiled, { module, exports: module.exports, require: id => ({ './media': {}, './supabase': { supabase: {} } })[id] });
+  return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts };
+}
+function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null } = {}) {
+  const calls = { sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], loads: 0, onChange: null };
+  const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
   const screen = loadScreen('src/app/(app)/groups/chat/[id].tsx', {
@@ -20,10 +29,13 @@ function fixture({ messages = [message()], send, search, missing = false } = {})
     '@/components/VoiceNote': { MicButton: host('MicButton'), VoiceBubble: host('VoiceBubble') },
     '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
     '@/components/ZoomableImage': { ZoomableImage: host('ZoomableImage') },
-    '@/components/Overlays': { useOverlays: () => ({ showToast: noop, showOptions: value => calls.options.push(value) }) },
+    '@/components/Overlays': { useOverlays: () => ({ showToast: value => calls.toasts.push(value), showOptions: value => calls.options.push(value) }) },
     '@/lib/groupChat': {
-      fetchGroupMessages: async () => messages, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => {},
-      subscribeToGroupChat: () => stop, subscribeToGroup: () => stop,
+      ...realProofRules(),
+      fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => {},
+      subscribeToGroupChat: (_group, onChange) => { calls.onChange = onChange; return stop; }, subscribeToGroup: () => stop,
+      fetchMyProofVotes: async (...args) => { calls.voteFetches.push(args); return fetchVotes ? fetchVotes(...args) : new Map(myVotes); },
+      voteGroupProof: async (...args) => { calls.votes.push(args); if (vote) return vote(...args); return { legit: 1, cap: 0, mine: args[2] }; },
       sendGroupMessage: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[1] }); },
       deleteGroupMessage: async value => { calls.deleted.push(value.id); },
       pinGroupMessage: async (...args) => { calls.pinned.push(args); }, searchGroupMessages: async (_group, query) => search ? search(query) : [],
@@ -156,4 +168,327 @@ test('an older group search response cannot erase newer matching results', async
     await act(() => old);
     assert.equal(tree.root.findByType('FlatList').props.data[0]?.body, 'fresh match');
   } finally { release([]); await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// Group dares: the group votes Legit 🔥 or Cap 🧢 on each proof.
+// ---------------------------------------------------------------------------
+const dare = (changes = {}) => message({ id: 'dare1', sender_id: 'carol', kind: 'dare', body: 'Do ten jumps', ...changes });
+const proof = (id, sender, votes = {}) => message({ id, sender_id: sender, kind: 'proof', body: null, dare_id: 'dare1', media_path: `${sender}/group/${id}.jpg`, media_type: 'photo', proof_legit: 0, proof_cap: 0, proof_legacy: false, ...votes });
+const texts = tree => tree.root.findAllByType('Text').map(textOf);
+const voteButton = (tree, label) => tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel === label);
+const voteButtons = tree => tree.root.findAllByType('Pressable').filter(node => /^(Vote (legit|cap)|You said)/.test(node.props.accessibilityLabel ?? ''));
+
+test('a proof is labelled by what the group decided so far', async () => {
+  const { screen } = fixture({ members: ['alice', 'bob', 'carol'], messages: [
+    proof('waiting', 'bob'),
+    proof('counts', 'bob', { proof_legit: 2, proof_cap: 1 }),
+    proof('tie', 'bob', { proof_legit: 1, proof_cap: 1 }),
+    proof('capped', 'bob', { proof_cap: 2 }),
+    proof('old', 'bob', { proof_legacy: true }),
+    proof('oldVoted', 'bob', { proof_legacy: true, proof_cap: 1 }),
+    proof('mine', 'alice'),
+    dare(),
+  ] });
+  const tree = await renderScreen(screen);
+  try {
+    const shown = texts(tree);
+    for (const label of ['⏳ Legit or cap? Vote!', '✅ Legit – it counts', '⚖️ Tie – not decided', "🧢 Cap – doesn't count", '✅ Did the dare', '⏳ Waiting for votes']) {
+      assert.ok(shown.includes(label), `missing "${label}" in ${JSON.stringify(shown)}`);
+    }
+    // An old proof that someone voted cap on follows the normal rule.
+    assert.equal(shown.filter(text => text === "🧢 Cap – doesn't count").length, 2);
+    // Totals, without saying who voted what.
+    assert.ok(shown.includes('🔥 2 · 🧢 1'));
+    assert.ok(shown.includes('🔥 1 · 🧢 1'));
+    assert.ok(!shown.some(text => text.includes('Did the dare') && text !== '✅ Did the dare'));
+  } finally { await unmount(tree); }
+});
+
+test('Legit and Cap buttons show for everyone except the poster, and your own vote is highlighted', async () => {
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], myVotes: new Map([['theirs', true]]), messages: [
+    proof('theirs', 'bob', { proof_legit: 2 }), proof('mine', 'alice', { proof_cap: 1 }), dare(),
+  ] });
+  const tree = await renderScreen(screen);
+  try {
+    // Your own votes are fetched once, for the proofs on screen.
+    assert.deepEqual(calls.voteFetches, [['alice', ['theirs', 'mine']]]);
+    // Two buttons, on bob's proof only (none on your own proof).
+    assert.equal(voteButtons(tree).length, 2);
+    const chosen = voteButton(tree, 'You said legit. Tap to take your vote back')[0];
+    assert.equal(chosen.props.accessibilityState.selected, true);
+    assert.equal(voteButton(tree, 'Vote cap')[0].props.accessibilityState.selected, false);
+    assert.equal(voteButton(tree, 'Vote legit').length, 0);
+    // The poster still sees the totals on their own proof.
+    assert.ok(texts(tree).includes('🔥 0 · 🧢 1'));
+  } finally { await unmount(tree); }
+});
+
+test('tapping your vote again takes it back, tapping the other one changes it, with a toast each time', async () => {
+  let server = { legit: 2, cap: 0, mine: true };
+  const { screen, calls } = fixture({ myVotes: new Map([['p1', true]]), messages: [proof('p1', 'bob', { proof_legit: 2 }), dare()],
+    vote: (_me, _id, legit) => { server = { legit: legit === true ? 2 : 1, cap: legit === false ? 1 : 0, mine: legit }; return server; } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => voteButton(tree, 'You said legit. Tap to take your vote back')[0].props.onPress());
+    assert.deepEqual(calls.votes[0], ['alice', 'p1', null]);
+    assert.equal(calls.toasts.at(-1), 'Vote taken back');
+    assert.ok(texts(tree).includes('🔥 1 · 🧢 0'));
+    assert.equal(voteButton(tree, 'Vote legit').length, 1, 'nothing is highlighted after taking the vote back');
+    await act(() => voteButton(tree, 'Vote cap')[0].props.onPress());
+    assert.deepEqual(calls.votes[1], ['alice', 'p1', false]);
+    assert.equal(calls.toasts.at(-1), 'You called cap 🧢');
+    assert.equal(voteButton(tree, 'You said cap. Tap to take your vote back').length, 1);
+    assert.ok(texts(tree).includes('🔥 1 · 🧢 1'));
+    await act(() => voteButton(tree, 'Vote legit')[0].props.onPress());
+    assert.deepEqual(calls.votes[2], ['alice', 'p1', true]);
+    assert.equal(calls.toasts.at(-1), 'You said legit 🔥');
+  } finally { await unmount(tree); }
+});
+
+test('a second tap while a vote is being sent does nothing', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const { screen, calls } = fixture({ messages: [proof('p1', 'bob'), dare()], vote: () => pending });
+  const tree = await renderScreen(screen);
+  try {
+    const legit = voteButton(tree, 'Vote legit')[0].props.onPress;
+    await act(async () => { legit(); legit(); await Promise.resolve(); });
+    assert.equal(voteButton(tree, 'Vote cap')[0].props.disabled, true, 'the buttons wait while the vote is sent');
+    await act(async () => { voteButton(tree, 'Vote cap')[0].props.onPress(); await Promise.resolve(); });
+    assert.equal(calls.votes.length, 1);
+    release({ legit: 1, cap: 0, mine: true });
+    await act(() => pending);
+    assert.equal(voteButton(tree, 'Vote cap')[0].props.disabled, false);
+  } finally { release({ legit: 1, cap: 0, mine: true }); await unmount(tree); }
+});
+
+test('a vote the server refuses shows a toast (an alert would not show on the web) and changes nothing', async () => {
+  const { screen, calls } = fixture({ messages: [proof('p1', 'bob', { proof_legit: 1 }), dare()], vote: async () => { throw new Error('Only people in this group can vote'); } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => voteButton(tree, 'Vote cap')[0].props.onPress());
+    assert.equal(calls.toasts.at(-1), 'Vote not saved – Only people in this group can vote');
+    assert.equal(screen.calls.alerts.length, 0);
+    assert.ok(texts(tree).includes('🔥 1 · 🧢 0'));
+    assert.equal(voteButton(tree, 'Vote cap').length, 1, 'no vote is highlighted');
+    assert.equal(voteButton(tree, 'Vote cap')[0].props.disabled, false, 'you can try again');
+  } finally { await unmount(tree); }
+});
+
+test('the dare card counts only proofs that count, and "Do it" comes back while none of yours counts', async () => {
+  const members = ['alice', 'bob', 'carol'];
+  const card = tree => texts(tree).find(text => /did it|Nobody has done it|Everyone did it/.test(text));
+  const doIt = tree => tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel === 'Do it and post proof');
+  const render = async list => { const { screen } = fixture({ members, messages: [...list, dare()] }); return renderScreen(screen); };
+  // bob's proof counts, carol's was called cap, yours is waiting.
+  let tree = await render([proof('a', 'alice'), proof('b', 'bob', { proof_legit: 2 }), proof('c', 'carol', { proof_cap: 2 })]);
+  try {
+    assert.equal(card(tree), '1 of 3 did it: bob');
+    assert.equal(doIt(tree).length, 1);
+    assert.ok(texts(tree).includes('⏳ Your proof is waiting for votes'));
+    assert.ok(!texts(tree).includes('✅ You did it'));
+  } finally { await unmount(tree); }
+  // Your newest proof was called cap (an older one is a tie): post new proof.
+  tree = await render([proof('a2', 'alice', { proof_cap: 1 }), proof('a1', 'alice', { proof_legit: 1, proof_cap: 1 })]);
+  try {
+    assert.equal(card(tree), 'Nobody has done it yet');
+    assert.equal(doIt(tree).length, 1);
+    assert.ok(texts(tree).includes('🧢 The group said cap – post new proof?'));
+  } finally { await unmount(tree); }
+  // One of your proofs counts: done, even if a newer one was called cap.
+  tree = await render([proof('a2', 'alice', { proof_cap: 1 }), proof('a1', 'alice', { proof_legit: 1 }), proof('b', 'bob', { proof_legacy: true })]);
+  try {
+    assert.equal(card(tree), '2 of 3 did it: you, bob');
+    assert.equal(doIt(tree).length, 0);
+    assert.ok(texts(tree).includes('✅ You did it'));
+  } finally { await unmount(tree); }
+  // Everyone's proof counts.
+  tree = await render([proof('a', 'alice', { proof_legit: 1 }), proof('b', 'bob', { proof_legit: 2, proof_cap: 1 }), proof('c', 'carol', { proof_legit: 1 })]);
+  try {
+    assert.equal(card(tree), '🔥 Everyone did it!');
+  } finally { await unmount(tree); }
+  // A tie for everyone: nobody has done it.
+  tree = await render([proof('a', 'alice', { proof_legit: 1, proof_cap: 1 }), proof('b', 'bob', { proof_legit: 1, proof_cap: 1 })]);
+  try {
+    assert.equal(card(tree), 'Nobody has done it yet');
+    assert.ok(texts(tree).includes("⚖️ Your proof is a tie so far – it doesn't count yet"));
+  } finally { await unmount(tree); }
+});
+
+test('a live vote from someone else changes only the totals, without loading the whole chat again', async () => {
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], messages: [proof('p1', 'bob'), dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    const loadsBefore = calls.loads;
+    await act(() => calls.onChange({ event: 'UPDATE', message: { id: 'p1', proof_legit: 2, proof_cap: 1 } }));
+    assert.equal(calls.loads, loadsBefore);
+    assert.ok(texts(tree).includes('🔥 2 · 🧢 1'));
+    assert.ok(texts(tree).includes('✅ Legit – it counts'));
+    assert.equal(texts(tree).find(text => text.includes('did it')), '1 of 3 did it: bob');
+    // A new message still loads the chat.
+    await act(() => calls.onChange({ event: 'INSERT', message: { id: 'new' } }));
+    assert.equal(calls.loads, loadsBefore + 1);
+  } finally { await unmount(tree); }
+});
+
+test('a proof without vote totals (a server without votes yet) counts at once and has no vote buttons; one with totals has them', async () => {
+  const old = message({ id: 'p1', sender_id: 'bob', kind: 'proof', body: null, dare_id: 'dare1', media_path: 'bob/group/p1.jpg', media_type: 'photo' });
+  const { screen } = fixture({ members: ['alice', 'bob', 'carol'], messages: [proof('p2', 'carol'), old, dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('✅ Did the dare'));
+    assert.ok(texts(tree).includes('⏳ Legit or cap? Vote!'));
+    // Two buttons: on carol's proof only.
+    assert.equal(voteButtons(tree).length, 2);
+    assert.equal(texts(tree).find(text => text.includes('did it')), '1 of 3 did it: bob');
+  } finally { await unmount(tree); }
+});
+
+test('the person who sent the dare gets Legit and Cap on the others\' proofs, but not on their own proof', async () => {
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], messages: [proof('bobs', 'bob'), proof('alices', 'alice'), dare({ sender_id: 'alice' })] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(voteButtons(tree).length, 2);
+    await act(() => voteButton(tree, 'Vote legit')[0].props.onPress());
+    assert.deepEqual(calls.votes, [['alice', 'bobs', true]]);
+    assert.ok(texts(tree).includes('⏳ Waiting for votes'));
+  } finally { await unmount(tree); }
+});
+
+test('an old proof counts until someone votes, and the others can still vote on it', async () => {
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], messages: [proof('old', 'bob', { proof_legacy: true }), dare()],
+    vote: (_me, _id, legit) => (legit === null ? { legit: 0, cap: 0, mine: null, legacy: false } : { legit: 0, cap: 1, mine: false, legacy: false }) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('✅ Did the dare'));
+    assert.equal(texts(tree).find(text => text.includes('did it')), '1 of 3 did it: bob');
+    await act(() => voteButton(tree, 'Vote cap')[0].props.onPress());
+    assert.deepEqual(calls.votes, [['alice', 'old', false]]);
+    assert.ok(texts(tree).includes("🧢 Cap – doesn't count"));
+    assert.ok(texts(tree).includes('Nobody has done it yet'));
+    // Taking the vote back: once anyone has voted, it is no longer an old proof, so it waits for votes.
+    await act(() => voteButton(tree, 'You said cap. Tap to take your vote back')[0].props.onPress());
+    assert.ok(texts(tree).includes('⏳ Legit or cap? Vote!'));
+    assert.ok(!texts(tree).includes('✅ Did the dare'));
+    assert.ok(texts(tree).includes('Nobody has done it yet'));
+  } finally { await unmount(tree); }
+});
+
+test('an older "your votes" answer that arrives after you voted does not undo your vote', async () => {
+  const answers = [];
+  const { screen, calls } = fixture({ messages: [proof('p1', 'bob'), dare()], fetchVotes: () => new Promise(resolve => answers.push(resolve)) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { answers[0](new Map()); });
+    // A new message arrives: the chat loads again, and that "your votes" answer is still on its way.
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(answers.length, 2);
+    await act(() => voteButton(tree, 'Vote legit')[0].props.onPress());
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+    await act(async () => { answers[1](new Map()); });
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+  } finally { answers.forEach(resolve => resolve(new Map())); await unmount(tree); }
+});
+
+test('an older "your votes" answer cannot replace a newer one', async () => {
+  const answers = [];
+  const { screen, calls } = fixture({ messages: [proof('p1', 'bob'), dare()], fetchVotes: () => new Promise(resolve => answers.push(resolve)) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(answers.length, 2);
+    await act(async () => { answers[1](new Map([['p1', true]])); });
+    await act(async () => { answers[0](new Map()); });
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+  } finally { answers.forEach(resolve => resolve(new Map())); await unmount(tree); }
+});
+
+test('if your votes can\'t be loaded, the screen keeps the ones it shows', async () => {
+  let fail = false;
+  const { screen, calls } = fixture({ messages: [proof('p1', 'bob'), dare()], myVotes: new Map([['p1', true]]),
+    fetchVotes: async () => { if (fail) throw new Error('Network request failed'); return new Map([['p1', true]]); } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+    fail = true;
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(calls.voteFetches.length, 2);
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a reply to a proof and a pinned proof say "📸 Dare proof", never that the dare is done', async () => {
+  const { screen } = fixture({ pinned: 'p1', messages: [message({ id: 'r1', sender_id: 'carol', body: 'no way', reply_to: 'p1' }), proof('p1', 'bob'), dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(tree.root.findByType('ReplyQuote').props.text, '📸 Dare proof');
+    assert.ok(texts(tree).some(text => text.endsWith('📸 Dare proof')), JSON.stringify(texts(tree)));
+    assert.ok(!texts(tree).some(text => text.includes('Did the dare')));
+  } finally { await unmount(tree); }
+});
+
+test('a vote answer that arrives after a newer live update does not put old totals back', async () => {
+  let release;
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol', 'dave'], messages: [proof('p1', 'bob'), dare()], vote: () => new Promise(resolve => { release = resolve; }) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { voteButton(tree, 'Vote legit')[0].props.onPress(); await Promise.resolve(); });
+    // Your vote, then dave's, arrive live before the answer to your vote.
+    await act(() => calls.onChange({ event: 'UPDATE', message: { id: 'p1', proof_legit: 1, proof_cap: 0 } }));
+    await act(() => calls.onChange({ event: 'UPDATE', message: { id: 'p1', proof_legit: 1, proof_cap: 1 } }));
+    await act(async () => { release({ legit: 1, cap: 0, mine: true }); });
+    assert.ok(texts(tree).includes('🔥 1 · 🧢 1'));
+    assert.ok(texts(tree).includes('⚖️ Tie – not decided'));
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+    assert.equal(texts(tree).find(text => /did it|Nobody has done it/.test(text)), 'Nobody has done it yet');
+  } finally { release?.({ legit: 1, cap: 0, mine: true }); await unmount(tree); }
+});
+
+test('a chat reload that set off before a live vote update does not put the old totals back', async () => {
+  let release;
+  const first = [proof('p1', 'bob'), dare()];
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'],
+    fetchMessages: n => (n === 1 ? first : new Promise(resolve => { release = resolve; })) });
+  const tree = await renderScreen(screen);
+  try {
+    // A new message arrives (the chat loads again), then a live vote before that load comes back.
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await Promise.resolve(); });
+    await act(() => calls.onChange({ event: 'UPDATE', message: { id: 'p1', proof_legit: 2, proof_cap: 1 } }));
+    await act(async () => { release([message({ id: 'new', sender_id: 'carol', body: 'look at this' }), ...first]); });
+    assert.ok(texts(tree).includes('look at this'));
+    assert.ok(texts(tree).includes('🔥 2 · 🧢 1'));
+    assert.ok(texts(tree).includes('✅ Legit – it counts'));
+  } finally { release?.(first); await unmount(tree); }
+});
+
+test('a chat reload brings in vote totals that changed while nothing was shown live', async () => {
+  let list = [proof('p1', 'bob'), dare()];
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], fetchMessages: () => list });
+  const tree = await renderScreen(screen);
+  try {
+    list = [message({ id: 'new', sender_id: 'carol', body: 'hi' }), proof('p1', 'bob', { proof_cap: 2 }), dare()];
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.ok(texts(tree).includes('🔥 0 · 🧢 2'));
+    assert.ok(texts(tree).includes("🧢 Cap – doesn't count"));
+  } finally { await unmount(tree); }
+});
+
+test('a chat reload that set off before your vote was answered does not put the old totals back', async () => {
+  let release;
+  const first = [proof('p1', 'bob'), dare()];
+  const saved = new Map();   // your votes as the server has them
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'],
+    fetchMessages: n => (n === 1 ? first : new Promise(resolve => { release = resolve; })),
+    fetchVotes: async () => new Map(saved),
+    vote: (_me, id, legit) => { saved.set(id, legit); return { legit: 1, cap: 0, mine: legit }; } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await Promise.resolve(); });
+    await act(() => voteButton(tree, 'Vote legit')[0].props.onPress());
+    await act(async () => { release([message({ id: 'new', sender_id: 'carol', body: 'look at this' }), ...first]); });
+    assert.ok(texts(tree).includes('look at this'));
+    assert.ok(texts(tree).includes('🔥 1 · 🧢 0'));
+    assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
+  } finally { release?.(first); await unmount(tree); }
 });

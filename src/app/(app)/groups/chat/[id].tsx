@@ -38,8 +38,11 @@ import {
   fetchGroupChats,
   fetchGroupMessages,
   fetchGroupReads,
+  fetchMyProofVotes,
   markGroupChatRead,
   pinGroupMessage,
+  proofCounts,
+  proofOutcome,
   searchGroupMessages,
   sendGroupDare,
   sendGroupMessage,
@@ -48,6 +51,8 @@ import {
   setGroupPhoto,
   subscribeToGroup,
   subscribeToGroupChat,
+  voteGroupProof,
+  type GroupChatChange,
   type GroupMessage,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
@@ -64,7 +69,8 @@ import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 const READS_EVERY_MS = 15_000;
 
 // A group's chat 💬: texts, photos and videos (📷), voice notes (hold 🎤), and group dares (🚩) where everyone
-// posts their proof. "Typing…" and "Seen by" like a one-on-one chat. 🔎 searches the chat.
+// posts their proof and the rest of the group votes on it: Legit 🔥 or Cap 🧢. "Typing…" and "Seen by" like a
+// one-on-one chat. 🔎 searches the chat.
 // Tap the top to see the group (drops, members). Hold a message: yours → delete for everyone; theirs → report.
 export default function GroupChat() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
@@ -91,12 +97,29 @@ export default function GroupChat() {
   const [menuFor, setMenuFor] = useState<{ message: GroupMessage; actions: MessageAction[] } | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [viewing, setViewing] = useState<GroupMessage | null>(null);
+  // Your own votes on the proofs in this chat (proof id → true for legit, false for cap), and the proofs whose
+  // vote is being sent right now (a second tap waits for the first).
+  const [myVotes, setMyVotes] = useState<Map<string, boolean>>(new Map());
+  const votesRequest = useRef(0);
+  const voting = useRef(new Set<string>());
+  const [busyVotes, setBusyVotes] = useState<Set<string>>(new Set());
+  // How many times each proof's vote totals changed on screen (a live update, or the answer to your vote). An
+  // answer that set off before the latest change can be older than what's shown, so it doesn't replace it.
+  const totalsChanges = useRef(new Map<string, number>());
   const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
 
   const load = useCallback(() => {
+    const changesBefore = new Map(totalsChanges.current);
     fetchGroupMessages(groupId)
       .then((list) => {
-        setMessages(list);
+        // Vote totals that changed on screen while this was loading are newer than the ones it brought back.
+        setMessages((current) =>
+          list.map((m) => {
+            if ((totalsChanges.current.get(m.id) ?? 0) === (changesBefore.get(m.id) ?? 0)) return m;
+            const shown = current?.find((c) => c.id === m.id);
+            return shown ? { ...m, proof_legit: shown.proof_legit, proof_cap: shown.proof_cap, proof_legacy: shown.proof_legacy } : m;
+          }),
+        );
         fetchReactions(
           list.map((m) => m.id),
           true,
@@ -106,6 +129,16 @@ export default function GroupChat() {
         // Their message arrived: they've stopped typing.
         if (list[0]) clearTyping(list[0].sender_id);
         markGroupChatRead(groupId).catch(() => {});
+        // An answer that comes back after you voted again is old news, so it's dropped.
+        const request = ++votesRequest.current;
+        fetchMyProofVotes(
+          userId,
+          list.filter((m) => m.kind === 'proof').map((m) => m.id),
+        )
+          .then((votes) => {
+            if (request === votesRequest.current) setMyVotes(votes);
+          })
+          .catch(() => {});
       })
       .catch((error) => {
         console.warn('Could not load the group chat', error);
@@ -114,7 +147,28 @@ export default function GroupChat() {
     fetchGroupReads(groupId)
       .then(setReads)
       .catch(() => {});
-  }, [groupId, clearTyping]);
+  }, [groupId, userId, clearTyping]);
+
+  // Live changes: a vote changed a proof's totals → just those numbers change; anything else → load again.
+  const onChatChange = useCallback(
+    (change: GroupChatChange) => {
+      const row = change.message;
+      if (change.event === 'UPDATE' && row.id) {
+        totalsChanges.current.set(row.id, (totalsChanges.current.get(row.id) ?? 0) + 1);
+        setMessages(
+          (current) =>
+            current?.map((m) =>
+              m.id === row.id
+                ? { ...m, proof_legit: row.proof_legit ?? m.proof_legit, proof_cap: row.proof_cap ?? m.proof_cap, proof_legacy: row.proof_legacy ?? m.proof_legacy }
+                : m,
+            ) ?? current,
+        );
+        return;
+      }
+      load();
+    },
+    [load],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -125,7 +179,7 @@ export default function GroupChat() {
         .then((chats) => setMuted(chats.get(groupId)?.muted ?? false))
         .catch(() => {});
       load();
-      const stop = subscribeToGroupChat(groupId, load);
+      const stop = subscribeToGroupChat(groupId, onChatChange);
       const stopReactions = subscribeToReactions(true, load);
       const stopGroup = subscribeToGroup(groupId, () => {
         fetchGroup(groupId)
@@ -143,7 +197,7 @@ export default function GroupChat() {
         stopGroup();
         clearInterval(readsTimer);
       };
-    }, [groupId, load]),
+    }, [groupId, load, onChatChange]),
   );
 
   const people = new Map<string, Profile>();
@@ -159,13 +213,18 @@ export default function GroupChat() {
   );
   const urls = useMediaUrls(paths);
 
-  // Group dares: who has posted proof for each one.
+  // Group dares: who has a proof that counts for each one (the group voted legit), and your own newest proof.
   const proofsByDare = new Map<string, Set<string>>();
+  const myProofByDare = new Map<string, GroupMessage>();
   for (const m of messages ?? []) {
     if (m.kind === 'proof' && m.dare_id) {
-      const set = proofsByDare.get(m.dare_id) ?? new Set<string>();
-      set.add(m.sender_id);
-      proofsByDare.set(m.dare_id, set);
+      if (proofCounts(m)) {
+        const set = proofsByDare.get(m.dare_id) ?? new Set<string>();
+        set.add(m.sender_id);
+        proofsByDare.set(m.dare_id, set);
+      }
+      // The list is newest first.
+      if (m.sender_id === userId && !myProofByDare.has(m.dare_id)) myProofByDare.set(m.dare_id, m);
     }
   }
 
@@ -221,6 +280,74 @@ export default function GroupChat() {
       return false;
     }
   }
+
+  // 🔥 / 🧢 on someone's proof. Tapping the vote you already gave takes it back.
+  async function voteOn(proof: GroupMessage, legit: boolean) {
+    if (voting.current.has(proof.id)) return;
+    voting.current.add(proof.id);
+    setBusyVotes((current) => new Set(current).add(proof.id));
+    const choice = myVotes.get(proof.id) === legit ? null : legit;
+    const changesBefore = totalsChanges.current.get(proof.id) ?? 0;
+    try {
+      const result = await voteGroupProof(userId, proof.id, choice);
+      // Your vote as the server has it now. Older "your votes" answers still on the way are dropped.
+      votesRequest.current++;
+      setMyVotes((current) => {
+        const next = new Map(current);
+        if (result.mine === null) next.delete(proof.id);
+        else next.set(proof.id, result.mine);
+        return next;
+      });
+      // The new totals – unless a live update came in while your vote was on its way (that one is newer).
+      if ((totalsChanges.current.get(proof.id) ?? 0) === changesBefore) {
+        totalsChanges.current.set(proof.id, changesBefore + 1);
+        setMessages(
+          (current) =>
+            current?.map((m) =>
+              m.id === proof.id ? { ...m, proof_legit: result.legit, proof_cap: result.cap, proof_legacy: result.legacy ?? m.proof_legacy } : m,
+            ) ?? current,
+        );
+      }
+      Haptics.selectionAsync();
+      showToast(choice === null ? 'Vote taken back' : choice ? 'You said legit 🔥' : 'You called cap 🧢');
+    } catch (error) {
+      showToast(`Vote not saved – ${friendlyError(error)}`);
+    } finally {
+      voting.current.delete(proof.id);
+      setBusyVotes((current) => {
+        const next = new Set(current);
+        next.delete(proof.id);
+        return next;
+      });
+    }
+  }
+
+  // The label on a proof: what the group decided so far.
+  const proofLabel = (m: GroupMessage) => {
+    switch (proofOutcome(m)) {
+      case 'legacy':
+        return '✅ Did the dare';
+      case 'counts':
+        return '✅ Legit – it counts';
+      case 'tie':
+        return '⚖️ Tie – not decided';
+      case 'cap':
+        return "🧢 Cap – doesn't count";
+      default:
+        return m.sender_id === userId ? '⏳ Waiting for votes' : '⏳ Legit or cap? Vote!';
+    }
+  };
+  // Under the dare, for you: why your proof doesn't count (yet).
+  const myProofNote = (m: GroupMessage) => {
+    switch (proofOutcome(m)) {
+      case 'tie':
+        return "⚖️ Your proof is a tie so far – it doesn't count yet";
+      case 'cap':
+        return '🧢 The group said cap – post new proof?';
+      default:
+        return '⏳ Your proof is waiting for votes';
+    }
+  };
 
   const openCamera = (dareId?: string) =>
     router.push({ pathname: '/camera', params: { group: groupId, ...(dareId ? { groupDare: dareId } : {}) } });
@@ -314,7 +441,7 @@ export default function GroupChat() {
             ? '🎤 Voice note'
             : m.kind === 'dare'
               ? `🎯 ${m.body ?? ''}`
-              : '✅ Did the dare';
+              : '📸 Dare proof';
 
   function openGroupMenu() {
     showOptions({
@@ -496,6 +623,7 @@ export default function GroupChat() {
               const older = messages[index + 1];
               const firstOfRun = !older || older.sender_id !== item.sender_id;
               const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
+              const myProof = item.kind === 'dare' ? myProofByDare.get(item.id) : undefined;
               const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
               return (
                 <View style={[styles.row, mine ? styles.right : styles.left]}>
@@ -534,6 +662,7 @@ export default function GroupChat() {
                                 ? 'Nobody has done it yet'
                                 : `${proofs.size} of ${memberCount} did it: ${[...proofs].map((id) => (id === userId ? 'you' : nameOf(id))).join(', ')}`}
                           </Text>
+                          {myProof && !proofs.has(userId) ? <Text style={styles.dareNote}>{myProofNote(myProof)}</Text> : null}
                           {proofs.has(userId) ? (
                             <Text style={styles.dareDone}>✅ You did it</Text>
                           ) : (
@@ -551,7 +680,11 @@ export default function GroupChat() {
                         </View>
                       ) : item.media_path ? (
                         <View>
-                          {item.kind === 'proof' ? <Text style={styles.proofTag}>✅ Did the dare</Text> : null}
+                          {item.kind === 'proof' ? (
+                            <Text style={[styles.proofTag, !proofCounts(item) && (proofOutcome(item) === 'cap' ? styles.proofTagCap : styles.proofTagOpen)]}>
+                              {proofLabel(item)}
+                            </Text>
+                          ) : null}
                           {item.media_type === 'video' ? (
                             <VideoClip
                               uri={urls[item.media_path] ?? ''}
@@ -567,6 +700,36 @@ export default function GroupChat() {
                         </View>
                       ) : null}
                     </Pressable>
+                    {/* Votes on a proof: the totals, and Legit / Cap for everyone but the poster. */}
+                    {item.kind === 'proof' && item.proof_legit !== undefined && (!mine || item.proof_legit + (item.proof_cap ?? 0) > 0) ? (
+                      <View style={styles.voteRow}>
+                        {(item.proof_legit ?? 0) + (item.proof_cap ?? 0) > 0 ? (
+                          <Text style={styles.voteTotals}>
+                            🔥 {item.proof_legit ?? 0} · 🧢 {item.proof_cap ?? 0}
+                          </Text>
+                        ) : null}
+                        {!mine
+                          ? ([true, false] as const).map((legit) => {
+                              const chosen = myVotes.get(item.id) === legit;
+                              const busy = busyVotes.has(item.id);
+                              return (
+                                <Pressable
+                                  key={legit ? 'legit' : 'cap'}
+                                  onPress={() => voteOn(item, legit)}
+                                  disabled={busy}
+                                  style={({ pressed }) => [styles.voteButton, chosen && styles.voteButtonChosen, (pressed || busy) && styles.pressed]}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: chosen, disabled: busy }}
+                                  accessibilityLabel={
+                                    chosen ? `You said ${legit ? 'legit' : 'cap'}. Tap to take your vote back` : legit ? 'Vote legit' : 'Vote cap'
+                                  }>
+                                  <Text style={[styles.voteText, chosen && styles.voteTextChosen]}>{legit ? 'Legit 🔥' : 'Cap 🧢'}</Text>
+                                </Pressable>
+                              );
+                            })
+                          : null}
+                      </View>
+                    ) : null}
                     <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
                     <Text style={styles.time}>
                       {pinnedId === item.id ? '📌 ' : ''}
@@ -840,6 +1003,42 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontWeight: '900',
     marginBottom: 4,
+  },
+  proofTagOpen: {
+    color: colors.textMuted,
+  },
+  proofTagCap: {
+    color: colors.pink,
+  },
+  voteRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  voteTotals: {
+    ...font.small,
+    fontWeight: '800',
+  },
+  voteButton: {
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  voteButtonChosen: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  voteText: {
+    ...font.small,
+    color: colors.text,
+    fontWeight: '800',
+  },
+  voteTextChosen: {
+    color: colors.onAccent,
   },
   dareCard: {
     alignSelf: 'stretch',
