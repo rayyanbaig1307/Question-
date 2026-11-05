@@ -1,4 +1,4 @@
-# Face mesh (MediaPipe) and the Soft Glow lens
+# Face mesh (MediaPipe): the Soft Glow and Golden Hour lenses
 
 Status: built, **not switched on yet**. The app works exactly as before until the steps in "Switching it on"
 are done and a new native build (APK + TestFlight) is made. Nothing here has run on a phone yet.
@@ -20,11 +20,22 @@ a few landmarks and contours. 478 points let lenses follow the real shape of a f
   folder as Android assets. No config plugin is needed for it.
 - `src/lib/faceMesh.ts`: the guard (`FACE_MESH_AVAILABLE`), `useFaceMeshOutput`, `toScreenPoints` (camera
   coordinates → screen points) and the names of the useful points (`MESH`) and scores (`BLENDSHAPE`).
-- `src/components/lens/SoftGlowOverlay.tsx`: the Soft Glow drawing (Skia): soft warm glow on the skin (not the
-  eyes, brows or lips), light blush (a bit stronger when smiling), brighter eyes + small catchlight (hidden while
-  blinking), a few small twinkling sparkles. All faint on purpose.
+- `src/components/lens/lensPaint.ts`: the drawing for both looks (Skia), used live AND for the saved photo.
+  - ✨ Soft Glow (`'glow'`): soft warm glow on the skin (not the eyes, brows or lips), light blush (a bit
+    stronger when smiling), brighter eyes + small catchlight (hidden while blinking), a few twinkling sparkles.
+  - 🌅 Golden Hour (`'golden'`): low evening sun from the top-left. Warm light on the cheekbone, temple and jaw
+    on the side that faces the sun, a touch of shade on the other side, a soft golden rim on the lit edge, a
+    warm haze and a few faint flare circles from the top-left corner, and a slightly warmer picture with warm
+    corners. How much each spot faces the sun comes from the face's 3D points (`src/lib/goldenLight.ts`,
+    tested in `tests/unit/golden-light.test.mjs`).
+  All faint on purpose.
+- `src/components/lens/LensOverlay.tsx`: draws the look live on top of the camera (a Skia picture per frame).
+- `src/components/lens/bakeLook.ts`: draws the same look onto the saved photo (see "The look in the photo").
 - `src/components/lens/SoftGlowCamera.tsx`: VisionCamera + photo output + face mesh output + the overlay.
-  Same props as `FaceLensCamera`. Smooths the points (calm when still, quick when moving).
+  `look` prop picks the look. Same props as `FaceLensCamera` otherwise. Smooths the points (calm when still,
+  quick when moving).
+- Camera wiring: `ModeDial` shows ✨ and 🌅 bubbles only when `FACE_MESH_AVAILABLE`; both are Peekaboo+ (without
+  Plus, tapping one opens `/plus`). `CameraPage` shows `SoftGlowCamera` for either mode.
 
 ## Switching it on (needs a new native build)
 
@@ -49,9 +60,13 @@ a few landmarks and contours. 478 points let lenses follow the real shape of a f
 
 ## Things to know
 
-- **The glow isn't in the photo yet.** `capture()` returns the plain photo. To keep the look, either take a
-  `react-native-view-shot` of camera + overlay, or (better) redraw the glow on the photo with Skia offscreen
-  using the same points mapped to the photo.
+- **The look in the photo.** `capture()` takes the real photo, then `bakeLook` draws the same look on it with
+  Skia off screen, using the face points from the moment the button was pressed. A screenshot of the screen
+  (`react-native-view-shot`) wasn't used: the camera picture often comes out black in it on iPhone, and it
+  would only be screen-sized. The view shows the photo "zoomed to fill", so the drawing is scaled from view
+  points onto the photo. This assumes the preview and the photo show the same area (both 4:3, the usual
+  case); if the look sits a bit off in saved photos only, check that first. If baking fails, the plain photo
+  is used, so a photo is never lost. Videos still have no look (the normal camera records them).
 - **Live overlay can't truly blur skin.** The overlay is drawn on top of the camera view, so it can soften,
   brighten and tint, but not blur the pixels below. Real live smoothing needs the camera frames drawn inside
   Skia (`react-native-vision-camera-skia` + `react-native-vision-camera-worklets`, both 5.2.4, more native code).

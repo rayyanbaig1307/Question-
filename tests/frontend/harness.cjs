@@ -88,6 +88,16 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/chatBackgrounds': { friendChatKey: id => `friend:${id}`, groupChatKey: id => `group:${id}`, useChatBackground: () => ({ plus: false, picked: null, shown: null, choose: async () => {} }) },
     '@/components/chat/ChatBackground': { ChatBackground: host('ChatBackground'), ChatInkProvider: host('ChatInkProvider'), chatInk: () => null, useChatInk: () => null },
     '@/components/chat/ChatBackgroundPicker': { ChatBackgroundPicker: host('ChatBackgroundPicker') },
+    // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
+    '@/lib/appIcons': {
+      CAN_CHANGE_APP_ICON: false,
+      APP_ICONS: [
+        { key: 'classic', name: null, label: 'Classic', plus: false, preview: 1 },
+        { key: 'midnight', name: 'Midnight', label: 'Midnight', plus: true, preview: 2 },
+      ],
+      currentAppIcon: () => 'classic',
+      setAppIcon: async () => {},
+    },
   };
   for (const name of componentNames) modules[`@/components/${name === 'VideoClip' ? 'VideoClipSafe' : name}`] = { [name]: host(name) };
   Object.assign(modules, overrides);
