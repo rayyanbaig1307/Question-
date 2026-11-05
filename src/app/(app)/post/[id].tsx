@@ -24,6 +24,7 @@ import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
 import { fetchRelation } from '@/lib/friends';
+import { fetchPostScreenshots, useContentScreenshots } from '@/lib/insights';
 import { postMedia, useMyDropDays } from '@/lib/drop';
 import { useMediaUrls } from '@/lib/media';
 import { noteDropSeen } from '@/lib/peeks';
@@ -108,6 +109,24 @@ export default function PostViewer() {
 
   const isMine = post?.user_id === userId;
   const author = post?.author;
+
+  // 📸 A screenshot of someone else's post is recorded (they get a push; Peekaboo+ shows them who).
+  useContentScreenshots('post', post?.id, !!post && !isMine && !locked);
+
+  // On your own post: how many screenshots (tap to see who, with Peekaboo+).
+  const [screenshots, setScreenshots] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isMine) return;
+      let current = true;
+      fetchPostScreenshots(id).then((found) => {
+        if (current && found) setScreenshots(found.screenshots);
+      });
+      return () => {
+        current = false;
+      };
+    }, [id, isMine]),
+  );
 
   function openMenu() {
     if (!post || !author) return;
@@ -287,6 +306,16 @@ export default function PostViewer() {
               accessibilityLabel="See who peeked">
               <Text style={styles.peekedText}>
                 👀 {post.peek_stats.revealed} peeked · {post.peek_stats.passed} scrolled past ›
+              </Text>
+            </Pressable>
+          ) : null}
+          {isMine && screenshots > 0 ? (
+            <Pressable
+              style={styles.peeked}
+              onPress={() => router.push(`/screenshots/${post.id}`)}
+              accessibilityLabel="See who took screenshots">
+              <Text style={styles.peekedText}>
+                📸 {screenshots} {screenshots === 1 ? 'screenshot' : 'screenshots'} ›
               </Text>
             </Pressable>
           ) : null}

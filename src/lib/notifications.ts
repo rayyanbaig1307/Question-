@@ -156,6 +156,10 @@ function openFor(data: Record<string, unknown> | undefined) {
     case 'post':
       if (typeof data.post === 'string') router.push(`/post/${data.post}`);
       break;
+    case 'story':
+      // "📸 Someone screenshotted your story": open your profile (tap your picture to see the story and who).
+      if (typeof data.user === 'string') router.push(`/profile/${data.user}`);
+      break;
     case 'comments':
       if (typeof data.post === 'string') router.push(`/comments/${data.post}`);
       break;

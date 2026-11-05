@@ -388,6 +388,12 @@ when a push arrives.
 - Server: migration `20261215000000_peekaboo_plus.sql` (not applied; adds `public.log_plus_event` for the webhook)
   and Edge Function `revenuecat-webhook` (not deployed; owner steps at the top of its file).
 - Needs a new native build (TestFlight) before it works on phones. An OTA alone keeps showing "coming soon".
+- Plus insights (branch `plus-insights`, not live): 👀 who viewed your profile (`/profile-views`, button on your
+  own profile), 🔁 who rewatched your story and 📸 who screenshotted it (in the story's "Seen by" sheet), and 📸
+  screenshots of your posts (`/screenshots/[id]`, from the post). Settings → Privacy has "Show me in Profile views".
+  App code: `src/lib/insights.ts`. Server: migration `20261217000000_plus_insights.sql` (not applied). Names are
+  only handed out by the server when `private.is_plus` says yes (a `plus_members` row) – the `TESTERS` list in
+  `plus.ts` is app-only, so a tester without a row sees the free version of these screens.
 
 ## Face mesh + Soft Glow lens (branch `mediapipe-faces`, not switched on)
 

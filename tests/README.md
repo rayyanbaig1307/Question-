@@ -66,6 +66,10 @@ Database (PGlite, part of `npm test`):
   and finds what it should on an untouched database; its "names must still be free" list matches the names
   in the migration files.
 - `local-db.test.mjs`: the `applyMigrationFile` helper works on PGlite and keeps nothing of a file that fails.
+- `plus-insights.test.mjs`: Peekaboo+ insights (`20261217000000_plus_insights.sql`). A profile visit is saved at
+  most once an hour, never for yourself or across a block; "Show me in Profile views" off hides you and your own
+  viewers; story re-opens are counted; screenshots send the owner a push without a name; free users get counts
+  only and Plus users get who; the tables can't be read directly; deleting an account removes its rows.
 
 API and library (Vitest, part of `npm test`):
 

@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -14,6 +14,7 @@ import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/Scr
 import { SongCard } from '@/components/SongCard';
 import { useMe } from '@/lib/auth';
 import { fetchRelation, type Relation } from '@/lib/friends';
+import { recordProfileView } from '@/lib/insights';
 import { fetchUserPosts } from '@/lib/posts';
 import { fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
 import { profileSong } from '@/lib/songs';
@@ -40,6 +41,11 @@ export default function ProfileScreen() {
 
   const [data, setData] = useState<Loaded | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // 👀 Profile views: opening someone else's profile counts as a visit (the server keeps at most one an hour).
+  useEffect(() => {
+    if (!isMe && id) recordProfileView(id);
+  }, [id, isMe]);
 
   const load = useCallback(async () => {
     try {
@@ -186,6 +192,9 @@ export default function ProfileScreen() {
           />
           <Button title="Keeps" icon="albums" variant="secondary" small style={styles.action} onPress={() => router.push('/keeps')} />
         </View>
+      ) : null}
+      {isMe ? (
+        <Button title="👀 Profile views" variant="secondary" small onPress={() => router.push('/profile-views')} />
       ) : (
         <View style={styles.personActions}>
           <FriendButton person={profile} relation={data.relation} onChanged={load} />
