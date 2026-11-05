@@ -252,6 +252,39 @@ it('the app\'s "does this proof count?" rule (tests/unit/group-proof-parity.test
   }
 });
 
+it('only people who were in the group when a proof was posted get to vote on it, and never on their own', () => {
+  const lib = loadLibrary('groupChat', { mocks: { './media': {} } });
+  const proof = { sender_id: 'B', created_at: '2026-11-04T12:00:00.123456+00:00' };
+  expect(lib.canVoteOnProof(proof, 'A', '2026-11-01T00:00:00+00:00')).toBe(true);    // joined before
+  expect(lib.canVoteOnProof(proof, 'A', '2026-11-04T12:00:00.123+00:00')).toBe(true); // the same moment
+  expect(lib.canVoteOnProof(proof, 'A', '2026-11-04T12:00:01+00:00')).toBe(false);    // joined after
+  expect(lib.canVoteOnProof(proof, 'A', '2026-11-04T13:00:00+01:00')).toBe(true);     // another time zone, same moment
+  expect(lib.canVoteOnProof(proof, 'B', '2026-11-01T00:00:00+00:00')).toBe(false);    // your own proof
+  // Join time not known (still loading, or it couldn't be read): the buttons show and the server decides.
+  expect(lib.canVoteOnProof(proof, 'A', null)).toBe(true);
+  expect(lib.canVoteOnProof(proof, 'A', 'not a time')).toBe(true);
+  expect(lib.canVoteOnProof(proof, 'B', null)).toBe(false);
+});
+
+it('your join time is read from your own row in that group; null if you are not in it; errors come back', async () => {
+  const filters = [];
+  let answer = { data: { joined_at: '2026-11-01T09:00:00.5+00:00' }, error: null };
+  const from = vi.fn((table) => {
+    const chain = query(() => answer);
+    chain.select = (columns) => { filters.push(['select', table, columns]); return chain; };
+    chain.eq = (column, value) => { filters.push(['eq', column, value]); return chain; };
+    chain.maybeSingle = () => { filters.push(['maybeSingle']); return chain; };
+    return chain;
+  });
+  const lib = loadLibrary('groupChat', { supabase: { from }, mocks: { './media': {} } });
+  expect(await lib.fetchMyGroupJoin('G', 'A')).toBe('2026-11-01T09:00:00.5+00:00');
+  expect(filters).toEqual([['select', 'peek_group_members', 'joined_at'], ['eq', 'group_id', 'G'], ['eq', 'user_id', 'A'], ['maybeSingle']]);
+  answer = { data: null, error: null };
+  expect(await lib.fetchMyGroupJoin('G', 'A')).toBe(null);
+  answer = { data: null, error: { message: 'Network request failed' } };
+  await expect(lib.fetchMyGroupJoin('G', 'A')).rejects.toMatchObject({ message: 'Network request failed' });
+});
+
 it('a live group chat change says what happened and which message', () => {
   const handlers = [];
   const channel = { on: (_kind, _filter, handler) => { handlers.push(handler); return channel; }, subscribe: () => channel };

@@ -34,10 +34,12 @@ import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import {
+  canVoteOnProof,
   deleteGroupMessage,
   fetchGroupChats,
   fetchGroupMessages,
   fetchGroupReads,
+  fetchMyGroupJoin,
   fetchMyProofVotes,
   markGroupChatRead,
   pinGroupMessage,
@@ -103,6 +105,21 @@ export default function GroupChat() {
   const votesRequest = useRef(0);
   const voting = useRef(new Set<string>());
   const [busyVotes, setBusyVotes] = useState<Set<string>>(new Set());
+  // When you joined this group: only people who were in it when a proof was posted can vote on that proof.
+  // null until it's loaded (or if it can't be): then the buttons show and the server decides. It is read again
+  // with every reload of the chat and after a refused vote (you may have been removed and added back, which
+  // makes it later); an answer that comes back after a newer one is dropped.
+  const [joined, setJoined] = useState<{ user: string; group: string; at: string | null } | null>(null);
+  const joinedAt = joined?.user === userId && joined.group === groupId ? joined.at : null;
+  const joinRequest = useRef(0);
+  const refreshJoin = useCallback(() => {
+    const request = ++joinRequest.current;
+    fetchMyGroupJoin(groupId, userId)
+      .then((at) => {
+        if (request === joinRequest.current) setJoined({ user: userId, group: groupId, at });
+      })
+      .catch(() => {});
+  }, [groupId, userId]);
   // How many times each proof's vote totals changed on screen (a live update, or the answer to your vote). An
   // answer that set off before the latest change can be older than what's shown, so it doesn't replace it.
   const totalsChanges = useRef(new Map<string, number>());
@@ -110,6 +127,7 @@ export default function GroupChat() {
 
   const load = useCallback(() => {
     const changesBefore = new Map(totalsChanges.current);
+    refreshJoin();
     fetchGroupMessages(groupId)
       .then((list) => {
         // Vote totals that changed on screen while this was loading are newer than the ones it brought back.
@@ -147,7 +165,7 @@ export default function GroupChat() {
     fetchGroupReads(groupId)
       .then(setReads)
       .catch(() => {});
-  }, [groupId, userId, clearTyping]);
+  }, [groupId, userId, clearTyping, refreshJoin]);
 
   // Live changes: a vote changed a proof's totals → just those numbers change; anything else → load again.
   const onChatChange = useCallback(
@@ -312,6 +330,8 @@ export default function GroupChat() {
       showToast(choice === null ? 'Vote taken back' : choice ? 'You said legit 🔥' : 'You called cap 🧢');
     } catch (error) {
       showToast(`Vote not saved – ${friendlyError(error)}`);
+      // Maybe you were removed and added back since the chat opened: check your join time again.
+      refreshJoin();
     } finally {
       voting.current.delete(proof.id);
       setBusyVotes((current) => {
@@ -334,7 +354,7 @@ export default function GroupChat() {
       case 'cap':
         return "🧢 Cap – doesn't count";
       default:
-        return m.sender_id === userId ? '⏳ Waiting for votes' : '⏳ Legit or cap? Vote!';
+        return canVoteOnProof(m, userId, joinedAt) ? '⏳ Legit or cap? Vote!' : '⏳ Waiting for votes';
     }
   };
   // Under the dare, for you: why your proof doesn't count (yet).
@@ -700,7 +720,8 @@ export default function GroupChat() {
                         </View>
                       ) : null}
                     </Pressable>
-                    {/* Votes on a proof: the totals, and Legit / Cap for everyone but the poster. */}
+                    {/* Votes on a proof: the totals, and Legit / Cap for everyone who was in the group when it was
+                        posted, except the poster. */}
                     {item.kind === 'proof' && item.proof_legit !== undefined && (!mine || item.proof_legit + (item.proof_cap ?? 0) > 0) ? (
                       <View style={styles.voteRow}>
                         {(item.proof_legit ?? 0) + (item.proof_cap ?? 0) > 0 ? (
@@ -708,8 +729,10 @@ export default function GroupChat() {
                             🔥 {item.proof_legit ?? 0} · 🧢 {item.proof_cap ?? 0}
                           </Text>
                         ) : null}
-                        {!mine
-                          ? ([true, false] as const).map((legit) => {
+                        {mine ? null : !canVoteOnProof(item, userId, joinedAt) ? (
+                          <Text style={styles.voteNote}>You joined after this was posted, so you can&apos;t vote on it</Text>
+                        ) : (
+                          ([true, false] as const).map((legit) => {
                               const chosen = myVotes.get(item.id) === legit;
                               const busy = busyVotes.has(item.id);
                               return (
@@ -727,7 +750,7 @@ export default function GroupChat() {
                                 </Pressable>
                               );
                             })
-                          : null}
+                        )}
                       </View>
                     ) : null}
                     <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
@@ -1039,6 +1062,10 @@ const styles = StyleSheet.create({
   },
   voteTextChosen: {
     color: colors.onAccent,
+  },
+  voteNote: {
+    ...font.small,
+    color: colors.textMuted,
   },
   dareCard: {
     alignSelf: 'stretch',

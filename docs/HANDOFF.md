@@ -53,7 +53,10 @@ On 5 Nov the owner said "go" and the **server side was released** to the live pr
    tested local copy (only differences: line endings and code comments in old functions that predate this
    work). Supabase's security advisor shows nothing new.
 **Not applied:** `20261215000000_peekaboo_plus` (another session's, after RevenueCat) and
-`20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go).
+`20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go). (Since then another
+session applied `20261215000000_peekaboo_plus` live, it says. `20261216` can be applied before or after that
+session's `20261218000000_plus_extras`: if the Peekaboo+ dare streak, with Peek-a-Save, is already there,
+`20261216` leaves it as it is – it counts group dares by itself.)
 **Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
 (`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. Since 5 Nov they
 also have the crop fix `a6a4c62` (OTA `53587d08…`, built by another session from `23853ae` with `a6a4c62`
@@ -119,8 +122,10 @@ What people will notice once it's released:
   notification now says "📸 Posted proof – legit or cap?" instead of "✅ Did the dare!". Proofs posted before
   the update keep counting until someone votes on them (after that, the normal rule applies). Group dares
   now also count toward the 🔥 dare streak in one-to-one chats – old group proofs too – so some streaks can go
-  up on the day of the release. A vote only counts while the voter is in the group: someone who leaves (or is
-  removed) takes their votes with them, so spare accounts that join, vote and leave change nothing.
+  up on the day of the release. Only people who were in the group when the proof was posted can vote on it
+  (owner's choice, 5 Nov): someone added later sees "You joined after this was posted, so you can't vote on
+  it". A vote also only counts while the voter is in the group: someone who leaves (or is removed) takes their
+  votes with them, so spare accounts can't join to vote, or vote and leave.
 - Friend search treats `_` as a real underscore. In Settings, a privacy choice is still saved if you leave
   quickly, and screen readers no longer call the switches "disabled".
 - The web version works when signed in (it used to crash). Sending or saving from the web editor says
@@ -223,8 +228,12 @@ rename files that are already live.
   the group, or is removed by the group's maker, loses their votes and the totals are counted again (a vote
   only counts while you're in the group – otherwise spare accounts could join, vote Legit and leave). So the
   group's maker can take votes away by removing people; that is visible to everyone, and nobody learns who
-  voted what. A deleted account's votes are removed too. People added after a proof was posted can still vote
-  on it. Someone with a block (either way) with the poster can't vote on that proof – they can't see it
+  voted what (owner said OK to the rule "only people in the group when the proof was posted can vote", 5 Nov;
+  removing someone taking their votes away is still the builder's choice). A deleted account's votes are
+  removed too. People added after a proof was posted can't vote on it (the server checks the member's join
+  time, which only the server sets; app users also lost the table rights to add or change member rows).
+  Someone who leaves and is added again counts as joining at that new time, so they can't vote again on older
+  proofs. Someone with a block (either way) with the poster can't vote on that proof – they can't see it
   anyway. Vote pushes follow the group's mute and the doer's "Messages" notification setting; a doer who left
   the group gets none. A proof that starts counting because a Cap voter left (rather than through a vote)
   sends no "The group says legit" push; the next vote that keeps it counting does. Several counting proofs

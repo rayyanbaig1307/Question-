@@ -55,6 +55,17 @@ export function proofCounts(proof: Pick<GroupMessage, 'proof_legit' | 'proof_cap
   return outcome === 'counts' || outcome === 'legacy';
 }
 
+// Can you vote Legit / Cap on this proof? Never on your own. Only people who were already in the group when it
+// was posted can vote: someone added later can't vote on older proofs (the server checks this too, in
+// public.vote_group_proof). `joinedAt` is when you joined the group (fetchMyGroupJoin); null if that isn't known
+// yet or couldn't be loaded – then the buttons show and the server decides.
+export function canVoteOnProof(proof: Pick<GroupMessage, 'sender_id' | 'created_at'>, me: string, joinedAt: string | null): boolean {
+  if (proof.sender_id === me) return false;
+  if (!joinedAt) return true;
+  // A time that can't be read counts as "not known" too (NaN > anything is false).
+  return !(Date.parse(joinedAt) > Date.parse(proof.created_at));
+}
+
 // Your groups' chat summaries for the Chat list: unread count, latest message, muted or not.
 export type GroupChatSummary = {
   group_id: string;
@@ -133,9 +144,10 @@ export async function sendGroupDare(groupId: string, dare: string): Promise<Grou
 }
 
 // 🔥 / 🧢 Vote on someone's proof for a group dare: legit = true (it's real), false (cap, it's fake), or null to
-// take your vote back. Everyone in the group except the poster can vote, once each. `me` is the account on
-// screen: the server refuses the vote if a different account is logged in by now. Gives back the new totals,
-// your vote, and whether it still counts as a proof from before voting existed (false once anyone has voted).
+// take your vote back. Everyone who was in the group when the proof was posted, except the poster, can vote,
+// once each (see canVoteOnProof). `me` is the account on screen: the server refuses the vote if a different
+// account is logged in by now. Gives back the new totals, your vote, and whether it still counts as a proof from
+// before voting existed (false once anyone has voted).
 export async function voteGroupProof(
   me: string,
   proofId: string,
@@ -163,6 +175,19 @@ export async function fetchMyProofVotes(me: string, proofIds: string[]): Promise
     .in('proof_id', proofIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.proof_id as string, row.legit as boolean]));
+}
+
+// When you joined this group (only people who were in the group when a proof was posted can vote on it).
+// null if you're not in it. Only the server sets this time.
+export async function fetchMyGroupJoin(groupId: string, me: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('peek_group_members')
+    .select('joined_at')
+    .eq('group_id', groupId)
+    .eq('user_id', me)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { joined_at?: string } | null)?.joined_at ?? null;
 }
 
 // 📌 Pin a message to the top of the group chat (null = unpin). Any member can.

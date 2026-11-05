@@ -10,10 +10,11 @@ function realProofRules() {
   const compiled = ts.transpileModule(readSource('src/lib/groupChat.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(compiled, { module, exports: module.exports, require: id => ({ './media': {}, './supabase': { supabase: {} } })[id] });
-  return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts };
+  return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts, canVoteOnProof: module.exports.canVoteOnProof };
 }
-function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null } = {}) {
-  const calls = { sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], loads: 0, onChange: null };
+// joinedAt: when the person on screen (alice) joined the group – by default before every message here.
+function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z' } = {}) {
+  const calls = { sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
@@ -35,6 +36,7 @@ function fixture({ messages = [message()], send, search, missing = false, member
       fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => {},
       subscribeToGroupChat: (_group, onChange) => { calls.onChange = onChange; return stop; }, subscribeToGroup: () => stop,
       fetchMyProofVotes: async (...args) => { calls.voteFetches.push(args); return fetchVotes ? fetchVotes(...args) : new Map(myVotes); },
+      fetchMyGroupJoin: async (...args) => { calls.joinFetches.push(args); return joinedAt(...args); },
       voteGroupProof: async (...args) => { calls.votes.push(args); if (vote) return vote(...args); return { legit: 1, cap: 0, mine: args[2] }; },
       sendGroupMessage: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[1] }); },
       deleteGroupMessage: async value => { calls.deleted.push(value.id); },
@@ -221,6 +223,98 @@ test('Legit and Cap buttons show for everyone except the poster, and your own vo
     assert.equal(voteButton(tree, 'Vote legit').length, 0);
     // The poster still sees the totals on their own proof.
     assert.ok(texts(tree).includes('🔥 0 · 🧢 1'));
+  } finally { await unmount(tree); }
+});
+
+test('no Legit or Cap buttons on proofs posted before you joined the group, only on newer ones', async () => {
+  const { screen, calls } = fixture({ members: ['alice', 'bob', 'carol'], joinedAt: async () => '2026-11-04T12:00:00Z', messages: [
+    proof('before', 'bob', { created_at: '2026-11-04T11:59:59.999Z', proof_legit: 1 }),
+    proof('same', 'carol', { created_at: '2026-11-04T12:00:00Z' }),
+    proof('after', 'carol', { created_at: '2026-11-04T12:30:00Z' }),
+    dare(),
+  ] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(calls.joinFetches, [['squad', 'alice']]);
+    // Buttons on the proof posted the moment you joined and on the newer one; none on the older one.
+    assert.equal(voteButtons(tree).length, 4);
+    const shown = texts(tree);
+    assert.equal(shown.filter(text => text === "You joined after this was posted, so you can't vote on it").length, 1);
+    // The older proof's totals still show, and its label doesn't ask you to vote.
+    assert.ok(shown.includes('🔥 1 · 🧢 0'));
+    assert.equal(shown.filter(text => text === '⏳ Legit or cap? Vote!').length, 2);
+    assert.ok(shown.includes('✅ Legit – it counts'), 'the older proof still shows what the group decided');
+    assert.ok(!shown.includes('⏳ Waiting for votes'));
+  } finally { await unmount(tree); }
+});
+
+test('a proof from before you joined that has no votes yet says it is waiting for votes, not "Vote!"', async () => {
+  const { screen } = fixture({ joinedAt: async () => '2026-11-05T00:00:00Z', messages: [proof('old', 'bob'), dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    const shown = texts(tree);
+    assert.equal(voteButtons(tree).length, 0);
+    assert.ok(shown.includes('⏳ Waiting for votes'), JSON.stringify(shown));
+    assert.ok(!shown.includes('⏳ Legit or cap? Vote!'));
+    assert.ok(shown.includes("You joined after this was posted, so you can't vote on it"));
+  } finally { await unmount(tree); }
+});
+
+test('removed and added back while the chat stays open: the join time is read again, so the buttons go', async () => {
+  // alice had joined before bob's proof. While her chat is open she is removed and added back (a later join).
+  let joined = '2026-11-01T00:00:00Z';
+  const { screen, calls } = fixture({ joinedAt: async () => joined, messages: [proof('p1', 'bob'), dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(voteButtons(tree).length, 2);
+    joined = '2026-11-05T09:00:00Z';
+    // The next live change reloads the chat, and with it the join time.
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(calls.joinFetches.length, 2);
+    assert.equal(voteButtons(tree).length, 0);
+    assert.ok(texts(tree).includes("You joined after this was posted, so you can't vote on it"));
+    assert.ok(texts(tree).includes('⏳ Waiting for votes'));
+  } finally { await unmount(tree); }
+});
+
+test('a refused vote reads the join time again, so buttons that can never work go away', async () => {
+  let joined = '2026-11-01T00:00:00Z';
+  const { screen, calls } = fixture({ joinedAt: async () => joined, messages: [proof('p1', 'bob'), dare()],
+    vote: () => { joined = '2026-11-05T09:00:00Z'; throw Object.assign(new Error('Only people who were in the group when this proof was posted can vote'), { code: 'P0001' }); } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { await voteButton(tree, 'Vote legit')[0].props.onPress(); await new Promise(r => setTimeout(r, 0)); });
+    assert.match(calls.toasts.at(-1), /^Vote not saved – /);
+    assert.equal(calls.joinFetches.length, 2);
+    assert.equal(voteButtons(tree).length, 0);
+    assert.ok(texts(tree).includes("You joined after this was posted, so you can't vote on it"));
+  } finally { await unmount(tree); }
+});
+
+test('an older join-time answer that arrives after a newer one is dropped', async () => {
+  const answers = [];
+  const { screen, calls } = fixture({ joinedAt: () => new Promise(resolve => answers.push(resolve)), messages: [proof('p1', 'bob'), dare()] });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { calls.onChange({ event: 'INSERT', message: { id: 'new' } }); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(answers.length, 2);
+    // The newer answer (you joined after the proof) comes first; the older one (before it) comes late.
+    await act(async () => { answers[1]('2026-11-05T09:00:00Z'); await new Promise(r => setTimeout(r, 0)); });
+    await act(async () => { answers[0]('2026-11-01T00:00:00Z'); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(voteButtons(tree).length, 0);
+  } finally { await unmount(tree); }
+});
+
+test('if your join time can\'t be loaded, the buttons still show and the server decides', async () => {
+  const { screen, calls } = fixture({ joinedAt: async () => { throw new Error('offline'); }, messages: [proof('p1', 'bob'), dare()],
+    vote: () => { throw Object.assign(new Error('Only people who were in the group when this proof was posted can vote'), { code: 'P0001' }); } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(voteButtons(tree).length, 2);
+    await act(() => voteButton(tree, 'Vote legit')[0].props.onPress());
+    assert.equal(calls.votes.length, 1);
+    assert.match(calls.toasts.at(-1), /^Vote not saved – /);
+    assert.equal(voteButton(tree, 'Vote legit').length, 1, 'nothing is highlighted after a refused vote');
   } finally { await unmount(tree); }
 });
 
