@@ -262,12 +262,22 @@ test('Group reactions do not notify a sender who already left the group',async()
 });
 test('Scheduled drop reminder respects activity age, Drops preferences and duplicate delivery',async()=>{
   await db.transaction(async tx=>{
-    const offset=(await tx.query("select o from generate_series(-720,840)o where extract(hour from((now() at time zone 'utc')+make_interval(mins=>o)))::int*60+extract(minute from((now() at time zone 'utc')+make_interval(mins=>o)))::int=private.drop_minute(((now() at time zone 'utc')+make_interval(mins=>o))::date) limit 1")).rows[0].o;
+    let offset=(await tx.query("select o from generate_series(-720,840)o where extract(hour from((now() at time zone 'utc')+make_interval(mins=>o)))::int*60+extract(minute from((now() at time zone 'utc')+make_interval(mins=>o)))::int=private.drop_minute(((now() at time zone 'utc')+make_interval(mins=>o))::date) limit 1")).rows[0]?.o;
+    if(offset===undefined){
+      // Each day has one drop time (10:00-22:00 local), so at some hours no real time zone is at its drop minute.
+      // Then, for this test only, today's drop is "now" in UTC. Everything here is rolled back at the end.
+      const minute=(await tx.query("select (extract(hour from now() at time zone 'utc')*60+extract(minute from now() at time zone 'utc'))::int as m")).rows[0].m;
+      await tx.query(`create or replace function private.drop_minute(day date) returns integer language sql immutable set search_path = '' as $$ select ${minute} $$`);
+      offset=0;
+    }
     for(const [i,days]of[[0,10],[1,1],[2,46],[3,10]])await tx.query("insert into push_tokens(token,user_id,platform,utc_offset_minutes,updated_at) values($1,$2,'ios',$3,now()-make_interval(days=>$4))",[`ExponentPushToken[qa-reminder-${i}]`,users[i],offset,days]);
     await tx.query('insert into notification_prefs(user_id,drops) values($1,false)',[users[3]]);
     await tx.query('select private.send_drop_reminders()');await tx.query('select private.send_drop_reminders()');
     const queued=(await tx.query('select body from net.sent')).rows;assert.equal(queued.length,1);assert.equal(queued[0].body[0].to,'ExponentPushToken[qa-reminder-0]');
+    await tx.rollback();
   });
+  // The real drop time is back (nothing from this test was kept).
+  assert.match((await db.query("select prosrc from pg_proc where proname='drop_minute'")).rows[0].prosrc,/2246822507/);
 });
 test('Report alerts reach only local moderators and queue failure cannot lose the report',async()=>{
   await db.query('insert into private.report_alert_people(user_id) values($1)',[users[15]]);
