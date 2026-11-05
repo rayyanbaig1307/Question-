@@ -52,6 +52,7 @@ h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; 
 .note { color: var(--muted); font-size: 13px; margin-top: -6px; }
 
 /* ---- App icons ---- */
+.icon-img { width: 100%; max-width: 150px; height: auto; aspect-ratio: 1; border-radius: 22.5%; box-shadow: 0 6px 18px rgba(27, 20, 40, 0.18); display: block; }
 .icon {
   width: 100%; max-width: 150px; aspect-ratio: 1; border-radius: 26%; display: grid; place-items: center;
   position: relative; box-shadow: 0 6px 18px rgba(27, 20, 40, 0.18); overflow: hidden;
@@ -130,31 +131,39 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
   <!-- APP ICONS -->
   <section>
     <h2>App icons</h2>
-    <p class="sub">Members pick which Peekaboo icon sits on their home screen. Same googly eyes, new colours.</p>
+    <p class="sub">Your real Peekaboo logo in new colours. Members pick which one sits on their home screen.</p>
     <div class="grid">
       <div class="item">
-        <div class="icon" style="background:linear-gradient(135deg,#FF59A5,#8650DB)"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <img class="icon-img" src="plus-icons/classic.png" alt="Classic app icon" width="150" height="150">
         <span class="label">Classic</span><span class="note">Free for everyone</span>
       </div>
       <div class="item">
-        <div class="icon" style="background:radial-gradient(circle at 30% 25%,#3A2A12,#120C06);--rim:#E8A93A;--pupil:#E8A93A"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <img class="icon-img" src="plus-icons/dark-gold.png" alt="Dark Gold app icon" width="150" height="150">
         <span class="label">Dark Gold</span><span class="note">Plus</span>
       </div>
       <div class="item">
-        <div class="icon" style="background:linear-gradient(135deg,#38B6FF,#1E3A8A)"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
-        <span class="label">Midnight Blue</span><span class="note">Plus</span>
+        <img class="icon-img" src="plus-icons/midnight.png" alt="Midnight app icon" width="150" height="150">
+        <span class="label">Midnight</span><span class="note">Plus</span>
       </div>
       <div class="item">
-        <div class="icon" style="background:linear-gradient(135deg,#3DDC97,#0E7C66)"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <img class="icon-img" src="plus-icons/mint.png" alt="Mint app icon" width="150" height="150">
         <span class="label">Mint</span><span class="note">Plus</span>
       </div>
       <div class="item">
-        <div class="icon" style="background:linear-gradient(135deg,#FFE14D,#FF8A3D)"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <img class="icon-img" src="plus-icons/sunny.png" alt="Sunny app icon" width="150" height="150">
         <span class="label">Sunny</span><span class="note">Plus</span>
       </div>
       <div class="item">
-        <div class="icon" style="background:#FFFFFF;--rim:#FF3D8E;--pupil:#8A4DFF"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <img class="icon-img" src="plus-icons/clean-white.png" alt="Clean White app icon" width="150" height="150">
         <span class="label">Clean White</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/all-black.png" alt="All Black app icon" width="150" height="150">
+        <span class="label">All Black</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/cherry.png" alt="Cherry app icon" width="150" height="150">
+        <span class="label">Cherry</span><span class="note">Plus</span>
       </div>
     </div>
   </section>
