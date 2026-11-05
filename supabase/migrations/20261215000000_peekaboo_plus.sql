@@ -49,3 +49,15 @@ create table if not exists private.plus_events (
   app_user_id text,
   body jsonb
 );
+
+-- The revenuecat-webhook Edge Function writes to the log through this, because the "private" part of the
+-- database can't be reached from outside. Each RevenueCat event is kept once (the same event sent twice is
+-- skipped). Only the server (service role) may call it.
+create or replace function public.log_plus_event(p_event_id text, p_event_type text, p_app_user_id text, p_body jsonb)
+returns void language sql security definer set search_path = '' as $$
+  insert into private.plus_events (event_id, event_type, app_user_id, body)
+  values (p_event_id, p_event_type, p_app_user_id, p_body)
+  on conflict (event_id) do nothing;
+$$;
+revoke all on function public.log_plus_event(text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.log_plus_event(text, text, text, jsonb) to service_role;

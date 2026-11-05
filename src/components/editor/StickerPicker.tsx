@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { router } from 'expo-router';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SafeEdge } from '@/components/SafeEdge';
@@ -17,16 +17,18 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord, onPic
   onPickSpecial: (id: string) => void;
 }) {
   const plus = usePlus();
-  // Which Peekaboo+ pack someone without Peekaboo+ last tapped (shows a short note under it).
-  const [lockedNote, setLockedNote] = useState<string | null>(null);
+  // A locked Peekaboo+ sticker: close the stickers and show the Peekaboo+ screen.
+  const openPlus = () => {
+    onClose();
+    router.push('/plus');
+  };
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
-      onShow={() => setLockedNote(null)}>
+      onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <SafeEdge edge="bottom" style={styles.sheet}>
           <Pressable>
@@ -51,14 +53,11 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord, onPic
                     <Text style={styles.section}>{pack.name}</Text>
                     {plus ? null : <Text style={styles.plusTag}>⭐ Peekaboo+</Text>}
                   </View>
-                  {lockedNote === pack.id ? (
-                    <Text style={styles.lockedNote}>These stickers come with Peekaboo+. It&apos;s coming soon!</Text>
-                  ) : null}
                   <View style={[styles.specials, !plus && styles.locked]}>
                     {pack.stickers.map((sticker) => (
                       <Pressable
                         key={sticker.id}
-                        onPress={() => (plus ? onPickSpecial(sticker.id) : setLockedNote(pack.id))}
+                        onPress={() => (plus ? onPickSpecial(sticker.id) : openPlus())}
                         accessibilityLabel={`${plusStickerLabel(sticker.id)} sticker${plus ? '' : ', Peekaboo+ only'}`}
                         style={({ pressed }) => [styles.special, styles.plusCell, pressed && styles.pressed]}>
                         <SpecialSticker id={sticker.id} small />
@@ -164,10 +163,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.pill,
     overflow: 'hidden',
-  },
-  lockedNote: {
-    ...font.small,
-    textAlign: 'center',
   },
   locked: {
     opacity: 0.45,

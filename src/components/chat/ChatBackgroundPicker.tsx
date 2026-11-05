@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useState, type ReactNode } from 'react';
+import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { SafeEdge } from '@/components/SafeEdge';
@@ -20,18 +21,16 @@ export function ChatBackgroundPicker({ visible, current, plus, onPick, onClose }
   onClose: () => void;
 }) {
   const { width } = useWindowDimensions();
-  const [lockedTap, setLockedTap] = useState(false);
   const tileWidth = Math.floor((Math.min(width, 520) - space.lg * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
 
-  const close = () => {
-    setLockedTap(false);
-    onClose();
-  };
+  const close = () => onClose();
 
   const pick = (backgroundId: string | null) => {
     if (backgroundId && !plus) {
+      // Locked: close this sheet and show the Peekaboo+ screen.
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      setLockedTap(true);
+      close();
+      router.push('/plus');
       return;
     }
     Haptics.selectionAsync();
@@ -45,7 +44,7 @@ export function ChatBackgroundPicker({ visible, current, plus, onPick, onClose }
         <SafeEdge edge="bottom" style={styles.sheet}>
           <Pressable>
             <Text style={styles.title}>Chat background</Text>
-            <Text style={[styles.message, lockedTap && styles.messageLocked]}>
+            <Text style={styles.message}>
               {plus
                 ? 'Only you see it. It holds still if your phone has Reduce Motion on.'
                 : '⭐ Moving backgrounds come with Peekaboo+. Only you would see yours.'}
@@ -141,10 +140,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: space.xs,
     marginBottom: space.md,
-  },
-  messageLocked: {
-    color: colors.accent,
-    fontWeight: '800',
   },
   scroll: {
     maxHeight: 460,

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
+import { PlusBadge } from '@/components/PlusBadge';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
@@ -16,9 +17,12 @@ export function PersonRow({ person, right }: { person: Profile; right?: ReactNod
         accessibilityLabel={`Open @${person.username}`}>
         <Avatar path={person.avatar_path} name={person.display_name || person.username} size={48} />
         <View style={styles.names}>
-          <Text style={styles.name} numberOfLines={1}>
-            {person.display_name || person.username}
-          </Text>
+          <View style={styles.nameLine}>
+            <Text style={styles.name} numberOfLines={1}>
+              {person.display_name || person.username}
+            </Text>
+            <PlusBadge userId={person.id} small />
+          </View>
           <Text style={styles.username} numberOfLines={1}>
             @{person.username}
           </Text>
@@ -47,9 +51,15 @@ const styles = StyleSheet.create({
   names: {
     flex: 1,
   },
+  nameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+  },
   name: {
     ...font.body,
     fontWeight: '800',
+    flexShrink: 1,
   },
   username: {
     ...font.small,

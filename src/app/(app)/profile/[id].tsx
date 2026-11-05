@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
 import { HitUpButton } from '@/components/HitUpButton';
 import { useOverlays } from '@/components/Overlays';
+import { PlusBadge } from '@/components/PlusBadge';
 import { PostGrid } from '@/components/PostGrid';
 import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { SongCard } from '@/components/SongCard';
@@ -150,6 +151,7 @@ export default function ProfileScreen() {
         <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
         <View style={styles.badges}>
           <Text style={styles.username}>@{profile.username}</Text>
+          <PlusBadge userId={profile.id} />
           {profile.is_private ? <Text style={styles.badge}>🔒 Private</Text> : null}
           {isFriend ? <Text style={[styles.badge, styles.friendBadge]}>👯 Friends</Text> : null}
         </View>

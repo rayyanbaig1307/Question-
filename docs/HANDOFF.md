@@ -199,6 +199,18 @@ those builds go out. The
 leave Chat. There's no realtime listener: it refreshes on focus, when the app comes back to the front, and
 when a push arrives.
 
+## Peekaboo+ ⭐ payments (branch `plus-payments`, not live)
+
+- RevenueCat (`react-native-purchases`, loaded through a guard in `src/lib/plus.ts`; native module `RNPurchases`).
+  App Store product `peekaboo_plus_monthly`, entitlement `plus`, offering `default` (Monthly package). iPhone only.
+  Without `EXPO_PUBLIC_REVENUECAT_IOS_KEY`, on Android, in Expo Go or on older downloads, the screen says "coming soon".
+- Has Plus = tester (`TESTERS` in `plus.ts`) or RevenueCat entitlement `plus` or a `public.plus_members` row that
+  hasn't run out. `configurePurchases(userId)` runs from `(app)/_layout.tsx` (RevenueCat app user id = Supabase id).
+- Screen `(app)/plus.tsx`; locked themes, chat backgrounds and stickers open it. ⭐ badge: `components/PlusBadge.tsx`.
+- Server: migration `20261215000000_peekaboo_plus.sql` (not applied; adds `public.log_plus_event` for the webhook)
+  and Edge Function `revenuecat-webhook` (not deployed; owner steps at the top of its file).
+- Needs a new native build (TestFlight) before it works on phones. An OTA alone keeps showing "coming soon".
+
 ## Open items
 
 Owner's to-do:

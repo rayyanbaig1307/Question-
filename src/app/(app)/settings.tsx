@@ -157,6 +157,15 @@ export default function Settings() {
     <View style={styles.fill}>
       <ScreenHeader title="Settings" />
       <ScrollView style={styles.fill} contentContainerStyle={styles.content}>
+        <Section title="Peekaboo+">
+          <Row
+            icon="star"
+            color={colors.yellow}
+            title="⭐ Peekaboo+"
+            subtitle={plus ? 'You have Peekaboo+ – thank you!' : 'See who viewed your profile, themes, stickers and more'}
+            onPress={() => router.push('/plus')}
+          />
+        </Section>
         <Section title="Privacy & safety">
           <Row
             icon="lock-closed"
@@ -267,7 +276,7 @@ export default function Settings() {
               return (
                 <Pressable
                   key={option.key}
-                  onPress={() => (locked ? showToast('This theme comes with Peekaboo+ ⭐') : chooseTheme(option.key))}
+                  onPress={() => (locked ? router.push('/plus') : chooseTheme(option.key))}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on, disabled: locked }}
                   accessibilityLabel={locked ? `${option.label}, Peekaboo+ only` : option.label}

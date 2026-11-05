@@ -8,6 +8,7 @@ import { syncCommunityDares } from '@/lib/communityDares';
 import { useShareLocationWhileOpen } from '@/lib/location';
 import { fetchNotificationPrefs } from '@/lib/notificationPrefs';
 import { registerForPush, scheduleDropNotifications, useNotificationTaps } from '@/lib/notifications';
+import { configurePurchases } from '@/lib/plus';
 import { colors } from '@/theme';
 
 // Every screen you can reach once you're logged in.
@@ -31,6 +32,11 @@ export default function AppLayout() {
   useEffect(() => {
     if (!userId) return;
     syncCommunityDares().catch((error) => console.warn('Could not load community dares', error));
+  }, [userId]);
+
+  // Peekaboo+ ⭐: set up payments for this account and check whether you have Plus.
+  useEffect(() => {
+    if (userId) configurePurchases(userId);
   }, [userId]);
 
   // Just made your account with Apple or Google: pick a username first (shown instead of the app).
@@ -60,6 +66,7 @@ export default function AppLayout() {
       />
       <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="map" options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="plus" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
     {/* Everyone must have agreed to the current Terms of Service. */}
     <TermsGate />
