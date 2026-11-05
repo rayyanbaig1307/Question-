@@ -57,12 +57,18 @@ On 5 Nov the owner said "go" and the **server side was released** to the live pr
 session applied `20261215000000_peekaboo_plus` live, it says. `20261216` can be applied before or after that
 session's `20261218000000_plus_extras`: if the Peekaboo+ dare streak, with Peek-a-Save, is already there,
 `20261216` leaves it as it is – it counts group dares by itself.)
-**Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
-(`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. Since 5 Nov they
-also have the crop fix `a6a4c62` (OTA `53587d08…`, built by another session from `23853ae` with `a6a4c62`
-cherry-picked; not a branch commit). **Any next live OTA must include `a6a4c62`** (the branch has it) or the
-crop Rotate button disappears again. One known side effect until the QA OTA: re-posting the same story to your
-profile after deleting that post shows an error.
+**App update published (5 Nov, owner's "Ok do both"):** OTA `346a8ad8-384b-4a95-885d-929ff02c69f2` on branch
+`preview` (runtime `exposdk:58.0.0`, Android + iOS), built from `e3fbac4`: all the QA app fixes, group dare
+Legit / Cap votes, the Inbox-bell header (`23853ae`) and the crop Rotate fix (`a6a4c62`). Checked after
+publishing: both bundles contain the project URL and key (the "setup-needed" text in them is only the code's
+fallback). No native package changed since the installed builds, so no new build is needed. The other session's
+Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
+`preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**Not applied yet:** `20261216000000_group_dare_votes` on the live database. Supabase's connector asks the owner
+to approve every database change; the question timed out twice (5 Nov) and nothing was applied (checked). Until
+it is applied, the new app shows group proofs the old way ("✅ Did the dare", no vote buttons) – that pairing is
+covered by the screen tests. Send the file (with `set local lock_timeout = '15s';` after `begin;`) once the
+owner is ready to tap Approve, then compare the functions with a local copy as before.
 **Done after the release (5 Nov):** the 14 old photo files of deleted accounts were deleted. They were put on
 the cleanup waiting list (`private.media_deferred_deletions`) and the daily cleanup was started once by hand
 (the same call the pg_cron job makes); it answered `removed 14 of 14`, and the leftover-file check below now
