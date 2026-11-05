@@ -30,6 +30,8 @@ returns boolean language sql stable security definer set search_path = '' as $$
     select 1 from public.plus_members m where m.user_id = person and m.expires_at > now()
   );
 $$;
+-- Only other database functions use this one.
+revoke all on function private.is_plus(uuid) from public, anon, authenticated;
 
 create or replace function public.is_plus(person uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
