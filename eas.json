@@ -23,11 +23,24 @@
       "environment": "preview",
       "autoIncrement": true,
       "distribution": "store"
+    },
+    "testflight-testing": {
+      "extends": "testflight",
+      "channel": "testing"
+    },
+    "preview-testing": {
+      "extends": "preview",
+      "channel": "testing"
     }
   },
   "submit": {
     "production": {},
     "testflight": {
+      "ios": {
+        "ascAppId": "6829561855"
+      }
+    },
+    "testflight-testing": {
       "ios": {
         "ascAppId": "6829561855"
       }

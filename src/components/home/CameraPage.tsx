@@ -31,12 +31,21 @@ import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
+import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
+import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
+import { usePlus } from '@/lib/plus';
 import { ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
 const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_LENS_AVAILABLE
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('./FaceLensCamera').FaceLensCamera
+  : null;
+
+// The Soft Glow filter (MediaPipe face tracking), only on downloads that have it. Peekaboo+.
+const SoftGlow: typeof import('@/components/lens/SoftGlowCamera').SoftGlowCamera | null = FACE_MESH_AVAILABLE
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('@/components/lens/SoftGlowCamera').SoftGlowCamera
   : null;
 
 // Videos can be up to this long.
@@ -46,6 +55,7 @@ const MAX_VIDEO_SECONDS = 30;
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
+  glow: colors.yellow,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -123,14 +133,23 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
+  // Soft Glow (Peekaboo+): the face-tracking camera with the glow drawn on top.
+  const plus = usePlus();
+  const glowOn = lensesHere && homeMode === 'glow' && SoftGlow !== null;
+  const glowRef = useRef<SoftGlowHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
   const [lensRecording, setLensRecording] = useState(false);
   const lensVideoItems = useRef<LensItem[]>([]);
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
+    // Soft Glow is a Peekaboo+ filter: without Plus, show what Peekaboo+ is instead.
+    if (next === 'glow' && !plus) {
+      router.push('/plus');
+      return;
+    }
     setHomeMode(next);
-    if (next === 'googly' && facing === 'back') setFacing('front');
+    if ((next === 'googly' || next === 'glow') && facing === 'back') setFacing('front');
   }
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
@@ -154,7 +173,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     });
 
   async function takePhoto() {
-    if (busy || (lensOn ? !lensRef.current : !cameraRef.current)) return;
+    if (busy || (glowOn ? !glowRef.current : lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     // Selfie cameras have no flash, so the screen becomes the flash: bright white for a moment, then the photo.
@@ -166,6 +185,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
     }
     try {
+      if (glowOn && glowRef.current) {
+        const shot = await glowRef.current.capture();
+        openEditor(shot.uri, 'cover');
+        return;
+      }
       if (lensOn && lensRef.current) {
         const shot = await lensRef.current.capture();
         openEditor(shot.uri, 'cover', false, shot.items);
@@ -191,7 +215,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
 
   async function startRecording() {
     if (busy || recording) return;
-    if (!lensOn && !cameraRef.current) return;
+    if (!lensOn && !glowOn && !cameraRef.current) return;
     // First time: ask for the microphone (so videos have sound), then you hold again.
     if (!mic?.granted && mic?.canAskAgain !== false) {
       await requestMic();
@@ -205,7 +229,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
     // yet). The googly eyes go on the video as stickers where they were when you started.
-    if (lensOn && lensRef.current) {
+    if (glowOn) {
+      // Soft Glow: the normal camera records the video (the glow isn't in videos yet).
+      setLensRecording(true);
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    } else if (lensOn && lensRef.current) {
       lensVideoItems.current = lensRef.current.currentItems();
       setLensRecording(true);
       // The normal camera needs a moment to start up.
@@ -307,7 +335,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        lensOn && !lensRecording && FaceLens ? (
+        glowOn && !lensRecording && SoftGlow ? (
+          <SoftGlow ref={glowRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
+        ) : lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : active || warm ? (
           <CameraView

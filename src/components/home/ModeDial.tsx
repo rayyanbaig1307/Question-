@@ -19,15 +19,18 @@ import { Bouncy } from '@/components/Bouncy';
 import { todayDareDay, useDare } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
+import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
 // The lens: 'googly' puts googly eyes on every face the camera sees.
-export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess';
+// 'glow' is the Soft Glow face filter (MediaPipe face tracking) – only on downloads that have it.
+export type CameraMode = 'photo' | 'googly' | 'glow' | 'dare' | 'drop' | 'guess';
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
   { key: 'googly', emoji: '🤪', label: 'Googly' },
+  ...(FACE_MESH_AVAILABLE ? [{ key: 'glow' as const, emoji: '✨', label: 'Soft Glow' }] : []),
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
@@ -43,7 +46,7 @@ const BUBBLE_ACTIVE = 54;
 // Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
 // A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
 // The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat.
-export const LENS_MODES: CameraMode[] = ['googly'];
+export const LENS_MODES: CameraMode[] = ['googly', 'glow'];
 
 export function ModeDial({ mode, onChange, dots, lensesOnly = false }: {
   mode: CameraMode;
@@ -133,6 +136,8 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
   const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
+
+  if (mode === 'glow') return null;
 
   if (mode === 'googly') {
     // The lens explains itself (eyes on faces). Without face tracking, say how to get it.
