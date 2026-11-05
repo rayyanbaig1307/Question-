@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Pressable,
   StyleSheet,
   Text,
@@ -69,6 +68,7 @@ import { useTyping } from '@/lib/typing';
 import { Audio, sendVoice } from '@/lib/voice';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
+import { useKeyboardLift, type KeyboardBox } from '@/lib/useKeyboardLift';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // A 1-on-1 chat with a friend. New messages pop in live.
@@ -105,6 +105,9 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
   const insets = useSafeAreaInsets();
+  // Keeps the message box right above the keyboard.
+  const keyboardBox = useRef<KeyboardBox>(null);
+  const keyboardLift = useKeyboardLift(keyboardBox, insets.bottom);
   const { friendTyping, onTextChange, clearFriendTyping } = useTyping(userId, friendId, areFriends);
   // Screenshot this chat → your friend sees a notice. (Only while you're looking at it, not a peek on top of it.)
   const focused = useIsFocused();
@@ -430,10 +433,9 @@ export default function ChatScreen() {
       />
 
       <ChatInkProvider ink={ink}>
-        {/* Under the top bar: lifts everything above the keyboard. It must sit directly under the top bar (not inside
-            another box), or it works out the keyboard's overlap wrong and the message box ends up under the keyboard.
-            The negative offset stops a gap appearing between the message box and the keyboard. */}
-        <KeyboardAvoidingView style={styles.body} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+        {/* Under the top bar. When the keyboard opens, this gets just enough space at the bottom to keep the
+            message box right above it (lib/useKeyboardLift.ts). */}
+        <View ref={keyboardBox} style={[styles.body, { paddingBottom: keyboardLift }]}>
           <ChatBackground id={background.shown} />
           {search !== null ? (
             <View style={styles.searchBar}>
@@ -607,7 +609,7 @@ export default function ChatScreen() {
               <Text style={[styles.notFriends, ink, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </ChatInkProvider>
       <ChatBackgroundPicker
         visible={backgroundOpen}

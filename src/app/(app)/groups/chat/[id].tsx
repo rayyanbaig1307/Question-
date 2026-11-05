@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
@@ -67,6 +66,7 @@ import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useGroupTyping } from '@/lib/typing';
 import { useSafetyActions } from '@/lib/useSafetyActions';
+import { useKeyboardLift, type KeyboardBox } from '@/lib/useKeyboardLift';
 import { Audio } from '@/lib/voice';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
@@ -87,6 +87,9 @@ export default function GroupChat() {
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const ink = chatInk(background.shown);
   const insets = useSafeAreaInsets();
+  // Keeps the message box right above the keyboard.
+  const keyboardBox = useRef<KeyboardBox>(null);
+  const keyboardLift = useKeyboardLift(keyboardBox, insets.bottom);
   const [group, setGroup] = useState<PeekGroup | null | undefined>(undefined);
   const [messages, setMessages] = useState<GroupMessage[] | null>(null);
   const [reads, setReads] = useState<Map<string, string>>(new Map());
@@ -569,10 +572,9 @@ export default function GroupChat() {
       />
 
       <ChatInkProvider ink={ink}>
-        {/* Under the top bar: lifts everything above the keyboard. It must sit directly under the top bar (not inside
-            another box), or it works out the keyboard's overlap wrong and the message box ends up under the keyboard.
-            The negative offset stops a gap appearing between the message box and the keyboard. */}
-        <KeyboardAvoidingView style={styles.body} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+        {/* Under the top bar. When the keyboard opens, this gets just enough space at the bottom to keep the
+            message box right above it (lib/useKeyboardLift.ts). */}
+        <View ref={keyboardBox} style={[styles.body, { paddingBottom: keyboardLift }]}>
           <ChatBackground id={background.shown} />
           {search !== null ? (
             <View style={styles.searchBar}>
@@ -825,7 +827,7 @@ export default function GroupChat() {
               )}
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </ChatInkProvider>
       <ChatBackgroundPicker
         visible={backgroundOpen}
