@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -27,8 +27,9 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { useMe } from '@/lib/auth';
 import { sendReaction, STORY_REACTIONS } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import { fetchStoryInsights, recordStoryView, useContentScreenshots, type StoryInsights } from '@/lib/insights';
 import { mediaFiles, useMediaUrls } from '@/lib/media';
-import { deleteStory, fetchStoryRing, fetchStoryViewers, markStorySeen, type StoryRing } from '@/lib/stories';
+import { deleteStory, fetchStoryRing, fetchStoryViewers, type StoryRing } from '@/lib/stories';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
@@ -52,6 +53,8 @@ export default function StoryViewer() {
   const [paused, setPaused] = useState(false);
   const [viewers, setViewers] = useState<{ storyId: string; people: Profile[] } | null>(null);
   const [viewersOpen, setViewersOpen] = useState(false);
+  // Peekaboo+ insights for your own story: who rewatched it 🔁 and who screenshotted it 📸.
+  const [insights, setInsights] = useState<{ storyId: string; data: StoryInsights } | null>(null);
   // Swipe up on your own story: the list of everyone who viewed it.
   const openViewers = () => setViewersOpen(true);
   const swipeUp = usePanGesture({
@@ -126,18 +129,32 @@ export default function StoryViewer() {
     return () => cancelAnimation(progress);
   }, [running, storyId, round, progress, next, seconds]);
 
-  // Tell your friend you saw it.
+  // Tell your friend you saw it. Each time you open their story counts once per photo (pausing doesn't
+  // count again), so they can see with Peekaboo+ who rewatched it.
+  const counted = useRef(new Set<string>());
   useEffect(() => {
-    if (running && storyId && !isMine) markStorySeen(userId, storyId);
+    if (!running || !storyId || isMine || counted.current.has(storyId)) return;
+    counted.current.add(storyId);
+    recordStoryView(userId, storyId);
   }, [running, storyId, isMine, userId]);
 
-  // On your own story: who has seen this photo.
+  // 📸 A screenshot of a friend's story is recorded (they get a push; Peekaboo+ shows them who).
+  useContentScreenshots('story', storyId, !isMine && !!storyId);
+
+  // On your own story: who has seen this photo (and, opening the list again, the latest).
   useEffect(() => {
     if (!isMine || !storyId) return;
+    let current = true;
     fetchStoryViewers(storyId)
-      .then((people) => setViewers({ storyId, people }))
+      .then((people) => current && setViewers({ storyId, people }))
       .catch(() => {});
-  }, [isMine, storyId]);
+    fetchStoryInsights(storyId).then((data) => {
+      if (current && data) setInsights({ storyId, data });
+    });
+    return () => {
+      current = false;
+    };
+  }, [isMine, storyId, viewersOpen]);
 
   // Download the next photo in advance so it appears instantly.
   const nextUrl = ring ? urls[ring.stories[index + 1]?.media_path ?? ''] : undefined;
@@ -233,6 +250,11 @@ export default function StoryViewer() {
 
   const name = ring.author.display_name || ring.author.username;
   const seenBy = viewers?.storyId === story.id ? viewers.people : null;
+  const storyInsights = insights?.storyId === story.id ? insights.data : null;
+  const openPlus = () => {
+    setViewersOpen(false);
+    router.push('/plus');
+  };
 
   return (
     <View style={styles.fill}>
@@ -348,7 +370,43 @@ export default function StoryViewer() {
                 contentContainerStyle={styles.sheetList}
                 style={styles.sheetScroll}
                 ListEmptyComponent={<Text style={styles.sheetEmpty}>Nobody yet – check back soon!</Text>}
-                renderItem={({ item }) => <PersonRow person={item} />}
+                ListHeaderComponent={
+                  storyInsights && !storyInsights.plus ? (
+                    <Pressable style={styles.teaser} onPress={openPlus} accessibilityRole="button">
+                      <Text style={styles.teaserTitle}>🔁 Who rewatched? ⭐</Text>
+                      {storyInsights.rewatchers + storyInsights.screenshotters > 0 ? (
+                        <Text style={styles.teaserText}>
+                          {[
+                            storyInsights.rewatchers > 0 ? `${storyInsights.rewatchers} rewatched` : null,
+                            storyInsights.screenshotters > 0 ? `${storyInsights.screenshotters} screenshotted` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}{' '}
+                          – see who with Peekaboo+
+                        </Text>
+                      ) : (
+                        <Text style={styles.teaserText}>See who watched again with Peekaboo+</Text>
+                      )}
+                    </Pressable>
+                  ) : undefined
+                }
+                renderItem={({ item }) => {
+                  const extra = storyInsights?.plus ? storyInsights.people.get(item.id) : undefined;
+                  return (
+                    <PersonRow
+                      person={item}
+                      right={
+                        extra && (extra.views > 1 || extra.screenshots > 0) ? (
+                          <Text style={styles.insightTag}>
+                            {[extra.views > 1 ? `🔁 ×${extra.views}` : null, extra.screenshots > 0 ? '📸' : null]
+                              .filter(Boolean)
+                              .join('  ')}
+                          </Text>
+                        ) : undefined
+                      }
+                    />
+                  );
+                }}
               />
             </Pressable>
           </SafeEdge>
@@ -552,6 +610,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingBottom: space.lg,
     gap: space.sm,
+  },
+  teaser: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.yellow,
+    padding: space.md,
+    gap: 2,
+  },
+  teaserTitle: {
+    ...font.body,
+    fontWeight: '800',
+  },
+  teaserText: {
+    ...font.small,
+  },
+  insightTag: {
+    ...font.body,
+    fontWeight: '800',
   },
   sheetEmpty: {
     ...font.small,

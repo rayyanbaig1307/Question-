@@ -64,6 +64,12 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds): off by default, so screens look like they do without it.
     '@/lib/plus': { CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false, configurePurchases: async () => {} },
+    // Peekaboo+ insights (profile views, rewatches, screenshots): nothing to show, and the setting is unknown.
+    '@/lib/insights': {
+      recordProfileView: async () => {}, fetchMyProfileViews: async () => null, fetchShowInProfileViews: async () => null,
+      setShowInProfileViews: async () => {}, recordStoryView: async () => {}, fetchStoryInsights: async () => null,
+      recordScreenshot: async () => {}, useContentScreenshots: () => {}, fetchPostScreenshots: async () => null,
+    },
     '@/lib/chatBackgrounds': { friendChatKey: id => `friend:${id}`, groupChatKey: id => `group:${id}`, useChatBackground: () => ({ plus: false, picked: null, shown: null, choose: async () => {} }) },
     '@/components/chat/ChatBackground': { ChatBackground: host('ChatBackground'), ChatInkProvider: host('ChatInkProvider'), chatInk: () => null, useChatInk: () => null },
     '@/components/chat/ChatBackgroundPicker': { ChatBackgroundPicker: host('ChatBackgroundPicker') },

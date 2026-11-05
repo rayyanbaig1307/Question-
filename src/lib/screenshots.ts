@@ -35,3 +35,21 @@ export function useScreenshotNotice(
     return () => subscription.remove();
   }, [me, other, what, enabled]);
 }
+
+// While `enabled`, calls `onScreenshot` when a screenshot is taken (several in a row count once).
+// Uses the same detector as above, so it's skipped where the phone or app can't detect screenshots.
+export function useScreenshotDetector(enabled: boolean, onScreenshot: () => void) {
+  const noticed = useEffectEvent(() => onScreenshot());
+
+  useEffect(() => {
+    if (!enabled || !ScreenCapture) return;
+    let last = 0;
+    const subscription = ScreenCapture.addScreenshotListener(() => {
+      const now = Date.now();
+      if (now - last < 3000) return;
+      last = now;
+      noticed();
+    });
+    return () => subscription.remove();
+  }, [enabled]);
+}

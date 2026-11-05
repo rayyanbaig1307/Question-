@@ -11,6 +11,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { fetchMyBirthday } from '@/lib/birthday';
 import { friendlyError } from '@/lib/errors';
+import { fetchShowInProfileViews, setShowInProfileViews } from '@/lib/insights';
 import { inviteFriends } from '@/lib/invite';
 import { contactEmail, type LegalPage } from '@/lib/legal';
 import { LEGAL_DOCS } from '@/lib/legalDocs';
@@ -31,6 +32,8 @@ export default function Settings() {
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
   const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
+  // "Show me in Profile views" (null while loading, or if it can't be loaded yet).
+  const [showInViews, setShowInViews] = useState<boolean | null>(null);
   const profileWrites = useRef(Promise.resolve());
   const latestProfile = useRef(profile);
   const locationRequest = useRef(0);
@@ -73,6 +76,22 @@ export default function Settings() {
       .then(setNotify)
       .catch(() => setNotify(ALL_ON));
   }, [userId]);
+
+  useEffect(() => {
+    fetchShowInProfileViews(userId).then((on) => active.current && setShowInViews(on));
+  }, [userId]);
+
+  async function changeShowInViews(on: boolean) {
+    const before = showInViews;
+    setShowInViews(on);
+    try {
+      await setShowInProfileViews(on);
+      if (active.current) showToast(on ? '👀 You show up in Profile views' : "🙈 You're hidden from Profile views");
+    } catch (error) {
+      if (active.current) setShowInViews(before);
+      Alert.alert('Could not save', friendlyError(error));
+    }
+  }
 
   // Fresh each time you come back here (e.g. right after adding your birthday).
   useFocusEffect(
@@ -268,6 +287,22 @@ export default function Settings() {
             subtitle={HIT_UPS_FROM.find((option) => option.key === (profile?.hit_ups_from ?? 'everyone'))?.label}
             onPress={chooseHitUps}
           />
+          {showInViews !== null ? (
+            <Row
+              icon="eye"
+              color={colors.blue}
+              title="Show me in Profile views"
+              subtitle="When off, people don't see you visited – and you can't see your own visitors"
+              right={
+                <Switch
+                  value={showInViews}
+                  onValueChange={changeShowInViews}
+                  trackColor={{ true: colors.blue, false: colors.border }}
+                  thumbColor={colors.white}
+                />
+              }
+            />
+          ) : null}
           <Row icon="map" color={colors.green} title="Friend map" onPress={() => router.push('/map')} />
           <Row
             icon="hand-left"
