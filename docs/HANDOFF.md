@@ -55,8 +55,11 @@ On 5 Nov the owner said "go" and the **server side was released** to the live pr
 **Not applied:** `20261215000000_peekaboo_plus` (another session's, after RevenueCat) and
 `20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go).
 **Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
-(`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. One known
-side effect until the OTA: re-posting the same story to your profile after deleting that post shows an error.
+(`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. Since 5 Nov they
+also have the crop fix `a6a4c62` (OTA `53587d08…`, built by another session from `23853ae` with `a6a4c62`
+cherry-picked; not a branch commit). **Any next live OTA must include `a6a4c62`** (the branch has it) or the
+crop Rotate button disappears again. One known side effect until the QA OTA: re-posting the same story to your
+profile after deleting that post shows an error.
 **Done after the release (5 Nov):** the 14 old photo files of deleted accounts were deleted. They were put on
 the cleanup waiting list (`private.media_deferred_deletions`) and the daily cleanup was started once by hand
 (the same call the pg_cron job makes); it answered `removed 14 of 14`, and the leftover-file check below now
