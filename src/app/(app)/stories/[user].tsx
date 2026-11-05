@@ -14,6 +14,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 
 import { VideoClip } from '@/components/VideoClipSafe';
@@ -51,6 +52,17 @@ export default function StoryViewer() {
   const [paused, setPaused] = useState(false);
   const [viewers, setViewers] = useState<{ storyId: string; people: Profile[] } | null>(null);
   const [viewersOpen, setViewersOpen] = useState(false);
+  // Swipe up on your own story: the list of everyone who viewed it.
+  const openViewers = () => setViewersOpen(true);
+  const swipeUp = usePanGesture({
+    enabled: isMine,
+    activeOffsetY: -25,
+    failOffsetX: [-30, 30],
+    onDeactivate: (event) => {
+      'worklet';
+      if (event.translationY < -60) scheduleOnRN(openViewers);
+    },
+  });
   // The last reaction you sent (its counter restarts the flying-emoji animation).
   const [burst, setBurst] = useState<{ count: number; emoji: string } | null>(null);
   const progress = useSharedValue(0);
@@ -250,7 +262,9 @@ export default function StoryViewer() {
       ) : null}
       {loadedId !== story.id ? <ActivityIndicator style={styles.spinner} color={colors.white} size="large" /> : null}
 
-      {/* Tap zones: left third goes back, the rest goes forward. Hold anywhere to pause. */}
+      {/* Tap zones: left third goes back, the rest goes forward. Hold anywhere to pause.
+          On your own story, swipe up to see who viewed it. */}
+      <GestureDetector gesture={swipeUp}>
       <View style={styles.tapZones}>
         <Pressable
           style={styles.backZone}
@@ -269,6 +283,7 @@ export default function StoryViewer() {
           accessibilityLabel="Next photo"
         />
       </View>
+      </GestureDetector>
 
       <SafeEdge edge="top" style={styles.top} pointerEvents="box-none">
         <LinearGradient colors={['rgba(0,0,0,0.55)', 'transparent']} style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -296,7 +311,7 @@ export default function StoryViewer() {
           <View style={styles.myButtons}>
             <Pressable style={styles.viewersButton} onPress={() => setViewersOpen(true)}>
               <Ionicons name="eye" size={18} color={colors.white} />
-              <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen`}</Text>
+              <Text style={styles.viewersText}>{seenBy === null ? '…' : `${seenBy.length} seen · swipe up`}</Text>
             </Pressable>
             <Pressable style={styles.viewersButton} onPress={() => confirmDelete()} accessibilityLabel="Delete from my story">
               <Ionicons name="trash" size={18} color={colors.white} />
@@ -326,7 +341,7 @@ export default function StoryViewer() {
         <Pressable style={styles.backdrop} onPress={() => setViewersOpen(false)}>
           <SafeEdge edge="bottom" style={styles.sheet}>
             <Pressable>
-              <Text style={styles.sheetTitle}>👁 Seen by</Text>
+              <Text style={styles.sheetTitle}>👁 Seen by {seenBy?.length ?? 0}</Text>
               <FlatList
                 data={seenBy ?? []}
                 keyExtractor={(person) => person.id}

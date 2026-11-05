@@ -40,32 +40,32 @@ export const DEFAULT_TEXT_SIZE = 34;
 export const MIN_TEXT_SIZE = 16;
 export const MAX_TEXT_SIZE = 80;
 
-// The 6 text styles. `plus` ones are for Peekaboo+ ⭐ only. `scale` evens out fonts that look small or big.
+// The 6 text styles (all free for everyone; `plus` is kept in case something is ever Plus-only). `scale` evens out fonts that look small or big.
 export const TEXT_FONTS: { id: TextFont; label: string; family: string; scale: number; plus: boolean }[] = [
   { id: 'bubbly', label: 'Bubbly', family: 'Fredoka_700Bold', scale: 1, plus: false },
   { id: 'marker', label: 'Marker', family: 'PermanentMarker_400Regular', scale: 0.95, plus: false },
-  { id: 'retro', label: 'RETRO', family: 'Bungee_400Regular', scale: 0.85, plus: true },
-  { id: 'diary', label: 'Diary', family: 'Caveat_700Bold', scale: 1.25, plus: true },
-  { id: 'typed', label: 'Typed', family: 'SpecialElite_400Regular', scale: 0.9, plus: true },
-  { id: 'loud', label: 'LOUD', family: 'Anton_400Regular', scale: 1.05, plus: true },
+  { id: 'retro', label: 'RETRO', family: 'Bungee_400Regular', scale: 0.85, plus: false },
+  { id: 'diary', label: 'Diary', family: 'Caveat_700Bold', scale: 1.25, plus: false },
+  { id: 'typed', label: 'Typed', family: 'SpecialElite_400Regular', scale: 0.9, plus: false },
+  { id: 'loud', label: 'LOUD', family: 'Anton_400Regular', scale: 1.05, plus: false },
 ];
 
 export const TEXT_EFFECTS: { id: TextEffect; label: string; plus: boolean }[] = [
   { id: 'none', label: 'None', plus: false },
   { id: 'glow', label: 'Glow', plus: false },
-  { id: 'neon', label: 'Neon', plus: true },
+  { id: 'neon', label: 'Neon', plus: false },
   { id: 'outline', label: 'Outline', plus: false },
   { id: 'shadow', label: 'Shadow', plus: false },
-  { id: 'pop3d', label: '3D Pop', plus: true },
+  { id: 'pop3d', label: '3D Pop', plus: false },
 ];
 
 export const TEXT_ANIMATIONS: { id: TextAnimation; label: string; plus: boolean }[] = [
   { id: 'none', label: 'None', plus: false },
-  { id: 'pop', label: 'Pop', plus: true },
-  { id: 'bounce', label: 'Bounce', plus: true },
-  { id: 'wiggle', label: 'Wiggle', plus: true },
-  { id: 'typewriter', label: 'Typewriter', plus: true },
-  { id: 'peek', label: 'Peek', plus: true },
+  { id: 'pop', label: 'Pop', plus: false },
+  { id: 'bounce', label: 'Bounce', plus: false },
+  { id: 'wiggle', label: 'Wiggle', plus: false },
+  { id: 'typewriter', label: 'Typewriter', plus: false },
+  { id: 'peek', label: 'Peek', plus: false },
 ];
 
 // The background button goes round these, one per tap.

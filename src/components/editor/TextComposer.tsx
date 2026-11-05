@@ -55,7 +55,7 @@ const ALIGN_ICONS: Record<TextAlign, 'format-align-left' | 'format-align-center'
 const NEXT_ALIGN: Record<TextAlign, TextAlign> = { center: 'left', left: 'right', right: 'center' };
 
 // The full-screen text tool: type in the middle, size slider on the left, tools down the right,
-// style bubbles above the keyboard. ⭐ things are for Peekaboo+ only.
+// style bubbles above the keyboard. Everything here is free for everyone.
 export function TextComposer({ initial, onDone, onCancel }: {
   initial: TextDraft;
   onDone: (draft: TextDraft) => void;
