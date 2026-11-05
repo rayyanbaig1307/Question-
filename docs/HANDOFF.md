@@ -44,7 +44,9 @@ is finished and **tested on this computer only**. **Nothing has been pushed, dep
 hosted project or published as an OTA.** The live database is still the old one (migrations up to
 `20261212000000_chat_extras.sql`). The live app is `a9e5ddf` plus header-only changes another session
 published on 5 Nov (OTA `19dffe81…` from commit `23853ae`: Inbox bell in the Chat header, no profile picture
-at the top). None of the QA fixes are live. Releasing needs the owner's "go".
+at the top), and since 5 Nov also the crop fix `a6a4c62` (OTA `53587d08…`, built from `23853ae` with
+`a6a4c62` cherry-picked; not a branch commit). **Any next live OTA must include `a6a4c62`** or the crop Rotate
+button disappears again. None of the QA fixes are live. Releasing needs the owner's "go".
 
 - **Commits** (local only): from `ac246c3` (the supplied patch: security fixes, hardening migration
   `20261213102659`, local test suite) to the branch head. `ee96f61` makes the tests run on Linux,
