@@ -43,15 +43,15 @@ returns text[] language sql immutable strict parallel safe set search_path = '' 
   select coalesce(array(select jsonb_array_elements_text(private.word_filter_lists() -> list_name)), '{}'::text[]);
 $$;
 
--- Fancy look-alike letters ("ｆｕｃｋ", "𝐟𝐮𝐜𝐤", "ⓕⓤⓒⓚ") become plain ones (Unicode NFKC), like plainLetters() in
+-- Fancy look-alike letters (full-width, bold maths and circled letters) become plain ones (Unicode NFKC), like plainLetters() in
 -- the app. Then, the same as the app, in the same order:
--- * accents are taken off ("fück" → "fuck", "José" → "Jose"): each letter is split into the plain letter plus its
+-- * accents are taken off (an accented "u" in a swear word becomes a plain "u"; "Jose" with an accent becomes "Jose"): each letter is split into the plain letter plus its
 --   accent mark (Unicode NFD), and the accent marks are deleted (the five blocks of "combining" marks);
--- * the "outlined" letters and digits (U+1CCD6–U+1CCF9) are only known to newer Unicode, so older PostgreSQL
+-- * the "outlined" letters and digits (U+1CCD6-U+1CCF9) are only known to newer Unicode, so older PostgreSQL
 --   versions (16 and earlier) would miss them; they are swapped by hand so every version agrees;
 -- * characters you can't see (zero-width space, soft hyphen, joiners, direction marks, variation selectors,
---   tags…) are deleted, so "cu<invisible>nt" can't pass as two harmless pieces;
--- * Cyrillic and Greek letters that look just like Latin ones ("сunt" with a Russian "с") become the Latin
+--   tags...) are deleted, so "cu<invisible>nt" can't pass as two harmless pieces;
+-- * Cyrillic and Greek letters that look just like Latin ones (a Russian letter that looks like "c") become the Latin
 --   letter. The two lists below are LOOK_ALIKE_FROM / LOOK_ALIKE_TO in the app, in the same order.
 create or replace function private.word_filter_plain_letters(value text)
 returns text language sql immutable strict parallel safe set search_path = '' as $$
@@ -64,18 +64,18 @@ returns text language sql immutable strict parallel safe set search_path = '' as
           '', 'g'),
         (select string_agg(chr(c), '' order by c) from generate_series(117974, 118009) as c),
         'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'),
-      '[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ￰-￸\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E0FFF]',
+      '[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFF8\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E0FFF]',
       '', 'g'),
-    E'аαсԁеεһіιјкκӏоοрρԛѕτυԝхχу'
-      || E'АΑВΒСЕΕНΗІΙЈКΚМΜΝОΟРΡЅТΤХΧΥҮΖ',
+    E'\u0430\u03B1\u0441\u0501\u0435\u03B5\u04BB\u0456\u03B9\u0458\u043A\u03BA\u04CF\u043E\u03BF\u0440\u03C1\u051B\u0455\u03C4\u03C5\u051D\u0445\u03C7\u0443'
+      || E'\u0410\u0391\u0412\u0392\u0421\u0415\u0395\u041D\u0397\u0406\u0399\u0408\u041A\u039A\u041C\u039C\u039D\u041E\u039F\u0420\u03A1\u0405\u0422\u03A4\u0425\u03A7\u03A5\u04AE\u0396',
     'aacdeehiijkklooppqstuwxxy'
       || 'AABBCEEHHIIJKKMMNOOPPSTTXXYYZ');
 $$;
 
--- "n1gg3r" → "nigger", "F.A.G" → "f a g". Same steps as tidy() in the app.
--- Lower case is done by hand (A–Z only) so the result never depends on the server's language settings.
--- The one other letter the app turns into a plain letter is the Turkish "İ" (it becomes "i" plus a dot). Since
--- accents are now taken off first, "İ" never gets this far; the swap stays only to match the app exactly.
+-- "n1gg3r" -> "nigger", "F.A.G" -> "f a g". Same steps as tidy() in the app.
+-- Lower case is done by hand (A-Z only) so the result never depends on the server's language settings.
+-- The one other letter the app turns into a plain letter is the Turkish capital "I" with a dot (it becomes "i" plus a dot). Since
+-- accents are now taken off first, that letter never gets this far; the swap stays only to match the app exactly.
 create or replace function private.word_filter_tidy(value text)
 returns text language sql immutable strict parallel safe set search_path = '' as $$
   select regexp_replace(
@@ -85,7 +85,7 @@ returns text language sql immutable strict parallel safe set search_path = '' as
     '[^abcdefghijklmnopqrstuvwxyz]', ' ', 'g');
 $$;
 
--- "f u c k" → "fuck": single letters in a row are joined. Same as joinSingles() in the app.
+-- "f u c k" -> "fuck": single letters in a row are joined. Same as joinSingles() in the app.
 create or replace function private.word_filter_join_singles(clean text)
 returns text language plpgsql immutable strict parallel safe set search_path = '' as $$
 declare
@@ -149,7 +149,7 @@ begin
   if place not in ('name', 'content') then
     raise exception 'Unknown place for the word filter: %', place;
   end if;
-  -- Fancy look-alike letters ("ｆｕｃｋ", "𝐟𝐮𝐜𝐤") are turned into plain ones first.
+  -- Fancy look-alike letters (full-width and bold maths letters) are turned into plain ones first.
   text_value := private.word_filter_plain_letters(value);
   clean := private.word_filter_tidy(text_value);
   squashed := replace(clean, ' ', '');
@@ -180,7 +180,7 @@ $$;
 create or replace function private.word_filter_message(place text)
 returns text language sql immutable strict parallel safe set search_path = '' as $$
   select case when place = 'name'
-    then 'Let''s keep it clean – that word can''t be in a username or name.'
+    then E'Let''s keep it clean \u2013 that word can''t be in a username or name.'
     else 'That word isn''t allowed on Peekaboo.' end;
 $$;
 
@@ -312,7 +312,7 @@ begin
         or private.blocked_word(candidate, 'name') is not null loop
     attempts := attempts + 1;
     if attempts > 20 then
-      -- "user" + letters a–f and numbers can never spell a blocked word.
+      -- "user" + letters a-f and numbers can never spell a blocked word.
       candidate := 'user' || substr(replace(new.id::text, '-', ''), 1, 12);
       exit;
     end if;
