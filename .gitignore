@@ -54,3 +54,6 @@ example
 .qa/
 .supabase/
 supabase/.temp/
+
+# Temporary working copies made by Claude Code helpers
+.claude/worktrees/
