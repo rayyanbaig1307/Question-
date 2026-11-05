@@ -64,6 +64,10 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**`20261219000000_plus_fixes` is live (checked 5 Nov, ~22:15 UTC):** `public.my_broken_streaks` on the live database is
+byte-for-byte the file's version (after removing Windows line endings from the paste), users can run it and visitors
+can't, and the owner's account `df5aae76…` is in `private.report_alert_people`. It was pasted in the SQL Editor (no
+history row).
 **Everything on the owner's TestFlight build (5 Nov, owner: "push all the features… I want to test the features on
 TestFlight", RevenueCat later):** this branch now contains the whole Peekaboo+ branch (merged `00848ff`, then
 `ec6aa50`), and OTA `4b19b737-bf78-4180-bdf6-b46b1dcbd56a` on branch **`testing`** (the channel of the Peekaboo+
