@@ -296,17 +296,19 @@ describe('username-auth real handler', () => {
 });
 
 // OPEN-01: names chosen at username sign-up go through the same word filter before any account is made.
-// The fake database answers with the app's own filter; tests/unit/word-filter-parity.test.mjs proves the real
-// database function gives the same answers.
+// The owner's choice: the username can't have swearing or slurs; the display name may swear, but no slurs.
+// The fake database answers with the app's own filter in those places; tests/unit/word-filter-parity.test.mjs
+// proves the real database function (public_name_allowed) gives the same answers.
 describe('username-auth sign-up word filter', () => {
   const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
+  const WORD_NOT_ALLOWED = "That word isn't allowed on Peekaboo.";
   function filteredService() {
     const service = usernameService();
     const { findBlockedWord } = loadLibrary('cleanWords');
     const limiter = service.rpc.getMockImplementation();
     service.rpc.mockImplementation(async (fn, args) => {
       if (fn !== 'public_name_allowed') return limiter(fn, args);
-      return { data: !findBlockedWord(args.username, 'name') && !findBlockedWord(args.display_name, 'name'), error: null };
+      return { data: !findBlockedWord(args.username, 'name') && !findBlockedWord(args.display_name, 'content'), error: null };
     });
     service.admin.from.mockReturnValue(query({ data: null, error: null }));
     service.login.mockResolvedValue({ data: { session: { access_token: 'test-access', refresh_token: 'test-refresh' } }, error: null });
@@ -325,12 +327,41 @@ describe('username-auth sign-up word filter', () => {
     expect(reserved(rpc)).toHaveLength(0);
   });
 
-  it.each(['big dick', 'F U C K', 'ｆｕｃｋ', 'Total Bitch', 'n1gg3r'])('rejects the blocked display name %s', async (display_name) => {
-    const { admin, login, createUser } = filteredService();
+  it.each(['big dick', 'F U C K', 'ｆｕｃｋ', 'Total Bitch', 'Fuck Off', 'Shït Happens'])('lets a display name with swearing through: %s', async (display_name) => {
+    const { admin, login, rpc, createUser } = filteredService();
     const response = await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name });
+    expect(response.status).toBe(200);
+    expect(createUser).toHaveBeenCalledOnce();
+    expect(createUser.mock.calls[0][0].user_metadata.display_name).toBe(display_name);
+    expect(rpc).toHaveBeenCalledWith('public_name_allowed', { username: 'alex', display_name });
+  });
+
+  // Numbers for letters, dots and spaces, fancy letters, an invisible character, a look-alike letter, accents.
+  it.each(['n1gg3r', 'F.A.G.G.O.T', 'K I K E', 'ｒｅｔａｒｄ', 'ki\u200Bke', '\u0441hink', 'Wétbáck', 'Big Sp1c'])('rejects a display name with a slur: %s', async (display_name) => {
+    const { admin, login, rpc, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'alex', display_name });
+    expect(response.status).toBe(400);
+    // The same message the app and the database give for a slur in a display name.
+    expect(await response.json()).toEqual({ error: WORD_NOT_ALLOWED });
+    expect(createUser).not.toHaveBeenCalled();
+    expect(reserved(rpc)).toHaveLength(0);
+  });
+
+  it('still rejects a username with swearing when the display name is fine to swear in', async () => {
+    const { admin, login, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'sh1t_head', display_name: 'Shit Head' });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: NAME_NOT_ALLOWED });
     expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('gives the username message when both the username and the display name break the rules', async () => {
+    const { admin, login, rpc, createUser } = filteredService();
+    const response = await signup(loadEdge('username-auth', admin, login), { username: 'sh1t_head', display_name: 'n1gg3r' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: NAME_NOT_ALLOWED });
+    expect(createUser).not.toHaveBeenCalled();
+    expect(reserved(rpc)).toHaveLength(0);
   });
 
   it.each(['Moby Dick', 'Alex Cock', 'Scunthorpe', 'Nazir'])('lets the real name %s through', async (display_name) => {

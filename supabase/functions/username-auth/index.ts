@@ -158,8 +158,10 @@ async function refundAttempt(attemptId: string): Promise<void> {
 class LoginServiceError extends Error {}
 
 // The word filter lives in the database (private.blocked_word), so the app, the server and this function all
-// follow the same rules. If the check can't run, don't make the account.
+// follow the same rules: no swearing or slurs in the username; the display name may swear, but no slurs.
+// If the check can't run, don't make the account.
 const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
+const WORD_NOT_ALLOWED = "That word isn't allowed on Peekaboo.";
 async function namesAllowed(username: string, displayName: string): Promise<boolean> {
   const { data, error } = await admin.rpc('public_name_allowed', { username, display_name: displayName });
   if (error || typeof data !== 'boolean') throw error ?? new Error('Could not check the name');
@@ -237,7 +239,9 @@ Deno.serve(async (req) => {
       const displayName = String(body.display_name ?? '').trim().slice(0, 40) || username;
       // The same word filter as the app (the database's copy of it), checked before any account is made.
       if (!(await namesAllowed(username, displayName))) {
-        return json({ error: NAME_NOT_ALLOWED }, 400);
+        // The same message as the app: a username that breaks the rules gets the username message; a slur in
+        // the display name (which may swear) gets the general one. An empty display name checks only the username.
+        return json({ error: (await namesAllowed(username, '')) ? WORD_NOT_ALLOWED : NAME_NOT_ALLOWED }, 400);
       }
       // Set before reserving: if the limiter breaks partway, the counters already taken are given back.
       giveBackOnError = true;

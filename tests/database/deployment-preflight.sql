@@ -253,8 +253,8 @@ order by x.created_at, x.id;
 select 'profiles' as source, id::text as row_id, 'username' as field, username as value, private.blocked_word(username,'name') as word
   from public.profiles where private.blocked_word(username,'name') is not null
 union all
-select 'profiles', id::text, 'display_name', display_name, private.blocked_word(display_name,'name')
-  from public.profiles where private.blocked_word(display_name,'name') is not null
+select 'profiles', id::text, 'display_name', display_name, private.blocked_word(display_name,'content')
+  from public.profiles where private.blocked_word(display_name,'content') is not null
 union all
 select 'profiles', id::text, 'bio', bio, private.blocked_word(bio,'content')
   from public.profiles where private.blocked_word(bio,'content') is not null

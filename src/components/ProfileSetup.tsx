@@ -137,7 +137,8 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const usernameFree = isMine || (availability?.name === username && availability.free);
 
   const problems = {
-    name: name.trim() ? checkClean(name, 'name') : 'Type your name.',
+    // Your name may swear but can't have slurs; your @username can't have either.
+    name: name.trim() ? checkClean(name, 'content') : 'Type your name.',
     username: !username
       ? 'Pick a username.'
       : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(username, 'name'))),

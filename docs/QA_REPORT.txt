@@ -19,13 +19,15 @@ What happened to each OPEN item:
   20261214000000_public_word_filter.sql makes the database check public text
   (usernames, display names, bios, post and Guess Who captions, comments, hit
   ups, dare ideas, group names) with the same rules as src/lib/cleanWords.ts,
-  keeping the real-name and private-chat exceptions. Both sides also see
-  through invisible characters, look-alike letters and accents. username-auth
-  refuses a blocked name before a username sign-up.
-  tests/unit/word-filter-parity.test.mjs keeps the app and the database the
-  same. Left on purpose: private chat (1:1 and group, chat dares) and profile
-  song title/artist are not filtered; the hit-back note and a word split
-  across username + display name are checked by the app only.
+  keeping the private-chat exception. Both sides also see through invisible
+  characters, look-alike letters and accents. username-auth refuses a blocked
+  name before a username sign-up. tests/unit/word-filter-parity.test.mjs
+  keeps the app and the database the same. [Update 2026-11-05] The owner
+  chose to allow swearing everywhere except @usernames: display names now
+  block slurs only, like bios (app, database, sign-up and preflight alike).
+  Left on purpose: private chat (1:1 and group, chat dares) and profile song
+  title/artist are not filtered; the hit-back note and a slur split across
+  username + display name are checked by the app only.
 - OPEN-02 (signed-in web app crashed in the native pager): FIXED. Phones keep
   the native pager (src/components/home/HomePager.tsx); the browser uses a
   small web pager (HomePager.web.tsx), with web stand-ins for the friend map

@@ -387,7 +387,8 @@ try {
   const [A, B, C, F, S, K, W, P, N, G, X, Z] = users;
   // A: sends the broken chat messages (deleted at the end). B: has photos and is reported.
   // C: in the group chat. F: B's friend who reports. S: a stranger. K: makes the bad keep.
-  // W: public text with bad words. P/N: the forfeit. G: Guess Who. X: clean look-alikes. Z: anyone.
+  // W: public text with bad words. P/N: the forfeit. G: Guess Who. Z: anyone.
+  // X: text that must NOT be listed: clean look-alikes, and swearing in a display name (allowed; only usernames can't).
   for (const [a, b] of [[A, B], [A, C], [B, C], [B, F], [F, W], [N, P]]) await friend(db, a, b);
 
   const as = (who, sql, args = []) => asUser(db, who, (tx) => tx.query(sql, args));
@@ -506,8 +507,8 @@ try {
     s.reports.anonymous = await report(F, 'post', s.mystery, { details: 'Guess Who (anonymous) post' });
 
     // --- Public text with bad words (no word filter in the database yet).
-    await as(W, "update public.profiles set username='fuckface99', display_name='Big Shit', bio='proud retard' where id=$1", [W]);
-    await as(X, "update public.profiles set display_name='Dick Smith', bio='I love Scunthorpe' where id=$1", [X]);
+    await as(W, "update public.profiles set username='fuckface99', display_name='Big Retard', bio='proud retard' where id=$1", [W]);
+    await as(X, "update public.profiles set display_name='Big Shit Dick Smith', bio='I love Scunthorpe' where id=$1", [X]);
     await file(W, `${W}/posts/w1.jpg`);
     s.wPost = (await one(W, "insert into public.posts(user_id,media_path,caption) values($1,$2,'look at this retard') returning id", [W, `${W}/posts/w1.jpg`])).id;
     await file(X, `${X}/posts/x1.jpg`);
@@ -757,7 +758,7 @@ try {
   };
   await check('5b. The old public rows with bad words are still there and can be read', async () => {
     const p = await one(F, 'select username, display_name, bio from public.profiles where id=$1', [W]);
-    assert(p.username === 'fuckface99' && p.display_name === 'Big Shit' && p.bio === 'proud retard', JSON.stringify(p));
+    assert(p.username === 'fuckface99' && p.display_name === 'Big Retard' && p.bio === 'proud retard', JSON.stringify(p));
     assert((await one(F, 'select caption from public.posts where id=$1', [seed.wPost])).caption === 'look at this retard', 'post');
     assert((await one(G, 'select caption from public.mystery_posts where id=$1', [seed.mystery])).caption === 'guess who, faggot', 'guess who');
     assert((await one(F, 'select body from public.comments where id=$1', [seed.badComment])).body === 'shut up, spic', 'comment');
@@ -775,7 +776,7 @@ try {
   });
   const wordChanges = [
     ['username', (v) => as(W, 'update public.profiles set username=$2 where id=$1', [W, v]), 'fuckboy_2', 'wally_w'],
-    ['display name', (v) => as(W, 'update public.profiles set display_name=$2 where id=$1', [W, v]), 'Fuck Off', 'Wally'],
+    ['display name', (v) => as(W, 'update public.profiles set display_name=$2 where id=$1', [W, v]), 'Total Faggot', 'Wally'],
     ['bio', (v) => as(W, 'update public.profiles set bio=$2 where id=$1', [W, v]), 'total faggot', 'hello there'],
     ['post caption', (v) => as(W, 'update public.posts set caption=$2 where id=$1', [seed.wPost, v]), 'retards everywhere', 'look at this'],
     ['Guess Who caption', (v) => sys('update public.mystery_posts set caption=$2 where id=$1', [seed.mystery, v]), 'what a dyke', 'guess who'],
@@ -788,6 +789,15 @@ try {
     await check(`5b. Old ${what}: a change to another bad word is refused`, () => wordRefused(() => change(blocked), what));
     await check(`5b. Old ${what}: a change to clean text works`, () => change(clean).then(() => undefined));
   }
+  // The owner's choice: a display name may swear (only usernames can't). The finished-database preflight below
+  // must not list it either.
+  await check('5b. A display name with swearing saves; a username with swearing is still refused', async () => {
+    await as(W, 'update public.profiles set display_name=$2 where id=$1', [W, 'Fuck Off']);
+    const p = await one(F, 'select username, display_name from public.profiles where id=$1', [W]);
+    assert(p.display_name === 'Fuck Off', JSON.stringify(p));
+    const error = await refusal(() => as(W, 'update public.profiles set username=$2 where id=$1', [W, 'fuck_off']), 'username');
+    assert(error.code === '23514' && /can't be in a username or name/.test(error.message), error.message);
+  });
 
   // 5c. Private chat.
   await check('5c. Private chat with the same words is untouched', async () => {

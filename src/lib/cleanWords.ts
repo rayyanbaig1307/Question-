@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // Keeps hateful slurs out of Peekaboo (the app stores require a filter like this).
-// * Slurs are blocked in everything strangers can see: names, bios, captions, comments, hit ups, dare ideas,
-//   group names. Private chats between friends aren't filtered at all (the owner's choice).
-// * Swearing is blocked in usernames and display names only. Bios, chats, captions and comments allow it.
-// * Real names are fine: "Moby Dick" or "Alex Cock" as a display name (written with a capital letter, like a name).
+// * Slurs are blocked in everything strangers can see: usernames, display names, bios, captions, comments, hit ups,
+//   dare ideas, group names. Private chats between friends aren't filtered at all (the owner's choice).
+// * Swearing is blocked in @usernames only (the owner's choice). Display names, bios, captions, comments and
+//   chats allow it. So a username is checked with 'name', and everything else (display names too) with 'content'.
 // People try to sneak words past filters with numbers and dots ("n1gg3r", "s.l.u.r"), so text is tidied first.
 // ---------------------------------------------------------------------------
 
@@ -15,14 +15,15 @@ const HATEFUL = [
   'beaners', 'raghead', 'towelhead', 'dyke', 'dykes', 'coon', 'coons', 'gook', 'gooks', 'paki', 'pakis',
   'rapist', 'molester', 'pedo', 'pedophile', 'paedophile',
 ];
-// Swearing that can't be in a username or display name.
+// Swearing that can't be in a username.
 const CRUDE = [
   'fuck', 'fucker', 'fucking', 'motherfucker', 'shit', 'bullshit', 'cunt', 'bitch', 'bitches', 'whore', 'slut',
   'sluts', 'asshole', 'pussy', 'cock', 'cocksucker', 'dick', 'dildo', 'porn', 'porno', 'blowjob', 'handjob',
   'jerkoff', 'wanker', 'twat', 'nazi', 'hitler',
 ];
-// Swear words that are also real first or last names (Dick, Cock). In a display name they're allowed when
-// written like a name, with a capital letter ("Moby Dick"), but not in lowercase ("big dick").
+// Swear words that are also real first or last names (Dick, Cock). The 'name' check lets them through when
+// written like a name, with a capital letter ("Moby Dick"), but not in lowercase ("big dick"). Usernames are
+// always lowercase, so this rarely matters now; it stays so the app and the database stay exactly the same.
 const REAL_NAMES = ['dick', 'cock'];
 // Swear words that never turn up inside a real name, so they're caught inside longer names too ("fuckboy").
 // Shorter ones like "shit", "porn" or "nazi" are only caught as whole words, because they hide inside real
@@ -114,7 +115,7 @@ function withoutRealNames(text: string): string {
 }
 
 // The offending word, or null if the text is fine.
-// 'name' = a username or display name (no swearing); 'content' = everything else (only slurs are blocked).
+// 'name' = a @username (no swearing); 'content' = everything else, display names too (only slurs are blocked).
 // The database runs the very same check (private.blocked_word in the 20261214 migration), so people can't skip
 // it by talking to the server directly. Change both together.
 export function findBlockedWord(input: string, where: 'name' | 'content'): string | null {

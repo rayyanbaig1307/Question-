@@ -83,8 +83,14 @@ export default function EditProfile() {
       setUsernameError(formatError);
       return;
     }
-    // No swearing in your username or name; your bio can say anything but slurs.
-    const notAllowed = checkClean(`${username} ${displayName}`, 'name') ?? checkClean(bio, 'content');
+    // No swearing in your @username. Your name and bio can say anything but slurs.
+    // A slur split across the username and the name ("the_nig" + "Ger") is refused too. Only the app checks
+    // this, not the database.
+    const notAllowed =
+      checkClean(username, 'name') ??
+      checkClean(displayName, 'content') ??
+      checkClean(`${username} ${displayName}`, 'content') ??
+      checkClean(bio, 'content');
     if (notAllowed) {
       Alert.alert('Pick something else', notAllowed);
       return;

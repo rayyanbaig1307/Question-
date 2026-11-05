@@ -795,14 +795,15 @@ arrive with the normal update.
 
 ## Step 53 – Clean words 🧼
 
-1. **Usernames and display names: no swearing.** "big dick", "fuckboy", "f.u.c.k", "the_shit" say "Let's keep it
-   clean…" and won't save.
-2. **Real names are fine:** a display name like "Moby Dick", "Dick Smith" or "Alex Cock" (written with a capital
-   letter, like a name) saves. So do names like Ishita, Nazir, Pornsak, Hancock, Scunthorpe.
+1. **Usernames: no swearing.** "fuckboy", "f.u.c.k", "the_shit" say "Let's keep it clean…" and won't save.
+   Usernames like ishita, nazir, pornsak, hancock, scunthorpe are fine.
+2. **Display names (your name on your profile) may swear:** "Fuck Off" or "Big Dick" saves, and so do real names
+   like "Moby Dick" or "Alex Cock". (Changed 5 Nov: display names used to block swearing.)
 3. **Bios, chats, comments, captions, hit ups, group names:** swearing is allowed.
-4. **Slurs are blocked in public places** – names, bios, captions, comments, hit ups, dare ideas, group names
-   (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo". After the QA round 2 release
-   the database checks this too, with the same words and the same message (see Step 62).
+4. **Slurs are blocked in public places** – display names, bios, captions, comments, hit ups, dare ideas, group
+   names (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo" (in a username: "Let's keep
+   it clean…"). After the QA round 2 release the database checks this too, with the same words and the same
+   message (see Step 62).
 5. **Private chats aren't filtered at all**: any word goes through in a chat or a chat dare to a friend.
 
 ## Step 54 – Reports (owner, in Supabase) 🚩
@@ -958,9 +959,10 @@ real person's account (deleting can't be undone).
 3. **Links from a closed app:** close the app fully, then tap a chat or friend notification (or a `peekaboo://`
    link) → that page opens, not Home. The splash screen stays until it does, with no flash of the Welcome screen.
 4. **Word filter:**
-   - A bio, caption, comment, hit up, dare idea or group name with a slur → "That word isn't allowed on
-     Peekaboo." and it isn't saved.
-   - A username or display name with swearing → "Let's keep it clean – that word can't be in a username or name."
+   - A display name, bio, caption, comment, hit up, dare idea or group name with a slur → "That word isn't
+     allowed on Peekaboo." and it isn't saved.
+   - A display name with swearing (Edit profile → Name → "Fuck Off") → it saves and shows on your profile.
+   - A username with swearing → "Let's keep it clean – that word can't be in a username or name."
    - In a private chat (one-on-one or group, dares too) the same words still go through.
 5. **Photos stay on screen:** in a group chat with photos, have someone send a new photo → the photos already
    there stay put (no blank flash). Same on the Home feed when you pull down to refresh.

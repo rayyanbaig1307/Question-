@@ -64,15 +64,27 @@ test('A direct (authenticated) change of your own username to f.u.c.k is rejecte
 });
 
 test('Usernames reject swearing and slurs, including disguised spellings', async () => {
-  for (const name of ['f.u.c.k', 'fuckboy', 'n1gg3r', 'sh1t', 'b.i.t.c.h', 'cocksucker_9', 'hitler88']) {
+  // "big dick" and "DICK" aren't written like a real name, so the real-name rule doesn't let them through.
+  for (const name of ['f.u.c.k', 'fuckboy', 'n1gg3r', 'sh1t', 'b.i.t.c.h', 'cocksucker_9', 'hitler88', 'big dick', 'DICK']) {
     await nameBlocked(() => setOwn(0, 'username', name));
   }
 });
 
-test('Display names reject swearing: dots, spaces, numbers and fancy letters', async () => {
-  for (const name of ['f u c k', 'F.U.C.K', 'n1gg3r', 'ｆｕｃｋ', '𝐟𝐮𝐜𝐤', 'ⓕⓤⓒⓚ', '\u{1CCDB}\u{1CCEA}\u{1CCD8}\u{1CCE0}', 'big dick', 'DICK', 'Total Bitch', 'Wanker 😀']) {
-    await nameBlocked(() => setOwn(0, 'display_name', name));
+// The owner's choice: a display name (the name shown on a profile) may swear, like a bio. Only @usernames can't.
+test('Display names allow swearing, however it is written', async () => {
+  for (const name of ['f u c k', 'F.U.C.K', 'ｆｕｃｋ', '𝐟𝐮𝐜𝐤', 'ⓕⓤⓒⓚ', '\u{1CCDB}\u{1CCEA}\u{1CCD8}\u{1CCE0}', 'big dick', 'DICK', 'Total Bitch', 'Wanker 😀', 'Fuck Off', 'sh1t head']) {
+    assert.equal((await setOwn(0, 'display_name', name)).rows.length, 1, name);
+    assert.equal((await profile(0)).display_name, name);
   }
+});
+
+test('Display names reject slurs: dots, spaces, numbers and fancy letters', async () => {
+  // Fancy letters: full-width, bold, circled and the newer "outlined" ones (here "RETARD").
+  for (const name of ['n i g g e r', 'F.A.G.G.O.T', 'n1gg3r', 'Big R3tard', 'ｒｅｔａｒｄ', '𝐤𝐢𝐤𝐞', 'ⓢⓟⓘⓒ',
+    '\u{1CCE7}\u{1CCDA}\u{1CCE9}\u{1CCD6}\u{1CCE7}\u{1CCD9}', 'Total Wetback', 'Tranny 😀']) {
+    await wordBlocked(() => setOwn(0, 'display_name', name));
+  }
+  assert.equal((await profile(0)).display_name, 'QA 0');
 });
 
 test('Real names and innocent names are allowed, the same as in the app', async () => {
@@ -81,6 +93,13 @@ test('Real names and innocent names are allowed, the same as in the app', async 
   }
   for (const name of ['scunthorpe', 'ishita', 'pornsak', 'nazir', 'dickens', 'class_act']) {
     assert.equal((await setOwn(0, 'username', name)).rows.length, 1, name);
+  }
+  // The username check ('name') keeps the real-name rule: "Dick" and "Cock" pass only when written like a name,
+  // with a capital letter. Display names no longer use this check, so it is asked directly here.
+  const nameWord = async (text) => (await db.query("select private.blocked_word($1,'name') as w", [text])).rows[0].w;
+  for (const text of ['Moby Dick', 'Alex Cock', 'Dick Smith', 'Moby Dïck']) assert.equal(await nameWord(text), null, text);
+  for (const [text, word] of [['big dick', 'dick'], ['DICK', 'dick'], ['big cock', 'cock'], ['DiCk', 'dick'], ['big dïck', 'dick']]) {
+    assert.equal(await nameWord(text), word, text);
   }
 });
 
@@ -161,9 +180,22 @@ test('Invisible characters and look-alike letters do not sneak words past the fi
     // Cyrillic and Greek letters that look like Latin ones.
     '\u0441unt', 'n\u0456gger', '\u0421UNT', 'f\u03C5ck', 'w\u04BBore', 'sh\u0456t', '\u0455hit', 'p\u043Ern',
   ];
+  // Usernames can't hold these letters anyway (the format rule), but the word filter runs first and says no.
   for (const name of hidden) {
-    await nameBlocked(() => setOwn(0, 'display_name', name));
+    await nameBlocked(() => setOwn(0, 'username', name));
   }
+  // Display names may swear, but the same tricks don't sneak a slur in.
+  const hiddenSlurs = [
+    `ki${ZWSP}ke`, 'fa\u00ADggot', 's\u2060pic', 'ret\uFEFFard', 'ch\u200Dink', 'tr\u{E0020}anny', 'k\u180Eike', 'go\u034Fok',
+    'dy\uFE0Fke', 'co\u200Eon',
+    // Cyrillic and Greek letters that look like Latin ones.
+    '\u0441hink', 'n\u0456gger', '\u0421HINK', 'f\u03B1ggot', 'w\u0435tback', '\u0455pic', 'k\u0456k\u0435', 'p\u0430ki',
+    'g\u03BF\u03BFk', 'retar\u0501',
+  ];
+  for (const name of hiddenSlurs) {
+    await wordBlocked(() => setOwn(0, 'display_name', name));
+  }
+  assert.equal((await profile(0)).display_name, 'QA 0');
   await wordBlocked(() => setOwn(0, 'bio', `cu${ZWSP}nt n\u0456gger`));
   await wordBlocked(() => setOwn(0, 'bio', `n${ZWSP}igger`));
   await wordBlocked(() => post(0, 'r\u00ADetard'));
@@ -175,39 +207,51 @@ test('Invisible characters and look-alike letters do not sneak words past the fi
 });
 
 test('Old rows that already hold a blocked word do not block unrelated changes', async () => {
-  await legacy('update profiles set username=$2, display_name=$3, bio=$4 where id=$1', [users[0], 'fuckboy', 'Big Shit', 'retard']);
+  await legacy('update profiles set username=$2, display_name=$3, bio=$4 where id=$1', [users[0], 'fuckboy', 'Big Retard', 'retard']);
   const id = await post(0, 'fine');
   await legacy('update posts set caption=$2 where id=$1', [id, 'old nigger caption']);
   // Unrelated columns can still change.
   assert.equal((await rpc(0, 'update profiles set is_private=true where id=$1 returning id', [users[0]])).rows.length, 1);
   assert.equal((await rpc(0, 'update posts set audience=audience where id=$1 returning id', [id])).rows.length, 1);
   // Re-saving the same text is not a change either (the edit-profile screen saves every field).
-  assert.equal((await rpc(0, 'update profiles set username=username, bio=bio where id=$1 returning id', [users[0]])).rows.length, 1);
+  assert.equal((await rpc(0, 'update profiles set username=username, display_name=display_name, bio=bio where id=$1 returning id', [users[0]])).rows.length, 1);
   // But changing a blocked field to another blocked word is still stopped, and fixing it works.
   await wordBlocked(() => setOwn(0, 'bio', 'retards'));
+  await wordBlocked(() => setOwn(0, 'display_name', 'Big Retards'));
+  await nameBlocked(() => setOwn(0, 'username', 'fuckboy_2'));
   assert.equal((await setOwn(0, 'username', 'nice_name')).rows.length, 1);
+  // Swearing is fine in a display name now, so this fixes the old slur.
+  assert.equal((await setOwn(0, 'display_name', 'Big Shit')).rows.length, 1);
 });
 
 test('Apple / Google sign-up never fails because of a blocked name: it gets a safe one instead', async () => {
-  const cases = [
-    { full_name: 'Fuck Face' },
-    { name: 'n1gg3r' },
-    { full_name: 'ｆａｇｇｏｔ' },
-    { username: 'fuck_you', display_name: 'Fuck You' },
-  ];
-  for (const meta of cases) {
+  const signUp = async (meta) => {
     const id = randomUUID();
     await db.query('insert into auth.users(id,raw_user_meta_data,raw_app_meta_data) values($1,$2,$3)', [id, meta, { provider: 'google' }]);
-    const row = (await db.query('select username, display_name from profiles where id=$1', [id])).rows[0];
+    return (await db.query('select username, display_name from profiles where id=$1', [id])).rows[0];
+  };
+  // A slur in the shared name: the username and the shown name both become the safe "user" + numbers one.
+  for (const meta of [{ name: 'n1gg3r' }, { full_name: 'ｆａｇｇｏｔ' }, { full_name: 'K I K E' }, { username: 'k1ke_lol', display_name: 'K\u0456ke' }]) {
+    const row = await signUp(meta);
     assert.match(row.username, /^user[0-9a-f]{6}$/, JSON.stringify(meta));
     assert.equal(row.display_name, row.username, JSON.stringify(meta));
     // Allowed by the filter, so the person can carry on and pick a name in the app.
     assert.equal((await db.query("select private.blocked_word($1,'name') as w", [row.display_name])).rows[0].w, null);
   }
-  // A clean username with a blocked display name keeps the username.
+  // Swearing in the shared name: the username still gets a safe one, but the shown name is kept as it is.
+  for (const meta of [{ full_name: 'Fuck Face' }, { username: 'fuck_you', display_name: 'Fuck You' }, { name: 'Total Bitch' }]) {
+    const row = await signUp(meta);
+    assert.match(row.username, /^user[0-9a-f]{6}$/, JSON.stringify(meta));
+    assert.equal(row.display_name, meta.display_name ?? meta.full_name ?? meta.name, JSON.stringify(meta));
+  }
+  // A clean username with a slur as the display name keeps the username, and the shown name becomes the username.
   const id = randomUUID();
-  await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)', [id, { username: 'goodname', display_name: 'Total Bitch' }]);
+  await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)', [id, { username: 'goodname', display_name: 'Total Retard' }]);
   assert.deepEqual((await db.query('select username, display_name from profiles where id=$1', [id])).rows[0], { username: 'goodname', display_name: 'goodname' });
+  // A clean username with swearing in the display name keeps both.
+  const swears = randomUUID();
+  await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)', [swears, { username: 'goodname2', display_name: 'Total Bitch' }]);
+  assert.deepEqual((await db.query('select username, display_name from profiles where id=$1', [swears])).rows[0], { username: 'goodname2', display_name: 'Total Bitch' });
   // Real names written like names still come through.
   const moby = randomUUID();
   await db.query('insert into auth.users(id,raw_user_meta_data) values($1,$2)', [moby, { full_name: 'Moby Dick' }]);
@@ -235,11 +279,32 @@ test('Only the server can use the sign-up name check', async () => {
   await assert.rejects(() => rpc(0, "select private.blocked_word('x','name')"), /permission denied/);
 });
 
+test('The sign-up name check: no swearing in the username; the display name may swear but not hold a slur', async () => {
+  const allowed = async (username, displayName) => (await asUser(db, null,
+    (tx) => tx.query('select public_name_allowed($1,$2) as ok', [username, displayName]), 'service_role')).rows[0].ok;
+  for (const displayName of ['Fuck Off', 'F U C K', 'ｆｕｃｋ', 'big dick', 'Total Bitch', 'Shït Happens']) {
+    assert.equal(await allowed('alex', displayName), true, displayName);
+  }
+  for (const displayName of ['n1gg3r', 'F.A.G.G.O.T', 'ｒｅｔａｒｄ', 'ki\u200Bke', '\u0441hink', 'Wétbáck', 'Big Sp1c']) {
+    assert.equal(await allowed('alex', displayName), false, displayName);
+  }
+  for (const username of ['f.u.c.k', 'fuckboy', 'sh1t_head', 'n1gg3r']) {
+    assert.equal(await allowed(username, 'Alex'), false, username);
+  }
+});
+
 test('Accented letters do not sneak words past the filter, and accented real names still save', async () => {
   // "ü", "ï" and so on used to turn into a gap, so "fück" read as "f ck".
+  // Swearing: refused in a username (the word filter says no before the format rule does).
   for (const name of ['fück', 'cünt', 'shït', 'FÜCK', 'f̈uck', 'big dïck', 'nïgger']) {
-    await nameBlocked(() => setOwn(0, 'display_name', name));
+    await nameBlocked(() => setOwn(0, 'username', name));
   }
+  // Slurs: refused in a display name too.
+  for (const name of ['nïgger', 'Fággót', 'Big Rétárd', 'KÏKE', 'spíc', 'chi\u0308nk', 'Wétbáck']) {
+    await wordBlocked(() => setOwn(0, 'display_name', name));
+  }
+  // Swearing with accents is fine in a display name.
+  assert.equal((await setOwn(0, 'display_name', 'Fück Öff')).rows.length, 1);
   await wordBlocked(() => setOwn(0, 'bio', 'what a nïgger'));
   await wordBlocked(() => post(0, 'rétárd'));
   await wordBlocked(() => rpc(0, 'insert into dare_ideas(user_id,text) values($1,$2)', [users[0], 'Call your friend a fággót']));
@@ -312,8 +377,23 @@ test('Huge texts are not scanned by the word filter: the length limit refuses th
     assert.equal(await scans(), start + 1);
     // Normal text is unchanged.
     assert.equal((await setOwn(0, 'bio', 'living my best fucking life')).rows.length, 1);
-    await nameBlocked(() => setOwn(0, 'display_name', 'f.u.c.k'));
+    await nameBlocked(() => setOwn(0, 'username', 'f.u.c.k'));
+    await wordBlocked(() => setOwn(0, 'display_name', 'n.i.g.g.e.r'));
   });
+});
+
+test('Each public column is checked in the right place: only usernames block swearing', async () => {
+  assert.deepEqual(await filteredColumns(), [
+    { table: 'comments', column: 'body', place: 'content' },
+    { table: 'dare_ideas', column: 'text', place: 'content' },
+    { table: 'hit_ups', column: 'message', place: 'content' },
+    { table: 'mystery_posts', column: 'caption', place: 'content' },
+    { table: 'peek_groups', column: 'name', place: 'content' },
+    { table: 'posts', column: 'caption', place: 'content' },
+    { table: 'profiles', column: 'username', place: 'name' },
+    { table: 'profiles', column: 'display_name', place: 'content' },
+    { table: 'profiles', column: 'bio', place: 'content' },
+  ]);
 });
 
 test('Every filtered column refuses text over 2000 characters, even padded with spaces', async () => {

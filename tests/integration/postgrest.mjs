@@ -443,9 +443,14 @@ try {
     assert.equal(result.data.message, "Let's keep it clean – that word can't be in a username or name.");
     assert.equal((await db.query('select username from profiles where id=$1', [users[38]])).rows[0].username, before);
   });
-  await check('HTTP PATCH of a display name written in fancy letters (ｆｕｃｋ) is rejected', async () => {
-    const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: 'ｆｕｃｋ' } });
+  // The owner's choice: a display name may swear (only @usernames can't), but a slur is still refused.
+  await check('HTTP PATCH of a display name: swearing in fancy letters (ｆｕｃｋ) saves, a slur in fancy letters (ｒｅｔａｒｄ) is rejected', async () => {
+    const swearing = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: 'ｆｕｃｋ' }, headers: { Prefer: 'return=representation' } });
+    assert.equal(swearing.status, 200, JSON.stringify(swearing.data)); assert.equal(swearing.data[0].display_name, 'ｆｕｃｋ');
+    const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: 'ｒｅｔａｒｄ' } });
     assert.equal(result.status, 400); assert.equal(result.data.code, '23514');
+    assert.equal(result.data.message, "That word isn't allowed on Peekaboo.");
+    assert.equal((await db.query('select display_name from profiles where id=$1', [users[38]])).rows[0].display_name, 'ｆｕｃｋ');
   });
   await check('HTTP rename to a legitimate username and real-name display name still works', async () => {
     const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { username: 'rest_clean_name', display_name: 'Moby Dick' }, headers: { Prefer: 'return=representation' } });
@@ -454,16 +459,25 @@ try {
   });
   // OPEN-01 review: characters you can't see (zero-width space, soft hyphen…) and Cyrillic/Greek look-alike
   // letters must not split or hide a word on this older PostgreSQL either.
+  // Swearing is checked on the username (the word filter says no before the username format rule does); slurs on
+  // the display name and bio.
   await check('HTTP PATCH with an invisible character or a Cyrillic look-alike letter inside a word is rejected', async () => {
-    for (const body of [{ display_name: 'cu​nt' }, { display_name: 'сunt' }, { bio: 'nіgger' }, { bio: 'sh­it n⁠igger' }]) {
+    const NAME = "Let's keep it clean – that word can't be in a username or name.";
+    const WORD = "That word isn't allowed on Peekaboo.";
+    for (const [body, message] of [
+      [{ username: 'cu\u200bnt' }, NAME], [{ username: '\u0441unt' }, NAME],
+      [{ display_name: 'ki\u200bke' }, WORD], [{ display_name: '\u0441hink' }, WORD],
+      [{ bio: 'n\u0456gger' }, WORD], [{ bio: 'sh\u00adit n\u2060igger' }, WORD],
+    ]) {
       const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body });
       assert.equal(result.status, 400, JSON.stringify(body)); assert.equal(result.data.code, '23514', JSON.stringify(body));
+      assert.equal(result.data.message, message, JSON.stringify(body));
     }
     const cases = [
       ['cu​nt', 'name', 'cunt'], ['sh­it', 'name', 'shit'], ['c⁠unt', 'name', 'cunt'], ['fu﻿ck', 'name', 'fuck'],
       ['fu\u{E0020}ck', 'name', 'fuck'], ['сunt', 'name', 'cunt'], ['СUNT', 'name', 'cunt'], ['nіgger', 'content', 'nigger'],
       ['fυck', 'name', 'fuck'], ['Moby Dіck', 'name', null], ['Алексей', 'name', null],
-      ['Love ❤️', 'name', null],
+      ['Love ❤️', 'name', null], ['ki\u200bke', 'content', 'kike'], ['\u0441hink', 'content', 'chink'], ['cu\u200bnt', 'content', null],
     ];
     for (const [text, place, word] of cases) {
       assert.equal((await db.query('select private.blocked_word($1,$2) as w', [text, place])).rows[0].w, word, JSON.stringify(text));
@@ -472,11 +486,19 @@ try {
   // OPEN-01 review: accents ("fück") must not split a word on this PostgreSQL either, and real names with
   // accents ("José", "Moby Dïck") must still save.
   await check('HTTP PATCH with an accented letter inside a word is rejected; accented real names still save', async () => {
-    for (const body of [{ display_name: 'fück' }, { display_name: 'cünt' }, { display_name: 'shït' }, { display_name: 'fu\u0308ck' }, { bio: 'nïgger' }]) {
+    const NAME = "Let's keep it clean – that word can't be in a username or name.";
+    const WORD = "That word isn't allowed on Peekaboo.";
+    for (const [body, message] of [
+      [{ username: 'fück' }, NAME], [{ username: 'cünt' }, NAME], [{ username: 'shït' }, NAME], [{ username: 'fu\u0308ck' }, NAME],
+      [{ display_name: 'nïgger' }, WORD], [{ display_name: 'Fággót' }, WORD], [{ display_name: 're\u0301ta\u0301rd' }, WORD],
+      [{ bio: 'nïgger' }, WORD],
+    ]) {
       const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body });
       assert.equal(result.status, 400, JSON.stringify(body)); assert.equal(result.data.code, '23514', JSON.stringify(body));
+      assert.equal(result.data.message, message, JSON.stringify(body));
     }
-    for (const name of ['José', 'Zoë', 'Björk', 'Renée', 'Łukasz', 'Ñandú', 'Ågot', 'Алёна', 'Νίκος', 'Moby Dïck']) {
+    // Swearing with accents is fine in a display name, like real names with accents.
+    for (const name of ['José', 'Zoë', 'Björk', 'Renée', 'Łukasz', 'Ñandú', 'Ågot', 'Алёна', 'Νίκος', 'Moby Dïck', 'Fück Öff']) {
       const result = await request(`profiles?id=eq.${users[38]}`, { user: 38, method: 'PATCH', body: { display_name: name }, headers: { Prefer: 'return=representation' } });
       assert.equal(result.status, 200, `${name}: ${JSON.stringify(result.data)}`); assert.equal(result.data[0].display_name, name);
     }

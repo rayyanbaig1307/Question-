@@ -86,6 +86,43 @@ test('social setup validates empty fields and both confirmations before saving',
   } finally { await unmount(tree); }
 });
 
+// The word filter on the setup screen, with the app's real filter. The owner's choice: your name may swear (like a
+// bio); only the @username can't. Slurs are refused, however they are written.
+async function trySetup(name, username) {
+  const { screen, calls } = setupHarness();
+  const tree = await renderScreen(screen);
+  try {
+    for (const [label, value] of [['Your name', name], ['Username', username]]) await act(() => tree.root.findAllByType('TextField').find(node => node.props.label === label).props.onChangeText(value));
+    for (const box of tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')) await act(() => box.props.onPress());
+    await act(() => button(tree, "Let's go!").props.onPress());
+    const error = label => tree.root.findAllByType('TextField').find(node => node.props.label === label).props.error ?? null;
+    return { calls, nameError: error('Your name'), usernameError: error('Username') };
+  } finally { await unmount(tree); }
+}
+
+test('social setup: a name with swearing saves', async () => {
+  for (const name of ['Fuck Off', 'Big Shit', 'ｆｕｃｋ', 'Total Bitch']) {
+    const { calls, nameError, usernameError } = await trySetup(name, 'alice');
+    assert.deepEqual([name, nameError, usernameError], [name, null, null]);
+    // (The screen's objects come from its own sandbox, so compare them as plain JSON.)
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.saved)), [['alice', { username: 'alice', display_name: name }]]);
+    assert.equal(calls.done, 1);
+  }
+});
+
+test('social setup: a slur in the name, or swearing in the username, is refused and nothing is saved', async () => {
+  // Numbers for letters, dots, spaces, fancy letters, an invisible character, a Cyrillic look-alike letter, accents.
+  for (const name of ['n1gg3r', 'F.A.G.G.O.T', 'K I K E', 'ｒｅｔａｒｄ', 'ki​ke', 'сhink', 'Wétbáck']) {
+    const { calls, nameError, usernameError } = await trySetup(name, 'alice');
+    assert.deepEqual([name, nameError, usernameError, calls.saved.length], [name, "That word isn't allowed on Peekaboo.", null, 0]);
+  }
+  for (const username of ['f.u.c.k', 'sh1t_head', 'fuckboy']) {
+    const { calls, nameError, usernameError } = await trySetup('Fuck Off', username);
+    assert.deepEqual([username, nameError, usernameError, calls.saved.length],
+      [username, null, "Let's keep it clean – that word can't be in a username or name.", 0]);
+  }
+});
+
 test('social setup treats a failed logout as a visible, recoverable error', async () => {
   const { screen } = setupHarness({ signOut: async () => { throw new Error('Simulated logout failure'); } });
   const tree = await renderScreen(screen);

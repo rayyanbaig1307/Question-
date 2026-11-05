@@ -50,9 +50,13 @@ Database (PGlite, part of `npm test`):
   give back a try, the old call still works during the update, a refund gives back exactly one request's
   tries, and old rows are cleaned up a few at a time.
 - `word-filter.test.mjs`: the database word filter on public text (usernames, display names, bios,
-  captions, Guess Who captions, comments, hit ups, dare ideas, group names). It covers disguises (dots,
-  fancy letters, invisible characters, look-alike letters, accents), real names that must still save,
-  private chat staying unfiltered, safe names for Apple/Google sign-up, and the 2,000-character guard.
+  captions, Guess Who captions, comments, hit ups, dare ideas, group names). Only usernames block swearing
+  (the owner's choice, 5 Nov); display names may swear but not hold a slur, and the test checks which place
+  each column uses. It covers disguises (dots, fancy letters, invisible characters, look-alike letters,
+  accents) on swearing in usernames and slurs in display names, real names that must still save (and the
+  username check's own real-name rule: "Moby Dick" passes, "big dick" and "DICK" don't), private
+  chat staying unfiltered, safe names for Apple/Google sign-up (a shared name that swears is kept, one with a
+  slur is swapped), and the 2,000-character guard.
 - `fresh-database.test.mjs`: a brand-new empty database takes every migration with no accounts made first;
   the report-alert migration adds the owner only when that account exists; `includeFixes:false` leaves out
   the hardening migration and every later one.
@@ -77,16 +81,19 @@ API and library (Vitest, part of `npm test`):
   Guess Who file list has loaded.
 - `tests/unit/word-filter-parity.test.mjs`: the app's filter (`src/lib/cleanWords.ts`) and the database's
   give the same answer: same word lists, a fixed word list, every invisible and look-alike letter, accents,
-  and thousands of seeded random strings. Run it after changing either side.
+  and thousands of seeded random strings. It also checks that the sign-up name check (`public_name_allowed`)
+  treats the username as a name and the display name as content, like the app. Run it after changing either
+  side.
 - `tests/unit/username-search.test.mjs`: friend search sends `_` as a real underscore (not "any one letter"),
   drops `%`, `*` and `\` that the person typed, and `likePrefix` escapes `_`, `%` and `\`.
 - `tests/unit/chat-delete.test.mjs`: a deleted peek or voice note counts as deleted even when its file
   clean-up fails; a delete the server refuses still shows the error.
 - `tests/unit/media-urls-hook.test.mjs`: photos stay on screen when a new photo arrives, links for photos that
   left are dropped, and nothing carries over to a different login.
-- Changed: `edge-security.test.mjs` (word filter in username sign-up), `apple-deletion.test.mjs` (a
-  password-only account that sends an Apple code is now deleted, still without contacting Apple),
-  `auth-provider.test.mjs` (logout and profile reload never mix up two accounts),
+- Changed: `edge-security.test.mjs` (word filter in username sign-up: a display name may swear, a slur in it
+  or swearing in the username is refused before any account is made, with the same message as the app),
+  `apple-deletion.test.mjs` (a password-only account that sends an Apple code is now deleted, still without
+  contacting Apple), `auth-provider.test.mjs` (logout and profile reload never mix up two accounts),
   `account-deletion-client.test.mjs` (plain error messages from the delete server), `group-chat.test.mjs`
   and `upload-integrity.test.mjs` (group photo and upload clean-up keep the real error).
 
@@ -102,6 +109,11 @@ Frontend (rendered screens, part of `npm test`):
   Try again), `settings.test.cjs` (queued privacy saves, deletion after leaving Settings, switch rows not
   marked disabled), `navigation.test.cjs` (no screen until the saved login has loaded, so a start-up link is
   kept), `editor.test.cjs` (chat-dare proof when the dare is gone).
+- Word filter on the name screens, with the app's real filter: `forms.test.cjs` (Sign up and Edit profile)
+  and `social-setup.test.cjs` (the Apple/Google setup screen). A display name that swears saves; a slur in the
+  display name or bio (in any disguise) or swearing in the username is refused and nothing is saved. On Sign up
+  and Edit profile, a slur split across the username and the name is refused too (the app checks this; the
+  database doesn't).
 
 ## Real PostgreSQL and HTTP tests (Windows and Linux)
 
@@ -124,7 +136,8 @@ tokens, role changes and RLS over HTTP. They include 1,000 reads from 40 synthet
 requests and 240 group writes from 24 authors at 24 concurrent requests. Check authorization and exact
 counts as well as speed. Results go to `.qa/rest-after.json` (`.qa/rest-before.json` with `QA_ORIGINAL=1`).
 The old "known medium" public-name moderation bypass is fixed (OPEN-01) and is now covered by passing
-word-filter checks over HTTP.
+word-filter checks over HTTP (swearing refused in a username, saved in a display name; slurs refused in a
+display name or bio, including fancy, invisible, look-alike and accented letters).
 
 Newer HTTP checks: username search escaping (a hand-written pattern, and the app's own `searchUsers`
 through supabase-js); the Community dares list loaded with the app's own `fetchIdeas`; a hidden dare idea
@@ -189,7 +202,7 @@ It rehearses the release on a throw-away local PostgreSQL 16 server:
 1. It builds the database as the live app has it now (every migration before `20261213102659`) with invented
    people, and saves the kinds of old rows the live app allowed: a forfeit paid twice, broken chat messages,
    a keep pointing at someone else's photo, reports, bad words in public text (and the same words in private
-   chat).
+   chat). A display name that only swears must NOT be listed (only usernames block swearing).
 2. It runs `tests/database/deployment-preflight.sql` (read from disk each time, one query at a time, each
    read-only) and checks that every query lists exactly those rows.
 3. It applies the new migrations one file at a time, each in its own transaction. The hardening migration
@@ -293,6 +306,18 @@ pointed at the hosted project.
 | Release rehearsal | `npm run test:preflight` (as a normal user) | 154 passed, 0 failed, 1 NOTE (not a failure: the newest migration, 20261214100000, is applied, but the rehearsal has no extra checks of its own for it; tests/database/final-db.test.mjs covers it) |
 | Browser (3 screen sizes) | `node tests/browser/build.mjs && npx playwright test`, run 4 times | 72 passed each run, 0 failed, 0 flaky, 0 skipped |
 | Security advisories | `npm audit` / `npm audit --omit=dev` | 4 moderate, all in the lint tools (eslint-config-expo -> eslint-plugin-import / eslint-plugin-react -> minimatch); 0 in the app itself |
+
+Re-run on 2026-11-05, after the owner allowed swearing in display names (only @usernames block it now) and
+after two reviews of that change (the split-slur check on Sign up / Edit profile, the sign-up server's message
+for a slur in a display name, and direct checks of the username's real-name rule):
+`npm test` node part 346 passed, 0 failed, and the Vitest part 25 files, 329 passed. (The clock-dependent
+"Scheduled drop reminder" test in `round2.test.mjs` used to fail at times of day when no time zone is at its
+drop minute, for example 05:17 UTC. It now picks the drop time itself in that case and undoes it afterwards; it
+passed at 12 different times spread over the day.)
+Type check and lint: no errors. `npm run test:rest`: 66 passed, 0 failed. `QA_ORIGINAL=1` (run with the
+`safe.directory` settings above, so the old app code really loads): 48 passed, 14 failed, and every one of
+the 14 is the old code failing a check, none a git setup error. `npm run test:preflight`: 155 passed,
+0 failed, 1 NOTE. Browser: 72 passed (one run). The concurrency and HTTP stress runs were not repeated.
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

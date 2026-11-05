@@ -47,10 +47,18 @@ export default function SignUp() {
   const usernameTaken = availability?.name === username && !availability.free;
   const usernameFree = availability?.name === username && availability.free;
 
+  // Your name may swear but can't have slurs; your @username can't have either.
+  const nameProblem = checkClean(name, 'content');
   const problems = {
+    name: nameProblem,
     username: !username
       ? 'Pick a username.'
-      : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(`${username} ${name}`, 'name'))),
+      : (usernameFormatError ??
+        (usernameTaken
+          ? 'Taken! Try another one.'
+          // A slur split across the username and the name ("the_nig" + "Ger") is refused too. Only the app
+          // checks this, not the database. (Skipped when the name alone has a slur, so the message shows once.)
+          : (checkClean(username, 'name') ?? (nameProblem ? null : checkClean(`${username} ${name}`, 'content'))))),
     email: !withEmail || /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Type a real email address.',
     password: checkPassword(password),
     age: oldEnough ? null : 'You need to be 13 or older to use Peekaboo.',
@@ -113,6 +121,7 @@ export default function SignUp() {
         maxLength={40}
         autoComplete="name"
         textContentType="name"
+        error={tried ? problems.name : null}
       />
       <TextField
         label="Username"

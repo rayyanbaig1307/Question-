@@ -117,6 +117,121 @@ for (const invalid of ['short', '12345678', 'abcdefgh', '😀'.repeat(4)]) test(
   } finally { await unmount(tree); }
 });
 
+// The word filter on the sign-up and edit-profile screens, with the app's real filter. The owner's choice: a display
+// name may swear (like a bio); only the @username can't. Slurs are refused everywhere, however they are written.
+const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
+const WORD_NOT_ALLOWED = "That word isn't allowed on Peekaboo.";
+const SWEARY_NAMES = ['Fuck Off', 'Big Shit', 'ｆｕｃｋ', 'Total Bitch'];
+// Numbers for letters, dots, spaces, fancy letters, an invisible character, a Cyrillic look-alike letter, accents.
+const DISGUISED_SLURS = ['n1gg3r', 'F.A.G.G.O.T', 'K I K E', 'ｒｅｔａｒｄ', 'ki​ke', 'сhink', 'Wétbáck'];
+const SWEARY_USERNAMES = ['f.u.c.k', 'sh1t_head', 'fuckboy'];
+const field = (tree, label) => tree.root.findAllByType('TextField').find(node => node.props.label === label);
+
+async function trySignup({ name, username, withEmail = true }) {
+  const { screen, requests } = signupHarness();
+  const tree = await renderScreen(screen);
+  try {
+    await fill(tree, 'Your name', name);
+    await fill(tree, 'Username', username);
+    if (withEmail) await fill(tree, 'Email', 'alice@example.test');
+    else await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'radio' && textOf(node).includes('Just a username')).props.onPress());
+    await fill(tree, 'Password', 'Example123');
+    for (const row of tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')) await act(() => row.props.onPress());
+    await act(() => button(tree, "Let's go!").props.onPress());
+    // After an email sign-up the form is replaced by "Check your email", so the fields can be gone.
+    return { requests, nameError: field(tree, 'Your name')?.props.error ?? null, usernameError: field(tree, 'Username')?.props.error ?? null };
+  } finally { await unmount(tree); }
+}
+
+test('signup: a display name with swearing is fine, with email or with just a username', async () => {
+  for (const name of SWEARY_NAMES) {
+    const email = await trySignup({ name, username: 'alice' });
+    assert.deepEqual([name, email.nameError, email.usernameError, email.requests.length], [name, null, null, 1]);
+    assert.equal(email.requests[0][1].options.data.display_name, name);
+    const usernameOnly = await trySignup({ name, username: 'alice', withEmail: false });
+    assert.deepEqual(usernameOnly.requests, [['username', 'alice', 'Example123', name, 'qa-terms']]);
+  }
+});
+
+test('signup: a slur in the display name is refused under the name, however it is written', async () => {
+  for (const name of DISGUISED_SLURS) {
+    const result = await trySignup({ name, username: 'alice' });
+    assert.deepEqual([name, result.nameError, result.usernameError, result.requests.length], [name, WORD_NOT_ALLOWED, null, 0]);
+  }
+});
+
+test('signup: swearing in the username is still refused, even with a display name that swears', async () => {
+  for (const username of SWEARY_USERNAMES) {
+    const result = await trySignup({ name: 'Fuck Off', username });
+    assert.deepEqual([username, result.nameError, result.usernameError, result.requests.length], [username, null, NAME_NOT_ALLOWED, 0]);
+  }
+});
+
+function editProfileHarness() {
+  const saved = [];
+  const screen = loadScreen('src/app/(app)/edit-profile.tsx', {
+    'expo-image-picker': {},
+    '@/lib/auth': { useMe: () => ({ userId: 'alice', profile: { id: 'alice', username: 'alice', display_name: 'Alice', bio: '', is_private: false, avatar_path: null }, setProfile() {} }) },
+    '@/lib/media': { deleteAvatar: async () => {}, resizePhoto: async uri => uri, uploadAvatar: async () => 'alice/avatar.jpg' },
+    '@/lib/profiles': { ...validators, isUsernameAvailable: async () => true, updateMyProfile: async (_id, fields) => { saved.push(fields); return { id: 'alice', ...fields }; } },
+    '@/lib/cleanWords': validators,
+  });
+  return { screen, saved };
+}
+async function tryEditProfile(changes) {
+  const { screen, saved } = editProfileHarness();
+  const tree = await renderScreen(screen);
+  try {
+    for (const [label, value] of Object.entries(changes)) await fill(tree, label, value);
+    await act(() => button(tree, 'Save').props.onPress());
+    return { saved, alerts: screen.calls.alerts };
+  } finally { await unmount(tree); }
+}
+
+test('edit profile: a display name with swearing saves', async () => {
+  for (const name of SWEARY_NAMES) {
+    const { saved, alerts } = await tryEditProfile({ Name: name });
+    assert.deepEqual(alerts, [], name);
+    assert.equal(saved.length, 1, name);
+    assert.equal(saved[0].display_name, name);
+    assert.equal(saved[0].username, 'alice');
+  }
+});
+
+test('edit profile: a slur in the display name or bio, or swearing in the username, is refused and nothing is saved', async () => {
+  const cases = [
+    ...DISGUISED_SLURS.map(value => [{ Name: value }, WORD_NOT_ALLOWED]),
+    ...DISGUISED_SLURS.map(value => [{ Name: 'Fuck Off', Bio: value }, WORD_NOT_ALLOWED]),
+    ...SWEARY_USERNAMES.map(value => [{ Name: 'Fuck Off', Username: value }, NAME_NOT_ALLOWED]),
+  ];
+  for (const [changes, message] of cases) {
+    const { saved, alerts } = await tryEditProfile(changes);
+    assert.deepEqual(alerts, [['Pick something else', message]], JSON.stringify(changes));
+    assert.equal(saved.length, 0, JSON.stringify(changes));
+  }
+});
+
+// Only the app checks this, not the database: a slur split across the @username and the name is refused too.
+test('signup and edit profile: a slur split across the username and the name is refused', async () => {
+  for (const [username, name] of [['the_nig', 'Ger Bob'], ['ret', 'Ard'], ['tow', 'Elhead'], ['n_i_g', 'G E R']]) {
+    const result = await trySignup({ name, username });
+    assert.deepEqual([username, name, result.nameError, result.usernameError, result.requests.length], [username, name, null, WORD_NOT_ALLOWED, 0]);
+    const { saved, alerts } = await tryEditProfile({ Username: username, Name: name });
+    assert.deepEqual(alerts, [['Pick something else', WORD_NOT_ALLOWED]], `${username} + ${name}`);
+    assert.equal(saved.length, 0, `${username} + ${name}`);
+  }
+  // The name is still checked on its own too: joined to "al_x", the spaced-out slur "K I K E" would slip through.
+  const spaced = await trySignup({ name: 'K I K E', username: 'al_x' });
+  assert.deepEqual([spaced.nameError, spaced.usernameError, spaced.requests.length], [WORD_NOT_ALLOWED, null, 0]);
+  const edited = await tryEditProfile({ Username: 'al_x', Name: 'K I K E' });
+  assert.deepEqual([edited.alerts, edited.saved.length], [[['Pick something else', WORD_NOT_ALLOWED]], 0]);
+  // Swearing split across them is fine: the name may swear anyway.
+  const signup = await trySignup({ name: 'Ck Off', username: 'big_fu' });
+  assert.deepEqual([signup.nameError, signup.usernameError, signup.requests.length], [null, null, 1]);
+  const { saved, alerts } = await tryEditProfile({ Username: 'big_fu', Name: 'Ck Off' });
+  assert.deepEqual([alerts, saved.length], [[], 1]);
+});
+
 const birthday = loadScreen('src/components/BirthdayForm.tsx', { '@/lib/birthday': { setBirthday() {} } }).exports.checkBirthday;
 const today = new Date(2026, 10, 4);
 for (const [label, day, month, year, valid] of [

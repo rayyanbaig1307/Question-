@@ -66,8 +66,10 @@ What people will notice once it's released:
 - Photos in group chat, the Home feed, the grid, Guess Who and Keeps stay on screen when a new photo arrives.
 - The Community dares list loads again (it fails in the live app).
 - Chat-dare proof for a dare that's gone says "Photo sent" and goes back to the chat.
-- Public text (names, bios, captions, comments, hit ups, dare ideas, group names) is now word-checked by
-  the database too, not just the app. Private chat is still not filtered.
+- Public text (usernames, display names, bios, captions, comments, hit ups, dare ideas, group names) is now
+  word-checked by the database too, not just the app. Swearing is now fine everywhere except @usernames, so a
+  display name like "Fuck Off" saves; slurs are still blocked in all public text. Private chat is still not
+  filtered.
 - Username login has fairer limits (see below). A server problem says "Could not reach the login service.
   Please try again." instead of "Wrong username or password".
 - Deleting an account on an iPhone signed in to a different Apple ID still deletes the account, but no longer
@@ -171,11 +173,15 @@ rename files that are already live.
   posts, messages or keeps with them. Each row is tiny. Safe to leave.
 - If an author blocks someone, that person can no longer report the author's posts, stories or comments
   (they can still report the author's profile).
+- Swearing is only blocked in @usernames (owner's choice, 5 Nov). Display names, bios, captions, comments, hit
+  ups, dare ideas and group names may swear; slurs are blocked in all of them. The two messages stay the same.
 - Profile song title/artist are not word-filtered (real song titles contain these words).
 - Private chat is not word-filtered on purpose (1:1 and group chat, chat dares). Checked by the app only, not
-  the database: the hit-back note, the "Dare a friend" screen, and a word split across username + display name.
-- Word filter mistakes: real words like Polish "spić", Czech "špic", Spanish "pedó" and the surname "Fück" are
-  blocked. Letters like ı, ø and ł aren't mapped, so a slur spelled with them gets through (app and server alike).
+  the database: the hit-back note, the "Dare a friend" screen, and a slur split across username + display name
+  (Sign up and Edit profile).
+- Word filter mistakes: real words like Polish "spić", Czech "špic" and Spanish "pedó" are blocked (the surname
+  "Fück" is fine now as a display name). Letters like ı, ø and ł aren't mapped, so a slur spelled with them gets
+  through (app and server alike).
 - Signed photo links made before a delete keep working until they run out (about an hour, shorter for peeks).
 - Username login lock-out: someone with many internet addresses can keep one username's 40-try limit full, so
   the real owner must wait. People on shared Wi-Fi share the 30-try "from here" limit. Apple/Google/email
@@ -269,9 +275,9 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
   logo on notifications, so it no longer signs up for pushes and takes itself off the list the next time it opens
   (`registerForPush` in `src/lib/notifications.ts`).
 
-- **Name filter** (`src/lib/cleanWords.ts`): swearing is blocked in usernames and display names only.
-  "Dick"/"Cock" are allowed when written like a real name ("Moby Dick"). Bios, captions, comments, hit ups and
-  group names allow swearing but block slurs. **Private chats between friends aren't filtered at all** (the
+- **Name filter** (`src/lib/cleanWords.ts`): swearing is blocked in @usernames only (changed 5 Nov: display
+  names used to be blocked too). Display names, bios, captions, comments, hit ups and group names allow
+  swearing but block slurs. **Private chats between friends aren't filtered at all** (the
   owner's call, "free speech"). Report/Block still work in chats.
   Once the QA release is out, the database checks the same public text too
   (`20261214000000_public_word_filter.sql`: `private.blocked_word` and the `word_filter` triggers). The two

@@ -197,6 +197,7 @@ describe('word filter: app and database agree', () => {
     expect(findBlockedWord('ｆｕｃｋ', 'name')).toBe('fuck');
     expect(findBlockedWord('Moby Dick', 'name')).toBeNull();
     expect(findBlockedWord('big dick', 'name')).toBe('dick');
+    expect(findBlockedWord('DICK', 'name')).toBe('dick');
     expect(findBlockedWord('Scunthorpe', 'name')).toBeNull();
     expect(findBlockedWord('fuck', 'content')).toBeNull();
     expect(findBlockedWord('n1gg3r', 'content')).toBe('nigger');
@@ -255,6 +256,35 @@ describe('word filter: app and database agree', () => {
       }
     }
     await expectSame(texts);
+  });
+
+  it('checks names at sign-up in the same places as the app: the username as a name, the display name as content', async () => {
+    // public_name_allowed is what username-auth asks before it makes an account. The owner's choice: a display
+    // name may swear (like a bio), only the @username can't. tests/api/edge-security.test.mjs uses this same rule
+    // as its stand-in for the database.
+    const texts = corpus();
+    const answers = async (usernames, displayNames) => (await db.query(
+      'select n, public_name_allowed(u, d) as ok from unnest($1::text[], $2::text[]) with ordinality as x(u, d, n) order by n',
+      [usernames, displayNames],
+    )).rows.map((row) => row.ok);
+    const asDisplayName = await answers(texts.map(() => 'alex'), texts);
+    const asUsername = await answers(texts, texts.map(() => 'Alex'));
+    const differences = [];
+    texts.forEach((text, i) => {
+      if (asDisplayName[i] !== (findBlockedWord(text, 'content') === null)) differences.push({ text, as: 'display name', server: asDisplayName[i] });
+      if (asUsername[i] !== (findBlockedWord(text, 'name') === null)) differences.push({ text, as: 'username', server: asUsername[i] });
+    });
+    expect(differences.slice(0, 20)).toEqual([]);
+    // A few answers spelled out: swearing is fine in a display name but not in a username; slurs are refused in both.
+    const one = async (username, displayName) => (await answers([username], [displayName]))[0];
+    expect(await one('alex', 'Fuck Off')).toBe(true);
+    expect(await one('alex', 'ｆｕｃｋ')).toBe(true);
+    expect(await one('alex', 'n1gg3r')).toBe(false);
+    expect(await one('alex', 'ki\u200bke')).toBe(false);
+    expect(await one('alex', '\u0441hink')).toBe(false);
+    expect(await one('alex', 'Wétbáck')).toBe(false);
+    expect(await one('f.u.c.k', 'Alex')).toBe(false);
+    expect(await one('sh1t_head', 'Alex')).toBe(false);
   });
 
   it('gives the same answer on 6000 seeded random strings, in both places', async () => {

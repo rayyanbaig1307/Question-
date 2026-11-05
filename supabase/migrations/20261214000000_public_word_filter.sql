@@ -5,8 +5,10 @@
 -- to the server directly could skip it. This makes the database run exactly the same check:
 -- * Slurs are blocked in everything strangers can see: usernames, display names, bios, post and Guess Who
 --   captions, comments, hit ups, dare ideas and group names.
--- * Swearing is blocked in usernames and display names only.
--- * Real names are fine as a display name when written like a name ("Moby Dick", "Alex Cock").
+-- * Swearing is blocked in @usernames only. Display names (the name shown on a profile), bios and the rest
+--   allow it. That is the owner's choice.
+-- * The username check keeps the old real-name rule ("Moby Dick" with a capital letter is let through). Usernames
+--   are always lowercase, so it rarely matters now; it stays so the app and the database stay exactly the same.
 -- * Private chat messages (1:1 and group chat) are NOT filtered. That is the owner's choice. Dare cards in a
 --   chat are chat messages too, so they aren't filtered either (the same for 1:1 and group chats). The
 --   "Dare a friend" screen still checks the dare in the app before sending it.
@@ -133,7 +135,7 @@ returns text language sql immutable strict parallel safe set search_path = '' as
 $$;
 
 -- The offending word, or null if the text is fine. Same as findBlockedWord() in the app.
--- place = 'name' (usernames and display names: no swearing) or 'content' (everything else: only slurs).
+-- place = 'name' (@usernames: no swearing) or 'content' (everything else, display names too: only slurs).
 create or replace function private.blocked_word(value text, place text)
 returns text language plpgsql immutable strict parallel safe set search_path = '' as $$
 declare
@@ -241,7 +243,7 @@ revoke all on function private.enforce_word_filter() from public;
 -- other triggers on these tables, so it sees the final text.
 drop trigger if exists word_filter on public.profiles;
 create trigger word_filter before insert or update on public.profiles
-  for each row execute function private.enforce_word_filter('username', 'name', 'display_name', 'name', 'bio', 'content');
+  for each row execute function private.enforce_word_filter('username', 'name', 'display_name', 'content', 'bio', 'content');
 drop trigger if exists word_filter on public.posts;
 create trigger word_filter before insert or update on public.posts
   for each row execute function private.enforce_word_filter('caption', 'content');
@@ -267,18 +269,20 @@ create trigger word_filter before insert or update on public.peek_groups
   for each row execute function private.enforce_word_filter('name', 'content');
 
 -- For the username sign-up server (supabase/functions/username-auth): true when both names pass the filter.
+-- The same rules as the profiles table: no swearing in the username; the display name may swear, but no slurs.
 -- Only the server can call it, so it says nothing to anyone else.
 create or replace function public.public_name_allowed(username text, display_name text)
 returns boolean language sql stable security definer set search_path = '' as $$
   select private.blocked_word(coalesce(username, ''), 'name') is null
-     and private.blocked_word(coalesce(display_name, ''), 'name') is null;
+     and private.blocked_word(coalesce(display_name, ''), 'content') is null;
 $$;
 revoke all on function public.public_name_allowed(text, text) from public, anon, authenticated;
 grant execute on function public.public_name_allowed(text, text) to service_role;
 
 -- New accounts: the same as the 20261213 version, plus the word filter. Signing up must never fail because of a
 -- name from Apple or Google, so a name that isn't allowed is swapped for a safe one ("user" + numbers). The
--- person then picks their own name in the app.
+-- person then picks their own name in the app. The same rules as the profiles table: the username can't have
+-- swearing or slurs; the shown name may swear, so only a slur swaps it.
 create or replace function private.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
@@ -316,7 +320,8 @@ begin
   end loop;
 
   shown_name := left(coalesce(shared_name, candidate), 40);
-  if private.blocked_word(shown_name, 'name') is not null then
+  -- Swearing is fine in a shown name; a slur is not.
+  if private.blocked_word(shown_name, 'content') is not null then
     shown_name := candidate;
   end if;
 
