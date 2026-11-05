@@ -569,7 +569,10 @@ export default function GroupChat() {
       />
 
       <ChatInkProvider ink={ink}>
-        <View style={styles.body}>
+        {/* Under the top bar: lifts everything above the keyboard. It must sit directly under the top bar (not inside
+            another box), or it works out the keyboard's overlap wrong and the message box ends up under the keyboard.
+            The negative offset stops a gap appearing between the message box and the keyboard. */}
+        <KeyboardAvoidingView style={styles.body} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
           <ChatBackground id={background.shown} />
           {search !== null ? (
             <View style={styles.searchBar}>
@@ -610,7 +613,7 @@ export default function GroupChat() {
             </Pressable>
           ) : null}
 
-          <KeyboardAvoidingView style={[styles.fill, background.shown ? styles.clear : null]} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+          <View style={[styles.fill, background.shown ? styles.clear : null]}>
             {search !== null && search.trim() ? (
               <FlatList
                 data={results?.query === search ? results.list : []}
@@ -821,8 +824,8 @@ export default function GroupChat() {
                 <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
               )}
             </View>
-          </KeyboardAvoidingView>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </ChatInkProvider>
       <ChatBackgroundPicker
         visible={backgroundOpen}
