@@ -42,7 +42,7 @@ const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_L
     require('./FaceLensCamera').FaceLensCamera
   : null;
 
-// The Soft Glow filter (MediaPipe face tracking), only on downloads that have it. Peekaboo+.
+// The Soft Glow and Golden Hour filters (MediaPipe face tracking), only on downloads that have it. Peekaboo+.
 const SoftGlow: typeof import('@/components/lens/SoftGlowCamera').SoftGlowCamera | null = FACE_MESH_AVAILABLE
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('@/components/lens/SoftGlowCamera').SoftGlowCamera
@@ -56,6 +56,7 @@ const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
   glow: colors.yellow,
+  golden: colors.orange,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -133,9 +134,10 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
-  // Soft Glow (Peekaboo+): the face-tracking camera with the glow drawn on top.
+  // Soft Glow / Golden Hour (Peekaboo+): the face-tracking camera with the look drawn on top.
   const plus = usePlus();
-  const glowOn = lensesHere && homeMode === 'glow' && SoftGlow !== null;
+  const glowLook = homeMode === 'golden' ? 'golden' : 'glow';
+  const glowOn = lensesHere && (homeMode === 'glow' || homeMode === 'golden') && SoftGlow !== null;
   const glowRef = useRef<SoftGlowHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
   const [lensRecording, setLensRecording] = useState(false);
@@ -143,13 +145,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
-    // Soft Glow is a Peekaboo+ filter: without Plus, show what Peekaboo+ is instead.
-    if (next === 'glow' && !plus) {
+    // Soft Glow and Golden Hour are Peekaboo+ filters: without Plus, show what Peekaboo+ is instead.
+    if ((next === 'glow' || next === 'golden') && !plus) {
       router.push('/plus');
       return;
     }
     setHomeMode(next);
-    if ((next === 'googly' || next === 'glow') && facing === 'back') setFacing('front');
+    if ((next === 'googly' || next === 'glow' || next === 'golden') && facing === 'back') setFacing('front');
   }
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
@@ -230,7 +232,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
     // yet). The googly eyes go on the video as stickers where they were when you started.
     if (glowOn) {
-      // Soft Glow: the normal camera records the video (the glow isn't in videos yet).
+      // Soft Glow / Golden Hour: the normal camera records the video (the look isn't in videos yet).
       setLensRecording(true);
       await new Promise((resolve) => setTimeout(resolve, 900));
     } else if (lensOn && lensRef.current) {
@@ -336,7 +338,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
         glowOn && !lensRecording && SoftGlow ? (
-          <SoftGlow ref={glowRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
+          <SoftGlow ref={glowRef} look={glowLook} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : active || warm ? (

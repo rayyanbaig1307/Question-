@@ -39,13 +39,13 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '🎨', title: 'App themes' },
   { emoji: '🌈', title: 'Moving chat backgrounds' },
   { emoji: '✨', title: '48 stickers' },
-  { emoji: '📱', title: 'Custom app icons', soon: true },
+  { emoji: '📱', title: 'Custom app icons' },
   { emoji: '💾', title: 'Peek-a-Save (1 a month)' },
   { emoji: '⏪', title: 'Drop rewind' },
   { emoji: '🕵️', title: 'Guess Who hint' },
   { emoji: '📌', title: 'Pin your top 3 chats' },
   { emoji: '🎬', title: '60-second videos' },
-  { emoji: '🌅', title: 'Soft Glow & Golden Hour filters', soon: true },
+  { emoji: '🌅', title: 'Soft Glow & Golden Hour filters' },
   { emoji: '⭐', title: 'Plus badge next to your name' },
 ];
 

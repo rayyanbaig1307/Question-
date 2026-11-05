@@ -231,6 +231,7 @@ export default function Settings() {
             subtitle={plus ? 'You have Peekaboo+ – thank you!' : 'See who viewed your profile, themes, stickers and more'}
             onPress={() => router.push('/plus')}
           />
+          <Row icon="apps" color={colors.purple} title="App icon" onPress={() => router.push('/app-icon')} />
         </Section>
         <Section title="Privacy & safety">
           <Row
