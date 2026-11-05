@@ -120,7 +120,7 @@ export default function PlusScreen() {
             <Wordmark height={40} onDark />
             <Text style={styles.plusSign}>+</Text>
           </View>
-          <Text style={styles.title}>{plus ? 'You have Peekaboo+ ⭐' : 'Get Peekaboo+ ⭐'}</Text>
+          <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
           <Text style={styles.tagline}>
             {plus ? 'Thank you for supporting Peekaboo! Here is everything you get.' : 'See more, peek more, glow more.'}
           </Text>
@@ -145,7 +145,7 @@ export default function PlusScreen() {
           ) : null
         ) : !CAN_BUY_PLUS ? (
           <View style={styles.soonBox}>
-            <Text style={styles.soonTitle}>Peekaboo+ is coming soon ⭐</Text>
+            <Text style={styles.soonTitle}>Coming soon ⭐</Text>
             <Text style={styles.soonText}>
               {Platform.OS === 'ios'
                 ? "You'll be able to get it right here. Keep Peekaboo up to date!"
@@ -156,7 +156,7 @@ export default function PlusScreen() {
           <BigButton title="Couldn't load the price · Try again" onPress={retryPrice} />
         ) : (
           <BigButton
-            title={price ? `Get Peekaboo+ · ${price}/month` : 'Get Peekaboo+'}
+            title={price ? `Subscribe · ${price}/month` : 'Subscribe'}
             loading={price === undefined || busy === 'buy'}
             onPress={buy}
           />
