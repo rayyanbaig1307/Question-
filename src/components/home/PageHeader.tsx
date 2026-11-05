@@ -1,34 +1,24 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '@/components/Avatar';
 import { Wordmark } from '@/components/Wordmark';
-import { useMe } from '@/lib/auth';
 import { colors, font, space } from '@/theme';
 
-// Top bar for the Chat and Home pages: a title (or the Peekaboo logo) in the middle, and your picture
-// (→ profile) on the right – so your profile is always one tap away. (No camera button: the bottom bar has one.)
-// `inbox`: a 🔔 bell next to your picture (Chat page) with a red number for new things in your Inbox.
+// Top bar for the Chat and Home pages: a title (or the Peekaboo logo) in the middle, and the 🔔 Inbox bell on
+// the right, with a red number (and a pink ring) when something new is waiting. Your profile is on the Camera
+// screen's top bar. (No camera button here: the bottom bar has one.)
 export function PageHeader({ title, logo = false, inbox }: {
   title?: string;
   logo?: boolean;
   inbox?: { count: number; onPress: () => void };
 }) {
-  const { userId, profile } = useMe();
   const insets = useSafeAreaInsets();
-
-  const me = (
-    <Pressable onPress={() => router.push(`/profile/${userId}`)} accessibilityLabel="My profile">
-      <Avatar path={profile?.avatar_path} name={profile?.display_name || profile?.username} size={40} />
-    </Pressable>
-  );
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
       {/* An empty space the same width as the right side, so the title stays in the middle. */}
-      <View style={[styles.side, inbox && styles.sideWide]} />
+      <View style={styles.side} />
       {logo ? (
         <View style={styles.logo}>
           <Wordmark height={30} />
@@ -36,15 +26,15 @@ export function PageHeader({ title, logo = false, inbox }: {
       ) : (
         <Text style={styles.title}>{title}</Text>
       )}
-      <View style={[styles.side, styles.right, inbox && styles.sideWide]}>
+      <View style={[styles.side, styles.right]}>
         {inbox ? (
           <Pressable
             onPress={inbox.onPress}
-            style={styles.bell}
+            style={[styles.bell, inbox.count > 0 && styles.bellNew]}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel={inbox.count > 0 ? `Inbox, ${inbox.count} new` : 'Inbox'}>
-            <Ionicons name={inbox.count > 0 ? 'notifications' : 'notifications-outline'} size={22} color={colors.text} />
+            <Ionicons name={inbox.count > 0 ? 'notifications' : 'notifications-outline'} size={22} color={inbox.count > 0 ? colors.accent : colors.text} />
             {inbox.count > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{inbox.count > 99 ? '99+' : inbox.count}</Text>
@@ -52,7 +42,6 @@ export function PageHeader({ title, logo = false, inbox }: {
             ) : null}
           </Pressable>
         ) : null}
-        {me}
       </View>
     </View>
   );
@@ -73,13 +62,6 @@ const styles = StyleSheet.create({
   right: {
     alignItems: 'flex-end',
   },
-  sideWide: {
-    width: 96,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: space.sm,
-  },
   bell: {
     width: 40,
     height: 40,
@@ -87,6 +69,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.card,
+  },
+  // Something new: a pink ring around the bell, so it's easy to spot.
+  bellNew: {
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   badge: {
     position: 'absolute',
