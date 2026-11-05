@@ -32,7 +32,7 @@ and the owner's standing preferences.
 | App Store Connect name | "Peekaboo: Dare Your Friends" (iOS 1.0, Prepare for Submission) |
 | TestFlight public link | https://testflight.apple.com/join/3DWqzxhS (works once Apple's beta review passes) |
 | Android APK (v16) | link in `src/lib/invite.ts` (`ANDROID_LINK`) |
-| Owner's app account | `@coolname`, user id `d3614487-2fa7-477c-8b64-be66ce1f5f3f` |
+| Owner's app account | `@coolname`, user id `df5aae76-7e6a-4e91-9645-5b897a533156` (Sign in with Apple, since 4 Nov 2026; the old id d3614487-… was deleted). Gets report alerts and a lifetime Plus row (product_id 'tester') in plus_members |
 | Test account | `@ayaan` (owner's brother), birthday 8 Jul 2007, friends with the owner |
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |

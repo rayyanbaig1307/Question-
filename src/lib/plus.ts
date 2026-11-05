@@ -19,7 +19,7 @@ import { supabase } from './supabase';
 // ---------------------------------------------------------------------------
 
 // The owner's account (@coolname).
-const TESTERS = new Set(['d3614487-2fa7-477c-8b64-be66ce1f5f3f']);
+const TESTERS = new Set(['df5aae76-7e6a-4e91-9645-5b897a533156']);
 
 // Names used in App Store Connect and RevenueCat.
 const ENTITLEMENT = 'plus';
