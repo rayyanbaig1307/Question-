@@ -1,0 +1,30 @@
+{
+  "name": "peekaboo-face-mesh",
+  "version": "0.1.0",
+  "description": "Peekaboo's own VisionCamera v5 camera output that runs Google MediaPipe Face Landmarker (478 face points + 52 expression scores).",
+  "private": true,
+  "license": "MIT",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "nitrogen",
+    "nitro.json",
+    "assets",
+    "ios/**/*.swift",
+    "android/build.gradle",
+    "android/gradle.properties",
+    "android/CMakeLists.txt",
+    "android/src",
+    "*.podspec"
+  ],
+  "scripts": {
+    "specs": "npx nitrogen@0.37.1"
+  },
+  "peerDependencies": {
+    "react-native": "*",
+    "react-native-nitro-modules": ">= 0.37",
+    "react-native-vision-camera": ">= 5.2"
+  }
+}
