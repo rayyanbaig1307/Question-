@@ -64,6 +64,14 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**Face filters draw live on the camera (5 Nov, late; owner: "I want to see it moving and tracking my face, like the
+googly eyes"):** ✨ Soft Glow and 🌅 Golden Hour never drew on the camera preview, only on the saved photo. The cause
+was `soft()` in `lensPaint.ts`: its default `style = BlurStyle.Normal` is worked out on the camera's drawing thread
+before `BlurStyle` exists there, so the first frame threw and `LensOverlay`'s safety net switched the filter off.
+Fixed in `2c31570` (no default; `style ?? BlurStyle.Normal` in the body); `LensOverlay` now warns once if drawing
+ever stops; `tests/unit/worklet-order.test.mjs` fails on any worklet whose parameter default reads an outside name.
+OTA `86618bc8-7116-4ece-a9e4-ecfac0825d73` on branch **`testing`** (includes the Peekaboo+ session's `a365c28`). Not
+yet seen on a phone: check it on TestFlight (close and reopen the app twice first).
 **`20261219000000_plus_fixes` is live (checked 5 Nov, ~22:15 UTC):** `public.my_broken_streaks` on the live database is
 byte-for-byte the file's version (after removing Windows line endings from the paste), users can run it and visitors
 can't, and the owner's account `df5aae76…` is in `private.report_alert_people`. It was pasted in the SQL Editor (no
