@@ -37,20 +37,36 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Now: QA round 2 is done on this branch, but NOT released (4 Nov)
+## Now: QA round 2 database part is LIVE (5 Nov); the app update is not published yet
 
-**Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes. It
-is finished and **tested on this computer only**. **Nothing has been pushed, deployed, migrated on the
-hosted project or published as an OTA.** The live database is still the old one (migrations up to
-`20261212000000_chat_extras.sql`). The live app is `a9e5ddf` plus header-only changes another session
-published on 5 Nov (OTA `19dffe81…` from commit `23853ae`: Inbox bell in the Chat header, no profile picture
-at the top). None of the QA fixes are live. Releasing needs the owner's "go".
+**Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes.
+On 5 Nov the owner said "go" and the **server side was released** to the live project, in this order:
+1. Safety check (`tests/database/deployment-preflight.sql`, read-only): no hard blockers, no old stranger
+   reports to save, no broken old messages or keeps.
+2. `delete-account` deployed (version 8, "Verify JWT" off, as before).
+3. Migrations applied in order: `20261213102659` hardening, `20261213200000` media fixes, `20261213210000`
+   robustness, `20261213220000` username limits, `20261214000000` word filter, `20261214100000` final fixes.
+   Each was sent with a 15-second lock limit, so it could never keep live users waiting.
+4. `username-auth` (version 5, "Verify JWT" **on**, as before) and `cleanup-media` (version 2, "Verify JWT"
+   off, as before) deployed.
+5. Checked afterwards: every function, privacy rule, trigger and permission on the live database matches the
+   tested local copy (only differences: line endings and code comments in old functions that predate this
+   work). Supabase's security advisor shows nothing new.
+**Not applied:** `20261215000000_peekaboo_plus` (another session's, after RevenueCat) and
+`20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go).
+**Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
+(`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. One known
+side effect until the OTA: re-posting the same story to your profile after deleting that post shows an error.
+**Still to do after the release:** 14 old photo files of deleted accounts are left in Storage (find them with
+the leftover-file check below; delete them in Supabase → Storage → `media`, not with SQL), the
+cf-connecting-ip check, the phone checks in `docs/TESTING.md` Step 62, and turning on "Leaked password
+protection" in Supabase Auth (the advisor suggests it; it was already off before).
 
-- **Commits** (local only): from `ac246c3` (the supplied patch: security fixes, hardening migration
+- **Commits**: from `ac246c3` (the supplied patch: security fixes, hardening migration
   `20261213102659`, local test suite) to the branch head. `ee96f61` makes the tests run on Linux,
   `468e792` patches dev-tool advisories (glob/minimatch overrides; no app or native package changed), and
   the commits after it hold the review fixes for the database, the Edge Functions and the app.
-- **New migrations (not applied):** `20261213102659_qa_round2_security_hardening`,
+- **New migrations (the first six applied live on 5 Nov, see above):** `20261213102659_qa_round2_security_hardening`,
   `20261213200000_qa_review_media_fixes`, `20261213210000_qa_review_robustness_fixes`,
   `20261213220000_username_auth_limits`, `20261214000000_public_word_filter`, `20261214100000_qa_final_db_fixes`.
   Also `20261216000000_group_dare_votes` (group dares: Legit or Cap votes, see below): it ships with this
