@@ -53,7 +53,7 @@ export const TEXT_FONTS: { id: TextFont; label: string; family: string; scale: n
 export const TEXT_EFFECTS: { id: TextEffect; label: string; plus: boolean }[] = [
   { id: 'none', label: 'None', plus: false },
   { id: 'glow', label: 'Glow', plus: false },
-  { id: 'neon', label: 'Neon', plus: false },
+  { id: 'neon', label: 'Electric', plus: false },
   { id: 'outline', label: 'Outline', plus: false },
   { id: 'shadow', label: 'Shadow', plus: false },
   { id: 'pop3d', label: '3D Pop', plus: false },
@@ -64,7 +64,7 @@ export const TEXT_ANIMATIONS: { id: TextAnimation; label: string; plus: boolean 
   { id: 'pop', label: 'Pop', plus: false },
   { id: 'bounce', label: 'Bounce', plus: false },
   { id: 'wiggle', label: 'Wiggle', plus: false },
-  { id: 'typewriter', label: 'Typewriter', plus: false },
+  { id: 'typewriter', label: 'Type-in', plus: false },
   { id: 'peek', label: 'Peek', plus: false },
 ];
 
@@ -310,7 +310,7 @@ function hexToRgb(hex: string): [number, number, number] | null {
 }
 
 // ---------------------------------------------------------------------------
-// Text placed on the photo, with its animation (Pop, Bounce, Wiggle, Typewriter, Peek). The animation plays,
+// Text placed on the photo, with its animation (Pop, Bounce, Wiggle, Type-in, Peek). The animation plays,
 // rests for a moment and plays again, so you can see it. `still` stops it at its resting look – the editor
 // sets it while it takes the final picture.
 // ---------------------------------------------------------------------------
@@ -348,7 +348,7 @@ export function PlacedText({ spec, maxWidth, still = false }: { spec: TextSpec; 
     return () => cancelAnimation(progress);
   }, [animation, spec.content, progress]);
 
-  // Typewriter: the letters appear one by one, stay for a bit, then start again.
+  // Type-in: the letters appear one by one, stay for a bit, then start again.
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (animation !== 'typewriter') return;
