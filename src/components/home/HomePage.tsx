@@ -26,7 +26,7 @@ import { StoryRow, type Rings } from './StoryRow';
 
 // Home, like Instagram: story circles along the top, then the feed – your friends' posts (and yours) first,
 // then everyone else's public posts.
-export function HomePage({ visible, onCamera, inboxCount }: { visible: boolean; onCamera: () => void; inboxCount: number }) {
+export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: () => void }) {
   const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
@@ -226,7 +226,7 @@ export function HomePage({ visible, onCamera, inboxCount }: { visible: boolean; 
 
   return (
     <View style={styles.fill}>
-      <PageHeader logo inbox={{ count: inboxCount, onPress: () => router.push('/inbox') }} />
+      <PageHeader logo />
       <FlatList
         data={posts ?? []}
         keyExtractor={(post) => post.id}

@@ -112,7 +112,7 @@ export default function Home() {
       <Animated.View style={swipe.pageStyles[CAMERA].dim} pointerEvents="none" />
     </Animated.View>,
     <Animated.View key="home" style={swipe.pageStyles[HOME].page}>
-      <HomePage visible={focused && page === HOME} onCamera={() => goTo(CAMERA)} inboxCount={inboxCount} />
+      <HomePage visible={focused && page === HOME} onCamera={() => goTo(CAMERA)} />
       <Animated.View style={swipe.pageStyles[HOME].dim} pointerEvents="none" />
     </Animated.View>,
   ];

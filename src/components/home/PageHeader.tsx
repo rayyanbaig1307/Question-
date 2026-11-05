@@ -6,7 +6,7 @@ import { Wordmark } from '@/components/Wordmark';
 import { colors, font, space } from '@/theme';
 
 // Top bar for the Chat and Home pages: a title (or the Peekaboo logo) in the middle, and the 🔔 Inbox bell on
-// the right, with a red number (and a pink ring) when something new is waiting. Your profile is on the Camera
+// the left, with a red number (and a pink ring) when something new is waiting. Your profile is on the Camera
 // screen's top bar. (No camera button here: the bottom bar has one.)
 export function PageHeader({ title, logo = false, inbox }: {
   title?: string;
@@ -17,16 +17,8 @@ export function PageHeader({ title, logo = false, inbox }: {
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
-      {/* An empty space the same width as the right side, so the title stays in the middle. */}
-      <View style={styles.side} />
-      {logo ? (
-        <View style={styles.logo}>
-          <Wordmark height={30} />
-        </View>
-      ) : (
-        <Text style={styles.title}>{title}</Text>
-      )}
-      <View style={[styles.side, styles.right]}>
+      {/* Left: the 🔔 Inbox bell (Chat page). */}
+      <View style={styles.side}>
         {inbox ? (
           <Pressable
             onPress={inbox.onPress}
@@ -43,6 +35,15 @@ export function PageHeader({ title, logo = false, inbox }: {
           </Pressable>
         ) : null}
       </View>
+      {logo ? (
+        <View style={styles.logo}>
+          <Wordmark height={30} />
+        </View>
+      ) : (
+        <Text style={styles.title}>{title}</Text>
+      )}
+      {/* An empty space the same width as the left side, so the title stays in the middle. */}
+      <View style={styles.side} />
     </View>
   );
 }
@@ -58,9 +59,6 @@ const styles = StyleSheet.create({
   side: {
     width: 48,
     paddingTop: space.sm,
-  },
-  right: {
-    alignItems: 'flex-end',
   },
   bell: {
     width: 40,
