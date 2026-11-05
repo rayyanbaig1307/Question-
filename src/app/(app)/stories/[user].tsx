@@ -83,11 +83,11 @@ export default function StoryViewer() {
   const urls = useMediaUrls(ring?.stories.flatMap((story) => mediaFiles(story)) ?? []);
   const story = ring?.stories[index];
   const url = story ? urls[story.media_path] : undefined;
-  // A video story lasts as long as the video (up to 30 seconds); a photo story 5 seconds.
+  // A video story lasts as long as the video (up to 30 seconds, or 60 with Peekaboo+); a photo story 5 seconds.
   const [videoLength, setVideoLength] = useState<{ id: string; seconds: number } | null>(null);
   const isVideo = story?.media_type === 'video';
   const seconds =
-    isVideo && videoLength?.id === story?.id ? Math.min(30, Math.max(1, videoLength.seconds)) : SECONDS_PER_PHOTO;
+    isVideo && videoLength?.id === story?.id ? Math.min(60, Math.max(1, videoLength.seconds)) : SECONDS_PER_PHOTO;
 
   // Finished this person's stories (or they have none) → next friend in line, or close.
   const finished = ring === null || (ring !== undefined && index >= ring.stories.length);

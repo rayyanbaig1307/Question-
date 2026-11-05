@@ -31,8 +31,8 @@ import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
 
 const SECONDS = 10;
-// A video peek plays to its end (videos can be up to 30 seconds).
-const MAX_VIDEO_SECONDS = 30;
+// A video peek plays to its end (videos can be up to 30 seconds, or 60 with Peekaboo+).
+const MAX_VIDEO_SECONDS = 60;
 
 // first = opening it for the first time, replay = your one replay, saved = saved in the chat (no time limit).
 type Mode = 'first' | 'replay' | 'saved';

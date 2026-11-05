@@ -34,6 +34,7 @@ import type { FaceLensHandle } from './FaceLensCamera';
 import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
 import { usePlus } from '@/lib/plus';
+import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
 import { ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
@@ -47,9 +48,6 @@ const SoftGlow: typeof import('@/components/lens/SoftGlowCamera').SoftGlowCamera
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('@/components/lens/SoftGlowCamera').SoftGlowCamera
   : null;
-
-// Videos can be up to this long.
-const MAX_VIDEO_SECONDS = 30;
 
 // The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
 const MODE_RING: Record<CameraMode, string> = {
@@ -120,7 +118,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
 
-  // Videos: hold the shutter to record (up to 30 seconds). The camera switches to video while you hold.
+  // Videos: hold the shutter to record (up to 30 seconds, or 60 with Peekaboo+). The camera switches to video
+  // while you hold.
   const [mic, requestMic] = useMicrophonePermissions();
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recording, setRecording] = useState(false);
@@ -222,6 +221,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       return;
     }
     const withSound = mic?.granted ?? false;
+    // How long this video can be: 30 seconds, or 60 with Peekaboo+.
+    const videoSeconds = maxVideoSeconds(plus);
     stopAsked.current = false;
     setBusy(true);
     setRecording(true);
@@ -242,11 +243,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     await waitForCamera();
     try {
       recordProgress.set(0);
-      recordProgress.set(withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000, easing: Easing.linear }));
+      recordProgress.set(withTiming(1, { duration: videoSeconds * 1000, easing: Easing.linear }));
       // You let go before it even started: still keep a short clip.
       if (stopAsked.current) setTimeout(() => cameraRef.current?.stopRecording(), 300);
       const video = await cameraRef.current?.recordAsync({
-        maxDuration: MAX_VIDEO_SECONDS,
+        maxDuration: videoSeconds,
         ...(Platform.OS === 'ios' ? { codec: 'avc1' as const } : {}),
       });
       if (video?.uri) openEditor(video.uri, 'cover', true, lensVideoItems.current);
@@ -311,19 +312,33 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.9,
-      videoMaxDuration: MAX_VIDEO_SECONDS,
+      // The picker allows the Peekaboo+ length; a longer-than-free video is checked just below.
+      videoMaxDuration: PLUS_VIDEO_SECONDS,
       allowsEditing: false,
     });
     const asset = result.canceled ? null : result.assets[0];
     if (!asset) return;
     if (asset.type === 'video') {
       // Peekaboo videos are short and small, so uploads stay quick.
-      if ((asset.duration ?? 0) > (MAX_VIDEO_SECONDS + 0.5) * 1000) {
-        Alert.alert('Too long', `Pick a video of ${MAX_VIDEO_SECONDS} seconds or less.`);
+      const check = checkPickedVideo(asset.duration, asset.fileSize, plus);
+      if (check === 'too-long') {
+        Alert.alert('Too long', `Pick a video of ${maxVideoSeconds(plus)} seconds or less.`);
         return;
       }
-      if ((asset.fileSize ?? 0) > 30 * 1024 * 1024) {
-        Alert.alert('Too big', 'That video is too big. Try a shorter one, or record one in Peekaboo.');
+      if (check === 'needs-plus') {
+        // 30–60 seconds: that's a Peekaboo+ length.
+        Alert.alert(
+          'Videos up to 60 s come with Peekaboo+ ⭐',
+          `Without Peekaboo+, videos can be up to ${FREE_VIDEO_SECONDS} seconds. Pick a shorter one, or get Peekaboo+.`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'See Peekaboo+ ⭐', onPress: () => router.push('/plus') },
+          ],
+        );
+        return;
+      }
+      if (check === 'too-big') {
+        Alert.alert('Too big', TOO_BIG_VIDEO);
         return;
       }
       openEditor(asset.uri, 'cover', true);
@@ -352,7 +367,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             mirror={facing === 'front'}
             mode={mode}
             mute={!(mic?.granted ?? false)}
-            // Small, quick-to-upload videos: 720p at a modest quality (about 9–10 MB for 30 seconds).
+            // Small, quick-to-upload videos: 720p at a modest quality (about 9–10 MB for 30 seconds, about
+            // 19 MB for 60 – under the 30 MB the store takes).
             videoQuality="720p"
             videoBitrate={2_500_000}
             onCameraReady={() => cameraReady.current.splice(0).forEach((resolve) => resolve())}

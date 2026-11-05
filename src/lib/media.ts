@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { supabase } from './supabase';
 import type { MediaFields } from './types';
+import { MAX_VIDEO_BYTES, TOO_BIG_VIDEO } from './videoLimits';
 
 // 'mystery' is for Guess Who: those files go in a shared folder, so the file name doesn't give away who posted it.
 type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery' | 'voice' | 'keeps' | 'group';
@@ -104,7 +105,10 @@ export async function uploadMedia(
             : ['mp4', 'video/mp4']
           : ['jpg', 'image/jpeg'];
   const path = folder === 'mystery' ? `mystery/${randomUUID()}.${extension}` : `${userId}/${folder}/${randomUUID()}.${extension}`;
-  const { error } = await supabase.storage.from('media').upload(path, await readBytes(localUri), { contentType });
+  const bytes = await readBytes(localUri);
+  // The store takes files up to 30 MB. Say so kindly before uploading, instead of failing halfway.
+  if (type === 'video' && bytes.byteLength > MAX_VIDEO_BYTES) throw new Error(TOO_BIG_VIDEO);
+  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType });
   if (error) throw error;
   return path;
 }

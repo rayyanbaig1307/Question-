@@ -12,6 +12,7 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
 import { useMe } from '@/lib/auth';
+import { MAX_PINS, pinKeyForFriend, pinKeyForGroup, sortByPins, useChatPins } from '@/lib/chatPins';
 import { clearChat, fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
@@ -58,6 +59,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
   const [links, setLinks] = useState<FriendLink[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  // Your pinned chats (Peekaboo+ ⭐, up to 3), kept on this phone.
+  const { pins, plus, toggle: togglePinned } = useChatPins();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -139,10 +142,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     setRefreshing(false);
   }
 
-  // Pinned chats stay at the top.
-  const shown = rows
-    ? [...rows].sort((a, b) => Number(!!settings.get(b.friend.id)?.pinned) - Number(!!settings.get(a.friend.id)?.pinned))
-    : null;
+  // Pinned chats stay at the top, in the order you pinned them.
+  const shown = rows ? sortByPins(rows, (row) => pinKeyForFriend(row.friend.id), pins) : null;
   // While searching: only the chats whose name matches, and new people (not friends yet) below.
   const needle = trimmed.toLowerCase();
   const matching = (shown ?? []).filter(
@@ -154,6 +155,45 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   const newPeople = found && found.query === trimmed ? found.people.filter((person) => !friendIds.has(person.id)) : null;
   const relationWith = (personId: string) =>
     relationFrom(links.find((link) => link.requester_id === personId || link.addressee_id === personId) ?? null, userId);
+
+  // A pinned chat whose friend or group is gone (unfriended, left) doesn't use up one of the 3 places.
+  const stillThere = (key: string) =>
+    key.startsWith('group:')
+      ? groups.length === 0 || groups.some((group) => pinKeyForGroup(group.id) === key)
+      : (rows ?? []).some((row) => pinKeyForFriend(row.friend.id) === key);
+
+  // "📌 Pin to top" / "Unpin" in a chat's hold-down menu. Pinning is Peekaboo+ ⭐ – without it, this shows
+  // what Peekaboo+ is.
+  function pinOption(key: string) {
+    const isPinned = pins.includes(key);
+    return {
+      label: isPinned ? '📌 Unpin' : '📌 Pin to top',
+      onPress: async () => {
+        if (!plus) {
+          router.push('/plus');
+          return;
+        }
+        const result = await togglePinned(key, stillThere);
+        if (!active.current) return;
+        if (result === 'pinned') showToast('Pinned to the top 📌');
+        else if (result === 'unpinned') showToast('Unpinned');
+        else if (result === 'full') showToast(`You can pin up to ${MAX_PINS} chats. Unpin one first.`);
+        else router.push('/plus');
+      },
+    };
+  }
+
+  // Hold down a group: pin it to the top, or open its chat.
+  function openGroupMenu(group: PeekGroup) {
+    if (!active.current) return;
+    showOptions({
+      title: group.name,
+      options: [
+        pinOption(pinKeyForGroup(group.id)),
+        { label: '💬 Open group chat', onPress: () => router.push(`/groups/chat/${group.id}`) },
+      ],
+    });
+  }
 
   // Hold down a chat: options for that friend.
   function openFriendMenu(friend: Profile) {
@@ -175,10 +215,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     showOptions({
       title: name,
       options: [
-        {
-          label: current?.pinned ? '📌 Unpin chat' : '📌 Pin chat to top',
-          onPress: () => change({ pinned: !current?.pinned }, current?.pinned ? 'Unpinned' : 'Pinned to the top 📌'),
-        },
+        pinOption(pinKeyForFriend(friend.id)),
         {
           label: current?.mute_messages ? '🔔 Unmute notifications' : '🔕 Mute notifications',
           onPress: () =>
@@ -291,7 +328,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
               ) : null}
               {rows.length > 0 ? (
                 <>
-                  <GroupsSection groups={groups} chats={groupChats} />
+                  <GroupsSection groups={groups} chats={groupChats} pins={pins} onMenu={openGroupMenu} />
                   <Text style={styles.sectionTitle}>💬 Chats</Text>
                 </>
               ) : null}
@@ -335,7 +372,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
             <ChatRowView
               row={item}
               me={userId}
-              pinned={!!settings.get(item.friend.id)?.pinned}
+              pinned={pins.includes(pinKeyForFriend(item.friend.id))}
               muted={!!settings.get(item.friend.id)?.mute_messages}
               onMenu={() => openFriendMenu(item.friend)}
             />
@@ -347,7 +384,13 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
 }
 
 // Group Peek: your groups (how many posted today's drop), or one row to start your first group.
-function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<string, GroupChatSummary> }) {
+// Pinned groups (Peekaboo+) come first, with a 📌. Hold a group for its menu.
+function GroupsSection({ groups, chats, pins, onMenu }: {
+  groups: PeekGroup[];
+  chats: Map<string, GroupChatSummary>;
+  pins: string[];
+  onMenu: (group: PeekGroup) => void;
+}) {
   return (
     <>
       <View style={styles.sectionHeader}>
@@ -373,7 +416,8 @@ function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<stri
           <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
         </Pressable>
       ) : (
-        groups.map((group) => {
+        sortByPins(groups, (group) => pinKeyForGroup(group.id), pins).map((group) => {
+          const pinned = pins.includes(pinKeyForGroup(group.id));
           const total = counting(group).length;
           const left = stillToPost(group).length;
           const chat = chats.get(group.id);
@@ -384,6 +428,11 @@ function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<stri
               key={group.id}
               // Opens the group chat (its drops and members are one tap away from there).
               onPress={() => router.push(`/groups/chat/${group.id}`)}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onMenu(group);
+              }}
+              accessibilityHint="Hold for options"
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
               <View style={styles.groupIcon}>
                 {group.photo_path ? (
@@ -395,6 +444,7 @@ function GroupsSection({ groups, chats }: { groups: PeekGroup[]; chats: Map<stri
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>
                   {group.name}
+                  {pinned ? <Text style={styles.pin}> 📌</Text> : null}
                 </Text>
                 {chat?.last_body ? (
                   <Text style={[styles.statusText, unread > 0 && styles.groupUnreadText]} numberOfLines={1}>
@@ -514,7 +564,7 @@ function ChatRowView({ row, me, pinned, muted, onMenu }: {
           <Text style={[styles.name, styles.nameText]} numberOfLines={1}>
             {row.friend.display_name || row.friend.username}
           </Text>
-          {pinned ? <Ionicons name="pin" size={14} color={colors.textMuted} /> : null}
+          {pinned ? <Text style={styles.pin}>📌</Text> : null}
           {muted ? <Ionicons name="notifications-off" size={14} color={colors.textMuted} /> : null}
         </View>
         <View style={styles.status}>
@@ -586,6 +636,9 @@ const styles = StyleSheet.create({
   },
   nameText: {
     flexShrink: 1,
+  },
+  pin: {
+    fontSize: 12,
   },
   status: {
     flexDirection: 'row',
