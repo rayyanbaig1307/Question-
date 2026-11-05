@@ -3,11 +3,16 @@ import { DarkTheme, DefaultTheme, type Theme } from 'expo-router';
 import { Appearance } from 'react-native';
 
 // ---------------------------------------------------------------------------
-// Dark, Light or Match phone. The choice is kept in a tiny file on the phone and read the moment the app
-// starts, so every screen is drawn in the right colors straight away. Changing it restarts the app.
+// Dark, Light or Match phone – plus the Peekaboo+ themes (Black & Gold, Midnight, Sunset). The choice is kept
+// in a tiny file on the phone and read the moment the app starts, so every screen is drawn in the right colors
+// straight away. Changing it restarts the app.
 // ---------------------------------------------------------------------------
 
-export type ThemeChoice = 'dark' | 'light' | 'system';
+export type ThemeChoice = 'dark' | 'light' | 'system' | PlusTheme;
+// The themes only Peekaboo+ members can pick (Settings checks usePlus()).
+export type PlusTheme = 'gold' | 'midnight' | 'sunset';
+export const PLUS_THEMES: readonly PlusTheme[] = ['gold', 'midnight', 'sunset'];
+const ALL_CHOICES: readonly string[] = ['dark', 'light', 'system', ...PLUS_THEMES];
 const THEME_FILE = 'peekaboo-theme.txt';
 
 function readThemeChoice(): ThemeChoice {
@@ -15,7 +20,9 @@ function readThemeChoice(): ThemeChoice {
     const file = new File(Paths.document, THEME_FILE);
     if (file.exists) {
       const saved = file.textSync().trim();
-      if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
+      // A saved Plus theme is still used here even if the person doesn't have Plus any more, so the app
+      // always starts fine. Settings won't let anyone without Plus pick one.
+      if (ALL_CHOICES.includes(saved)) return saved as ThemeChoice;
     }
   } catch {
     // no saved choice yet
@@ -32,11 +39,14 @@ export async function saveThemeChoice(choice: ThemeChoice): Promise<void> {
 export const themeChoice: ThemeChoice = readThemeChoice();
 // What "Match phone" means right now.
 export const phoneScheme = Appearance.getColorScheme() === 'light' ? 'light' : 'dark';
-export const isDark = themeChoice === 'system' ? phoneScheme === 'dark' : themeChoice === 'dark';
+// The theme in use right now ("Match phone" turned into dark or light).
+const activeTheme: Exclude<ThemeChoice, 'system'> = themeChoice === 'system' ? phoneScheme : themeChoice;
+// Black & Gold and Midnight are dark themes; Sunset is a light one.
+export const isDark = activeTheme === 'dark' || activeTheme === 'gold' || activeTheme === 'midnight';
 
 // Make the phone's own pop-ups and keyboards match too.
 try {
-  Appearance.setColorScheme(themeChoice === 'system' ? 'unspecified' : themeChoice);
+  Appearance.setColorScheme(themeChoice === 'system' ? 'unspecified' : isDark ? 'dark' : 'light');
 } catch {
   // older phones: fine either way
 }
@@ -92,16 +102,82 @@ const light: typeof dark = {
   overlayStrong: 'rgba(0,0,0,0.6)',
 };
 
-export const colors = isDark ? dark : light;
+// ⭐ Peekaboo+ themes. The fun colors (pink for dares, green, yellow…) stay the same so nothing gets confusing;
+// the background, cards, text, buttons and story rings change.
+
+// Black & Gold: almost-black warm background with gold text and gold buttons.
+const gold: typeof dark = {
+  ...dark,
+  bg: '#0E0A08',
+  surface: '#1C1510',
+  card: '#2A2016',
+  cardPressed: '#36291C',
+  border: '#3D2F20',
+  text: '#F2D9A8',
+  textMuted: '#BFA57A',
+  textFaint: '#7D6A4E',
+  accent: '#E8A93A',
+  onAccent: '#1A1006',
+};
+
+// Midnight: deep navy with sky-blue buttons.
+const midnight: typeof dark = {
+  ...dark,
+  bg: '#0B1530',
+  surface: '#13204A',
+  card: '#1A2A5A',
+  cardPressed: '#23366E',
+  border: '#2A3F7A',
+  text: '#EAF4FF',
+  textMuted: '#A9BEDD',
+  textFaint: '#6F84A8',
+  accent: '#38B6FF',
+  onAccent: '#06142E',
+};
+
+// Sunset: warm cream background, brown text and orange buttons.
+const sunset: typeof dark = {
+  ...light,
+  bg: '#FFF1D6',
+  surface: '#FFFAF0',
+  card: '#FFE6C7',
+  cardPressed: '#FFD9AE',
+  border: '#F3CFA3',
+  text: '#5A2A12',
+  textMuted: '#8A5A3C',
+  textFaint: '#B48A6C',
+  accent: '#FF7A1F',
+  onAccent: '#FFFFFF',
+};
+
+const palettes = { dark, light, gold, midnight, sunset };
+export const colors = palettes[activeTheme];
 
 // Text boxes get a keyboard in the matching color.
 export const keyboardAppearance: 'dark' | 'light' = isDark ? 'dark' : 'light';
 
+// The main two-color blend (story rings, big buttons, the dare banner) and the soft glow behind some
+// screens, for each theme.
+const brandBlend: Record<typeof activeTheme, readonly [string, string]> = {
+  dark: [colors.pink, colors.purple],
+  light: [colors.pink, colors.purple],
+  gold: ['#F2C14E', '#C9861C'],
+  midnight: ['#38B6FF', '#3A86F0'],
+  sunset: ['#FF7A1F', '#FF4F6E'],
+};
+const glowTop: Record<typeof activeTheme, string> = {
+  dark: '#1B1030',
+  light: '#FBE3F1',
+  gold: '#2A1D0E',
+  midnight: '#1E3A8A',
+  sunset: '#FFD1C2',
+};
+
 export const gradients = {
-  brand: [colors.pink, colors.purple] as const,
+  brand: brandBlend[activeTheme],
   sunny: [colors.yellow, colors.orange] as const,
   ocean: [colors.blue, colors.purple] as const,
-  night: [isDark ? '#1B1030' : '#FBE3F1', colors.bg] as const,
+  night: [glowTop[activeTheme], colors.bg] as const,
 };
 
 export const radius = {
