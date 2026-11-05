@@ -27,6 +27,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
+import { ChatBackground, ChatInkProvider, chatInk, useChatInk } from '@/components/chat/ChatBackground';
+import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
@@ -35,6 +37,7 @@ import { useOverlays } from '@/components/Overlays';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
+import { friendChatKey, useChatBackground } from '@/lib/chatBackgrounds';
 import {
   canReplay,
   canSave,
@@ -70,8 +73,12 @@ import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 export default function ChatScreen() {
   const { id: friendId } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
-  const { showToast } = useOverlays();
+  const { showToast, showOptions } = useOverlays();
   const { report } = useSafetyActions();
+  // Your moving background for this chat (Peekaboo+ ⭐). Only you see it.
+  const background = useChatBackground(friendChatKey(friendId));
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  const ink = chatInk(background.shown);
 
   const [friend, setFriend] = useState<Profile | null>(null);
   const [areFriends, setAreFriends] = useState(true);
@@ -372,163 +379,192 @@ export default function ChatScreen() {
             </Pressable>
           ) : null
         }
-        right={<RoundIconButton icon="search" label="Search this chat" onPress={() => setSearch(search === null ? '' : null)} />}
+        right={
+          <RoundIconButton
+            icon="ellipsis-horizontal"
+            label="Chat options"
+            onPress={() =>
+              showOptions({
+                title: name || undefined,
+                options: [
+                  { label: '🔎 Search this chat', onPress: () => setSearch(search === null ? '' : null) },
+                  { label: '🎨 Chat background', onPress: () => setBackgroundOpen(true) },
+                ],
+              })
+            }
+          />
+        }
       />
 
-      {search !== null ? (
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            value={search}
-            onChangeText={runSearch}
-            placeholder="Search this chat"
-            placeholderTextColor={colors.textMuted}
-            autoFocus
-            autoCapitalize="none"
-            keyboardAppearance={keyboardAppearance}
-            selectionColor={colors.accent}
-            style={styles.searchInput}
-          />
-          <Pressable
-            onPress={() => {
-              setSearch(null);
-              setResults(null);
-            }}
-            hitSlop={10}
-            accessibilityLabel="Close search">
-            <Text style={styles.searchCancel}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {/* The negative offset stops a gap appearing between the message box and the keyboard. */}
-      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
-        {search !== null && search.trim() ? (
-          <FlatList
-            data={results?.query === search ? results.list : []}
-            keyExtractor={(m) => m.id}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.searchList}
-            ListEmptyComponent={
-              results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
-            }
-            renderItem={({ item }) => (
-              <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
-                <Text style={styles.resultName}>
-                  {item.sender_id === userId ? 'You' : name} · {timeAgo(item.created_at)}
-                </Text>
-                <Text style={styles.resultText} numberOfLines={2}>
-                  {item.kind === 'dare' ? `🎯 ${item.body}` : item.body}
-                </Text>
-              </Pressable>
-            )}
-          />
-        ) : messages === null ? (
-          <ActivityIndicator color={colors.accent} style={styles.loading} />
-        ) : messages.length === 0 ? (
-          <View style={styles.empty}>
-            <EmptyState emoji="👋" title={`Say hi to ${name || 'your friend'}!`} message="Send a message or a peek." />
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            inverted
-            onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
-            keyExtractor={(m) => m.id}
-            contentContainerStyle={styles.list}
-            keyboardDismissMode="interactive"
-            // The list is upside down, so this "header" sits at the very bottom, under the newest message.
-            ListHeaderComponent={friendTyping ? <TypingBubble /> : undefined}
-            renderItem={({ item }) => {
-              const mine = item.sender_id === userId;
-              const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
-              return (
-                <View style={styles.messageBlock}>
-                  {replied ? (
-                    <View style={mine ? styles.right : styles.left}>
-                      <ReplyQuote
-                        name={replied.sender_id === userId ? 'You' : name}
-                        text={previewOf(replied)}
-                        mine={mine}
-                      />
-                    </View>
-                  ) : null}
-                  <MessageView
-                    message={item}
-                    me={userId}
-                    friendName={name}
-                    showStatus={item.id === myLatestId}
-                    dareActions={{ doDare, claimDare, confirmDare, dareBack: () => setDareOpen(true) }}
-                    onLongPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      openMenu(item);
-                    }}
-                  />
-                  <View style={mine ? styles.right : styles.left}>
-                    <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
-                  </View>
-                </View>
-              );
-            }}
-          />
-        )}
-
-        {areFriends && replyTo ? (
-          <View style={styles.replyBar}>
-            <View style={styles.replyBarText}>
-              <Text style={styles.replyBarName} numberOfLines={1}>
-                ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : name}
-              </Text>
-              <Text style={styles.replyBarBody} numberOfLines={1}>
-                {previewOf(replyTo)}
-              </Text>
-            </View>
-            <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
-              <Ionicons name="close" size={20} color={colors.textMuted} />
-            </Pressable>
-          </View>
-        ) : null}
-        {areFriends ? (
-          <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
-            <IconButton
-              icon="camera"
-              label="Send a peek"
-              background={colors.accent}
-              color={colors.onAccent}
-              onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
-            />
-            <IconButton icon="flag" label="Write a dare" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
-            <TextInput
-              value={text}
-              onChangeText={(value) => {
-                setText(value);
-                onTextChange(value);
-              }}
-              placeholder="Send a chat"
-              placeholderTextColor={colors.textFaint}
-              keyboardAppearance={keyboardAppearance}
-              selectionColor={colors.accent}
-              multiline
-              maxLength={2000}
-              style={styles.input}
-            />
-            {/* Nothing typed: hold the mic for a voice note. Typing: the send button. */}
-            {text.trim() || !Audio ? (
-              <IconButton
-                icon="arrow-up"
-                label="Send"
-                background={text.trim() ? colors.blue : colors.card}
-                onPress={send}
+      <ChatInkProvider ink={ink}>
+        <View style={styles.body}>
+          <ChatBackground id={background.shown} />
+          {search !== null ? (
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <TextInput
+                value={search}
+                onChangeText={runSearch}
+                placeholder="Search this chat"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                autoCapitalize="none"
+                keyboardAppearance={keyboardAppearance}
+                selectionColor={colors.accent}
+                style={styles.searchInput}
               />
+              <Pressable
+                onPress={() => {
+                  setSearch(null);
+                  setResults(null);
+                }}
+                hitSlop={10}
+                accessibilityLabel="Close search">
+                <Text style={styles.searchCancel}>Cancel</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* The negative offset stops a gap appearing between the message box and the keyboard. */}
+          <KeyboardAvoidingView style={[styles.fill, background.shown ? styles.clear : null]} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+            {search !== null && search.trim() ? (
+              <FlatList
+                data={results?.query === search ? results.list : []}
+                keyExtractor={(m) => m.id}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.searchList}
+                ListEmptyComponent={
+                  results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
+                }
+                renderItem={({ item }) => (
+                  <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
+                    <Text style={styles.resultName}>
+                      {item.sender_id === userId ? 'You' : name} · {timeAgo(item.created_at)}
+                    </Text>
+                    <Text style={styles.resultText} numberOfLines={2}>
+                      {item.kind === 'dare' ? `🎯 ${item.body}` : item.body}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            ) : messages === null ? (
+              <ActivityIndicator color={colors.accent} style={styles.loading} />
+            ) : messages.length === 0 ? (
+              <View style={styles.empty}>
+                {/* On a chat background the words sit on a soft card, so they're easy to read. */}
+                <View style={background.shown ? styles.emptyCard : null}>
+                  <EmptyState emoji="👋" title={`Say hi to ${name || 'your friend'}!`} message="Send a message or a peek." />
+                </View>
+              </View>
             ) : (
-              <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
+              <FlatList
+                ref={listRef}
+                data={messages}
+                inverted
+                onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
+                keyExtractor={(m) => m.id}
+                contentContainerStyle={styles.list}
+                keyboardDismissMode="interactive"
+                // The list is upside down, so this "header" sits at the very bottom, under the newest message.
+                ListHeaderComponent={friendTyping ? <TypingBubble /> : undefined}
+                renderItem={({ item }) => {
+                  const mine = item.sender_id === userId;
+                  const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
+                  return (
+                    <View style={styles.messageBlock}>
+                      {replied ? (
+                        <View style={mine ? styles.right : styles.left}>
+                          <ReplyQuote
+                            name={replied.sender_id === userId ? 'You' : name}
+                            text={previewOf(replied)}
+                            mine={mine}
+                          />
+                        </View>
+                      ) : null}
+                      <MessageView
+                        message={item}
+                        me={userId}
+                        friendName={name}
+                        showStatus={item.id === myLatestId}
+                        dareActions={{ doDare, claimDare, confirmDare, dareBack: () => setDareOpen(true) }}
+                        onLongPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          openMenu(item);
+                        }}
+                      />
+                      <View style={mine ? styles.right : styles.left}>
+                        <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
+                      </View>
+                    </View>
+                  );
+                }}
+              />
             )}
-          </View>
-        ) : (
-          <Text style={[styles.notFriends, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
-        )}
-      </KeyboardAvoidingView>
+
+            {areFriends && replyTo ? (
+              <View style={styles.replyBar}>
+                <View style={styles.replyBarText}>
+                  <Text style={styles.replyBarName} numberOfLines={1}>
+                    ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : name}
+                  </Text>
+                  <Text style={styles.replyBarBody} numberOfLines={1}>
+                    {previewOf(replyTo)}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
+                  <Ionicons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : null}
+            {areFriends ? (
+              <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
+                <IconButton
+                  icon="camera"
+                  label="Send a peek"
+                  background={colors.accent}
+                  color={colors.onAccent}
+                  onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
+                />
+                <IconButton icon="flag" label="Write a dare" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
+                <TextInput
+                  value={text}
+                  onChangeText={(value) => {
+                    setText(value);
+                    onTextChange(value);
+                  }}
+                  placeholder="Send a chat"
+                  placeholderTextColor={colors.textFaint}
+                  keyboardAppearance={keyboardAppearance}
+                  selectionColor={colors.accent}
+                  multiline
+                  maxLength={2000}
+                  style={styles.input}
+                />
+                {/* Nothing typed: hold the mic for a voice note. Typing: the send button. */}
+                {text.trim() || !Audio ? (
+                  <IconButton
+                    icon="arrow-up"
+                    label="Send"
+                    background={text.trim() ? colors.blue : colors.card}
+                    onPress={send}
+                  />
+                ) : (
+                  <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
+                )}
+              </View>
+            ) : (
+              <Text style={[styles.notFriends, ink, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
+            )}
+          </KeyboardAvoidingView>
+        </View>
+      </ChatInkProvider>
+      <ChatBackgroundPicker
+        visible={backgroundOpen}
+        current={background.picked}
+        plus={background.plus}
+        onPick={background.choose}
+        onClose={() => setBackgroundOpen(false)}
+      />
       <DareComposer visible={dareOpen} friendName={name} onClose={() => setDareOpen(false)} onSend={sendMyDare} />
       <MessageActions
         visible={menuFor !== null}
@@ -583,6 +619,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
   onLongPress: () => void;
 }) {
   const mine = message.sender_id === me;
+  const ink = useChatInk();
   const time = timeAgo(message.created_at);
   const statusLine = (show: boolean) =>
     mine && show ? <MessageStatus message={message} /> : null;
@@ -595,7 +632,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
         <Text style={styles.noticeText}>
           📸 {who} took a screenshot of {what}!
         </Text>
-        <Text style={styles.time}>{time}</Text>
+        <Text style={[styles.time, ink]}>{time}</Text>
       </View>
     );
   }
@@ -610,7 +647,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
             {mine ? `You reacted to ${friendName || 'their'}'s story` : 'Reacted to your story'}
           </Text>
         </Pressable>
-        <Text style={styles.time}>{time}</Text>
+        <Text style={[styles.time, ink]}>{time}</Text>
       </View>
     );
   }
@@ -658,7 +695,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
           {mine && state === 'done' ? <Text style={styles.dareNote}>Nice! Now it&apos;s {friendName || 'their'}&apos;s turn to dare you 😈</Text> : null}
         </Pressable>
         <View style={styles.metaRow}>
-          <Text style={styles.time}>{time}</Text>
+          <Text style={[styles.time, ink]}>{time}</Text>
           {statusLine(showStatus)}
         </View>
       </View>
@@ -670,7 +707,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
       <Pressable onLongPress={onLongPress} style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
         <VoiceBubble path={message.media_path} durationMs={message.audio_ms ?? 0} waveform={message.waveform} mine={mine} />
         <View style={styles.metaRow}>
-          <Text style={styles.time}>{time}</Text>
+          <Text style={[styles.time, ink]}>{time}</Text>
           {statusLine(showStatus)}
         </View>
       </Pressable>
@@ -712,7 +749,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
           </Text>
         </Pressable>
         <View style={styles.metaRow}>
-          <Text style={styles.time}>{time}</Text>
+          <Text style={[styles.time, ink]}>{time}</Text>
           {/* Every peek you send shows whether it was opened. */}
           {statusLine(true)}
         </View>
@@ -726,7 +763,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
         <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{message.body}</Text>
       </Pressable>
       <View style={styles.metaRow}>
-        <Text style={styles.time}>{time}</Text>
+        <Text style={[styles.time, ink]}>{time}</Text>
         {statusLine(showStatus)}
       </View>
     </View>
@@ -743,16 +780,17 @@ function MessageStatus({ message }: { message: Message }) {
       : message.kind === 'snap'
         ? 'Opened'
         : 'Seen';
-  const color = opened ? colors.accent : colors.textFaint;
+  const ink = useChatInk();
+  const color = opened ? colors.accent : (ink?.color ?? colors.textFaint);
   return (
     <View style={styles.status} accessibilityLabel={label}>
-      <Text style={styles.time}>·</Text>
+      <Text style={[styles.time, ink]}>·</Text>
       <Ionicons
         name={message.replayed_at ? 'refresh' : opened ? 'eye' : 'checkmark'}
         size={12}
         color={color}
       />
-      <Text style={[styles.time, styles.statusText, { color }]}>{label}</Text>
+      <Text style={[styles.time, ink, styles.statusText, { color }]}>{label}</Text>
     </View>
   );
 }
@@ -949,6 +987,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  // Everything under the top bar. A chat background fills this space, behind the messages.
+  body: {
+    flex: 1,
+  },
+  // See-through, so the chat background shows.
+  clear: {
+    backgroundColor: 'transparent',
+  },
+  emptyCard: {
+    marginHorizontal: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg + 'E6',
+  },
   loading: {
     flex: 1,
   },
@@ -1100,6 +1151,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   inputBar: {
+    backgroundColor: colors.bg,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: space.sm,
