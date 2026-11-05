@@ -15,6 +15,9 @@ import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
 
+// Each visit gets its own channel name – two listeners on the same name break the realtime library (docs/HANDOFF.md).
+let friendsListener = 0;
+
 // Find people by username, answer friend requests, and see your friends.
 export default function Friends() {
   const { userId, profile } = useMe();
@@ -36,7 +39,7 @@ export default function Friends() {
     useCallback(() => {
       loadLinks();
       const channel = supabase
-        .channel(`friends-screen-${userId}`)
+        .channel(`friends-screen-${userId}-${++friendsListener}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, loadLinks)
         .subscribe();
       return () => {

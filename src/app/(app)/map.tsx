@@ -15,6 +15,9 @@ import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
 
+// Each visit gets its own channel name – two listeners on the same name break the realtime library (docs/HANDOFF.md).
+let mapListener = 0;
+
 const WHOLE_WORLD = { latitude: 25, longitude: 0, latitudeDelta: 120, longitudeDelta: 120 };
 
 // The friend map: see friends who share their location. You stay hidden unless you turn sharing on.
@@ -48,7 +51,7 @@ export default function FriendMap() {
     useCallback(() => {
       load();
       const channel = supabase
-        .channel(`map-${userId}`)
+        .channel(`map-${userId}-${++mapListener}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, load)
         .subscribe();
       return () => {

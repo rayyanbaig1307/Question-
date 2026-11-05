@@ -7,6 +7,15 @@ import { supabase } from './supabase';
 const SEND_EVERY_MS = 2500;
 const HIDE_AFTER_MS = 4000;
 
+// The two (or more) people in a chat must be on the SAME topic for "typing…" to reach each other, so the
+// name can't change per visit like other listeners. If the chat is opened again before the old channel has
+// finished leaving (a notification tap while already in it), the realtime library would hand back the old,
+// closing channel. So leave it first.
+async function leaveOld(topic: string) {
+  const old = supabase.getChannels().find((c) => c.topic === `realtime:${topic}`);
+  if (old) await supabase.removeChannel(old);
+}
+
 // "Typing…" in a chat: tells your friend when you're typing, and tells you when they are.
 // It goes through a private live channel that only the two of you can join (see the database rules).
 export function useTyping(me: string, friend: string, enabled: boolean) {
@@ -24,6 +33,7 @@ export function useTyping(me: string, friend: string, enabled: boolean) {
     (async () => {
       // Private channels check who you are, so hand over your login first.
       await supabase.realtime.setAuth();
+      await leaveOld(topic);
       if (cancelled) return;
       joined = supabase
         .channel(topic, { config: { private: true, broadcast: { self: false } } })
@@ -103,6 +113,7 @@ export function useGroupTyping(me: string, groupId: string, enabled: boolean) {
 
     (async () => {
       await supabase.realtime.setAuth();
+      await leaveOld(topic);
       if (cancelled) return;
       joined = supabase
         .channel(topic, { config: { private: true, broadcast: { self: false } } })

@@ -79,7 +79,8 @@ export function brokenStreakText(streak: Pick<BrokenStreak, 'kind' | 'streak'>, 
 export function shortDate(iso: string): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const date = new Date(iso);
-  return `${date.getDate()} ${months[date.getMonth()]}`;
+  // The reset moments are midnight UTC, so read the UTC day – local time would show the day before west of London.
+  return `${date.getUTCDate()} ${months[date.getUTCMonth()]}`;
 }
 
 // "5h left" to save it.
