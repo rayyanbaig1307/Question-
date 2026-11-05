@@ -64,6 +64,20 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds): off by default, so screens look like they do without it.
     '@/lib/plus': { CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false, configurePurchases: async () => {} },
+    // Peekaboo+ extras (Peek-a-Save, drop rewind, Guess Who hint): the server doesn't have them, so they stay hidden.
+    '@/lib/plusExtras': {
+      fetchPlusAllowances: async () => { throw new Error('plus_allowances is not on this server'); },
+      fetchPeekASaves: async () => null,
+      fetchBrokenStreaks: async () => [],
+      peekASave: async () => 0,
+      fetchMysteryHints: async () => null,
+      getMysteryHint: async () => '',
+      brokenStreakText: () => '',
+      shortDate: () => '',
+      hoursLeft: () => '',
+    },
+    '@/components/PeekASaveCard': { PeekASaveCard: host('PeekASaveCard') },
+    '@/components/DropRewindOption': { DropRewindOption: host('DropRewindOption') },
     '@/lib/chatBackgrounds': { friendChatKey: id => `friend:${id}`, groupChatKey: id => `group:${id}`, useChatBackground: () => ({ plus: false, picked: null, shown: null, choose: async () => {} }) },
     '@/components/chat/ChatBackground': { ChatBackground: host('ChatBackground'), ChatInkProvider: host('ChatInkProvider'), chatInk: () => null, useChatInk: () => null },
     '@/components/chat/ChatBackgroundPicker': { ChatBackgroundPicker: host('ChatBackgroundPicker') },

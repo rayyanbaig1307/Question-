@@ -12,7 +12,9 @@ export async function createPost(
   userId: string,
   capture: Capture,
   caption: string,
-  options: { dare?: boolean; drop?: boolean; forfeit?: string; audience?: Audience } = {},
+  // `rewind`: ⏰ Peekaboo+ drop rewind – ask the server to post this late drop without the "late" label
+  // (it checks Plus and the weekly allowance itself; see post.drop_rewound for the answer).
+  options: { dare?: boolean; drop?: boolean; rewind?: boolean; forfeit?: string; audience?: Audience } = {},
 ): Promise<Post> {
   const { fields, stillUri } = await uploadCapture(userId, 'posts', capture);
   let blurPath: string | null = null;
@@ -27,6 +29,7 @@ export async function createPost(
         audience: options.audience ?? 'everyone',
         ...(options.dare ? { dare_day: todayDareDay() } : {}),
         ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
+        ...(options.drop && options.rewind ? { drop_rewound: true } : {}),
         ...(options.forfeit ? { forfeit_id: options.forfeit } : {}),
       })
       .select('*')

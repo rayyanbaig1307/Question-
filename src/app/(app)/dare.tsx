@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { PeekASaveCard } from '@/components/PeekASaveCard';
 import { PostGrid } from '@/components/PostGrid';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Avatar } from '@/components/Avatar';
@@ -26,6 +27,7 @@ import {
   type Streak,
 } from '@/lib/dareChain';
 import { syncCommunityDares } from '@/lib/communityDares';
+import { fetchPeekASaves, type BrokenStreak, type PlusAllowances } from '@/lib/plusExtras';
 import { DARE_RULES, fetchDarePosts, formatCountdown, nextDareAt, todayDareDay, useDare } from '@/lib/dares';
 import type { PostWithAuthor, Profile } from '@/lib/types';
 import { colors, font, gradients, radius, space } from '@/theme';
@@ -45,6 +47,8 @@ export default function DareScreen() {
   const [forfeits, setForfeits] = useState<Forfeit[]>([]);
   // Streaks with friends: days in a row you both did the dare.
   const [streaks, setStreaks] = useState<Streak[]>([]);
+  // 🙈 Streaks that broke in the last 24 hours (Peek-a-Save). null = not available (yet) on the server.
+  const [saves, setSaves] = useState<{ streaks: BrokenStreak[]; allowances: PlusAllowances } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Dares friends wrote for you, and your friends (for the quick "dare them" faces).
   const [daresForMe, setDaresForMe] = useState<DareForMe[]>([]);
@@ -67,6 +71,7 @@ export default function DareScreen() {
       if (loadedChain) setChain(loadedChain);
       if (loadedForfeits) setForfeits(loadedForfeits);
       if (loadedStreaks) setStreaks(loadedStreaks);
+      fetchPeekASaves().then(setSaves);
       fetchDaresForMe(userId)
         .then(setDaresForMe)
         .catch(() => {});
@@ -164,6 +169,17 @@ export default function DareScreen() {
           ))}
         </View>
       ) : null}
+
+      {/* 🙈 Peek-a-Save: streaks that just broke, which can still be brought back */}
+      {saves?.streaks.map((broken) => (
+        <PeekASaveCard
+          key={`${broken.kind}:${broken.friend_id}`}
+          streak={broken}
+          friend={friends.find((f) => f.id === broken.friend_id)}
+          allowances={saves.allowances}
+          onSaved={() => load()}
+        />
+      ))}
 
       {/* Streaks: you and a friend both doing the dare, day after day */}
       {streaks.length > 0 ? (

@@ -33,6 +33,7 @@ import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
+import { PeekASaveCard } from '@/components/PeekASaveCard';
 import { useOverlays } from '@/components/Overlays';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
@@ -59,6 +60,7 @@ import {
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
+import { fetchPeekASaves, type BrokenStreak, type PlusAllowances } from '@/lib/plusExtras';
 import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
@@ -85,6 +87,9 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[] | null>(null);
   // Your dare streak with this friend 🔥 (dares you two completed in a row).
   const [streak, setStreak] = useState(0);
+  // 🙈 Your dare streak with this friend just broke (less than 24 hours ago): Peek-a-Save can bring it back.
+  const [brokenStreak, setBrokenStreak] = useState<{ streak: BrokenStreak; allowances: PlusAllowances } | null>(null);
+  const [savesChecked, setSavesChecked] = useState(0);
   // Reactions on the messages, the message you're holding (its menu), and the message you're replying to.
   const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
   const [menuFor, setMenuFor] = useState<{ message: Message; actions: MessageAction[] } | null>(null);
@@ -358,6 +363,19 @@ export default function ChatScreen() {
     }
   }
 
+  // Checked when the chat opens and after a Peek-a-Save. (If the server doesn't have Peek-a-Save yet, nothing shows.)
+  useEffect(() => {
+    let cancelled = false;
+    fetchPeekASaves().then((found) => {
+      if (cancelled) return;
+      const mine = found?.streaks.find((s) => s.kind === 'chat_dare' && s.friend_id === friendId);
+      setBrokenStreak(found && mine ? { streak: mine, allowances: found.allowances } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [friendId, savesChecked]);
+
   // Tap a search result: jump to it in the chat (if it's one of the loaded messages).
   function jumpTo(message: Message) {
     const index = messages?.findIndex((m) => m.id === message.id) ?? -1;
@@ -437,6 +455,20 @@ export default function ChatScreen() {
                 accessibilityLabel="Close search">
                 <Text style={styles.searchCancel}>Cancel</Text>
               </Pressable>
+            </View>
+          ) : null}
+
+          {brokenStreak && search === null ? (
+            <View style={styles.peekASave}>
+              <PeekASaveCard
+                streak={brokenStreak.streak}
+                friend={friend}
+                allowances={brokenStreak.allowances}
+                onSaved={(restored) => {
+                  setStreak(restored);
+                  setSavesChecked((n) => n + 1);
+                }}
+              />
             </View>
           ) : null}
 
@@ -994,6 +1026,10 @@ const styles = StyleSheet.create({
     color: colors.pink,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  peekASave: {
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
   },
   headerStreak: {
     color: colors.orange,
