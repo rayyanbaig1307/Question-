@@ -1011,8 +1011,13 @@ real person's account (deleting can't be undone).
     - Turn on airplane mode and tap a vote → "Vote not saved – …" and nothing changes. Try it on the web
       version too: you see the message there (no silent failure).
     - C leaves the group (or A, if A made the group, removes C) → on A's and B's phones C's vote disappears from
-      the totals within a second or two ("🔥 0 · 🧢 1"). Add C back: C's buttons are not highlighted and C can
-      vote again.
+      the totals within a second or two ("🔥 0 · 🧢 1"). Add C back: on B's photo C now sees "You joined after
+      this was posted, so you can't vote on it" instead of the buttons (C counts as joining again now) – also
+      if C kept the chat open the whole time (it shows after the next message, or after C taps a vote once).
+      On a new proof posted after that, C has the buttons again.
+    - Add a fourth test account D to the group after B posted the photo → on B's photo D sees "🔥 0 · 🧢 1",
+      "🧢 Cap – doesn't count" and "You joined after this was posted, so you can't vote on it", with no
+      buttons. B posts a new proof for the dare → D has Legit / Cap on that one.
     - A proof posted before the update still shows "✅ Did the dare" and counts until someone votes on it. After
       the first vote it follows the normal rule, even if that vote is taken back (then "⏳ Legit or cap? Vote!"),
       and its poster gets no "The group says legit 🔥" for it.

@@ -80,8 +80,12 @@ Database (PGlite, part of `npm test`):
   account and visitors can't vote, the dare's sender can; one vote each, changeable and taken back, with the
   totals always equal to the votes table (also after 120 votes in separate transactions; PGlite runs them one
   at a time, so votes at the very same moment are only checked by `npm run test:concurrency`); a vote only
-  counts while the voter is in the group (spare accounts that join, vote Legit and leave change nothing;
-  being removed takes your votes away; your votes in other groups and the votes on your own proofs stay; a
+  counts while the voter is in the group, and only people who were in it when the proof was posted can vote
+  (someone added later is refused with a clear message on older proofs but can vote on newer ones; the very
+  same moment counts, one microsecond later doesn't; the app can't add a member row or move its join time back,
+  while adding people, read marks, mute and leaving still work; spare accounts can't join to vote, and the
+  ones added before the proof that vote Legit and leave change nothing; someone removed and added back can't
+  vote again on older proofs; being removed takes your votes away; your votes in other groups and the votes on your own proofs stay; a
   group with votes can still be deleted); votes are anonymous
   and the votes table is not sent live; more Legit than Cap counts, a tie or more Cap doesn't; the dare streak
   counts a counting proof for both the doer and the dare's sender, mixes with one-to-one chat dares, keeps the
@@ -141,7 +145,9 @@ Frontend (rendered screens, part of `npm test`):
   they work as before.
 - `group-chat.test.cjs` (added to): group dare votes. Each proof's label follows the votes (waiting, legit,
   tie, cap, old proof), with the totals; Legit / Cap buttons for everyone except the poster (the dare's sender
-  has them too), your own vote highlighted; tapping it again takes it back; a second tap while a vote is sent
+  has them too), but not on proofs posted before you joined (those say "You joined after this was posted, so
+  you can't vote on it" and "⏳ Waiting for votes"; if your join time can't be loaded the buttons show and the
+  server decides), your own vote highlighted; tapping it again takes it back; a second tap while a vote is sent
   does nothing; a refused vote shows a toast (not an alert); the dare card counts only counting proofs and "Do
   it · post proof" comes back while none of yours counts; an old proof counts until someone votes and can be
   voted on; a live vote changes only the totals, without loading the chat again; old answers never win: an
@@ -394,6 +400,26 @@ moved away or one of its parts taken out, the old screen put back, or one line o
 there; on real PostgreSQL, taking out the account-deletion lock makes "the poster deletes the proof" deadlock,
 and taking out the leave trigger or the vote's hold on your place in the group leaves votes behind. The HTTP
 stress run and `QA_ORIGINAL=1` were not repeated.
+
+Re-run on 2026-11-05, after the owner's rule "only people who were in the group when the proof was posted can
+vote" (the vote checks the member's join time; app users lost the table rights to add or change member rows;
+the chat hides the buttons on older proofs; and if the Peekaboo+ dare streak from `20261218000000_plus_extras`
+is already in the database, this file keeps it), and the fixes from its review (the chat reads your join time
+again on every reload and after a refused vote, so being removed and added back while the chat is open
+takes the buttons away too): `npm test` node part 393 passed, 0 failed (22 checks in
+`group-dare-votes.test.mjs`, 6 new screen checks in `group-chat.test.cjs`), the Vitest part 26 files, 339
+passed (2 new in `tests/unit/group-chat.test.mjs`). Type check and lint: no errors. `npm run test:rest`: 67
+passed, 0 failed (the vote check now also covers someone added late and a forged join time).
+`npm run test:preflight`: 159 passed, 0 failed, 1 NOTE. `npm run test:concurrency`: qa_fixed 33 passed,
+0 failed (qa_original 15 or 16 failed, as expected: the old daily-dare vote race doesn't show up every run).
+One concurrency run made while three review helpers were running tests on the same machine timed out once
+on "Deleting an account with 25,000 peeks" (15-second limit); on a quiet machine it takes about 4.7 seconds
+and passed in both other runs. The two changed database checks, the Peekaboo+ streak
+check and the three new "join time read again" screen checks were also run without the new code and failed
+there. Once, by hand: the other
+session's real `20261215`, `20261217` and `20261218` files applied before `20261216` keep their streak, and a
+group proof the group says is legit still counts in it. Browser, the HTTP stress run and `QA_ORIGINAL=1` were not
+repeated (they don't reach the group chat).
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

@@ -3,8 +3,9 @@
 --
 -- People can fake a proof, so the group decides:
 -- * A new proof does not count yet ("⏳ Legit or cap? Vote!").
--- * Everyone in the group except the person who posted it can vote: Legit 🔥 or Cap 🧢. That includes the
---   person who sent the dare. One vote each; you can change it or take it back.
+-- * Everyone who was in the group when the proof was posted, except the person who posted it, can vote:
+--   Legit 🔥 or Cap 🧢. That includes the person who sent the dare. One vote each; you can change it or take it
+--   back. Someone added to the group later can't vote on proofs from before they joined.
 -- * Votes are anonymous (like "Legit or cap?" on daily dares, 20261122000000_legit_or_cap.sql): everyone sees
 --   the totals, you see your own vote, nobody sees who voted what.
 -- * A proof COUNTS when it has more Legit votes than Cap votes. No votes or a tie: not decided yet.
@@ -17,12 +18,16 @@
 --   voted on them. Once someone votes, the normal rule applies for good (even if that vote is taken back).
 --   Their doers don't get "The group says legit" for them: those proofs already counted.
 --
--- Who can vote: a current member of the group, who isn't the poster and has no block with the poster either
--- way. (A block already hides the poster's messages from you, so you can't see the proof to judge it – the
--- same idea as "Only their friends can vote" on daily dares.) A vote only counts while you are in the group:
--- if you leave (or are removed), your votes on that group's proofs go and the totals are counted again.
--- Otherwise someone could bring spare accounts in one at a time, vote Legit and leave again, with nothing to
--- see in the member list.
+-- Who can vote: a current member of the group who was already in it when the proof was posted, who isn't the
+-- poster and has no block with the poster either way. (A block already hides the poster's messages from you,
+-- so you can't see the proof to judge it – the same idea as "Only their friends can vote" on daily dares.)
+-- "Already in it" uses peek_group_members.joined_at, which only the server sets (when someone is added; app
+-- users can't add or change member rows – step 6 also takes the table rights away as a second lock). Someone
+-- who leaves and is added again counts from the new time, so they can't vote again on older proofs.
+-- So nobody can bring spare accounts into the group after a proof is posted just to vote it Legit.
+-- A vote also only counts while you are in the group: if you leave (or are removed), your votes on that
+-- group's proofs go and the totals are counted again. Otherwise spare accounts that were added before the
+-- proof could vote Legit and then leave again, with nothing to see in the member list.
 --
 -- How the totals stay live and exact: votes are private, so the totals are kept on the proof's own row
 -- (group_messages.proof_legit / proof_cap). Members can already read that row and the app already listens to
@@ -183,6 +188,7 @@ declare
   doer_listens boolean;
   group_name text;
   dare_text text;
+  joined timestamptz;
 begin
   if me is null then
     raise exception 'Please log in again';
@@ -216,9 +222,14 @@ begin
   if not found then
     raise exception 'Please log in again';
   end if;
-  perform 1 from public.peek_group_members m where m.group_id = p.group_id and m.user_id = me for key share;
+  select m.joined_at into joined from public.peek_group_members m
+   where m.group_id = p.group_id and m.user_id = me for key share;
   if not found then
     raise exception 'Only people in this group can vote';
+  end if;
+  -- Only people who were already in the group when the proof was posted (both times are set by the server).
+  if joined > p.created_at then
+    raise exception 'Only people who were in the group when this proof was posted can vote';
   end if;
   -- Votes on one proof take turns from here on (see recount_group_proof).
   perform 1 from public.group_messages g where g.id = p.id for no key update;
@@ -274,6 +285,11 @@ grant execute on function public.vote_group_proof(uuid, boolean, uuid) to authen
 -- ---------------------------------------------------------------------
 -- 6. Leaving the group takes your votes with you
 -- ---------------------------------------------------------------------
+-- (Second lock for the "already in the group" rule in step 5: app users can't add or change member rows –
+-- there are no rules that let them, and from now on no table rights either. Adding people and the read and
+-- mute marks still work: they go through the server's own functions. Leaving or removing someone still works.)
+revoke insert, update on table public.peek_group_members from anon, authenticated;
+
 -- A vote only counts while the voter is in the group. When someone leaves or is removed, their votes on that
 -- group's proofs go, and the trigger in step 3 counts the totals again (everyone sees them change live).
 create or replace function private.drop_votes_of_leaver()
@@ -348,6 +364,18 @@ create trigger group_proofs_lock_before_delete before delete on public.profiles
 -- one of the two sent and the other did, with a proof that counts right now. Its time is when the proof was
 -- posted. Several counting proofs for one dare count once (the first one). Your own dare never counts.
 -- When the votes change and a proof stops counting, it stops counting here too.
+-- If the Peekaboo+ streak (20261218000000_plus_extras.sql: private.dare_streak_since, which also knows
+-- Peek-a-Saves) is already in the database, it is kept as it is: it counts group dares by itself as soon as
+-- private.group_proof_counts (step 1) exists, with the same rule as below. Replacing it here would take
+-- Peek-a-Save out of the streak. (In filename order this file runs first, so this only matters when the files
+-- are applied to a database out of order, e.g. Peekaboo+ before this one.)
+do $streak$
+begin
+  if to_regprocedure('private.dare_streak_since(uuid,uuid,timestamptz)') is not null then
+    raise notice 'The Peekaboo+ dare streak is already in the database, so private.dare_streak stays as it is';
+    return;
+  end if;
+  execute $sql$
 create or replace function private.dare_streak(a uuid, b uuid)
 returns int language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -374,6 +402,9 @@ begin
   return streak;
 end;
 $$;
+$sql$;
+end;
+$streak$;
 
 -- ---------------------------------------------------------------------
 -- 9. A proof's push and Chat list line no longer say the dare is done

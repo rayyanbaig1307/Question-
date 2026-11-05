@@ -410,6 +410,20 @@ try {
         const refused = await voteAs(user, true, expected);
         assert.equal(refused.status, 400, `${user}: ${refused.status} ${JSON.stringify(refused.data)}`); assert.equal(refused.data.message, message);
       }
+      // Someone added to the group after the proof was posted can't vote on it (only people who were there).
+      await friend(db, users[9], users[37]);
+      await own(9, 'select add_to_peek_group($1,$2::uuid[],current_date)', [crew, [users[37]]]);
+      const late = await voteAs(37, true);
+      assert.equal(late.status, 400, JSON.stringify(late.data)); assert.equal(late.data.message, 'Only people who were in the group when this proof was posted can vote');
+      // ...and can't move their join time back, or add a member row of their own, to get around that.
+      const joinedBefore = (await db.query('select joined_at from peek_group_members where group_id=$1 and user_id=$2', [crew, users[37]])).rows[0].joined_at;
+      const moved = await request(`peek_group_members?group_id=eq.${crew}&user_id=eq.${users[37]}`, { user: 37, method: 'PATCH', body: { joined_at: '2020-01-01T00:00:00Z' } });
+      assert.ok([401, 403].includes(moved.status), `PATCH joined_at ${moved.status} ${JSON.stringify(moved.data)}`);
+      const added = await request('peek_group_members', { user: 3, method: 'POST', body: { group_id: crew, user_id: users[3], added_by: users[9], joined_day: '2020-01-01', joined_at: '2020-01-01T00:00:00Z' } });
+      assert.ok([401, 403].includes(added.status), `POST member ${added.status} ${JSON.stringify(added.data)}`);
+      assert.deepEqual((await db.query('select joined_at from peek_group_members where group_id=$1 and user_id=$2', [crew, users[37]])).rows[0].joined_at, joinedBefore);
+      assert.equal((await db.query('select count(*)::int as n from peek_group_members where group_id=$1 and user_id=$2', [crew, users[3]])).rows[0].n, 0);
+      assert.equal((await voteAs(37, true)).data.message, 'Only people who were in the group when this proof was posted can vote');
       const visitor = await request('rpc/vote_group_proof', { user: null, method: 'POST', body: { proof: proofId, legit: true, expected_user_id: users[15] } });
       assert.ok([401, 403, 404].includes(visitor.status), `visitor ${visitor.status}`);
       // The totals, as every member reads them over REST; nobody outside the group sees the proof.
@@ -432,10 +446,15 @@ try {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
         global: { headers: { Authorization: `Bearer ${token(15)}` }, fetch: (url, init) => fetch(String(url).replace('http://local.invalid/rest/v1', runtime.base), init) },
       });
-      const { voteGroupProof, fetchMyProofVotes } = loadLibrary('groupChat', { supabase, mocks: { './media': {} } });
+      const { voteGroupProof, fetchMyProofVotes, fetchMyGroupJoin } = loadLibrary('groupChat', { supabase, mocks: { './media': {} } });
       // (The library runs in its own sandbox, so its answers are copied into plain values before comparing.)
       const plain = (value) => JSON.parse(JSON.stringify(value));
       assert.deepEqual(plain([...(await fetchMyProofVotes(users[15], [proofId]))]), [[proofId, true]]);
+      // Your join time, as the app reads it (for hiding the buttons on proofs from before you joined).
+      const myJoin = await fetchMyGroupJoin(crew, users[15]);
+      const realJoin = (await db.query('select joined_at from peek_group_members where group_id=$1 and user_id=$2', [crew, users[15]])).rows[0].joined_at;
+      assert.equal(Date.parse(myJoin), realJoin.getTime());
+      assert.equal(await fetchMyGroupJoin(crew, users[3]), null, 'not in the group: no join time');
       assert.deepEqual(plain(await voteGroupProof(users[15], proofId, null)), { legit: 0, cap: 1, mine: null, legacy: false });
       assert.equal((await fetchMyProofVotes(users[15], [proofId])).size, 0);
       assert.deepEqual(plain(await voteGroupProof(users[15], proofId, true)), { legit: 1, cap: 1, mine: true, legacy: false });

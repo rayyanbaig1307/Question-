@@ -61,6 +61,8 @@ async function pushTo(i) {
   return token;
 }
 const pushesTo = async (token) => (await db.query("select body->0->>'title' as title, body->0->>'body' as body from net.sent where body->0->>'to' = $1 order by id", [token])).rows;
+// The local database's clock counts whole milliseconds: wait a moment so that "added after the proof" really is later.
+const waitAMoment = () => new Promise((resolve) => setTimeout(resolve, 5));
 const at = (proof, days) => db.query(`update group_messages set created_at = now() - interval '${days} days' where id = $1`, [proof]);
 
 // ---------------------------------------------------------------------------
@@ -187,15 +189,64 @@ test('Many votes, one after another in any order, keep the totals equal to the v
   }
 });
 
-test('A vote only counts while the voter is in the group: spare accounts that join, vote and leave change nothing', async () => {
+test('Only people who were in the group when the proof was posted can vote; nobody can fake their join time', async () => {
+  const grp = await makeGroup([1, 2]);
+  const proof = await proofFrom(grp, 1, (await dareFrom(grp, 0)).id);
+  // users[3] is added after the proof was posted: refused, with a clear message, and nothing is saved.
+  await waitAMoment();
+  await friend(db, users[0], users[3]);
+  await rpc(0, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[3]]]);
+  const later = 'Only people who were in the group when this proof was posted can vote';
+  assert.equal(await failure(vote(3, proof.id, true)), later);
+  assert.equal(await failure(vote(3, proof.id, false)), later);
+  assert.equal(await failure(vote(3, proof.id, null)), later);
+  assert.deepEqual(await counted(proof.id), { legit: 0, cap: 0 });
+  // Everyone who was already there can.
+  assert.deepEqual(await vote(2, proof.id, true), { legit: 1, cap: 0, mine: true });
+  assert.deepEqual(await vote(0, proof.id, false), { legit: 1, cap: 1, mine: false });
+  // A proof posted after users[3] joined: they can vote on that one.
+  const newer = await proofFrom(grp, 1, proof.dare_id);
+  assert.deepEqual(await vote(3, newer.id, true), { legit: 1, cap: 0, mine: true });
+  // Exactly the same moment counts as "already in the group"; a moment later doesn't.
+  const posted = (await db.query('select created_at from group_messages where id = $1', [proof.id])).rows[0].created_at;
+  await db.query('update peek_group_members set joined_at = $3 where group_id = $1 and user_id = $2', [grp, users[3], posted]);
+  assert.deepEqual(await vote(3, proof.id, true), { legit: 2, cap: 1, mine: true });
+  await db.query("update peek_group_members set joined_at = $3::timestamptz + interval '1 microsecond' where group_id = $1 and user_id = $2", [grp, users[3], posted]);
+  assert.equal(await failure(vote(3, proof.id, false)), later);
+  assert.deepEqual(await counted(proof.id), { legit: 2, cap: 1 }, 'the refused change left the earlier vote as it was');
+  // The app can't add a member row with an earlier join time, or move its own join time back.
+  await friend(db, users[0], users[4]);
+  assert.match(await failure(rpc(4, "insert into peek_group_members(group_id,user_id,added_by,joined_day,joined_at) values($1,$2,$3,current_date,now() - interval '1 day')",
+    [grp, users[4], users[0]])), /permission denied/);
+  assert.match(await failure(rpc(3, "update peek_group_members set joined_at = now() - interval '1 day' where group_id = $1 and user_id = $2", [grp, users[3]])), /permission denied/);
+  assert.match(await failure(rpc(3, "update peek_group_members set chat_muted = true where group_id = $1 and user_id = $2", [grp, users[3]])), /permission denied/);
+  assert.equal((await db.query('select count(*)::int as n from peek_group_members where group_id = $1 and user_id = $2', [grp, users[4]])).rows[0].n, 0);
+  // The server's own ways of changing member rows still work: adding people, read marks, mute, leaving.
+  await waitAMoment();
+  await rpc(0, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[4]]]);
+  await rpc(3, 'select mark_group_chat_read($1)', [grp]);
+  await rpc(3, 'select set_group_chat_muted($1, true)', [grp]);
+  assert.equal((await db.query('select chat_muted from peek_group_members where group_id = $1 and user_id = $2', [grp, users[3]])).rows[0].chat_muted, true);
+  assert.equal(await failure(vote(4, proof.id, true)), later);
+  await rpc(4, 'delete from peek_group_members where group_id = $1 and user_id = $2', [grp, users[4]]);
+  assert.equal((await db.query('select count(*)::int as n from peek_group_members where group_id = $1 and user_id = $2', [grp, users[4]])).rows[0].n, 0);
+});
+
+test('A vote only counts while the voter is in the group: spare accounts can\'t join to vote, or vote and leave', async () => {
   // The dare sender 0, the doer 1 and members 2 and 3, who all say cap.
   const grp = await makeGroup([1, 2, 3]);
+  // Spare accounts (friends of the doer) the doer added before posting the proof.
+  for (const puppet of [5, 6]) await friend(db, users[1], users[puppet]);
+  await rpc(1, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[5], users[6]]]);
   const proof = await proofFrom(grp, 1, (await dareFrom(grp, 0)).id);
   for (const i of [0, 2, 3]) await vote(i, proof.id, false);
-  // The doer brings in spare accounts (friends of theirs) one at a time: each joins, votes legit and leaves.
-  for (const puppet of [5, 6, 7]) {
-    await friend(db, users[1], users[puppet]);
-    await rpc(1, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[puppet]]]);
+  // Spare accounts brought in after the proof can't vote on it at all.
+  await waitAMoment();
+  await friend(db, users[1], users[7]);
+  await rpc(1, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[7]]]);
+  assert.match(await failure(vote(7, proof.id, true)), /were in the group when this proof was posted/);
+  // The ones added before vote legit and leave one at a time: each vote goes with them.
+  for (const puppet of [5, 6]) {
     assert.equal((await vote(puppet, proof.id, true)).legit, 1);
     await rpc(puppet, 'delete from peek_group_members where group_id = $1 and user_id = $2', [grp, users[puppet]]);
     assert.deepEqual(await totals(proof.id), { legit: 0, cap: 3, legacy: false });
@@ -206,10 +257,14 @@ test('A vote only counts while the voter is in the group: spare accounts that jo
   // Someone the group's maker removes loses their votes too, and the totals are counted again.
   await rpc(0, 'delete from peek_group_members where group_id = $1 and user_id = $2', [grp, users[3]]);
   assert.deepEqual(await totals(proof.id), { legit: 0, cap: 2, legacy: false });
-  // Back in the group: they can vote again (their old vote is not remembered).
+  // Back in the group: their old vote is not remembered, and they count as joining now, so they can't vote
+  // again on that proof (only on newer ones).
+  await waitAMoment();
   await rpc(0, 'select add_to_peek_group($1,$2::uuid[],current_date)', [grp, [users[3]]]);
   assert.deepEqual((await rpc(3, 'select * from group_proof_votes')).rows, []);
-  assert.deepEqual(await vote(3, proof.id, true), { legit: 1, cap: 2, mine: true });
+  assert.match(await failure(vote(3, proof.id, true)), /were in the group when this proof was posted/);
+  const newer = await proofFrom(grp, 1, proof.dare_id);
+  assert.deepEqual(await vote(3, newer.id, true), { legit: 1, cap: 0, mine: true });
 });
 
 test('Leaving one group keeps your votes in your other groups, and the votes on your own proofs', async () => {
@@ -303,6 +358,40 @@ test('The streak mixes group dares with one-to-one chat dares and keeps the 3-da
   const again = await proofFrom(grp, 1, first.dare_id);
   await vote(2, again.id, true);
   assert.equal(await streak(0, 1), 3);
+});
+
+test('Applied after the Peekaboo+ streak (out of filename order), this update keeps that streak instead of replacing it', async () => {
+  // A database where a Peekaboo+-style streak (private.dare_streak_since, as in 20261218000000_plus_extras.sql)
+  // is already in place before this update arrives. (A stand-in with a marker answer, so it is easy to spot.)
+  const other = await initializeDatabase(await PGlite.create(), { includeFixes: false });
+  try {
+    for (const name of await remainingMigrations()) if (name < VOTES_MIGRATION) await applyMigrationFile(other, name);
+    await other.exec(`
+      create function private.dare_streak_since(a uuid, b uuid, since timestamptz) returns int
+        language sql stable security definer set search_path = '' as $$ select 77 $$;
+      create or replace function private.dare_streak(a uuid, b uuid) returns int
+        language sql stable security definer set search_path = '' as $$ select private.dare_streak_since(a, b, now()) $$;`);
+    const source = async () => (await other.query("select prosrc from pg_proc where oid = 'private.dare_streak(uuid,uuid)'::regprocedure")).rows[0].prosrc;
+    const before = await source();
+    await applyMigrationFile(other, VOTES_MIGRATION);
+    assert.equal(await source(), before, 'the Peekaboo+ streak was replaced');
+    assert.equal((await other.query('select private.dare_streak(gen_random_uuid(), gen_random_uuid()) as n')).rows[0].n, 77);
+    // The rest of this update is in place (the votes and the "does it count" rule the Peekaboo+ streak uses).
+    assert.ok((await other.query("select to_regprocedure('private.group_proof_counts(integer,integer,boolean)') as f")).rows[0].f);
+    assert.ok((await other.query("select to_regclass('public.group_proof_votes') as t")).rows[0].t);
+    // Running this update again still leaves it alone.
+    await applyMigrationFile(other, VOTES_MIGRATION);
+    assert.equal(await source(), before);
+  } finally { await other.close(); }
+  // In filename order this update brings its own streak with group dares (see above). Once the Peekaboo+
+  // update (20261218000000) is in too, its streak takes over and adds group dares through streak_moments_sql.
+  const ordinary = (await db.query("select prosrc from pg_proc where oid = 'private.dare_streak(uuid,uuid)'::regprocedure")).rows[0].prosrc;
+  if (/dare_streak_since/.test(ordinary)) {
+    const moments = (await db.query("select prosrc from pg_proc where oid = 'private.streak_moments_sql(boolean)'::regprocedure")).rows[0].prosrc;
+    assert.match(moments, /group_proof_counts/);
+  } else {
+    assert.match(ordinary, /group_proof_counts/);
+  }
 });
 
 test('A proof for your own dare never feeds a streak with yourself, but the group still votes on it', async () => {
