@@ -1,7 +1,7 @@
 <title>Peekaboo+ Look Book</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&family=Permanent+Marker&family=Bungee&family=Caveat:wght@700&family=Special+Elite&family=Anton&display=swap">
 <style>
 /* Layout: a phone-first look book – one band per thing Peekaboo+ unlocks, each a row of tappable swatches. */
 :root {
@@ -183,6 +183,88 @@ h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; 
 .neon { font-family: var(--display); font-weight: 700; font-size: 20px; color: #fff; padding: 4px 10px; border: 2px solid var(--n); border-radius: 10px;
   text-shadow: 0 0 6px var(--n), 0 0 14px var(--n); box-shadow: 0 0 10px var(--n), inset 0 0 8px var(--n); background: #120C1C; }
 .stk { overflow: visible; }
+
+
+/* ---- Text tool mock ---- */
+.tt-wrap { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.tt-phone { width: 300px; max-width: 100%; aspect-ratio: 9 / 19; border-radius: 36px; border: 7px solid #0F0A16; position: relative; overflow: hidden; background: #111; color: #fff; flex: none; }
+.tt-photo { position: absolute; inset: 0; background: radial-gradient(circle at 30% 30%, #6B4FA8, transparent 55%), radial-gradient(circle at 75% 60%, #FF6F91, transparent 50%), #1B1428; filter: brightness(0.55); }
+.tt-top { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; font-family: var(--display); font-weight: 600; }
+.tt-x { width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.4); display: grid; place-items: center; }
+.tt-done { background: linear-gradient(135deg, #FF3D8E, #8A4DFF); padding: 5px 14px; border-radius: 999px; font-size: 15px; }
+.tt-size { position: absolute; left: 10px; top: 90px; height: 170px; width: 8px; border-radius: 4px; background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.15)); clip-path: polygon(0 0, 100% 0, 60% 100%, 40% 100%); }
+.tt-size span { position: absolute; left: -6px; top: 50px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+.tt-text { position: absolute; left: 22px; right: 58px; top: 160px; text-align: center; font-family: "Permanent Marker", cursive; font-size: 30px; line-height: 1.1;
+  color: #FFE14D; text-shadow: 0 0 10px rgba(255,225,77,0.8), 0 0 22px rgba(255,61,142,0.6); }
+.tt-word { display: block; white-space: nowrap; }
+.tt-o { display: inline-flex; width: 0.78em; height: 0.78em; margin: 0 1px; border-radius: 50%; background: #fff; border: 3px solid #1B1428; position: relative; vertical-align: -0.05em; }
+.tt-o i { position: absolute; width: 50%; height: 50%; border-radius: 50%; background: #1B1428; left: 30%; top: 24%; animation: wob 1.6s ease-in-out infinite; }
+@keyframes wob { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-2px, 2px); } }
+.tt-emoji { display: block; font-size: 30px; }
+.tt-dock { position: absolute; right: 10px; top: 70px; display: flex; flex-direction: column; gap: 8px; background: rgba(20,14,30,0.72); padding: 8px 6px; border-radius: 22px; }
+.tt-tool { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 16px; }
+.tt-tool.on { background: #fff; color: #1B1428; }
+.tt-wheel { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(#FF3D8E, #FFE14D, #3DDC97, #38B6FF, #9B5CFF, #FF3D8E); }
+.tt-bgicon { width: 20px; height: 20px; border-radius: 6px; background: #fff; color: #1B1428; font-size: 12px; display: grid; place-items: center; }
+.tt-styles { position: absolute; left: 0; right: 0; bottom: 178px; display: flex; gap: 8px; overflow: hidden; padding-left: 14px; }
+.tt-style { flex: none; padding: 6px 14px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.35); font-size: 15px; white-space: nowrap; }
+.tt-style.on { background: #fff; color: #1B1428; border-color: #fff; }
+.tt-quick { position: absolute; left: 0; right: 0; bottom: 136px; display: flex; gap: 6px; padding-left: 14px; overflow: hidden; }
+.tt-quick span { flex: none; font-size: 12px; font-weight: 800; padding: 5px 10px; border-radius: 12px; background: rgba(255,255,255,0.12); }
+.tt-keys { position: absolute; left: 0; right: 0; bottom: 0; height: 126px; background: #2A2433; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 18px 18px 0 0; }
+.tt-keys i { flex: 1; border-radius: 6px; background: repeating-linear-gradient(90deg, #4A4256 0 22px, transparent 22px 26px); }
+.tt-notes { flex: 1 1 280px; display: grid; gap: 14px; min-width: 0; }
+.tt-note { display: flex; flex-direction: column; gap: 2px; }
+.tt-note .note { margin: 0; font-size: 14px; }
+
+/* ---- Viral stickers ---- */
+.vgrid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.vs { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.vs > div:first-child { background: radial-gradient(circle at 30% 20%, #3A2A5E, #1B1428 80%); border-radius: 22px; padding: 22px 18px; min-height: 170px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
+.v-q { font-family: var(--display); font-weight: 600; color: #fff; font-size: 16px; text-align: center; }
+.v-poll { }
+.v-opt { position: relative; width: 100%; background: #fff; border-radius: 14px; padding: 9px 12px; display: flex; justify-content: space-between; font-weight: 800; color: #1B1428; overflow: hidden; font-size: 14px; }
+.v-opt b { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #FFD6EA, #E2D2FF); }
+.v-opt span, .v-opt em { position: relative; font-style: normal; }
+.v-ask { }
+.v-ask-h { background: linear-gradient(135deg, #FF3D8E, #8A4DFF); color: #fff; font-family: var(--display); font-weight: 700; width: 100%; text-align: center; padding: 10px; border-radius: 16px 16px 0 0; }
+.v-ask-in { background: #fff; color: #9A8FAD; width: 100%; text-align: center; padding: 14px; border-radius: 0 0 16px 16px; margin-top: -10px; font-weight: 700; }
+.v-dare-h { font-family: Bungee, var(--display); font-size: 24px; color: #FFE14D; text-shadow: 0 3px 0 #FF3D8E; }
+.v-dare-b { background: #FFE14D; color: #1B1428; font-weight: 800; padding: 8px 18px; border-radius: 999px; }
+.v-dare-c { color: #CFC3E6; font-size: 13px; font-weight: 700; }
+.v-count { color: #fff; font-weight: 800; text-align: center; }
+.v-digits { font-family: var(--display); font-size: 34px; font-weight: 700; display: flex; gap: 4px; align-items: center; }
+.v-digits b { background: rgba(255,255,255,0.12); border-radius: 10px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+.v-remind { font-size: 13px; background: #fff; color: #1B1428; padding: 6px 14px; border-radius: 999px; }
+.v-track { position: relative; width: 100%; height: 12px; border-radius: 6px; background: rgba(255,255,255,0.18); }
+.v-track b { position: absolute; inset: 0 30% 0 0; border-radius: 6px; background: linear-gradient(90deg, #FFE14D, #FF7A1F, #FF3D8E); }
+.v-knob { position: absolute; left: 70%; top: 50%; transform: translate(-50%, -50%); font-size: 30px; animation: hop 1.8s ease-in-out infinite; }
+@keyframes hop { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -62%) scale(1.15); } }
+.v-nums { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.v-nums i { font-style: normal; width: 26px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.14); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.v-nums i.on { background: #FF3D8E; transform: scale(1.15); }
+.v-turn-h { font-family: Anton, var(--display); font-size: 26px; color: #fff; letter-spacing: 1px; }
+.v-turn-t { background: #fff; color: #1B1428; font-weight: 800; padding: 6px 12px; border-radius: 10px; font-size: 14px; }
+.v-faces { display: flex; align-items: center; color: #CFC3E6; font-size: 13px; font-weight: 700; gap: 6px; }
+.v-faces i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #1B1428; margin-right: -12px; background: linear-gradient(135deg, #FFB86B, #FF3D8E); }
+.v-faces i:nth-child(2) { background: linear-gradient(135deg, #38B6FF, #8A4DFF); }
+.v-faces i:nth-child(3) { background: linear-gradient(135deg, #3DDC97, #1E9BEA); }
+.v-faces span { margin-left: 16px; }
+.v-guess span:first-child { color: #fff; font-family: var(--display); font-weight: 600; font-size: 18px; }
+.v-guess-b { background: repeating-linear-gradient(45deg, #FFE14D 0 10px, #F5C400 10px 20px); color: #1B1428; font-weight: 800; padding: 8px 18px; border-radius: 12px; }
+.v-emo { display: flex; gap: 10px; }
+.v-emo i { font-style: normal; font-size: 28px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.14); display: grid; place-items: center; }
+.v-tags { flex-direction: row !important; flex-wrap: wrap; }
+.v-mention { background: #fff; color: #8A4DFF; font-family: var(--display); font-weight: 700; font-size: 20px; padding: 6px 14px; border-radius: 12px; transform: rotate(-4deg); }
+.v-spot { background: linear-gradient(135deg, #FF3D8E, #FF8A3D); color: #fff; font-weight: 800; padding: 6px 12px; border-radius: 999px; transform: rotate(3deg); }
+.v-song { flex-direction: row !important; gap: 12px !important; }
+.v-art { width: 54px; height: 54px; border-radius: 12px; background: conic-gradient(#FF3D8E, #8A4DFF, #38B6FF, #FF3D8E); flex: none; }
+.v-songtxt { display: flex; flex-direction: column; color: #fff; font-size: 13px; }
+.v-songtxt b { font-size: 15px; }
+.v-play { width: 34px; height: 34px; border-radius: 50%; background: #fff; color: #1B1428; display: grid; place-items: center; font-size: 13px; }
+.v-secret span:first-child { color: #fff; font-weight: 800; }
+.v-blur { color: #fff; font-family: var(--display); font-weight: 600; font-size: 18px; filter: blur(5px); background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { .tt-o i, .v-knob { animation: none; } }
 
 footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -435,6 +517,108 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
         <div class="stk"><span class="stamp" style="background:#3DDC97;color:#0E3B33;transform:rotate(4deg)">VIBES ✌️</span></div>
         <div class="stk"><span class="ticket" style="--tk:#FF8A3D;color:#fff">SUNDAY<br>RESET</span></div>
         <div class="stk"><span class="burst" style="background:#FF3D8E;color:#fff;font-size:22px">OMG</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEXT TOOL -->
+  <section>
+    <h2>New text tool</h2>
+    <p class="sub">A Peekaboo-style way to add words to photos and videos. The tools sit in a dock down the right side, the styles are round bubbles, and the 👀 Eyes switch turns every "o" into googly eyes.</p>
+    <div class="tt-wrap">
+      <div class="tt-phone">
+        <div class="tt-photo" aria-hidden="true"></div>
+        <div class="tt-top"><span class="tt-x">✕</span><span class="tt-done">Done ✓</span></div>
+        <div class="tt-size" aria-hidden="true"><span></span></div>
+        <div class="tt-text"><span class="tt-word">n<span class="tt-o"><i></i></span> cap</span><span class="tt-word">l<span class="tt-o"><i></i></span><span class="tt-o"><i></i></span>k at this</span><span class="tt-emoji">😤</span></div>
+        <div class="tt-dock" aria-label="Text tools">
+          <span class="tt-tool on" title="Style">Aa</span>
+          <span class="tt-tool" title="Colour"><b class="tt-wheel"></b></span>
+          <span class="tt-tool" title="Effect">✨</span>
+          <span class="tt-tool" title="Animate">🎬</span>
+          <span class="tt-tool" title="Align">☰</span>
+          <span class="tt-tool" title="Background"><b class="tt-bgicon">A</b></span>
+          <span class="tt-tool" title="Googly o's">👀</span>
+        </div>
+        <div class="tt-styles">
+          <span class="tt-style" style="font-family:Fredoka,sans-serif;font-weight:700">Bubbly</span>
+          <span class="tt-style on" style="font-family:'Permanent Marker',cursive">Marker</span>
+          <span class="tt-style" style="font-family:Bungee,sans-serif">RETRO</span>
+          <span class="tt-style" style="font-family:Caveat,cursive;font-size:20px">Diary</span>
+          <span class="tt-style" style="font-family:'Special Elite',monospace">Typed</span>
+          <span class="tt-style" style="font-family:Anton,sans-serif">LOUD</span>
+        </div>
+        <div class="tt-quick">
+          <span>@ Tag a friend</span><span>🎯 Dare</span><span>📍 Spot</span><span>🎵 Song</span>
+        </div>
+        <div class="tt-keys" aria-hidden="true"><i></i><i></i><i></i></div>
+      </div>
+      <div class="tt-notes">
+        <div class="tt-note"><span class="label">Aa · 6 text styles</span><span class="note">Bubbly, Marker, Retro, Diary, Typed and Loud. Each one gets its own Peekaboo name.</span></div>
+        <div class="tt-note"><span class="label">🎨 Colour</span><span class="note">A colour wheel plus quick brand colours. Tap the dropper to pick a colour from the photo.</span></div>
+        <div class="tt-note"><span class="label">✨ Effect</span><span class="note">None, Glow, Neon, Outline, Shadow and 3D Pop.</span></div>
+        <div class="tt-note"><span class="label">🎬 Animate</span><span class="note">For videos and stories: Pop in, Bounce, Wiggle, Typewriter and Peek (it peeks up from the bottom).</span></div>
+        <div class="tt-note"><span class="label">☰ Align &amp; ▢ Background</span><span class="note">Left, middle or right. Background: none, soft pill, solid block or see-through.</span></div>
+        <div class="tt-note"><span class="label">👀 Googly o's</span><span class="note">Only on Peekaboo: every "o" becomes a pair of googly eyes that wobble.</span></div>
+        <div class="tt-note"><span class="label">Size slider</span><span class="note">Slide up and down on the left edge to make the words bigger or smaller.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIRAL STICKERS -->
+  <section>
+    <h2>Viral stickers</h2>
+    <p class="sub">Stickers your friends can tap. Every tap sends them back into the app, which is how a story gets people talking. My advice: keep these free for everyone, because they bring people in.</p>
+    <div class="vgrid">
+      <div class="vs">
+        <div class="v-poll"><span class="v-q">is this legit or cap? 🤔</span>
+          <div class="v-opt"><b style="width:68%"></b><span>Legit ✅</span><em>68%</em></div>
+          <div class="v-opt"><b style="width:32%"></b><span>Cap 🧢</span><em>32%</em></div></div>
+        <span class="label">Legit or Cap?</span><span class="note">A 2-choice poll. You see who voted what.</span>
+      </div>
+      <div class="vs">
+        <div class="v-ask"><span class="v-ask-h">ask me anything 👀</span><span class="v-ask-in">type something…</span></div>
+        <span class="label">Ask Me</span><span class="note">Friends send questions; you answer on your next story.</span>
+      </div>
+      <div class="vs">
+        <div class="v-dare"><span class="v-dare-h">🎯 DARE ME</span><span class="v-dare-b">Send a dare</span><span class="v-dare-c">9 dares waiting</span></div>
+        <span class="label">Dare Me</span><span class="note">Friends tap it to send you a dare in chat.</span>
+      </div>
+      <div class="vs">
+        <div class="v-count"><span>🔔 next drop in</span><div class="v-digits"><b>02</b>:<b>14</b>:<b>09</b></div><span class="v-remind">Remind me</span></div>
+        <span class="label">Countdown</span><span class="note">Counts down to anything. Friends can ask to be reminded.</span>
+      </div>
+      <div class="vs">
+        <div class="v-hype"><span class="v-q">how hype is this?</span><div class="v-track"><b></b><span class="v-knob">🔥</span></div></div>
+        <span class="label">Hype Meter</span><span class="note">Slide the fire to vote. You see the average.</span>
+      </div>
+      <div class="vs">
+        <div class="v-rate"><span class="v-q">rate my fit</span><div class="v-nums"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i>6</i><i>7</i><i class="on">8</i><i>9</i><i>10</i></div></div>
+        <span class="label">Rate Me</span><span class="note">1 to 10. Only you see the scores.</span>
+      </div>
+      <div class="vs">
+        <div class="v-turn"><span class="v-turn-h">YOUR TURN 👉</span><span class="v-turn-t">show your lock screen</span><div class="v-faces"><i></i><i></i><i></i><span>+24 joined</span></div></div>
+        <span class="label">Your Turn</span><span class="note">Start a chain. Friends post theirs and it spreads.</span>
+      </div>
+      <div class="vs">
+        <div class="v-guess"><span>🕵️ who took this?</span><span class="v-guess-b">Tap to guess</span></div>
+        <span class="label">Guess Who</span><span class="note">Friends guess who posted it, like the Guess Who game.</span>
+      </div>
+      <div class="vs">
+        <div class="v-vibe"><span class="v-q">vibe check</span><div class="v-emo"><i>😭</i><i>😐</i><i>😍</i></div></div>
+        <span class="label">Vibe Check</span><span class="note">3 emoji to pick from, and you see the results.</span>
+      </div>
+      <div class="vs">
+        <div class="v-tags"><span class="v-mention">@ayaan</span><span class="v-spot">📍 Milton</span></div>
+        <span class="label">Tag &amp; Spot</span><span class="note">Tag a friend (they get a ping) or show where you are, roughly.</span>
+      </div>
+      <div class="vs">
+        <div class="v-song"><span class="v-art"></span><span class="v-songtxt"><b>Song name</b><span>Artist</span></span><span class="v-play">▶</span></div>
+        <span class="label">Now Playing</span><span class="note">A 30-second song preview friends can play.</span>
+      </div>
+      <div class="vs">
+        <div class="v-secret"><span>🤫 tap to reveal</span><span class="v-blur">i have a crush on…</span></div>
+        <span class="label">Secret</span><span class="note">Blurred text that friends tap to read.</span>
       </div>
     </div>
   </section>
