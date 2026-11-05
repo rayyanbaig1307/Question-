@@ -41,6 +41,10 @@ export function friendlyError(error: unknown): string {
   if (lower.includes("drop hasn't happened yet")) {
     return "Today's Peekaboo drop hasn't happened yet – wait for the notification! 👀";
   }
+  // The store said no because a file is over its size limit (30 MB).
+  if (lower.includes('exceeded the maximum allowed size') || lower.includes('payload too large')) {
+    return 'That file is too big to send (the most is 30 MB). Try a shorter video.';
+  }
   if (lower.includes('row-level security')) {
     return "You don't have permission to do that.";
   }

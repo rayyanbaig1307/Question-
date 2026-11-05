@@ -19,6 +19,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { ChatBackground, ChatInkProvider, chatInk } from '@/components/chat/ChatBackground';
+import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
@@ -33,6 +35,7 @@ import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { KeyboardSafeView } from '@/components/KeyboardSafeView';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
+import { groupChatKey, useChatBackground } from '@/lib/chatBackgrounds';
 import { friendlyError } from '@/lib/errors';
 import {
   canVoteOnProof,
@@ -80,6 +83,10 @@ export default function GroupChat() {
   const { userId } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
+  // Your moving background for this group chat (Peekaboo+ ⭐). Only you see it.
+  const background = useChatBackground(groupChatKey(groupId));
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  const ink = chatInk(background.shown);
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState<PeekGroup | null | undefined>(undefined);
   const [messages, setMessages] = useState<GroupMessage[] | null>(null);
@@ -473,6 +480,7 @@ export default function GroupChat() {
         ...(group?.photo_path ? [{ label: 'Remove group photo', onPress: () => changePhoto(true) }] : []),
         { label: '✏️ Change name & people', onPress: () => router.push({ pathname: '/groups/new', params: { group: groupId } }) },
         { label: '👯 Group info & drops', onPress: () => router.push(`/groups/${groupId}`) },
+        { label: '🎨 Chat background', onPress: () => setBackgroundOpen(true) },
         {
           label: muted ? '🔔 Unmute group chat' : '🔕 Mute group chat',
           onPress: async () => {
@@ -561,254 +569,273 @@ export default function GroupChat() {
         right={<RoundIconButton icon="ellipsis-horizontal" label="Group chat options" onPress={openGroupMenu} />}
       />
 
-      {search !== null ? (
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            value={search}
-            onChangeText={runSearch}
-            placeholder="Search this chat"
-            placeholderTextColor={colors.textMuted}
-            autoFocus
-            autoCapitalize="none"
-            keyboardAppearance={keyboardAppearance}
-            selectionColor={colors.accent}
-            style={styles.searchInput}
-          />
-          <Pressable
-            onPress={() => {
-              setSearch(null);
-              setResults(null);
-            }}
-            hitSlop={10}
-            accessibilityLabel="Close search">
-            <Text style={styles.searchCancel}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {pinnedMessage && search === null ? (
-        <Pressable style={styles.pinned} onPress={() => jumpTo(pinnedMessage)} accessibilityRole="button" accessibilityLabel="Go to the pinned message">
-          <Text style={styles.pinnedIcon}>📌</Text>
-          <Text style={styles.pinnedText} numberOfLines={1}>
-            <Text style={styles.pinnedName}>{pinnedMessage.sender_id === userId ? 'You' : nameOf(pinnedMessage.sender_id)}: </Text>
-            {previewOf(pinnedMessage)}
-          </Text>
-          <Pressable onPress={() => pin(null)} hitSlop={10} accessibilityLabel="Unpin">
-            <Ionicons name="close" size={18} color={colors.textMuted} />
-          </Pressable>
-        </Pressable>
-      ) : null}
-
-      <KeyboardSafeView style={styles.fill} bottomInset={insets.bottom} androidBehavior="padding">
-        {search !== null && search.trim() ? (
-          <FlatList
-            data={results?.query === search ? results.list : []}
-            keyExtractor={(m) => m.id}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.list}
-            ListEmptyComponent={
-              results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
-            }
-            renderItem={({ item }) => (
-              <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
-                <Text style={styles.resultName}>
-                  {item.sender_id === userId ? 'You' : nameOf(item.sender_id)} · {timeAgo(item.created_at)}
-                </Text>
-                <Text style={styles.resultText} numberOfLines={2}>
-                  {item.body}
-                </Text>
+      <ChatInkProvider ink={ink}>
+        {/* Under the top bar: keeps everything above the keyboard (KeyboardSafeView: on iPhone it lifts by the
+            keyboard's own height; on Android it is the same KeyboardAvoidingView as before, which must sit directly
+            under the top bar – not inside another box – or it works out the keyboard's overlap wrong).
+            bottomInset: no gap for the home-bar space under the message box. */}
+        <KeyboardSafeView style={styles.body} bottomInset={insets.bottom} androidBehavior="padding">
+          <ChatBackground id={background.shown} />
+          {search !== null ? (
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <TextInput
+                value={search}
+                onChangeText={runSearch}
+                placeholder="Search this chat"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                autoCapitalize="none"
+                keyboardAppearance={keyboardAppearance}
+                selectionColor={colors.accent}
+                style={styles.searchInput}
+              />
+              <Pressable
+                onPress={() => {
+                  setSearch(null);
+                  setResults(null);
+                }}
+                hitSlop={10}
+                accessibilityLabel="Close search">
+                <Text style={styles.searchCancel}>Cancel</Text>
               </Pressable>
-            )}
-          />
-        ) : messages === null ? (
-          <ActivityIndicator color={colors.accent} style={styles.loading} />
-        ) : messages.length === 0 ? (
-          <View style={styles.fill}>
-            <EmptyState emoji="💬" title="Say hi to the group!" message="Text, send a photo 📷, a voice note 🎤, or dare everyone 🚩." />
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            inverted
-            keyExtractor={(m) => m.id}
-            contentContainerStyle={styles.list}
-            keyboardDismissMode="interactive"
-            onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
-            renderItem={({ item, index }) => {
-              const mine = item.sender_id === userId;
-              const sender = people.get(item.sender_id);
-              const name = nameOf(item.sender_id);
-              // The list is upside down: the message "after" this one on screen is the one before it in time.
-              const older = messages[index + 1];
-              const firstOfRun = !older || older.sender_id !== item.sender_id;
-              const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
-              const myProof = item.kind === 'dare' ? myProofByDare.get(item.id) : undefined;
-              const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
-              return (
-                <View style={[styles.row, mine ? styles.right : styles.left]}>
-                  {!mine ? (
-                    <View style={styles.avatarSlot}>
-                      {firstOfRun ? <StoryAvatar person={sender} size={28} /> : null}
-                    </View>
-                  ) : null}
-                  <View style={[styles.bubbleWrap, item.kind === 'dare' && styles.dareWrap, mine ? styles.alignRight : styles.alignLeft]}>
-                    {!mine && firstOfRun ? <Text style={styles.sender}>{name}</Text> : null}
-                    {replied ? (
-                      <ReplyQuote name={replied.sender_id === userId ? 'You' : nameOf(replied.sender_id)} text={previewOf(replied)} mine={mine} />
-                    ) : null}
-                    <Pressable
-                      onLongPress={() => openMessageMenu(item)}
-                      onPress={item.media_path && item.kind !== 'voice' ? () => setViewing(item) : undefined}
-                      accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
-                      accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
-                      style={styles.stretch}>
-                      {item.kind === 'text' ? (
-                        <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                          <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
-                        </View>
-                      ) : item.kind === 'voice' ? (
-                        <VoiceBubble path={item.media_path} durationMs={item.audio_ms ?? 0} waveform={item.waveform} mine={mine} />
-                      ) : item.kind === 'dare' && proofs ? (
-                        <View style={[styles.dareCard, proofs.size >= memberCount && memberCount > 0 && styles.dareCardDone]}>
-                          <Text style={styles.dareLabel}>
-                            🎯 {mine ? 'YOU DARED THE GROUP' : `${name.toUpperCase()} DARED THE GROUP`}
-                          </Text>
-                          <Text style={styles.dareText}>{item.body}</Text>
-                          <Text style={styles.dareNote}>
-                            {proofs.size >= memberCount && memberCount > 0
-                              ? '🔥 Everyone did it!'
-                              : proofs.size === 0
-                                ? 'Nobody has done it yet'
-                                : `${proofs.size} of ${memberCount} did it: ${[...proofs].map((id) => (id === userId ? 'you' : nameOf(id))).join(', ')}`}
-                          </Text>
-                          {myProof && !proofs.has(userId) ? <Text style={styles.dareNote}>{myProofNote(myProof)}</Text> : null}
-                          {proofs.has(userId) ? (
-                            <Text style={styles.dareDone}>✅ You did it</Text>
-                          ) : (
-                            <Pressable
-                              onPress={() => openCamera(item.id)}
-                              style={({ pressed }) => [styles.dareButton, pressed && styles.pressed]}
-                              accessibilityRole="button"
-                              accessibilityLabel="Do it and post proof">
-                              <Ionicons name="camera" size={16} color={colors.onAccent} />
-                              <Text style={styles.dareButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                                Do it · post proof
-                              </Text>
-                            </Pressable>
-                          )}
-                        </View>
-                      ) : item.media_path ? (
-                        <View>
-                          {item.kind === 'proof' ? (
-                            <Text style={[styles.proofTag, !proofCounts(item) && (proofOutcome(item) === 'cap' ? styles.proofTagCap : styles.proofTagOpen)]}>
-                              {proofLabel(item)}
-                            </Text>
-                          ) : null}
-                          {item.media_type === 'video' ? (
-                            <VideoClip
-                              uri={urls[item.media_path] ?? ''}
-                              posterUri={item.poster_path ? urls[item.poster_path] : null}
-                              overlayUri={item.overlay_path ? urls[item.overlay_path] : null}
-                              playing={false}
-                              muted
-                              style={styles.media}
-                            />
-                          ) : (
-                            <Image source={{ uri: urls[item.media_path] }} style={styles.media} contentFit="cover" transition={150} />
-                          )}
+            </View>
+          ) : null}
+
+          {pinnedMessage && search === null ? (
+            <Pressable style={styles.pinned} onPress={() => jumpTo(pinnedMessage)} accessibilityRole="button" accessibilityLabel="Go to the pinned message">
+              <Text style={styles.pinnedIcon}>📌</Text>
+              <Text style={styles.pinnedText} numberOfLines={1}>
+                <Text style={styles.pinnedName}>{pinnedMessage.sender_id === userId ? 'You' : nameOf(pinnedMessage.sender_id)}: </Text>
+                {previewOf(pinnedMessage)}
+              </Text>
+              <Pressable onPress={() => pin(null)} hitSlop={10} accessibilityLabel="Unpin">
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </Pressable>
+          ) : null}
+
+          <View style={[styles.fill, background.shown ? styles.clear : null]}>
+            {search !== null && search.trim() ? (
+              <FlatList
+                data={results?.query === search ? results.list : []}
+                keyExtractor={(m) => m.id}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.list}
+                ListEmptyComponent={
+                  results?.query === search ? <Text style={styles.searchEmpty}>Nothing found for “{search.trim()}”</Text> : undefined
+                }
+                renderItem={({ item }) => (
+                  <Pressable style={styles.result} onPress={() => jumpTo(item)} accessibilityRole="button">
+                    <Text style={styles.resultName}>
+                      {item.sender_id === userId ? 'You' : nameOf(item.sender_id)} · {timeAgo(item.created_at)}
+                    </Text>
+                    <Text style={styles.resultText} numberOfLines={2}>
+                      {item.body}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            ) : messages === null ? (
+              <ActivityIndicator color={colors.accent} style={styles.loading} />
+            ) : messages.length === 0 ? (
+              <View style={[styles.fill, background.shown ? styles.clear : null]}>
+                {/* On a chat background the words sit on a soft card, so they're easy to read. */}
+                <View style={background.shown ? styles.emptyCard : null}>
+                  <EmptyState emoji="💬" title="Say hi to the group!" message="Text, send a photo 📷, a voice note 🎤, or dare everyone 🚩." />
+                </View>
+              </View>
+            ) : (
+              <FlatList
+                ref={listRef}
+                data={messages}
+                inverted
+                keyExtractor={(m) => m.id}
+                contentContainerStyle={styles.list}
+                keyboardDismissMode="interactive"
+                onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
+                renderItem={({ item, index }) => {
+                  const mine = item.sender_id === userId;
+                  const sender = people.get(item.sender_id);
+                  const name = nameOf(item.sender_id);
+                  // The list is upside down: the message "after" this one on screen is the one before it in time.
+                  const older = messages[index + 1];
+                  const firstOfRun = !older || older.sender_id !== item.sender_id;
+                  const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
+                  const myProof = item.kind === 'dare' ? myProofByDare.get(item.id) : undefined;
+                  const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
+                  return (
+                    <View style={[styles.row, mine ? styles.right : styles.left]}>
+                      {!mine ? (
+                        <View style={styles.avatarSlot}>
+                          {firstOfRun ? <StoryAvatar person={sender} size={28} /> : null}
                         </View>
                       ) : null}
-                    </Pressable>
+                      <View style={[styles.bubbleWrap, item.kind === 'dare' && styles.dareWrap, mine ? styles.alignRight : styles.alignLeft]}>
+                        {!mine && firstOfRun ? <Text style={[styles.sender, ink]}>{name}</Text> : null}
+                        {replied ? (
+                          <ReplyQuote name={replied.sender_id === userId ? 'You' : nameOf(replied.sender_id)} text={previewOf(replied)} mine={mine} />
+                        ) : null}
+                        <Pressable
+                          onLongPress={() => openMessageMenu(item)}
+                          onPress={item.media_path && item.kind !== 'voice' ? () => setViewing(item) : undefined}
+                          accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
+                          accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
+                          style={styles.stretch}>
+                          {item.kind === 'text' ? (
+                            <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                              <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
+                            </View>
+                          ) : item.kind === 'voice' ? (
+                            <VoiceBubble path={item.media_path} durationMs={item.audio_ms ?? 0} waveform={item.waveform} mine={mine} />
+                          ) : item.kind === 'dare' && proofs ? (
+                            <View style={[styles.dareCard, proofs.size >= memberCount && memberCount > 0 && styles.dareCardDone]}>
+                              <Text style={styles.dareLabel}>
+                                🎯 {mine ? 'YOU DARED THE GROUP' : `${name.toUpperCase()} DARED THE GROUP`}
+                              </Text>
+                              <Text style={styles.dareText}>{item.body}</Text>
+                              <Text style={styles.dareNote}>
+                                {proofs.size >= memberCount && memberCount > 0
+                                  ? '🔥 Everyone did it!'
+                                  : proofs.size === 0
+                                    ? 'Nobody has done it yet'
+                                    : `${proofs.size} of ${memberCount} did it: ${[...proofs].map((id) => (id === userId ? 'you' : nameOf(id))).join(', ')}`}
+                              </Text>
+                              {myProof && !proofs.has(userId) ? <Text style={styles.dareNote}>{myProofNote(myProof)}</Text> : null}
+                              {proofs.has(userId) ? (
+                                <Text style={styles.dareDone}>✅ You did it</Text>
+                              ) : (
+                                <Pressable
+                                  onPress={() => openCamera(item.id)}
+                                  style={({ pressed }) => [styles.dareButton, pressed && styles.pressed]}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Do it and post proof">
+                                  <Ionicons name="camera" size={16} color={colors.onAccent} />
+                                  <Text style={styles.dareButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                                    Do it · post proof
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </View>
+                          ) : item.media_path ? (
+                            <View>
+                              {item.kind === 'proof' ? (
+                                <Text style={[styles.proofTag, !proofCounts(item) && (proofOutcome(item) === 'cap' ? styles.proofTagCap : styles.proofTagOpen)]}>
+                                  {proofLabel(item)}
+                                </Text>
+                              ) : null}
+                              {item.media_type === 'video' ? (
+                                <VideoClip
+                                  uri={urls[item.media_path] ?? ''}
+                                  posterUri={item.poster_path ? urls[item.poster_path] : null}
+                                  overlayUri={item.overlay_path ? urls[item.overlay_path] : null}
+                                  playing={false}
+                                  muted
+                                  style={styles.media}
+                                />
+                              ) : (
+                                <Image source={{ uri: urls[item.media_path] }} style={styles.media} contentFit="cover" transition={150} />
+                              )}
+                            </View>
+                          ) : null}
+                        </Pressable>
                     {/* Votes on a proof: the totals, and Legit / Cap for everyone who was in the group when it was
                         posted, except the poster. */}
-                    {item.kind === 'proof' && item.proof_legit !== undefined && (!mine || item.proof_legit + (item.proof_cap ?? 0) > 0) ? (
-                      <View style={styles.voteRow}>
-                        {(item.proof_legit ?? 0) + (item.proof_cap ?? 0) > 0 ? (
-                          <Text style={styles.voteTotals}>
-                            🔥 {item.proof_legit ?? 0} · 🧢 {item.proof_cap ?? 0}
-                          </Text>
-                        ) : null}
+                        {item.kind === 'proof' && item.proof_legit !== undefined && (!mine || item.proof_legit + (item.proof_cap ?? 0) > 0) ? (
+                          <View style={styles.voteRow}>
+                            {(item.proof_legit ?? 0) + (item.proof_cap ?? 0) > 0 ? (
+                              <Text style={styles.voteTotals}>
+                                🔥 {item.proof_legit ?? 0} · 🧢 {item.proof_cap ?? 0}
+                              </Text>
+                            ) : null}
                         {mine ? null : !canVoteOnProof(item, userId, joinedAt) ? (
                           <Text style={styles.voteNote}>You joined after this was posted, so you can&apos;t vote on it</Text>
                         ) : (
                           ([true, false] as const).map((legit) => {
-                              const chosen = myVotes.get(item.id) === legit;
-                              const busy = busyVotes.has(item.id);
-                              return (
-                                <Pressable
-                                  key={legit ? 'legit' : 'cap'}
-                                  onPress={() => voteOn(item, legit)}
-                                  disabled={busy}
-                                  style={({ pressed }) => [styles.voteButton, chosen && styles.voteButtonChosen, (pressed || busy) && styles.pressed]}
-                                  accessibilityRole="button"
-                                  accessibilityState={{ selected: chosen, disabled: busy }}
-                                  accessibilityLabel={
-                                    chosen ? `You said ${legit ? 'legit' : 'cap'}. Tap to take your vote back` : legit ? 'Vote legit' : 'Vote cap'
-                                  }>
-                                  <Text style={[styles.voteText, chosen && styles.voteTextChosen]}>{legit ? 'Legit 🔥' : 'Cap 🧢'}</Text>
-                                </Pressable>
-                              );
-                            })
+                                  const chosen = myVotes.get(item.id) === legit;
+                                  const busy = busyVotes.has(item.id);
+                                  return (
+                                    <Pressable
+                                      key={legit ? 'legit' : 'cap'}
+                                      onPress={() => voteOn(item, legit)}
+                                      disabled={busy}
+                                      style={({ pressed }) => [styles.voteButton, chosen && styles.voteButtonChosen, (pressed || busy) && styles.pressed]}
+                                      accessibilityRole="button"
+                                      accessibilityState={{ selected: chosen, disabled: busy }}
+                                      accessibilityLabel={
+                                        chosen ? `You said ${legit ? 'legit' : 'cap'}. Tap to take your vote back` : legit ? 'Vote legit' : 'Vote cap'
+                                      }>
+                                      <Text style={[styles.voteText, chosen && styles.voteTextChosen]}>{legit ? 'Legit 🔥' : 'Cap 🧢'}</Text>
+                                    </Pressable>
+                                  );
+                                })
                         )}
+                          </View>
+                        ) : null}
+                        <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
+                        <Text style={[styles.time, ink]}>
+                          {pinnedId === item.id ? '📌 ' : ''}
+                          {timeAgo(item.created_at)}
+                          {mine && item.id === myLatest?.id && seenBy.length > 0
+                            ? ` · 👁 Seen by ${seenBy.length === memberCount - 1 ? 'everyone' : seenBy.join(', ')}`
+                            : ''}
+                        </Text>
                       </View>
-                    ) : null}
-                    <ReactionChips reactions={reactions.get(item.id)} me={userId} onToggle={(emoji) => react(item, emoji)} />
-                    <Text style={styles.time}>
-                      {pinnedId === item.id ? '📌 ' : ''}
-                      {timeAgo(item.created_at)}
-                      {mine && item.id === myLatest?.id && seenBy.length > 0
-                        ? ` · 👁 Seen by ${seenBy.length === memberCount - 1 ? 'everyone' : seenBy.join(', ')}`
-                        : ''}
-                    </Text>
-                  </View>
-                </View>
-              );
-            }}
-          />
-        )}
+                    </View>
+                  );
+                }}
+              />
+            )}
 
-        {replyTo ? (
-          <View style={styles.replyBar}>
-            <View style={styles.replyBarText}>
-              <Text style={styles.replyBarName} numberOfLines={1}>
-                ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : nameOf(replyTo.sender_id)}
-              </Text>
-              <Text style={styles.replyBarBody} numberOfLines={1}>
-                {previewOf(replyTo)}
-              </Text>
+            {replyTo ? (
+              <View style={styles.replyBar}>
+                <View style={styles.replyBarText}>
+                  <Text style={styles.replyBarName} numberOfLines={1}>
+                    ↩ Replying to {replyTo.sender_id === userId ? 'yourself' : nameOf(replyTo.sender_id)}
+                  </Text>
+                  <Text style={styles.replyBarBody} numberOfLines={1}>
+                    {previewOf(replyTo)}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
+                  <Ionicons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
+              <IconButton icon="camera" label="Send a photo or video" background={colors.accent} color={colors.onAccent} onPress={() => openCamera()} />
+              <IconButton icon="flag" label="Dare the group" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
+              <TextInput
+                value={text}
+                onChangeText={(value) => {
+                  draft.current = value;
+                  setText(value);
+                  onTextChange(value);
+                }}
+                placeholder="Message the group"
+                placeholderTextColor={colors.textFaint}
+                keyboardAppearance={keyboardAppearance}
+                selectionColor={colors.accent}
+                multiline
+                maxLength={2000}
+                style={styles.input}
+              />
+              {text.trim() || !Audio ? (
+                <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} disabled={sending} />
+              ) : (
+                <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
+              )}
             </View>
-            <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityLabel="Cancel reply">
-              <Ionicons name="close" size={20} color={colors.textMuted} />
-            </Pressable>
           </View>
-        ) : null}
-        <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
-          <IconButton icon="camera" label="Send a photo or video" background={colors.accent} color={colors.onAccent} onPress={() => openCamera()} />
-          <IconButton icon="flag" label="Dare the group" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
-          <TextInput
-            value={text}
-            onChangeText={(value) => {
-              draft.current = value;
-              setText(value);
-              onTextChange(value);
-            }}
-            placeholder="Message the group"
-            placeholderTextColor={colors.textFaint}
-            keyboardAppearance={keyboardAppearance}
-            selectionColor={colors.accent}
-            multiline
-            maxLength={2000}
-            style={styles.input}
-          />
-          {text.trim() || !Audio ? (
-            <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} disabled={sending} />
-          ) : (
-            <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
-          )}
-        </View>
-      </KeyboardSafeView>
+        </KeyboardSafeView>
+      </ChatInkProvider>
+      <ChatBackgroundPicker
+        visible={backgroundOpen}
+        current={background.picked}
+        plus={background.plus}
+        onPick={background.choose}
+        onClose={() => setBackgroundOpen(false)}
+      />
       <DareComposer visible={dareOpen} friendName="the group" onClose={() => setDareOpen(false)} onSend={sendDare} />
       <MessageActions
         visible={menuFor !== null}
@@ -849,6 +876,20 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  // Everything under the top bar. A chat background fills this space, behind the messages.
+  body: {
+    flex: 1,
+  },
+  // See-through, so the chat background shows.
+  clear: {
+    backgroundColor: 'transparent',
+  },
+  emptyCard: {
+    marginHorizontal: space.lg,
+    marginTop: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg + 'E6',
   },
   loading: {
     marginTop: space.xl,
@@ -1125,6 +1166,7 @@ const styles = StyleSheet.create({
     marginHorizontal: space.sm,
   },
   inputBar: {
+    backgroundColor: colors.bg,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: space.sm,

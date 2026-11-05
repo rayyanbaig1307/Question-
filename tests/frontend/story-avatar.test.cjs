@@ -114,7 +114,7 @@ test('no person yet (still loading): a plain picture, nothing to tap', async () 
 });
 
 test('a person row shows the story picture, but a plain one inside a sheet (the story viewer\'s "Seen by" list)', async () => {
-  const screen = loadScreen('src/components/PersonRow.tsx', {});
+  const screen = loadScreen('src/components/PersonRow.tsx', { '@/components/PlusBadge': { PlusBadge: host('PlusBadge') } });
   for (const [plain, type] of [[false, 'StoryAvatar'], [true, 'Avatar']]) {
     let tree;
     await renderer.act(async () => { tree = renderer.create(React.createElement(screen.exports.PersonRow, { person: bob, plain })); });
@@ -123,7 +123,7 @@ test('a person row shows the story picture, but a plain one inside a sheet (the 
     await act(() => tree.unmount());
   }
   const { readSource } = require('./harness.cjs');
-  assert.match(readSource('src/app/(app)/stories/[user].tsx'), /<PersonRow person=\{item\} plain \/>/);
+  assert.match(readSource('src/app/(app)/stories/[user].tsx'), /<PersonRow\s+person=\{item\}\s+plain\b/);
 });
 
 test('where the picture sits in a row that opens something, it does the same without a story (members, comments, chat list)', () => {

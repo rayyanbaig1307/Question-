@@ -111,7 +111,7 @@ test('iPhone: taps can pass through the keyboard area when asked (the comments s
 test('both chat screens, comments, and the dare and hit-up boxes use it, with the home-bar space taken off where the box keeps it', () => {
   for (const file of ['src/app/(app)/chat/[id].tsx', 'src/app/(app)/groups/chat/[id].tsx']) {
     const source = readSource(file);
-    assert.match(source, /<KeyboardSafeView style=\{styles\.fill\} bottomInset=\{insets\.bottom\} androidBehavior="padding">/, file);
+    assert.match(source, /<KeyboardSafeView style=\{styles\.(fill|body)\} bottomInset=\{insets\.bottom\} androidBehavior="padding">/, file);
     assert.doesNotMatch(source, /<KeyboardAvoidingView/, file);
   }
   const comments = readSource('src/app/(app)/comments/[postId].tsx');

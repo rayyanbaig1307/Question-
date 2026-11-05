@@ -1,7 +1,10 @@
+import { router } from 'expo-router';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SafeEdge } from '@/components/SafeEdge';
+import { usePlus } from '@/lib/plus';
 import { colors, font, radius, space } from '@/theme';
+import { PLUS_PACKS, plusStickerLabel } from './PlusStickers';
 import { SPECIAL_STICKERS, SpecialSticker } from './SpecialSticker';
 import { EMOJI_STICKERS, WORD_STICKERS } from './stickers';
 
@@ -13,8 +16,19 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord, onPic
   onPickWord: (word: string) => void;
   onPickSpecial: (id: string) => void;
 }) {
+  const plus = usePlus();
+  // A locked Peekaboo+ sticker: close the stickers and show the Peekaboo+ screen.
+  const openPlus = () => {
+    onClose();
+    router.push('/plus');
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <SafeEdge edge="bottom" style={styles.sheet}>
           <Pressable>
@@ -33,6 +47,25 @@ export function StickerPicker({ visible, onClose, onPickEmoji, onPickWord, onPic
                   </Pressable>
                 ))}
               </View>
+              {PLUS_PACKS.map((pack) => (
+                <View key={pack.id} style={styles.pack}>
+                  <View style={styles.packHead}>
+                    <Text style={styles.section}>{pack.name}</Text>
+                    {plus ? null : <Text style={styles.plusTag}>⭐ Peekaboo+</Text>}
+                  </View>
+                  <View style={[styles.specials, !plus && styles.locked]}>
+                    {pack.stickers.map((sticker) => (
+                      <Pressable
+                        key={sticker.id}
+                        onPress={() => (plus ? onPickSpecial(sticker.id) : openPlus())}
+                        accessibilityLabel={`${plusStickerLabel(sticker.id)} sticker${plus ? '' : ', Peekaboo+ only'}`}
+                        style={({ pressed }) => [styles.special, styles.plusCell, pressed && styles.pressed]}>
+                        <SpecialSticker id={sticker.id} small />
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ))}
               <View style={styles.words}>
                 {WORD_STICKERS.map((word) => (
                   <Pressable
@@ -111,6 +144,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.md,
     backgroundColor: colors.card,
+  },
+  pack: {
+    gap: space.sm,
+  },
+  packHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+  },
+  plusTag: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.white,
+    backgroundColor: colors.purple,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  locked: {
+    opacity: 0.45,
+  },
+  // A bit taller than the originals, so the round seals and bursts fit.
+  plusCell: {
+    height: 96,
   },
   words: {
     flexDirection: 'row',

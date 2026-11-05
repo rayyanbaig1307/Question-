@@ -383,9 +383,15 @@ test('Applied after the Peekaboo+ streak (out of filename order), this update ke
     await applyMigrationFile(other, VOTES_MIGRATION);
     assert.equal(await source(), before);
   } finally { await other.close(); }
-  // In filename order (no Peekaboo+ streak yet) this update brings its own streak with group dares (see above).
+  // In filename order this update brings its own streak with group dares (see above). Once the Peekaboo+
+  // update (20261218000000) is in too, its streak takes over and adds group dares through streak_moments_sql.
   const ordinary = (await db.query("select prosrc from pg_proc where oid = 'private.dare_streak(uuid,uuid)'::regprocedure")).rows[0].prosrc;
-  assert.match(ordinary, /group_proof_counts/);
+  if (/dare_streak_since/.test(ordinary)) {
+    const moments = (await db.query("select prosrc from pg_proc where oid = 'private.streak_moments_sql(boolean)'::regprocedure")).rows[0].prosrc;
+    assert.match(moments, /group_proof_counts/);
+  } else {
+    assert.match(ordinary, /group_proof_counts/);
+  }
 });
 
 test('A proof for your own dare never feeds a streak with yourself, but the group still votes on it', async () => {

@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions, type Camera
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -31,6 +31,11 @@ import { friendlyError } from '@/lib/errors';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
+import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
+import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
+import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
+import { usePlus } from '@/lib/plus';
+import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
 import { ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
@@ -39,13 +44,18 @@ const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_L
     require('./FaceLensCamera').FaceLensCamera
   : null;
 
-// Videos can be up to this long.
-const MAX_VIDEO_SECONDS = 30;
+// The Soft Glow and Golden Hour filters (MediaPipe face tracking), only on downloads that have it. Peekaboo+.
+const SoftGlow: typeof import('@/components/lens/SoftGlowCamera').SoftGlowCamera | null = FACE_MESH_AVAILABLE
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('@/components/lens/SoftGlowCamera').SoftGlowCamera
+  : null;
 
 // The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
+  glow: colors.yellow,
+  golden: colors.orange,
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -109,11 +119,29 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // A quick white flash on screen when a photo is taken.
   const flashOverlay = useSharedValue(0);
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOverlay.get() }));
+  // True while the selfie flash is on: the flash then covers the buttons too, so the whole screen lights you up.
+  const [flashing, setFlashing] = useState(false);
 
-  // Videos: hold the shutter to record (up to 30 seconds). The camera switches to video while you hold.
+  // Videos: hold the shutter to record (up to 30 seconds, or 60 with Peekaboo+). The camera switches to video
+  // while you hold.
   const [mic, requestMic] = useMicrophonePermissions();
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
   const [recording, setRecording] = useState(false);
+  // A selfie video with the flash on: full screen brightness for the ring light while recording.
+  const selfieLight = recording && flash === 'on' && facing === 'front';
+  useEffect(() => {
+    if (!selfieLight) return;
+    let restore: (() => Promise<void>) | null = null;
+    let stopped = false;
+    brightenScreen().then((undo) => {
+      if (stopped) undo();
+      else restore = undo;
+    });
+    return () => {
+      stopped = true;
+      restore?.();
+    };
+  }, [selfieLight]);
   const stopAsked = useRef(false);
   const cameraReady = useRef<(() => void)[]>([]);
   const recordProgress = useSharedValue(0);
@@ -123,14 +151,24 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
+  // Soft Glow / Golden Hour (Peekaboo+): the face-tracking camera with the look drawn on top.
+  const plus = usePlus();
+  const glowLook = homeMode === 'golden' ? 'golden' : 'glow';
+  const glowOn = lensesHere && (homeMode === 'glow' || homeMode === 'golden') && SoftGlow !== null;
+  const glowRef = useRef<SoftGlowHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
   const [lensRecording, setLensRecording] = useState(false);
   const lensVideoItems = useRef<LensItem[]>([]);
 
   // Lenses are for faces – picking one turns to the selfie camera.
   function changeMode(next: CameraMode) {
+    // Soft Glow and Golden Hour are Peekaboo+ filters: without Plus, show what Peekaboo+ is instead.
+    if ((next === 'glow' || next === 'golden') && !plus) {
+      router.push('/plus');
+      return;
+    }
     setHomeMode(next);
-    if (next === 'googly' && facing === 'back') setFacing('front');
+    if ((next === 'googly' || next === 'glow' || next === 'golden') && facing === 'back') setFacing('front');
   }
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
@@ -154,18 +192,27 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     });
 
   async function takePhoto() {
-    if (busy || (lensOn ? !lensRef.current : !cameraRef.current)) return;
+    if (busy || (glowOn ? !glowRef.current : lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Selfie cameras have no flash, so the screen becomes the flash: bright white for a moment, then the photo.
+    // Selfie cameras have no flash, so the screen becomes the flash (like the iPhone's own): warm white at full
+    // brightness, held a moment so the camera can adjust to the light, then the photo (lib/screenFlash.ts).
     const screenFlash = flash === 'on' && facing === 'front';
+    let restoreBrightness: (() => Promise<void>) | null = null;
     if (screenFlash) {
-      flashOverlay.set(withTiming(1, { duration: 80 }));
-      await new Promise((resolve) => setTimeout(resolve, 280));
+      setFlashing(true);
+      flashOverlay.set(withTiming(1, { duration: 60 }));
+      restoreBrightness = await brightenScreen();
+      await new Promise((resolve) => setTimeout(resolve, SCREEN_FLASH_WARMUP_MS));
     } else {
       flashOverlay.set(withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 300 })));
     }
     try {
+      if (glowOn && glowRef.current) {
+        const shot = await glowRef.current.capture();
+        openEditor(shot.uri, 'cover');
+        return;
+      }
       if (lensOn && lensRef.current) {
         const shot = await lensRef.current.capture();
         openEditor(shot.uri, 'cover', false, shot.items);
@@ -177,7 +224,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     } catch (error) {
       Alert.alert('Could not take photo', friendlyError(error));
     } finally {
-      if (screenFlash) flashOverlay.set(withTiming(0, { duration: 250 }));
+      if (screenFlash) {
+        flashOverlay.set(withTiming(0, { duration: 250 }));
+        setFlashing(false);
+        restoreBrightness?.();
+      }
       setBusy(false);
     }
   }
@@ -191,13 +242,15 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
 
   async function startRecording() {
     if (busy || recording) return;
-    if (!lensOn && !cameraRef.current) return;
+    if (!lensOn && !glowOn && !cameraRef.current) return;
     // First time: ask for the microphone (so videos have sound), then you hold again.
     if (!mic?.granted && mic?.canAskAgain !== false) {
       await requestMic();
       return;
     }
     const withSound = mic?.granted ?? false;
+    // How long this video can be: 30 seconds, or 60 with Peekaboo+.
+    const videoSeconds = maxVideoSeconds(plus);
     stopAsked.current = false;
     setBusy(true);
     setRecording(true);
@@ -205,7 +258,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
     // yet). The googly eyes go on the video as stickers where they were when you started.
-    if (lensOn && lensRef.current) {
+    if (glowOn) {
+      // Soft Glow / Golden Hour: the normal camera records the video (the look isn't in videos yet).
+      setLensRecording(true);
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    } else if (lensOn && lensRef.current) {
       lensVideoItems.current = lensRef.current.currentItems();
       setLensRecording(true);
       // The normal camera needs a moment to start up.
@@ -214,11 +271,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     await waitForCamera();
     try {
       recordProgress.set(0);
-      recordProgress.set(withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000, easing: Easing.linear }));
+      recordProgress.set(withTiming(1, { duration: videoSeconds * 1000, easing: Easing.linear }));
       // You let go before it even started: still keep a short clip.
       if (stopAsked.current) setTimeout(() => cameraRef.current?.stopRecording(), 300);
       const video = await cameraRef.current?.recordAsync({
-        maxDuration: MAX_VIDEO_SECONDS,
+        maxDuration: videoSeconds,
         ...(Platform.OS === 'ios' ? { codec: 'avc1' as const } : {}),
       });
       if (video?.uri) openEditor(video.uri, 'cover', true, lensVideoItems.current);
@@ -283,19 +340,33 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.9,
-      videoMaxDuration: MAX_VIDEO_SECONDS,
+      // The picker allows the Peekaboo+ length; a longer-than-free video is checked just below.
+      videoMaxDuration: PLUS_VIDEO_SECONDS,
       allowsEditing: false,
     });
     const asset = result.canceled ? null : result.assets[0];
     if (!asset) return;
     if (asset.type === 'video') {
       // Peekaboo videos are short and small, so uploads stay quick.
-      if ((asset.duration ?? 0) > (MAX_VIDEO_SECONDS + 0.5) * 1000) {
-        Alert.alert('Too long', `Pick a video of ${MAX_VIDEO_SECONDS} seconds or less.`);
+      const check = checkPickedVideo(asset.duration, asset.fileSize, plus);
+      if (check === 'too-long') {
+        Alert.alert('Too long', `Pick a video of ${maxVideoSeconds(plus)} seconds or less.`);
         return;
       }
-      if ((asset.fileSize ?? 0) > 30 * 1024 * 1024) {
-        Alert.alert('Too big', 'That video is too big. Try a shorter one, or record one in Peekaboo.');
+      if (check === 'needs-plus') {
+        // 30–60 seconds: that's a Peekaboo+ length.
+        Alert.alert(
+          'Videos up to 60 s come with Peekaboo+ ⭐',
+          `Without Peekaboo+, videos can be up to ${FREE_VIDEO_SECONDS} seconds. Pick a shorter one, or get Peekaboo+.`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'See Peekaboo+ ⭐', onPress: () => router.push('/plus') },
+          ],
+        );
+        return;
+      }
+      if (check === 'too-big') {
+        Alert.alert('Too big', TOO_BIG_VIDEO);
         return;
       }
       openEditor(asset.uri, 'cover', true);
@@ -307,7 +378,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        lensOn && !lensRecording && FaceLens ? (
+        glowOn && !lensRecording && SoftGlow ? (
+          <SoftGlow ref={glowRef} look={glowLook} active={active} facing={facing} flash={flash} zoom={camZoom} />
+        ) : lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : active || warm ? (
           <CameraView
@@ -322,7 +395,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             mirror={facing === 'front'}
             mode={mode}
             mute={!(mic?.granted ?? false)}
-            // Small, quick-to-upload videos: 720p at a modest quality (about 9–10 MB for 30 seconds).
+            // Small, quick-to-upload videos: 720p at a modest quality (about 9–10 MB for 30 seconds, about
+            // 19 MB for 60 – under the 30 MB the store takes).
             videoQuality="720p"
             videoBitrate={2_500_000}
             onCameraReady={() => cameraReady.current.splice(0).forEach((resolve) => resolve())}
@@ -346,7 +420,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           <View style={StyleSheet.absoluteFill} accessible={false} />
         </GestureDetector>
       ) : null}
-      <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.flash, flashing && styles.screenFlash, flashStyle]} pointerEvents="none" />
       {/* Flash during a selfie video: a bright ring light around the screen edges lights up your face. */}
       {recording && flash === 'on' && facing === 'front' ? (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -562,6 +636,12 @@ const styles = StyleSheet.create({
   flash: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.white,
+  },
+  // The selfie flash: warm white, on top of everything (buttons too).
+  screenFlash: {
+    backgroundColor: SCREEN_FLASH_COLOR,
+    zIndex: 1000,
+    elevation: 1000,
   },
   // A see-through wash of light over the preview plus a bright thin edge – lights your face in the dark
   // without hiding any of the picture.

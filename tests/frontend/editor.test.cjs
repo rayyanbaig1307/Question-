@@ -23,7 +23,7 @@ function fixture({ group = false, chatDare = false, failClaim = false, claimErro
     '@/lib/groupChat': { sendGroupCapture: async () => { calls.groups++; if (send) await send(); } },
     '@/lib/eyeTrack': { CAN_TRACK_EYES: false },
     '@/lib/keeps': { CAN_SAVE_TO_PHOTOS: false, addKeep: async () => {} },
-  });
+  }, { timers: 'real' }); // the editor waits a moment for moving text to stop before it takes the picture
   return { screen, calls };
 }
 const sendButton = tree => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'button' && /^Send/.test(textOf(node)));

@@ -80,7 +80,27 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "./plugins/with-ios-app-icons.js",
+        [
+          { "name": "DarkGold", "ios": "./assets/icons/dark-gold.png" },
+          { "name": "Midnight", "ios": "./assets/icons/midnight.png" },
+          { "name": "Mint", "ios": "./assets/icons/mint.png" },
+          { "name": "Sunny", "ios": "./assets/icons/sunny.png" },
+          { "name": "CleanWhite", "ios": "./assets/icons/clean-white.png" },
+          { "name": "AllBlack", "ios": "./assets/icons/all-black.png" },
+          { "name": "Cherry", "ios": "./assets/icons/cherry.png" },
+          { "name": "FxSunset", "ios": "./assets/icons/fx-sunset.png" },
+          { "name": "FxAurora", "ios": "./assets/icons/fx-aurora.png" },
+          { "name": "FxHolo", "ios": "./assets/icons/fx-holo.png" },
+          { "name": "FxNeon", "ios": "./assets/icons/fx-neon.png" },
+          { "name": "FxOcean", "ios": "./assets/icons/fx-ocean.png" },
+          { "name": "FxGlitterGold", "ios": "./assets/icons/fx-glitter-gold.png" },
+          { "name": "FxCandy", "ios": "./assets/icons/fx-candy.png" },
+          { "name": "FxGalaxy", "ios": "./assets/icons/fx-galaxy.png" }
+        ]
+      ]
     ],
     "experiments": {
       "reactCompiler": true

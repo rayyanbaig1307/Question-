@@ -4,12 +4,15 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
+import { isPlusSticker, PlusSticker } from './PlusStickers';
 
 // Peekaboo's own stickers, drawn by the app (no pictures needed).
 export const SPECIAL_STICKERS = ['googly-eyes', 'googly-eye', 'peekaboo', 'peek-bubble', 'i-see-you', 'caught'] as const;
 export type SpecialStickerId = (typeof SPECIAL_STICKERS)[number];
 
 export function SpecialSticker({ id, small = false }: { id: string; small?: boolean }) {
+  // The Peekaboo+ packs live in their own file.
+  if (isPlusSticker(id)) return <PlusSticker id={id} small={small} />;
   // The picker shows them at half size.
   const size = small ? 0.5 : 1;
   switch (id) {
@@ -60,7 +63,7 @@ export function SpecialSticker({ id, small = false }: { id: string; small?: bool
 
 // A cartoon googly eye: a white ball with a black pupil looking somewhere (x/y from -1 to 1).
 // On a photo each eye looks a random way, and the pupil jiggles into place when it appears – like the real thing.
-function GooglyEye({ size, look }: { size: number; look?: { x: number; y: number } }) {
+export function GooglyEye({ size, look }: { size: number; look?: { x: number; y: number } }) {
   const pupil = size * 0.46;
   const room = (size - pupil) / 2 - size * 0.06;
   const [target] = useState(() => look ?? randomLook());

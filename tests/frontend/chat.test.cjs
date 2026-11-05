@@ -4,7 +4,7 @@ const { React, loadScreen, renderScreen, act, unmount, host } = require('./harne
 const message = changes => ({ id: 'message1', sender_id: 'bob', recipient_id: 'alice', kind: 'text', body: 'Hello 👋', opened_at: null, saved_at: null, media_path: null, created_at: '2026-11-04T12:00:00Z', ...changes });
 
 function fixture({ send, search, mine = false } = {}) {
-  const calls = { sent: [], hidden: [], deleted: [], reacted: [] };
+  const calls = { sent: [], hidden: [], deleted: [], reacted: [], options: [] };
   const noop = () => {};
   const screen = loadScreen('src/app/(app)/chat/[id].tsx', {
     'expo-router': { router: { push() {} }, useFocusEffect: callback => React.useEffect(callback, [callback]), useIsFocused: () => true, useLocalSearchParams: () => ({ id: 'bob' }) },
@@ -15,6 +15,7 @@ function fixture({ send, search, mine = false } = {}) {
     '@/components/DareComposer': { DareComposer: host('DareComposer') },
     '@/components/MessageActions': Object.fromEntries(['MessageActions', 'ReactionChips', 'ReplyQuote'].map(name => [name, host(name)])),
     '@/components/VoiceNote': { MicButton: host('MicButton'), VoiceBubble: host('VoiceBubble') },
+    '@/components/Overlays': { useOverlays: () => ({ showToast: noop, showOptions: value => calls.options.push(value) }) },
     '@/lib/chat': {
       fetchConversation: async () => [message(mine ? { sender_id: 'alice', recipient_id: 'bob' } : {})], fetchDareStreak: async () => 0, markChatRead: async () => {}, cleanUpOpenedSnaps() {}, subscribeToMyMessages: () => noop,
       sendText: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[2] }); },
@@ -93,10 +94,13 @@ test('direct replies carry the selected parent message', async () => {
 test('an older direct search cannot replace the newest results', async () => {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
-  const { screen } = fixture({ search: query => query === 'old' ? pending : [message({ id: 'fresh', body: 'fresh match' })] });
+  const { screen, calls } = fixture({ search: query => query === 'old' ? pending : [message({ id: 'fresh', body: 'fresh match' })] });
   const tree = await renderScreen(screen);
   try {
+    // Search lives in the ••• menu at the top.
     await act(() => tree.root.findByType('ScreenHeader').props.right.props.onPress());
+    const searchOption = calls.options.at(-1).options.find(choice => /Search this chat/.test(choice.label));
+    await act(() => searchOption.onPress());
     const input = () => tree.root.findAllByType('TextInput').find(node => node.props.placeholder === 'Search this chat');
     let old;
     await act(async () => { old = input().props.onChangeText('old'); await Promise.resolve(); });

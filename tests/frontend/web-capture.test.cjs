@@ -32,7 +32,8 @@ function loadEditor(os) {
   };
   // The shared test mock of react-native, with only the platform changed.
   const reactNative = loadScreen('src/app/(app)/editor.tsx', mocks).modules['react-native'];
-  const screen = loadScreen('src/app/(app)/editor.tsx', { ...mocks, 'react-native': { ...reactNative, Platform: { OS: os } } });
+  // Real timers: the editor waits a moment for moving text to stop before it takes the picture.
+  const screen = loadScreen('src/app/(app)/editor.tsx', { ...mocks, 'react-native': { ...reactNative, Platform: { OS: os } } }, { timers: 'real' });
   return { screen, captures, routes };
 }
 

@@ -44,6 +44,8 @@ export type Post = MediaFields & {
   // and a tiny blurry preview shown to friends who haven't posted their own drop yet.
   drop_day: string | null;
   drop_late_seconds: number | null;
+  // ⏰ Peekaboo+ drop rewind: this late drop was posted without the "late" label (set by the server).
+  drop_rewound?: boolean;
   blur_path: string | null;
   // Set when this post pays a forfeit (a dare that ran out of time); the words are copied here.
   forfeit_id?: string | null;

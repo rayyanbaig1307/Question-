@@ -24,7 +24,9 @@ function host(name) {
   };
 }
 
-function loadScreen(relative, overrides = {}) {
+// `timers: 'real'` lets setTimeout really run (after its delay); the default only records the callbacks so a
+// test can run them by hand.
+function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
   const calls = { alerts: [], toasts: [], routes: [], timers: [], intervals: new Map() };
   const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText', 'KeyboardSafeView', 'StoryAvatar'];
   const modules = {
@@ -61,6 +63,42 @@ function loadScreen(relative, overrides = {}) {
     '@/lib/storyRings': { refreshStoryBadges: async () => {}, setStoryRings: () => {}, useStoryBadge: () => null },
     '@/lib/guess': { postMystery: async () => {} },
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
+    // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
+    '@/lib/plus': { CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false, configurePurchases: async () => {} },
+    '@/lib/chatPins': { MAX_PINS: 3, pinKeyForFriend: id => `friend:${id}`, pinKeyForGroup: id => `group:${id}`, sortByPins: items => items, useChatPins: () => ({ pins: [], plus: false, toggle: async () => 'needs-plus' }) },
+    // Peekaboo+ insights (profile views, rewatches, screenshots): nothing to show, and the setting is unknown.
+    '@/lib/insights': {
+      recordProfileView: async () => {}, fetchMyProfileViews: async () => null, fetchShowInProfileViews: async () => null,
+      setShowInProfileViews: async () => {}, recordStoryView: async () => {}, fetchStoryInsights: async () => null,
+      recordScreenshot: async () => {}, useContentScreenshots: () => {}, fetchPostScreenshots: async () => null,
+    },
+    // Peekaboo+ extras (Peek-a-Save, drop rewind, Guess Who hint): the server doesn't have them, so they stay hidden.
+    '@/lib/plusExtras': {
+      fetchPlusAllowances: async () => { throw new Error('plus_allowances is not on this server'); },
+      fetchPeekASaves: async () => null,
+      fetchBrokenStreaks: async () => [],
+      peekASave: async () => 0,
+      fetchMysteryHints: async () => null,
+      getMysteryHint: async () => '',
+      brokenStreakText: () => '',
+      shortDate: () => '',
+      hoursLeft: () => '',
+    },
+    '@/components/PeekASaveCard': { PeekASaveCard: host('PeekASaveCard') },
+    '@/components/DropRewindOption': { DropRewindOption: host('DropRewindOption') },
+    '@/lib/chatBackgrounds': { friendChatKey: id => `friend:${id}`, groupChatKey: id => `group:${id}`, useChatBackground: () => ({ plus: false, picked: null, shown: null, choose: async () => {} }) },
+    '@/components/chat/ChatBackground': { ChatBackground: host('ChatBackground'), ChatInkProvider: host('ChatInkProvider'), chatInk: () => null, useChatInk: () => null },
+    '@/components/chat/ChatBackgroundPicker': { ChatBackgroundPicker: host('ChatBackgroundPicker') },
+    // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
+    '@/lib/appIcons': {
+      CAN_CHANGE_APP_ICON: false,
+      APP_ICONS: [
+        { key: 'classic', name: null, label: 'Classic', plus: false, preview: 1 },
+        { key: 'midnight', name: 'Midnight', label: 'Midnight', plus: true, preview: 2 },
+      ],
+      currentAppIcon: () => 'classic',
+      setAppIcon: async () => {},
+    },
   };
   for (const name of componentNames) modules[`@/components/${name === 'VideoClip' ? 'VideoClipSafe' : name}`] = { [name]: host(name) };
   Object.assign(modules, overrides);
@@ -69,7 +107,10 @@ function loadScreen(relative, overrides = {}) {
   const module = { exports: {} };
   const context = vm.createContext({
     module, exports: module.exports, console,
-    setTimeout: callback => { calls.timers.push(callback); return calls.timers.length; }, clearTimeout: () => {},
+    setTimeout: timers === 'real'
+      ? (callback, ms, ...args) => { calls.timers.push(callback); return setTimeout(callback, ms, ...args); }
+      : callback => { calls.timers.push(callback); return calls.timers.length; },
+    clearTimeout: timers === 'real' ? id => clearTimeout(id) : () => {},
     setInterval: callback => { const id = Symbol('interval'); calls.intervals.set(id, callback); return id; }, clearInterval: id => calls.intervals.delete(id),
     require: id => {
       if (!(id in modules)) throw new Error(`Missing isolated test mock for ${id}`);

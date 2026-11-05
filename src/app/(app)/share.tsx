@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { DareRulesSheet } from '@/components/DareRulesSheet';
+import { DropRewindOption } from '@/components/DropRewindOption';
 import { useOverlays } from '@/components/Overlays';
 import { PostPreview } from '@/components/PostPreview';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -24,6 +25,7 @@ import { todayDareDay, useDare } from '@/lib/dares';
 import { lateLabel } from '@/lib/drop';
 import { useDareRulesAccepted } from '@/lib/legal';
 import { postMystery } from '@/lib/guess';
+import { fetchPlusAllowances, type PlusAllowances } from '@/lib/plusExtras';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
 import { refreshStoryBadges } from '@/lib/storyRings';
@@ -77,6 +79,10 @@ export default function Share() {
   const [toProfile, setToProfile] = useState(false);
   const [toDare, setToDare] = useState(fromDare);
   const [toDrop, setToDrop] = useState(fromDrop);
+  // ⏰ Peekaboo+ drop rewind: post a late drop without the "late" label (once a week). `rewindInfo` stays null
+  // when the server doesn't have it yet, and then the choice isn't shown.
+  const [rewind, setRewind] = useState(false);
+  const [rewindInfo, setRewindInfo] = useState<PlusAllowances | null>(null);
   const [caption, setCaption] = useState('');
   const [friends, setFriends] = useState<Profile[] | null>(null);
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
@@ -90,6 +96,17 @@ export default function Share() {
       .then(setFriends)
       .catch(() => setFriends([]));
   }, [userId]);
+
+  useEffect(() => {
+    if (!fromDrop) return;
+    let cancelled = false;
+    fetchPlusAllowances()
+      .then((info) => !cancelled && setRewindInfo(info))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [fromDrop]);
 
   const toggleFriend = (id: string) => {
     setToGuess(false);
@@ -178,15 +195,18 @@ export default function Share() {
       }
       // One post can be your drop, your dare answer, or both.
       let dropLate: number | null = null;
+      let dropRewound = false;
       let darePostId: string | null = null;
       if ((toDare || toDrop || toForfeit) && !done.current.post) {
         const post = await createPost(userId, photo, caption, {
           dare: toDare,
           drop: toDrop,
+          rewind: toDrop && rewind,
           forfeit: toForfeit && forfeit ? forfeit : undefined,
           audience,
         });
         dropLate = post.drop_late_seconds;
+        dropRewound = post.drop_rewound === true;
         if (toDare) darePostId = post.id;
         done.current.post = true;
       }
@@ -197,6 +217,10 @@ export default function Share() {
           ? 'Forfeit paid 💀✅ Respect.'
           : toGuess
           ? "Guess Who posted 🕵️ Let's see who figures it out!"
+          : toDrop && dropRewound
+          ? "Drop posted ⏰ No 'late' label this time 👀🔥"
+          : toDrop && dropLate !== null && rewind && !lateLabel(dropLate).onTime
+          ? `Drop posted · ${lateLabel(dropLate).text} (the rewind wasn't available)`
           : toDrop && dropLate !== null
           ? lateLabel(dropLate).onTime
             ? 'Drop posted · On time! 👀🔥'
@@ -270,6 +294,9 @@ export default function Share() {
               selected={toDrop}
               onPress={() => toggle(setToDrop, !toDrop)}
             />
+          ) : null}
+          {fromDrop && toDrop && rewindInfo ? (
+            <DropRewindOption allowances={rewindInfo} selected={rewind} onChange={setRewind} />
           ) : null}
           {fromForfeit ? (
             <Option
