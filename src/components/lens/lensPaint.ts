@@ -126,13 +126,15 @@ const BEAM_DUST = makeSpots(28, 19, [[0.02, 0.5, 0.02, 0.42]]);
 // ---------------------------------------------------------------------------
 
 // A fill paint with a colour, a see-through amount and a soft edge.
-function soft(color: string, alpha: number, blur: number, style: BlurStyle = BlurStyle.Normal) {
+// (No `style = BlurStyle.Normal` default here: on the camera's drawing thread a default like that is worked out
+// before BlurStyle exists and the live filter stops drawing. tests/unit/worklet-order.test.mjs checks this.)
+function soft(color: string, alpha: number, blur: number, style?: BlurStyle) {
   'worklet';
   const paint = Skia.Paint();
   paint.setAntiAlias(true);
   paint.setColor(Skia.Color(color));
   paint.setAlphaf(Math.max(0, Math.min(1, alpha)));
-  if (blur > 0) paint.setMaskFilter(Skia.MaskFilter.MakeBlur(style, blur, true));
+  if (blur > 0) paint.setMaskFilter(Skia.MaskFilter.MakeBlur(style ?? BlurStyle.Normal, blur, true));
   return paint;
 }
 

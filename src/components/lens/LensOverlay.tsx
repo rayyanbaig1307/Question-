@@ -20,8 +20,10 @@ export function LensOverlay({ faces, look }: { faces: SharedValue<LensFace[]>; l
       if (broken.value) return;
       try {
         paintLook(canvas, look, faces.value, size.value.width, size.value.height, clock.value / 1000);
-      } catch {
+      } catch (error) {
+        // Say why once, so a filter that stops drawing is never a silent mystery again.
         broken.value = true;
+        console.warn('Face filter stopped drawing', error);
       }
     }),
   );

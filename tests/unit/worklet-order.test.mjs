@@ -58,3 +58,52 @@ it('finds the files with worklets (the camera filters among them)', () => {
 it.each(files)('%s: no worklet uses a function of its own file before it is made', (file) => {
   expect(usedBeforeMade(file)).toEqual([]);
 });
+
+// The live face filters (Soft Glow, Golden Hour) drew nothing on the camera, only on the photo, because of
+// this: on the drawing thread a worklet gets the outside things it uses (like BlurStyle or Skia) from a line
+// at the START of its body. A default value for a parameter (`style = BlurStyle.Normal`) is worked out BEFORE
+// that line, so there the outside thing doesn't exist yet and the worklet throws. Work the default out
+// inside the body instead (`style ?? BlurStyle.Normal`).
+export function defaultsReadingOutside(file) {
+  const code = babel.transformFileSync(file, {
+    presets: ['babel-preset-expo'],
+    filename: file,
+    babelrc: false,
+    configFile: false,
+    caller: { name: 'metro', platform: 'ios', bundler: 'metro' },
+  }).code;
+  const problems = [];
+  const workletCode = [];
+  babel.traverse(babel.parseSync(code, { sourceType: 'script', babelrc: false, configFile: false }), {
+    ObjectProperty(path) {
+      const { key, value } = path.node;
+      if (key.name === 'code' && value.type === 'StringLiteral' && value.value.startsWith('(function')) workletCode.push(value.value);
+    },
+  });
+  for (const text of workletCode) {
+    babel.traverse(babel.parseSync(text, { sourceType: 'script', babelrc: false, configFile: false }), {
+      Function(path) {
+        const outside = new Set();
+        const body = path.node.body.type === 'BlockStatement' ? text.slice(path.node.body.start, path.node.body.end) : '';
+        for (const match of body.matchAll(/const\[([^\]]*)\]=this\.__closure/g)) {
+          for (const name of match[1].split(',')) outside.add(name.trim().split(':').pop().trim());
+        }
+        if (!outside.size) return;
+        for (const param of path.get('params')) {
+          if (!param.isAssignmentPattern()) continue;
+          const right = param.get('right');
+          const names = right.isIdentifier() ? [right.node.name] : [];
+          right.traverse({ Identifier(id) { if (id.isReferencedIdentifier()) names.push(id.node.name); } });
+          for (const name of names) {
+            if (outside.has(name)) problems.push(`${path.node.id?.name ?? 'a worklet'}: default ${text.slice(param.node.start, param.node.end)} reads ${name}`);
+          }
+        }
+      },
+    });
+  }
+  return [...new Set(problems)];
+}
+
+it.each(files)('%s: no worklet parameter default reads something from outside the worklet', (file) => {
+  expect(defaultsReadingOutside(file)).toEqual([]);
+});
