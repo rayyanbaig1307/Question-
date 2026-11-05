@@ -4,12 +4,15 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
+import { isPlusSticker, PlusSticker } from './PlusStickers';
 
 // Peekaboo's own stickers, drawn by the app (no pictures needed).
 export const SPECIAL_STICKERS = ['googly-eyes', 'googly-eye', 'peekaboo', 'peek-bubble', 'i-see-you', 'caught'] as const;
 export type SpecialStickerId = (typeof SPECIAL_STICKERS)[number];
 
 export function SpecialSticker({ id, small = false }: { id: string; small?: boolean }) {
+  // The Peekaboo+ packs live in their own file.
+  if (isPlusSticker(id)) return <PlusSticker id={id} small={small} />;
   // The picker shows them at half size.
   const size = small ? 0.5 : 1;
   switch (id) {
