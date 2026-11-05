@@ -1,0 +1,342 @@
+<title>Peekaboo+ Look Book</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Layout: a phone-first look book – one band per thing Peekaboo+ unlocks, each a row of tappable swatches. */
+:root {
+  --bg: #FFF6FB;
+  --card: #FFFFFF;
+  --ink: #1B1428;
+  --muted: #6B5F80;
+  --line: #EEDDF0;
+  --pink: #FF3D8E;
+  --purple: #8A4DFF;
+  --gold: #E8A93A;
+  --navy: #1B1428;
+  --display: "Fredoka", "Nunito", system-ui, sans-serif;
+  --body: "Nunito", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #120C1C; --card: #1E1530; --ink: #FFFFFF; --muted: #B7A9CC; --line: #2E2245;
+    --pink: #FF4F9A; --purple: #9B5CFF; --gold: #F2B84B; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #120C1C; --card: #1E1530; --ink: #FFFFFF; --muted: #B7A9CC; --line: #2E2245;
+  --pink: #FF4F9A; --purple: #9B5CFF; --gold: #F2B84B; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 60px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+header { display: flex; flex-direction: column; gap: 10px; }
+.plus-chip {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, var(--pink), var(--purple)); color: #fff;
+  font-family: var(--display); font-weight: 600; font-size: 15px; padding: 6px 14px; border-radius: 999px;
+}
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 7vw, 56px); line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: -0.5px; }
+.lede { color: var(--muted); max-width: 60ch; margin: 0; font-size: 17px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; }
+.sub { color: var(--muted); margin: -8px 0 0; max-width: 62ch; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid.wide { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.label { font-weight: 800; font-size: 15px; }
+.note { color: var(--muted); font-size: 13px; margin-top: -6px; }
+
+/* ---- App icons ---- */
+.icon-img { width: 100%; max-width: 150px; height: auto; aspect-ratio: 1; border-radius: 22.5%; box-shadow: 0 6px 18px rgba(27, 20, 40, 0.18); display: block; }
+.icon {
+  width: 100%; max-width: 150px; aspect-ratio: 1; border-radius: 26%; display: grid; place-items: center;
+  position: relative; box-shadow: 0 6px 18px rgba(27, 20, 40, 0.18); overflow: hidden;
+}
+.eyes { display: flex; gap: 2%; width: 66%; }
+.eye { flex: 1; aspect-ratio: 1; border-radius: 50%; background: #fff; border: 7px solid var(--rim, #1B1428); position: relative; }
+.eye::after { content: ""; position: absolute; width: 46%; aspect-ratio: 1; border-radius: 50%; background: var(--pupil, #1B1428); left: 30%; top: 26%; }
+.eye::before { content: ""; position: absolute; width: 16%; aspect-ratio: 1; border-radius: 50%; background: #fff; left: 52%; top: 30%; z-index: 1; }
+
+/* ---- Phones (themes) ---- */
+.phone {
+  width: 100%; max-width: 220px; aspect-ratio: 9 / 18; border-radius: 30px; padding: 12px; position: relative;
+  border: 6px solid #0F0A16; display: flex; flex-direction: column; gap: 8px; overflow: hidden;
+}
+.ph-top { display: flex; justify-content: space-between; align-items: center; font-family: var(--display); font-weight: 700; font-size: 18px; }
+.ph-dot { width: 26px; height: 26px; border-radius: 50%; }
+.ph-story { display: flex; gap: 6px; }
+.ph-story span { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--ring); background: var(--soft); }
+.ph-card { flex: 1; border-radius: 16px; background: var(--soft); position: relative; overflow: hidden; }
+.ph-card::after { content: ""; position: absolute; inset: auto 10px 10px 10px; height: 10px; border-radius: 5px; background: var(--ring); opacity: 0.7; }
+.ph-bar { height: 34px; border-radius: 17px; background: var(--barbg); display: flex; justify-content: space-around; align-items: center; }
+.ph-bar i { width: 14px; height: 14px; border-radius: 4px; background: var(--ring); display: block; }
+.ph-bar i.on { width: 20px; height: 20px; border-radius: 50%; }
+
+/* ---- Chat backgrounds ---- */
+.chat {
+  width: 100%; max-width: 220px; aspect-ratio: 3 / 4; border-radius: 22px; padding: 14px; display: flex; flex-direction: column;
+  justify-content: flex-end; gap: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+.bub { max-width: 75%; padding: 7px 12px; border-radius: 16px; font-size: 13px; font-weight: 700; line-height: 1.3; }
+.bub.them { align-self: flex-start; background: rgba(255,255,255,0.92); color: #1B1428; border-bottom-left-radius: 5px; }
+.bub.me { align-self: flex-end; color: #fff; border-bottom-right-radius: 5px; }
+
+/* ---- Stickers ---- */
+.pack { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.pack-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pack-name { font-family: var(--display); font-weight: 600; font-size: 20px; }
+.stickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+.stk { aspect-ratio: 1; display: grid; place-items: center; border-radius: 18px; background: var(--bg); }
+.stamp {
+  font-family: var(--display); font-weight: 700; color: #fff; padding: 6px 10px; border-radius: 12px; transform: rotate(-6deg);
+  text-align: center; line-height: 1.05; font-size: 15px; border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+}
+.mini-eyes { display: flex; gap: 3px; width: 70px; }
+.mini-eyes .eye { border-width: 4px; }
+.burst { font-family: var(--display); font-weight: 700; font-size: 22px; color: #fff; background: var(--pink); width: 74px; aspect-ratio: 1;
+  display: grid; place-items: center; clip-path: polygon(50% 0, 61% 18%, 82% 8%, 80% 30%, 100% 36%, 86% 52%, 100% 68%, 79% 72%, 82% 94%, 61% 84%, 50% 100%, 39% 84%, 18% 94%, 21% 72%, 0 68%, 14% 52%, 0 36%, 20% 30%, 18% 8%, 39% 18%); }
+
+/* ---- Filters ---- */
+.shot { width: 100%; max-width: 240px; aspect-ratio: 3 / 4; border-radius: 22px; overflow: hidden; position: relative; }
+.shot svg { width: 100%; height: 100%; display: block; }
+.shot .wash { position: absolute; inset: 0; pointer-events: none; }
+.glow svg { filter: brightness(1.08) contrast(0.92) saturate(1.05); }
+.glow .wash { background: radial-gradient(60% 45% at 50% 42%, rgba(255,235,240,0.45), transparent 70%); mix-blend-mode: screen; }
+.glow .spark { position: absolute; color: #fff; font-size: 18px; text-shadow: 0 0 8px #fff; }
+.golden svg { filter: sepia(0.25) saturate(1.25) brightness(1.04); }
+.golden .wash { background: linear-gradient(150deg, rgba(255,170,60,0.55), rgba(255,120,80,0.15) 45%, rgba(120,40,140,0.25)); mix-blend-mode: soft-light; }
+.golden .sun { position: absolute; top: -40px; right: -40px; width: 170px; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,214,120,0.9), rgba(255,170,60,0.25) 45%, transparent 70%); mix-blend-mode: screen; }
+.pair { display: flex; gap: 12px; flex-wrap: wrap; }
+.pair .item { flex: 1 1 200px; }
+
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+@media (prefers-reduced-motion: no-preference) {
+  .icon:hover, .stk:hover { transform: translateY(-3px) rotate(-2deg); transition: transform 0.2s; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="plus-chip">⭐ Peekaboo+ · $6.99/month</span>
+    <h1>The Peekaboo+ look book</h1>
+    <p class="lede">These are first drafts of what Peekaboo+ members get: app icons, home themes, chat backgrounds, sticker packs and the two new face filters. Pick the ones you like and tell me what to change.</p>
+  </header>
+
+  <!-- APP ICONS -->
+  <section>
+    <h2>App icons</h2>
+    <p class="sub">Your real Peekaboo logo in new colours. Members pick which one sits on their home screen.</p>
+    <div class="grid">
+      <div class="item">
+        <img class="icon-img" src="plus-icons/classic.png" alt="Classic app icon" width="150" height="150">
+        <span class="label">Classic</span><span class="note">Free for everyone</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/dark-gold.png" alt="Dark Gold app icon" width="150" height="150">
+        <span class="label">Dark Gold</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/midnight.png" alt="Midnight app icon" width="150" height="150">
+        <span class="label">Midnight</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/mint.png" alt="Mint app icon" width="150" height="150">
+        <span class="label">Mint</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/sunny.png" alt="Sunny app icon" width="150" height="150">
+        <span class="label">Sunny</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/clean-white.png" alt="Clean White app icon" width="150" height="150">
+        <span class="label">Clean White</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/all-black.png" alt="All Black app icon" width="150" height="150">
+        <span class="label">All Black</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <img class="icon-img" src="plus-icons/cherry.png" alt="Cherry app icon" width="150" height="150">
+        <span class="label">Cherry</span><span class="note">Plus</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOME / APP THEMES -->
+  <section>
+    <h2>Home &amp; app themes</h2>
+    <p class="sub">Changes the colours across the whole app: Home, story rings, buttons and the bottom bar.</p>
+    <div class="grid wide">
+      <div class="item">
+        <div class="phone" style="background:#FFF6FB;color:#1B1428;--ring:#FF3D8E;--soft:#F6E3F2;--barbg:#FFFFFF">
+          <div class="ph-top">peekaboo<span class="ph-dot" style="background:linear-gradient(135deg,#FF3D8E,#8A4DFF)"></span></div>
+          <div class="ph-story"><span></span><span></span><span></span><span></span></div>
+          <div class="ph-card"></div>
+          <div class="ph-bar"><i></i><i class="on"></i><i></i></div>
+        </div>
+        <span class="label">Peekaboo Pink</span><span class="note">Free for everyone</span>
+      </div>
+      <div class="item">
+        <div class="phone" style="background:#0E0A08;color:#F2D9A8;--ring:#E8A93A;--soft:#2A2016;--barbg:#1C1510">
+          <div class="ph-top">peekaboo<span class="ph-dot" style="background:#E8A93A"></span></div>
+          <div class="ph-story"><span></span><span></span><span></span><span></span></div>
+          <div class="ph-card"></div>
+          <div class="ph-bar"><i></i><i class="on"></i><i></i></div>
+        </div>
+        <span class="label">Black &amp; Gold</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <div class="phone" style="background:linear-gradient(180deg,#0B1530,#1E3A8A);color:#EAF4FF;--ring:#38B6FF;--soft:rgba(255,255,255,0.08);--barbg:rgba(255,255,255,0.1)">
+          <div class="ph-top">peekaboo<span class="ph-dot" style="background:#38B6FF"></span></div>
+          <div class="ph-story"><span></span><span></span><span></span><span></span></div>
+          <div class="ph-card"></div>
+          <div class="ph-bar"><i></i><i class="on"></i><i></i></div>
+        </div>
+        <span class="label">Midnight</span><span class="note">Plus</span>
+      </div>
+      <div class="item">
+        <div class="phone" style="background:linear-gradient(180deg,#FFF1D6,#FFD1C2);color:#5A2A12;--ring:#FF7A1F;--soft:rgba(255,255,255,0.55);--barbg:rgba(255,255,255,0.7)">
+          <div class="ph-top">peekaboo<span class="ph-dot" style="background:#FF7A1F"></span></div>
+          <div class="ph-story"><span></span><span></span><span></span><span></span></div>
+          <div class="ph-card"></div>
+          <div class="ph-bar"><i></i><i class="on"></i><i></i></div>
+        </div>
+        <span class="label">Sunset</span><span class="note">Plus</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHAT BACKGROUNDS -->
+  <section>
+    <h2>Chat backgrounds</h2>
+    <p class="sub">A different wallpaper and bubble colour for each chat. Only you see the one you pick.</p>
+    <div class="grid wide">
+      <div class="item">
+        <div class="chat" style="background:radial-gradient(circle at 20% 20%,#FFD6EA,transparent 40%),radial-gradient(circle at 80% 70%,#E2D2FF,transparent 45%),#FFF3FA">
+          <span class="bub them">dare you to eat that 💀</span><span class="bub me" style="background:#FF3D8E">bet. filming now</span>
+        </div>
+        <span class="label">Cotton Candy</span>
+      </div>
+      <div class="item">
+        <div class="chat" style="background:repeating-radial-gradient(circle at 0 0,#1B1428 0 14px,#231A33 14px 28px)">
+          <span class="bub them">who peeked at my story 👀</span><span class="bub me" style="background:#8A4DFF">not me 😇</span>
+        </div>
+        <span class="label">Night Peek</span>
+      </div>
+      <div class="item">
+        <div class="chat" style="background:linear-gradient(160deg,#FFB86B,#FF6F91 55%,#8A4DFF)">
+          <span class="bub them">drop's in 2 min 🔔</span><span class="bub me" style="background:#1B1428">ready</span>
+        </div>
+        <span class="label">Golden Hour</span>
+      </div>
+      <div class="item">
+        <div class="chat" style="background:radial-gradient(circle at 50% 120%,#3DDC97,#0E3B33 70%)">
+          <span class="bub them">guess who 🕵️</span><span class="bub me" style="background:#0E7C66">it's you lol</span>
+        </div>
+        <span class="label">Mint Glow</span>
+      </div>
+      <div class="item">
+        <div class="chat" style="background:conic-gradient(from 200deg at 50% 50%,#38B6FF,#9B5CFF,#FF4F9A,#FFE14D,#38B6FF)">
+          <span class="bub them">streak saved 🔥</span><span class="bub me" style="background:#1B1428">clutch</span>
+        </div>
+        <span class="label">Rainbow Swirl</span>
+      </div>
+      <div class="item">
+        <div class="chat" style="background:#0E0A08;background-image:radial-gradient(#E8A93A 1px,transparent 1.5px);background-size:18px 18px">
+          <span class="bub them">plus gang ⭐</span><span class="bub me" style="background:#E8A93A;color:#1B1428">⭐⭐⭐</span>
+        </div>
+        <span class="label">Gold Dust</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- STICKERS -->
+  <section>
+    <h2>Sticker packs</h2>
+    <p class="sub">New packs for photos, videos and chats. Peekaboo+ members get every pack, and a new one each month.</p>
+    <div class="pack">
+      <div class="pack-head"><span class="pack-name">👀 Googly Gang</span><span class="note" style="margin:0">8 stickers</span></div>
+      <div class="stickers">
+        <div class="stk"><div class="mini-eyes"><div class="eye"></div><div class="eye"></div></div></div>
+        <div class="stk"><div class="mini-eyes" style="width:60px;transform:rotate(14deg)"><div class="eye" style="--pupil:#FF3D8E"></div><div class="eye" style="--pupil:#FF3D8E"></div></div></div>
+        <div class="stk"><div class="mini-eyes" style="width:84px"><div class="eye"></div><div class="eye"></div><div class="eye"></div></div></div>
+        <div class="stk"><div class="mini-eyes" style="width:46px"><div class="eye" style="--rim:#E8A93A;--pupil:#E8A93A"></div></div></div>
+        <div class="stk"><span class="stamp" style="background:#FF3D8E">I SAW<br>THAT 👀</span></div>
+        <div class="stk"><span class="stamp" style="background:#8A4DFF">PEEK<br>A BOO</span></div>
+        <div class="stk"><span class="burst">BOO!</span></div>
+        <div class="stk"><span class="stamp" style="background:#1B1428">CAUGHT<br>IN 4K</span></div>
+      </div>
+    </div>
+    <div class="pack">
+      <div class="pack-head"><span class="pack-name">🎯 Dare Mode</span><span class="note" style="margin:0">8 stickers</span></div>
+      <div class="stickers">
+        <div class="stk"><span class="stamp" style="background:#FF7A1F">DARE<br>DONE ✅</span></div>
+        <div class="stk"><span class="stamp" style="background:#1DB97F">NO<br>CAP 🧢</span></div>
+        <div class="stk"><span class="stamp" style="background:#FF3D8E">ICONIC 🔥</span></div>
+        <div class="stk"><span class="stamp" style="background:#6B5F80">MID 😬</span></div>
+        <div class="stk"><span class="stamp" style="background:#1B1428">UN<br>HINGED 💀</span></div>
+        <div class="stk"><span class="stamp" style="background:#1E9BEA">YOUR<br>TURN 👉</span></div>
+        <div class="stk"><span class="burst" style="background:#F5C400;color:#1B1428;font-size:17px">STREAK</span></div>
+        <div class="stk"><span class="stamp" style="background:#8A4DFF">CHICKEN<br>🐔</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FILTERS -->
+  <section>
+    <h2>Face filters</h2>
+    <p class="sub">They follow your face live on the camera. These are drawn mock-ups: the real ones work on your real face and stay subtle.</p>
+    <div class="pair">
+      <div class="item">
+        <div class="shot"><svg viewBox="0 0 300 400" aria-label="Portrait before any filter">
+          <rect width="300" height="400" fill="#8DA3B8"/><rect y="250" width="300" height="150" fill="#5E6E80"/>
+          <ellipse cx="150" cy="370" rx="110" ry="70" fill="#2F2A3A"/>
+          <rect x="128" y="250" width="44" height="60" fill="#C99A7E"/>
+          <ellipse cx="150" cy="180" rx="78" ry="96" fill="#D9A989"/>
+          <path d="M72 165 Q80 70 150 72 Q222 70 228 165 Q215 110 150 108 Q88 110 72 165Z" fill="#2B1E1A"/>
+          <ellipse cx="122" cy="185" rx="9" ry="6" fill="#2B1E1A"/><ellipse cx="178" cy="185" rx="9" ry="6" fill="#2B1E1A"/>
+          <path d="M130 232 Q150 246 170 232" stroke="#9A5A4E" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <circle cx="112" cy="214" r="12" fill="#E8907F" opacity="0.25"/><circle cx="188" cy="214" r="12" fill="#E8907F" opacity="0.25"/>
+        </svg></div>
+        <span class="label">No filter</span>
+      </div>
+      <div class="item">
+        <div class="shot glow"><svg viewBox="0 0 300 400" aria-label="Portrait with Soft Glow">
+          <rect width="300" height="400" fill="#A9BCCD"/><rect y="250" width="300" height="150" fill="#76879A"/>
+          <ellipse cx="150" cy="370" rx="110" ry="70" fill="#3A3448"/>
+          <rect x="128" y="250" width="44" height="60" fill="#DDAE92"/>
+          <ellipse cx="150" cy="180" rx="78" ry="96" fill="#E9BFA2"/>
+          <path d="M72 165 Q80 70 150 72 Q222 70 228 165 Q215 110 150 108 Q88 110 72 165Z" fill="#3A2722"/>
+          <ellipse cx="122" cy="185" rx="10" ry="7" fill="#2B1E1A"/><ellipse cx="178" cy="185" rx="10" ry="7" fill="#2B1E1A"/>
+          <circle cx="125" cy="182" r="2.5" fill="#fff"/><circle cx="181" cy="182" r="2.5" fill="#fff"/>
+          <path d="M130 232 Q150 246 170 232" stroke="#C0625A" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <circle cx="112" cy="214" r="14" fill="#F59A8C" opacity="0.4"/><circle cx="188" cy="214" r="14" fill="#F59A8C" opacity="0.4"/>
+        </svg><div class="wash"></div>
+          <span class="spark" style="left:22%;top:20%">✦</span><span class="spark" style="right:20%;top:30%;font-size:12px">✦</span><span class="spark" style="right:30%;top:14%;font-size:10px">✦</span>
+        </div>
+        <span class="label">✨ Soft Glow</span><span class="note">Smoother skin, brighter eyes, rosy cheeks, a little sparkle</span>
+      </div>
+      <div class="item">
+        <div class="shot golden"><svg viewBox="0 0 300 400" aria-label="Portrait with Golden Hour">
+          <rect width="300" height="400" fill="#8DA3B8"/><rect y="250" width="300" height="150" fill="#5E6E80"/>
+          <ellipse cx="150" cy="370" rx="110" ry="70" fill="#2F2A3A"/>
+          <rect x="128" y="250" width="44" height="60" fill="#C99A7E"/>
+          <ellipse cx="150" cy="180" rx="78" ry="96" fill="#D9A989"/>
+          <path d="M72 165 Q80 70 150 72 Q222 70 228 165 Q215 110 150 108 Q88 110 72 165Z" fill="#2B1E1A"/>
+          <ellipse cx="122" cy="185" rx="9" ry="6" fill="#2B1E1A"/><ellipse cx="178" cy="185" rx="9" ry="6" fill="#2B1E1A"/>
+          <path d="M130 232 Q150 246 170 232" stroke="#9A5A4E" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M200 120 Q236 170 214 240" stroke="#FFD27A" stroke-width="10" fill="none" opacity="0.55" stroke-linecap="round"/>
+        </svg><div class="wash"></div><div class="sun"></div></div>
+        <span class="label">🌅 Golden Hour</span><span class="note">Warm sunset light that hits the side of your face as you move</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>Draft for Peekaboo+ · Tell me which icons, themes, backgrounds and packs to keep, cut or change, and I'll build those.</footer>
+</div>
