@@ -9,6 +9,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/Button';
 import { ChatBackground, ChatInkProvider, chatInk } from '@/components/chat/ChatBackground';
 import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
 import { DareComposer } from '@/components/DareComposer';
@@ -27,6 +29,8 @@ import { GroupFaces } from '@/components/GroupFaces';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { SafeEdge } from '@/components/SafeEdge';
+import { ZoomableImage } from '@/components/ZoomableImage';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { useMe } from '@/lib/auth';
@@ -80,16 +84,20 @@ export default function GroupChat() {
   const [reads, setReads] = useState<Map<string, string>>(new Map());
   const [muted, setMuted] = useState(false);
   const [text, setText] = useState('');
+  const draft = useRef('');
+  const sendingNow = useRef(false);
   const [sending, setSending] = useState(false);
   const [dareOpen, setDareOpen] = useState(false);
   // Search: the box is open while `search` isn't null.
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: GroupMessage[] } | null>(null);
+  const searchRequest = useRef(0);
   const listRef = useRef<FlatList<GroupMessage>>(null);
   // Reactions, the message you're holding (its menu), and the message you're replying to.
   const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
   const [menuFor, setMenuFor] = useState<{ message: GroupMessage; actions: MessageAction[] } | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
+  const [viewing, setViewing] = useState<GroupMessage | null>(null);
   const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
 
   const load = useCallback(() => {
@@ -169,23 +177,33 @@ export default function GroupChat() {
   }
 
   async function send() {
+    const originalText = text;
     const body = text.trim();
-    if (!body || sending) return;
+    if (!body || sendingNow.current) return;
+    sendingNow.current = true;
+    const replyId = replyTo?.id;
     setSending(true);
     try {
-      const sent = await sendGroupMessage(groupId, body, replyTo?.id);
-      setReplyTo(null);
-      setText('');
-      onTextChange('');
+      const sent = await sendGroupMessage(groupId, body, replyId);
+      setReplyTo((current) => current?.id === replyId ? null : current);
+      // Leave the next draft alone if you started typing while this message was sending.
+      if (draft.current === originalText) {
+        draft.current = '';
+        setText('');
+        onTextChange('');
+      }
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
     } catch (error) {
       Alert.alert('Message not sent', friendlyError(error));
     } finally {
+      sendingNow.current = false;
       setSending(false);
     }
   }
 
   async function sendVoiceNote(recording: Recording) {
+    if (sendingNow.current) return;
+    sendingNow.current = true;
     setSending(true);
     try {
       const sent = await sendGroupVoice(userId, groupId, recording.uri, recording.durationMs, recording.waveform);
@@ -193,6 +211,7 @@ export default function GroupChat() {
     } catch (error) {
       Alert.alert('Voice note not sent', friendlyError(error));
     } finally {
+      sendingNow.current = false;
       setSending(false);
     }
   }
@@ -251,7 +270,7 @@ export default function GroupChat() {
     } else if (sender) {
       actions.push(
         { label: '👤 See profile', onPress: () => router.push(`/profile/${sender.id}`) },
-        { label: 'Report', onPress: () => report({ user: sender, contentType: 'user', contentId: sender.id }) },
+        { label: 'Report', onPress: () => report({ user: sender, contentType: 'group_message', contentId: message.id }) },
       );
     }
     setMenuFor({ message, actions });
@@ -331,15 +350,17 @@ export default function GroupChat() {
   }
 
   async function runSearch(query: string) {
+    const request = ++searchRequest.current;
     setSearch(query);
     if (!query.trim()) {
       setResults(null);
       return;
     }
     try {
-      setResults({ query, list: await searchGroupMessages(groupId, query) });
+      const list = await searchGroupMessages(groupId, query);
+      if (request === searchRequest.current) setResults({ query, list });
     } catch (error) {
-      Alert.alert('Search failed', friendlyError(error));
+      if (request === searchRequest.current) Alert.alert('Search failed', friendlyError(error));
     }
   }
 
@@ -371,6 +392,7 @@ export default function GroupChat() {
     : [];
   const memberCount = group?.members.length ?? 0;
   const pinnedMessage = pinnedId ? (messages?.find((m) => m.id === pinnedId) ?? null) : null;
+  const openedMedia = viewing && messages?.some((m) => m.id === viewing.id) ? viewing : null;
 
   return (
     <View style={styles.fill}>
@@ -501,7 +523,12 @@ export default function GroupChat() {
                         {replied ? (
                           <ReplyQuote name={replied.sender_id === userId ? 'You' : nameOf(replied.sender_id)} text={previewOf(replied)} mine={mine} />
                         ) : null}
-                        <Pressable onLongPress={() => openMessageMenu(item)} style={styles.stretch}>
+                        <Pressable
+                          onLongPress={() => openMessageMenu(item)}
+                          onPress={item.media_path && item.kind !== 'voice' ? () => setViewing(item) : undefined}
+                          accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
+                          accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
+                          style={styles.stretch}>
                           {item.kind === 'text' ? (
                             <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                               <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
@@ -590,6 +617,7 @@ export default function GroupChat() {
               <TextInput
                 value={text}
                 onChangeText={(value) => {
+                  draft.current = value;
                   setText(value);
                   onTextChange(value);
                 }}
@@ -602,7 +630,7 @@ export default function GroupChat() {
                 style={styles.input}
               />
               {text.trim() || !Audio ? (
-                <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} />
+                <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} disabled={sending} />
               ) : (
                 <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
               )}
@@ -625,11 +653,35 @@ export default function GroupChat() {
         actions={menuFor?.actions ?? []}
         onClose={() => setMenuFor(null)}
       />
+      <Modal visible={openedMedia !== null} animationType="fade" onRequestClose={() => setViewing(null)}>
+        <View style={styles.mediaViewer}>
+          {openedMedia?.media_path && urls[openedMedia.media_path] ? (
+            openedMedia.media_type === 'video' ? (
+              <VideoClip
+                uri={urls[openedMedia.media_path]}
+                posterUri={openedMedia.poster_path ? urls[openedMedia.poster_path] : null}
+                overlayUri={openedMedia.overlay_path ? urls[openedMedia.overlay_path] : null}
+                playing
+                muted={false}
+                contentFit="contain"
+                style={styles.fill}
+              />
+            ) : (
+              <ZoomableImage uri={urls[openedMedia.media_path]} contentFit="contain" style={styles.fill} />
+            )
+          ) : <ActivityIndicator color={colors.white} />}
+          <SafeEdge edge="top" style={styles.mediaClose}>
+            <Button title="Close media" variant="secondary" small onPress={() => setViewing(null)} />
+          </SafeEdge>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mediaViewer: { flex: 1, backgroundColor: colors.black },
+  mediaClose: { position: 'absolute', top: 0, right: 0, padding: space.lg },
   fill: {
     flex: 1,
     backgroundColor: colors.bg,

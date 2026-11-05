@@ -116,8 +116,8 @@ async function fetchHiddenIds(me: string): Promise<Set<string>> {
     .eq('user_id', me)
     .order('hidden_at', { ascending: false })
     .limit(5000);
-  // A server without "delete for me" yet: nothing is hidden.
-  if (error) return new Set();
+  // A failed privacy check must not make cleared messages reappear.
+  if (error) throw error;
   return new Set((data ?? []).map((row) => row.message_id as string));
 }
 
@@ -245,7 +245,8 @@ export async function sendSnap(me: string, friendIds: string[], capture: Capture
     .from('messages')
     .insert(friendIds.map((friend) => ({ sender_id: me, recipient_id: friend, kind: 'snap', ...fields })));
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }
@@ -285,7 +286,11 @@ export async function markChatRead(friend: string): Promise<void> {
 export async function deleteMessage(message: Message): Promise<void> {
   const { error } = await supabase.from('messages').delete().eq('id', message.id);
   if (error) throw error;
-  if (message.media_path) await cleanUpSnapFile(message.sender_id, message);
+  // The message is deleted now. Tidying up its photo or voice file is extra: if that fails, it is only
+  // noted (the daily clean-up can still remove the file), and the delete still counts as done.
+  if (message.media_path) {
+    await cleanUpSnapFile(message).catch((cleanupError) => console.warn('Could not remove the file of a deleted message', cleanupError));
+  }
 }
 
 // A peek's photo is no longer needed once it was opened over a day ago (no replay or save left) and isn't saved.
@@ -295,16 +300,16 @@ const photoNoLongerNeeded = (row: Pick<Message, 'opened_at' | 'saved_at'>) =>
   Date.now() - new Date(row.opened_at).getTime() >= KEEP_AFTER_OPENING_MS;
 
 // Deletes a peek's files you sent once nobody you sent it to needs them any more (or it was unsent).
-async function cleanUpSnapFile(me: string, peek: Pick<Message, 'media_path' | 'poster_path' | 'overlay_path'>): Promise<void> {
+async function cleanUpSnapFile(peek: Pick<Message, 'media_path' | 'poster_path' | 'overlay_path'>): Promise<void> {
   if (!peek.media_path) return;
-  const { data } = await supabase
-    .from('messages')
-    .select('opened_at, saved_at')
-    .eq('sender_id', me)
-    .eq('media_path', peek.media_path);
-  if ((data ?? []).every(photoNoLongerNeeded)) {
-    await deleteMedia(mediaFiles({ ...peek, media_path: peek.media_path }));
+  // The server checks every recipient, including rows hidden from this person's chat.
+  // It also claims the path so Storage can recheck if a report or another use appears before deletion.
+  const paths = [...new Set(mediaFiles({ ...peek, media_path: peek.media_path }))];
+  for (const path of paths) {
+    const { data, error } = await supabase.rpc('can_cleanup_snap', { object_name: path });
+    if (error || data !== true) return;
   }
+  await deleteMedia(paths);
 }
 
 // Called when you open a chat: tidies up photos of your peeks that nobody needs any more.
@@ -316,7 +321,7 @@ export async function cleanUpOpenedSnaps(me: string, messages: Message[]): Promi
     }
   }
   for (const peek of peeks.values()) {
-    await cleanUpSnapFile(me, peek).catch(() => {});
+    await cleanUpSnapFile(peek).catch(() => {});
   }
 }
 
@@ -331,9 +336,10 @@ async function countUnread(me: string): Promise<number> {
 }
 
 // Calls `onChange` whenever one of your messages is sent, read, opened or unsent.
+let messageListener = 0;
 export function subscribeToMyMessages(name: string, onChange: () => void): () => void {
   const channel = supabase
-    .channel(name)
+    .channel(`${name}-${++messageListener}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onChange)
     .subscribe();
   return () => {

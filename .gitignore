@@ -50,5 +50,10 @@ example
 .env.asc
 *.p8
 
+# Local QA builds, evidence, and temporary service state
+.qa/
+.supabase/
+supabase/.temp/
+
 # Temporary working copies made by Claude Code helpers
 .claude/worktrees/

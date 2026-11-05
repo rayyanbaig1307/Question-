@@ -92,8 +92,11 @@ export default function ChatScreen() {
   // 🔎 Search: the box is open while `search` isn't null.
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: Message[] } | null>(null);
+  const searchRequest = useRef(0);
   const listRef = useRef<FlatList<Message>>(null);
   const [text, setText] = useState('');
+  const draft = useRef('');
+  const sendingNow = useRef(false);
   const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
   const insets = useSafeAreaInsets();
@@ -148,20 +151,27 @@ export default function ChatScreen() {
   );
 
   async function send() {
+    const originalText = text;
     const body = text.trim();
     // Private chats between friends aren't filtered: people can say whatever they want here (the owner's
     // choice). Report and Block still work on every message.
-    if (!body || sending) return;
+    if (!body || sendingNow.current) return;
+    sendingNow.current = true;
+    const replyId = replyTo?.id;
     setSending(true);
     try {
-      const sent = await sendText(userId, friendId, body, replyTo?.id);
-      setReplyTo(null);
-      setText('');
-      onTextChange('');
+      const sent = await sendText(userId, friendId, body, replyId);
+      setReplyTo((current) => current?.id === replyId ? null : current);
+      if (draft.current === originalText) {
+        draft.current = '';
+        setText('');
+        onTextChange('');
+      }
       setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
     } catch (error) {
       Alert.alert('Message not sent', friendlyError(error));
     } finally {
+      sendingNow.current = false;
       setSending(false);
     }
   }
@@ -213,6 +223,8 @@ export default function ChatScreen() {
   }
 
   async function sendVoiceNote(recording: Recording) {
+    if (sendingNow.current) return;
+    sendingNow.current = true;
     setSending(true);
     try {
       const sent = await sendVoice(userId, friendId, recording.uri, recording.durationMs, recording.waveform);
@@ -220,6 +232,7 @@ export default function ChatScreen() {
     } catch (error) {
       Alert.alert('Voice note not sent', friendlyError(error));
     } finally {
+      sendingNow.current = false;
       setSending(false);
     }
   }
@@ -331,15 +344,17 @@ export default function ChatScreen() {
             : 'Message';
 
   async function runSearch(query: string) {
+    const request = ++searchRequest.current;
     setSearch(query);
     if (!query.trim()) {
       setResults(null);
       return;
     }
     try {
-      setResults({ query, list: await searchConversation(userId, friendId, query) });
+      const list = await searchConversation(userId, friendId, query);
+      if (request === searchRequest.current) setResults({ query, list });
     } catch (error) {
-      Alert.alert('Search failed', friendlyError(error));
+      if (request === searchRequest.current) Alert.alert('Search failed', friendlyError(error));
     }
   }
 
@@ -529,6 +544,7 @@ export default function ChatScreen() {
                 <TextInput
                   value={text}
                   onChangeText={(value) => {
+                    draft.current = value;
                     setText(value);
                     onTextChange(value);
                   }}
@@ -547,6 +563,7 @@ export default function ChatScreen() {
                     label="Send"
                     background={text.trim() ? colors.blue : colors.card}
                     onPress={send}
+                    disabled={sending}
                   />
                 ) : (
                   <MicButton onRecorded={sendVoiceNote} onHint={showToast} />

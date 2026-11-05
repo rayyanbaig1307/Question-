@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { FormScreen } from '@/components/FormScreen';
@@ -21,30 +21,79 @@ import { colors, font, radius, space } from '@/theme';
 // ---------------------------------------------------------------------------
 
 // Does the logged-in person still need the setup screen? null while checking.
-export function useNeedsSetup(): [boolean | null, () => void] {
-  const { session, userId } = useAuth();
+// If the check doesn't work (no internet?) or takes too long, `failed` is true: the app then shows "Couldn't check – Try again"
+// instead of the app or the setup form. It never skips setup on an error. It also tries again by itself
+// when you come back to the app.
+export type SetupCheck = { failed: boolean; checking: boolean; retry: () => void };
+
+// How long the check may take before we stop waiting and show "Couldn't check – Try again".
+const SETUP_CHECK_TIME_LIMIT_MS = 15_000;
+
+export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
+  const { session, userId, profile, refreshProfile } = useAuth();
   // The answer, and whose account it's about (so a different login is checked again).
-  const [answer, setAnswer] = useState<{ user: string; needed: boolean } | null>(null);
+  const [answer, setAnswer] = useState<{ user: string; needed: boolean; failed: boolean } | null>(null);
+  // Goes up by one for every new try; `retrying` shows a spinner on "Try again".
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const social = madeWithAppleOrGoogle(session?.user.app_metadata?.provider);
+  // The setup form needs your profile (so the username you already have counts as yours, not "taken").
+  const haveProfile = useRef(false);
+  const reloadProfile = useRef(refreshProfile);
+  useEffect(() => {
+    haveProfile.current = !!profile;
+    reloadProfile.current = refreshProfile;
+  }, [profile, refreshProfile]);
 
   useEffect(() => {
     if (!userId || !social) return;
     let cancelled = false;
-    hasAcceptedAnyTerms(userId)
-      .then((agreed) => {
-        if (!cancelled) setAnswer({ user: userId, needed: !agreed });
-      })
-      // If the check fails (no internet), don't lock anyone out – the Terms check runs again later.
-      .catch(() => {
-        if (!cancelled) setAnswer({ user: userId, needed: false });
+    let answered = false;
+    // Taking too long counts as "couldn't check" (a request can hang forever on Android). If the real answer
+    // still comes later, it wins.
+    const timer = setTimeout(() => {
+      if (cancelled || answered) return;
+      setAnswer({ user: userId, needed: true, failed: true });
+      setRetrying(false);
+    }, SETUP_CHECK_TIME_LIMIT_MS);
+    (async () => {
+      if (await hasAcceptedAnyTerms(userId)) return { needed: false, failed: false };
+      const loaded = haveProfile.current || !!(await reloadProfile.current());
+      return { needed: true, failed: !loaded };
+    })()
+      // A failed check must not skip the name, age and Terms confirmations.
+      .catch(() => ({ needed: true, failed: true }))
+      .then((result) => {
+        answered = true;
+        clearTimeout(timer);
+        if (cancelled) return;
+        setAnswer({ user: userId, ...result });
+        setRetrying(false);
       });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [userId, social]);
+  }, [userId, social, attempt]);
 
-  const needed = !userId || !social ? false : answer?.user === userId ? answer.needed : null;
-  return [needed, () => userId && setAnswer({ user: userId, needed: false })];
+  const current = userId && social && answer?.user === userId ? answer : null;
+  const failed = current?.failed ?? false;
+  const retry = useCallback(() => {
+    setRetrying(true);
+    setAttempt((count) => count + 1);
+  }, []);
+
+  // The check failed: try again by itself as soon as you come back to the app.
+  useEffect(() => {
+    if (!failed) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') retry();
+    });
+    return () => subscription.remove();
+  }, [failed, retry]);
+
+  const needed = !userId || !social ? false : current ? current.needed : null;
+  return [needed, () => userId && setAnswer({ user: userId, needed: false, failed: false }), { failed, checking: retrying, retry }];
 }
 
 // A stand-in username from the database ("user" + 6 letters/numbers) isn't worth showing as a suggestion.
@@ -63,6 +112,13 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availability, setAvailability] = useState<{ name: string; free: boolean } | null>(null);
+  const working = useRef(false);
+  const mounted = useRef(true);
+  const leaving = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // Check if the username is free, a moment after you stop typing. (The one you already have counts as free.)
   const isMine = username === profile?.username;
@@ -81,7 +137,8 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const usernameFree = isMine || (availability?.name === username && availability.free);
 
   const problems = {
-    name: name.trim() ? checkClean(name, 'name') : 'Type your name.',
+    // Your name may swear but can't have slurs; your @username can't have either.
+    name: name.trim() ? checkClean(name, 'content') : 'Type your name.',
     username: !username
       ? 'Pick a username.'
       : (usernameFormatError ?? (usernameTaken ? 'Taken! Try another one.' : checkClean(username, 'name'))),
@@ -90,29 +147,46 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   };
 
   async function finish() {
+    if (working.current || leaving.current) return;
     setTried(true);
     setError(null);
     if (!userId || Object.values(problems).some(Boolean)) return;
+    working.current = true;
     setBusy(true);
     try {
       if (!isMine && !(await isUsernameAvailable(username))) {
         setAvailability({ name: username, free: false });
         return;
       }
+      if (!mounted.current || leaving.current) return;
       const updated = await updateMyProfile(userId, { username, display_name: name.trim() });
+      if (!mounted.current || leaving.current) return;
       setProfile(updated);
       // Agreeing is the last step: it's also how the app knows setup is done.
       await acceptLegal('terms', TERMS_VERSION);
+      if (!mounted.current || leaving.current) return;
       onDone();
     } catch (setupError) {
       setError(friendlyError(setupError));
     } finally {
-      setBusy(false);
+      working.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  async function cancelSetup() {
+    if (!mounted.current) return;
+    leaving.current = true;
+    try {
+      await signOut(userId ?? undefined);
+    } catch (logoutError) {
+      leaving.current = false;
+      if (mounted.current) setError(friendlyError(logoutError));
     }
   }
 
   return (
-    <FormScreen title="Almost there! 🎉" subtitle="Pick how your friends find you." onBack={signOut}>
+    <FormScreen title="Almost there! 🎉" subtitle="Pick how your friends find you." onBack={cancelSetup}>
       <TextField
         label="Your name"
         value={name}
@@ -176,7 +250,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Let's go!" icon="sparkles" onPress={finish} loading={busy} />
-      <Button title="Cancel and log out" variant="plain" onPress={signOut} />
+      <Button title="Cancel and log out" variant="plain" onPress={cancelSetup} />
     </FormScreen>
   );
 }

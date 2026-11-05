@@ -59,7 +59,8 @@ export async function sendVoice(
     .select('*')
     .single();
   if (error) {
-    await deleteMedia([media_path]);
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia([media_path]).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
   return data as Message;

@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+
 import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
@@ -13,26 +15,30 @@ export async function createPost(
   options: { dare?: boolean; drop?: boolean; forfeit?: string; audience?: Audience } = {},
 ): Promise<Post> {
   const { fields, stillUri } = await uploadCapture(userId, 'posts', capture);
-  const blurPath =
-    options.drop && stillUri ? await uploadMedia(userId, 'blurs', await makeBlurPreview(stillUri)) : null;
-  const { data, error } = await supabase
-    .from('posts')
-    .insert({
-      user_id: userId,
-      ...fields,
-      caption: caption.trim(),
-      audience: options.audience ?? 'everyone',
-      ...(options.dare ? { dare_day: todayDareDay() } : {}),
-      ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
-      ...(options.forfeit ? { forfeit_id: options.forfeit } : {}),
-    })
-    .select('*')
-    .single();
-  if (error) {
-    await deleteMedia(mediaFiles({ ...fields, blur_path: blurPath }));
+  let blurPath: string | null = null;
+  try {
+    if (options.drop && stillUri) blurPath = await uploadMedia(userId, 'blurs', await makeBlurPreview(stillUri));
+    const { data, error } = await supabase
+      .from('posts')
+      .insert({
+        user_id: userId,
+        ...fields,
+        caption: caption.trim(),
+        audience: options.audience ?? 'everyone',
+        ...(options.dare ? { dare_day: todayDareDay() } : {}),
+        ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
+        ...(options.forfeit ? { forfeit_id: options.forfeit } : {}),
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as Post;
+  } catch (error) {
+    // Something went wrong after the photo/video was uploaded (the blurry preview, or saving the post):
+    // remove the files again. If even that fails, you still see the real reason, not the clean-up problem.
+    await deleteMedia(mediaFiles({ ...fields, blur_path: blurPath })).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
-  return data as Post;
 }
 
 export async function fetchUserPosts(userId: string): Promise<Post[]> {
@@ -58,7 +64,7 @@ export async function fetchPost(postId: string): Promise<PostWithAuthor | null> 
 export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(post));
+  await deleteMedia(mediaFiles(post)).catch((cleanupError) => console.warn('Post removed; its files could not be cleaned up yet', cleanupError));
 }
 
 // Change the caption of one of your own posts (after it's posted).
@@ -73,7 +79,8 @@ export async function postFromStory(userId: string, story: Story, caption: strin
   const copied: string[] = [];
   const copy = async (path: string | null) => {
     if (!path) return null;
-    const target = `${userId}/posts/${path.split('/').pop()}`;
+    const extension = path.match(/\.[a-z0-9]+$/i)?.[0] ?? '';
+    const target = `${userId}/posts/${randomUUID()}${extension}`;
     const { error } = await supabase.storage.from('media').copy(path, target);
     if (error) throw error;
     copied.push(target);
@@ -94,7 +101,8 @@ export async function postFromStory(userId: string, story: Story, caption: strin
     if (error) throw error;
     return data as Post;
   } catch (error) {
-    await deleteMedia(copied);
+    // Undo the copies. If even that fails, you still see the real reason it couldn't be posted.
+    await deleteMedia(copied).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }

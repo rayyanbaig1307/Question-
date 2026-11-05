@@ -59,7 +59,8 @@ export async function postMystery(userId: string, capture: Capture, caption: str
   const { fields } = await uploadCapture(userId, 'mystery', capture);
   const { error } = await supabase.from('mystery_posts').insert({ user_id: userId, ...fields, caption: caption.trim() });
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Remove the files we just uploaded. If that fails too, still show the real reason the post didn't work.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }
@@ -84,5 +85,5 @@ export async function blockMysteryPoster(postId: string): Promise<void> {
 export async function deleteMystery(post: MysteryPost): Promise<void> {
   const { error } = await supabase.from('mystery_posts').delete().eq('id', post.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(post));
+  await deleteMedia(mediaFiles(post)).catch((cleanupError) => console.warn('Guess Who removed; its files could not be cleaned up yet', cleanupError));
 }

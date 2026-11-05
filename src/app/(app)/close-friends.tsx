@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -20,6 +20,8 @@ export default function CloseFriends() {
   const { userId, profile } = useMe();
   const [friends, setFriends] = useState<Profile[] | null>(null);
   const [close, setClose] = useState<Set<string>>(new Set());
+  const updating = useRef(new Set<string>());
+  const [pending, setPending] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([fetchFriends(userId), fetchCloseFriendIds(userId)])
@@ -32,6 +34,10 @@ export default function CloseFriends() {
   }, [userId]);
 
   async function toggle(friend: Profile) {
+    // Keep changes for the same person in order, even on a slow connection.
+    if (updating.current.has(friend.id)) return;
+    updating.current.add(friend.id);
+    setPending(new Set(updating.current));
     const on = !close.has(friend.id);
     Haptics.selectionAsync();
     setClose((current) => {
@@ -51,6 +57,9 @@ export default function CloseFriends() {
         return next;
       });
       Alert.alert('Could not update', friendlyError(error));
+    } finally {
+      updating.current.delete(friend.id);
+      setPending(new Set(updating.current));
     }
   }
 
@@ -83,8 +92,9 @@ export default function CloseFriends() {
               <Pressable
                 style={[styles.row, on && styles.rowOn]}
                 onPress={() => toggle(item)}
+                disabled={pending.has(item.id)}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: on }}
+                accessibilityState={{ checked: on, disabled: pending.has(item.id) }}
                 accessibilityLabel={`${item.display_name || item.username} close friend`}>
                 <Avatar path={item.avatar_path} name={item.display_name || item.username} size={44} />
                 <View style={styles.names}>

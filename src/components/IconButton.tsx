@@ -13,6 +13,7 @@ type Props = {
   background?: string;
   label: string;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
 // A round button with just an icon (used over the camera and photos).
@@ -24,6 +25,7 @@ export function IconButton({
   background = colors.overlay,
   label,
   style,
+  disabled = false,
 }: Props) {
   // On a plain card-colored button the icon uses the text color (so it shows in light mode too);
   // on dark see-through or colored buttons it's white.
@@ -33,8 +35,11 @@ export function IconButton({
       accessibilityRole="button"
       pressScale={0.85}
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={8}
       onPress={() => {
+        if (disabled) return;
         Haptics.selectionAsync();
         onPress();
       }}

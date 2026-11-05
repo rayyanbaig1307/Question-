@@ -10,12 +10,14 @@ export const REPORT_REASONS = [
 ] as const;
 
 export async function reportContent(params: {
+  reporterUserId?: string;
   reportedUserId: string;
   contentType: ReportContentType;
   contentId?: string;
   reason: string;
 }): Promise<void> {
   const { error } = await supabase.from('reports').insert({
+    ...(params.reporterUserId ? { reporter_id: params.reporterUserId } : {}),
     reported_user_id: params.reportedUserId,
     content_type: params.contentType,
     content_id: params.contentId ?? params.reportedUserId,
@@ -24,8 +26,11 @@ export async function reportContent(params: {
   if (error) throw error;
 }
 
-export async function blockUser(userId: string): Promise<void> {
-  const { error } = await supabase.rpc('block_user', { target: userId });
+export async function blockUser(userId: string, expectedUserId?: string): Promise<void> {
+  const { error } = await supabase.rpc('block_user', {
+    target: userId,
+    ...(expectedUserId ? { expected_user_id: expectedUserId } : {}),
+  });
   if (error) throw error;
 }
 

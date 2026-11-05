@@ -70,6 +70,7 @@ export default function SnapViewer() {
     (async () => {
       try {
         const message = await fetchMessage(id);
+        if (cancelled) return;
         if (!message || message.kind !== 'snap' || !message.media_path) {
           if (!cancelled) setState({ kind: 'gone' });
           return;
@@ -94,6 +95,8 @@ export default function SnapViewer() {
         const posterUrl = isVideo && message.poster_path ? await getSnapUrl(message.poster_path) : null;
         const overlayUrl = isVideo && message.overlay_path ? await getSnapUrl(message.overlay_path) : null;
         const ready = isVideo ? !!url && (!posterUrl || (await Image.prefetch(posterUrl, 'memory'))) : !!url && (await Image.prefetch(url, 'memory'));
+        // You may have gone back while the file was downloading. Keep its view for next time.
+        if (cancelled) return;
         if (!url || !ready) {
           if (!cancelled) setState({ kind: 'error' });
           return;

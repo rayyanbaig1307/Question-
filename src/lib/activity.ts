@@ -62,28 +62,44 @@ const clearedKey = (me: string) => `peekaboo-activity-cleared:${me}`;
 // friend notification arrives. No live database listener on purpose (one less thing that can break at launch).
 // "Seen" (no dot, not counted) and "Cleared" (gone from the Inbox) are remembered on this phone.
 export function useActivity(me: string, active: boolean) {
-  const [all, setAll] = useState<ActivityItem[]>([]);
-  const [seenAt, setSeenAt] = useState<string | null>(null);
-  const [clearedAt, setClearedAt] = useState<string | null>(null);
+  type State = { owner: string; all: ActivityItem[]; seenAt: string | null; clearedAt: string | null };
+  const [stored, setStored] = useState<State>({ owner: me, all: [], seenAt: null, clearedAt: null });
+  const all = stored.owner === me ? stored.all : [];
+  const seenAt = stored.owner === me ? stored.seenAt : null;
+  const clearedAt = stored.owner === me ? stored.clearedAt : null;
+  const reloadVersion = useRef(0);
+  const markerVersion = useRef(0);
+  const markers = useRef<{ owner: string; seen: string; cleared: string } | null>(null);
   // The newest item, for "seen" / "clear" (kept out of render so the callbacks below never change).
-  const newest = useRef<string | null>(null);
+  const newest = useRef<{ owner: string; at: string | null } | null>(null);
+  const cancelReload = useCallback(() => { reloadVersion.current++; }, []);
 
   const reload = useCallback(() => {
+    const request = ++reloadVersion.current;
+    const markerRequest = markerVersion.current;
     fetchActivity()
       .then((items) => {
-        newest.current = items[0]?.at ?? null;
-        setAll(items);
+        if (request !== reloadVersion.current) return;
+        newest.current = { owner: me, at: items[0]?.at ?? null };
+        setStored((current) => ({ owner: me, all: items,
+          seenAt: current.owner === me ? current.seenAt : null,
+          clearedAt: current.owner === me ? current.clearedAt : null }));
       })
       .catch((error) => console.warn('Could not load activity', error));
     // Another screen may have marked things seen or cleared since.
     AsyncStorage.multiGet([seenKey(me), clearedKey(me)])
       .then(([[, seen], [, cleared]]) => {
-        setSeenAt(seen ?? new Date(0).toISOString());
-        setClearedAt(cleared ?? new Date(0).toISOString());
+        if (request !== reloadVersion.current || markerRequest !== markerVersion.current) return;
+        const loaded = { owner: me, seen: seen ?? new Date(0).toISOString(), cleared: cleared ?? new Date(0).toISOString() };
+        markers.current = loaded;
+        setStored((current) => ({ owner: me, all: current.owner === me ? current.all : [], seenAt: loaded.seen, clearedAt: loaded.cleared }));
       })
       .catch(() => {
-        setSeenAt(new Date(0).toISOString());
-        setClearedAt(new Date(0).toISOString());
+        if (request !== reloadVersion.current || markerRequest !== markerVersion.current) return;
+        // Unknown saved preferences must not make previously cleared activity visible again.
+        if (markers.current?.owner !== me) return;
+        const saved = markers.current;
+        setStored((current) => ({ owner: me, all: current.owner === me ? current.all : [], seenAt: saved.seen, clearedAt: saved.cleared }));
       });
   }, [me]);
 
@@ -95,28 +111,38 @@ export function useActivity(me: string, active: boolean) {
     });
     const stops = ['post', 'comments', 'friends', 'message'].map((type) => onNotificationArrived(type, reload));
     return () => {
+      cancelReload();
       app.remove();
       stops.forEach((stop) => stop());
     };
-  }, [active, reload]);
+  }, [active, reload, cancelReload]);
 
   // Everything up to now counts as seen (called when you leave the Inbox).
   const markSeen = useCallback(() => {
-    const at = newest.current;
+    const at = newest.current?.owner === me ? newest.current.at : null;
     if (!at) return;
-    setSeenAt((current) => (current && current >= at ? current : at));
-    AsyncStorage.setItem(seenKey(me), at).catch(() => {});
+    markerVersion.current++;
+    const before = markers.current?.owner === me ? markers.current : null;
+    const seen = before?.seen && before.seen >= at ? before.seen : at;
+    markers.current = { owner: me, seen, cleared: before?.cleared ?? new Date(0).toISOString() };
+    setStored((current) => ({ owner: me, all: current.owner === me ? current.all : [], seenAt: seen,
+      clearedAt: current.owner === me ? current.clearedAt : null }));
+    AsyncStorage.setItem(seenKey(me), seen).catch(() => {});
   }, [me]);
 
   // "Clear": everything up to now disappears from the Inbox (and counts as seen).
   const clear = useCallback(() => {
-    const at = newest.current;
+    const at = newest.current?.owner === me ? newest.current.at : null;
     if (!at) return;
-    setClearedAt(at);
-    setSeenAt(at);
+    markerVersion.current++;
+    const before = markers.current?.owner === me ? markers.current : null;
+    const cleared = before?.cleared && before.cleared >= at ? before.cleared : at;
+    const seen = before?.seen && before.seen >= at ? before.seen : at;
+    markers.current = { owner: me, cleared, seen };
+    setStored((current) => ({ owner: me, all: current.owner === me ? current.all : [], clearedAt: cleared, seenAt: seen }));
     AsyncStorage.multiSet([
-      [clearedKey(me), at],
-      [seenKey(me), at],
+      [clearedKey(me), cleared],
+      [seenKey(me), seen],
     ]).catch(() => {});
   }, [me]);
 

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureDetector, useExclusiveGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -28,28 +28,48 @@ export function MicButton({ onRecorded, onHint }: {
 }) {
   // (Only rendered when Audio exists.)
   const recorder = Audio!.useAudioRecorder(VOICE_OPTIONS!);
-  const phase = useRef<'idle' | 'starting' | 'recording'>('idle');
+  const phase = useRef<'idle' | 'starting' | 'recording' | 'stopping'>('idle');
+  const mounted = useRef(true);
   const letGoEarly = useRef(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const levels = useRef<number[]>([]);
   const [live, setLive] = useState<{ ms: number; levels: number[] } | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      letGoEarly.current = true;
+      if (timer.current) clearInterval(timer.current);
+      timer.current = null;
+      const wasRecording = phase.current === 'recording';
+      phase.current = 'idle';
+      // The phone also releases the recorder, but our timer and pending work need to stop too.
+      if (wasRecording) Promise.resolve().then(() => recorder.stop()).catch(() => {});
+      Audio?.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+    };
+  }, [recorder]);
+
   async function start() {
-    if (!Audio || phase.current !== 'idle') return;
+    if (!Audio || !mounted.current || phase.current !== 'idle') return;
     phase.current = 'starting';
     letGoEarly.current = false;
     try {
       const permission = await Audio.getRecordingPermissionsAsync();
+      if (!mounted.current) return;
       if (!permission.granted) {
         const asked = await Audio.requestRecordingPermissionsAsync();
+        if (!mounted.current) return;
         phase.current = 'idle';
         if (!asked.granted) Alert.alert('Microphone needed 🎤', 'Allow the microphone for Peekaboo in your phone settings.');
         else onHint('Now hold the mic to record 🎤');
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      if (!mounted.current) return;
       await recorder.prepareToRecordAsync();
+      if (!mounted.current) return;
       if (letGoEarly.current) {
         phase.current = 'idle';
         await Audio.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -62,6 +82,7 @@ export function MicButton({ onRecorded, onHint }: {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setLive({ ms: 0, levels: [] });
       timer.current = setInterval(() => {
+        if (!mounted.current) return;
         const status = recorder.getStatus();
         levels.current.push(levelFromDecibels(status.metering));
         setLive({ ms: status.durationMillis, levels: levels.current.slice(-28) });
@@ -69,8 +90,9 @@ export function MicButton({ onRecorded, onHint }: {
       }, 80);
     } catch (error) {
       phase.current = 'idle';
+      await Audio.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
       console.warn('Could not start recording', error);
-      Alert.alert('Could not record', 'Something went wrong with the microphone. Try again!');
+      if (mounted.current) Alert.alert('Could not record', 'Something went wrong with the microphone. Try again!');
     }
   }
 
@@ -80,18 +102,25 @@ export function MicButton({ onRecorded, onHint }: {
       return;
     }
     if (phase.current !== 'recording' || !Audio) return;
-    phase.current = 'idle';
+    phase.current = 'stopping';
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     setLive(null);
     setCancelling(false);
-    const durationMs = recorder.getStatus().durationMillis;
+    let durationMs = 0;
     try {
+      durationMs = recorder.getStatus().durationMillis;
       await recorder.stop();
+    } catch (error) {
+      console.warn('Could not finish recording', error);
+      if (mounted.current) Alert.alert('Could not record', 'The recording did not finish. Please try again.');
+      return;
     } finally {
       // Back to normal so voice notes play through the speaker.
       await Audio.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      phase.current = 'idle';
     }
+    if (!mounted.current) return;
     if (cancel) {
       Haptics.selectionAsync();
       onHint('Voice note cancelled');

@@ -1,0 +1,243 @@
+Fresh database QA: Peekaboo
+==========================
+Reviewed final original revision a9e5ddf88e785bd8378b2b7d9dcd7e341df439b1 on
+claude/mobile-social-app-expo-h090jm. Initial inspection used b0dc637; the only
+upstream change between those revisions is the Android APK link in invite.ts.
+This is a fresh audit of the newer app,
+not a claim that the older local fixes were already in the repository.
+
+The first 36 migrations are unchanged from the previous audit and every earlier
+fix was absent. All 47 original migrations were read/applied in filename order.
+The added migrations cover OAuth profile creation, activity/inbox, report alerts,
+chat dares, drop reminders, cleanup, hides, group messages/media/reactions/replies/
+pins. The new fix migration is 20261213102659_qa_round2_security_hardening.sql.
+It was created by the Supabase CLI, then moved after the existing future-dated
+20261212 migration so execution order is correct. Original live migrations were
+not edited. The new OAuth/group behaviors were preserved when fixing older rules.
+
+Final database checks
+---------------------
+node --test tests/database/*.test.mjs
+  142/142 passing: 95 recurrent/general checks plus 47 newer-feature checks.
+  Refreshed original baseline: 94 passing, 48 failing, 142 total. Some failures
+  are checks for newly added helper contracts, not distinct original bugs.
+node tests/database/concurrency.mjs
+  17/17 fixed real PostgreSQL scenarios passed. The final original run failed
+  15/16 supported scenarios (the auth-reservation RPC does not exist originally).
+  A previous run also reproduced the vote counter race: 28 displayed votes
+  versus 32 actual vote rows; this race depends on scheduling.
+
+Final saved logs:
+  .qa/database-before.tap: 94 passed, 48 failed.
+  .qa/database-after.tap: 142 passed, 0 failed.
+  .qa/concurrency-results.json: fixed 17 passed; original 1 passed, 15 failed.
+Latest native source result at handoff:
+  work/native-pg-1793791850210/concurrency-results.json (outside the repo)
+The parent report may contain a later final run. Native tests intentionally run
+both original and fixed schemas; only a fixed-scenario failure fails the script.
+
+Test environment and limits
+---------------------------
+PGlite 0.5.15 runs real PostgreSQL constraints, grants, RLS and functions in memory.
+Native PostgreSQL 16.15 uses independent TCP sessions on 127.0.0.1, with up to 64
+connections. All cluster files are in this chat's work folder, processes are
+hidden and finally handlers stop them. No production database, account, URL,
+token, notification, cron job or media object was contacted or changed.
+
+Supabase platform schemas are local stand-ins: auth.uid() understands both SQL
+test claims and real PostgREST request.jwt.claims; cron only records schedules;
+Vault contains a locally generated key; net.http_post records rows, never sends
+HTTP. One historical report-alert migration assumes its owner account already
+exists, so the harness seeds a synthetic LOCAL auth/profile row with that id.
+It does not retrieve or log in to the real account. Actual OAuth, Apple/Google,
+GoTrue, S3 byte deletion, Expo push and device behavior are separate boundaries.
+Root additionally owns real local PostgREST/JWT tests and browser checks.
+
+The cleanup tests exercise real SQL races at Storage's metadata boundary. The
+current official Storage source awaits the database transaction before physical
+cleanup (object.ts deleteObjects, lines 604-616). The guard raises an exception,
+rather than skipping a row, when a concurrent report/reference rescues a file;
+the metadata transaction aborts before physical cleanup is reached. We did not
+run the hosted Storage service or delete real S3 objects. Primary reference:
+https://github.com/supabase/storage/blob/master/src/storage/object.ts
+
+Recurrent bugs: reproduced against this revision and fixed again
+----------------------------------------------------------------
+R1 HIGH - Draft/deleted post files readable to others.
+  Reproduce: public A uploads A/posts/file without a post row, or deletes a
+  close-friends post while file cleanup fails. Under B, can_read_media returned
+  true. Fix: require an actual visible post owned by the path owner, plus all
+  audience/drop/group rules. Blurry previews now obey audience too.
+R2 MEDIUM - Editing own post accepted another user's media path.
+  Reproduce: update A's post.media_path to B/posts/private.jpg. Fix: enforce
+  owned folders on UPDATE for main/poster/overlay/blur just like INSERT.
+R3 HIGH - Reporting Guess Who disclosed the anonymous author.
+  Reproduce: B reports before guessing, then SELECTs their own reports and reads
+  reported_user_id=A. Fix: mark anonymous reports and hide those report rows
+  from reporters, retaining the real author for moderators.
+R4 MEDIUM - Guess Who client could set expiry to 2099.
+  Fix: server-controlled exactly-24-hour expiry, like stories.
+R5 HIGH - Community dare author forged votes/selection state and daily quota.
+  Reproduce: INSERT votes=99999, used_on, hidden, backdated created_at; insert
+  two ideas in one statement or concurrent sessions. Fix: canonical fields,
+  server time and author quota lock. Atomic vote deltas replace stale recounts.
+R6 HIGH - Notification queue failure rolled back valid app actions.
+  Reproduce: make local net.http_post fail during a valid message insert.
+  Message was lost. Fix: isolate only the queue call and keep the main write;
+  record a generic warning. Delivery retries remain outside this change.
+R7 MEDIUM - Posts could be moved into the future by editing created_at.
+  Fix: server timestamp on INSERT, immutable original timestamp on UPDATE.
+R8 MEDIUM - Duplicate forfeit payments in one statement/concurrent sessions.
+  Reproduce: insert two posts with the same unpaid forfeit_id together.
+  Fix: unique partial index, which also covers concurrent transactions.
+R9 MEDIUM - New report could start as already reviewed.
+  Reproduce: INSERT status='reviewed'. Fix: force open status/server time.
+R10 MEDIUM - Snap sender could forge recipient save/replay workflow state.
+  Reproduce: INSERT saved_at, saved_by=recipient, replayed_at. Fix: canonical
+  initial state and sender timestamps; trusted hit-up introduction timing stays.
+R11 MEDIUM - SQL NULL allowed a voice message without media or empty screenshot.
+  Fix: explicit non-null content checks for those kinds.
+R12 MEDIUM - Voice waveform accepted negative, >100 and null bars.
+  Fix: validate every element and the 64-bar limit.
+R13 MEDIUM - Two hit ups at quota=9 produced 11 instead of 10.
+  Fix: per-sender lock and quota recheck at insertion.
+R14 MEDIUM - Two additions to an 11-member group produced 13 members.
+  Fix: group row lock and write-time size check. Duplicate adds remain idempotent.
+R15 MEDIUM - Eight parallel nudges produced eight notices inside one cooldown.
+  Fix: per-group/pair cooldown lock and recheck.
+R16 MEDIUM - Concurrent hit-back actions duplicated an introduction message.
+  Reproduce: duplicate respond calls, or mix respond_hit_up with hit_up.
+  Fix: shared connect helper locks/rechecks pending state, participants, blocks
+  and both adult ages; recipient response also locks its row.
+R17 MEDIUM - Reciprocal simultaneous hit ups left two pending rows, no friendship.
+  Fix: serialize the sorted pair before reading/writing.
+
+New or expanded findings in this revision
+----------------------------------------
+N1 HIGH - Activity leaked private replies after post access was revoked.
+  Reproduce: B comments while A's post is public. A goes private; friend C replies
+  privately to B's old comment. B cannot SELECT the post but my_activity returned
+  C's new private text. Fix: activity events with posts require current post access.
+N2 MEDIUM - Delete for me/Clear chat were only client filters.
+  Reproduce: hide/clear, then directly SELECT/search messages or reactions. The
+  old rows reappear. Fix: enforce each person's hides in messages SELECT and
+  reaction authorization. Other participants retain their own copy.
+N3 HIGH - Blocks did not protect group text/photos/reactions/summaries.
+  Reproduce: A/B remain in a group, B blocks A; B could still SELECT A's group
+  messages/photos/reactions and summary. Voice/push already treated blocks
+  differently. Fix: consistent blocked-sender filtering across rows, media,
+  summaries/reactions and pin access, without deleting group membership.
+  This follows the parent's explicit instruction for expected group blocking.
+N4 MEDIUM - Blocked/unfriended people could signal through chat-dare RPCs.
+  Reproduce: send dare, block, then recipient calls claim_chat_dare. It changed
+  state and notified the blocker. Fix: friendship/block checks and row locks on
+  claim/confirmation, preserving normal claim/nope/done behavior.
+N5 MEDIUM - Group voice/media allowed malformed and enormous payloads.
+  Reproduce: voice without file, negative/huge audio_ms, invalid waveform,
+  kind='photo' with media_type='video', or giant voice body. Fix: explicit content,
+  duration, waveform, media-kind and universal body limits. Old rows are preserved.
+N6 MEDIUM - Group messages accepted forged future timestamps.
+  Reproduce: INSERT created_at=2099. Fix: server time on group INSERT.
+N7 MEDIUM - Group reports did not identify the offending message.
+  Original UI reported a user id and database rejected group_message type.
+  Fix: supported group_message report type, reporter-membership validation,
+  canonical real sender and retained content id. Frontend/API agents wire the UI.
+N8 HIGH - Cleanup could delete live group files or new report/Keep evidence.
+  Reproduce: eligible old story is also referenced by group chat, or cleanup
+  reads candidates then another session reports/saves it before deletion.
+  Original cleanup omitted group refs and deleted metadata despite the new row.
+  Fix: all live references count; claims, reports, file references and Storage
+  deletes acquire the same path lock. At delete, recheck and abort if rescued.
+  Every media delete also protects unclaimed companions and writes a tombstone.
+  A later reference/replacement upload at that key is rejected after logical
+  deletion, preventing dangling references and pending-byte-delete races.
+  Confirmed real concurrent report/Keep wins, and delete-wins reference/upload
+  rejection. File bundles now require every distinct path to be safe (API agent).
+N9 HIGH - A deleted account's still-valid JWT could upload orphan Storage files.
+  Reproduce: trusted local delete of auth user, then use the same subject under
+  authenticated role to INSERT its own UUID folder. Old RLS allowed it.
+  Fix: restrictive Storage INSERT/UPDATE policies require an existing own profile.
+  Root additionally tests this through signed JWT and actual local HTTP.
+N10 MEDIUM - Same-name OAuth signups raced in automatic profile creation.
+  Reproduce: 16 simultaneous new auth users with one common Google full_name.
+  Original result: only one succeeded; others hit username uniqueness.
+  Fix: serialize the normalized username base before selecting a free candidate.
+  Fixed result: 16 valid accounts with unique profiles. Google names remain intact.
+N11 MEDIUM - Group reaction notified a sender who already left the group.
+  Reproduce: sender registers a local token, sends, leaves, remaining member
+  reacts. Fix: group reaction push requires current sender membership.
+N12 LOW - Reentrant reminder jobs queued duplicate reminders.
+  Reproduce: two independent send_drop_reminders calls read the same due user.
+  ON CONFLICT skipped one marker but both sent. Fix: send only if marker insert
+  actually succeeded. Same-job pg_cron normally serializes, so exposure is low.
+N13 HIGH - Ordinary author deletion could still erase reported media evidence.
+  Reproduce on the earlier hardening version: report a post, then author deletes
+  its visible post row and calls Storage.remove. The report still exists, but
+  its path was recoverable only by joining the now-deleted source row. The guard
+  therefore allowed the file deletion. A real database regression failed first.
+  Fix: persistent private report_media_evidence snapshots, captured atomically
+  in the BEFORE report trigger with a deferred FK. Cleanup checks these paths
+  independently of source rows. Reports and content deletion use the same sorted
+  path locks. Existing reachable reports are backfilled. App users have no table
+  access or helper access; private table RLS and explicit privilege revocation
+  defend against broad platform defaults. Paths remain until trusted report
+  removal, consistent with the previous retention policy.
+  Regression covers reported post, story, peek, group message, comment plus its
+  parent post, and anonymous content deletion; rejected reports roll back their
+  snapshots. Native concurrent report/author-delete now retains the file.
+  Intentional verified account deletion still overrides retention as designed.
+  Old reports whose source/path or physical file was already deleted cannot be
+  reconstructed by this migration. No recovery of those files is claimed.
+
+Safety/support contracts added for the other agents
+--------------------------------------------------
+reserve_username_auth_attempt(kind,key,max,minutes): server-only atomic throttle.
+account_mystery_files(account): server-only, sorted orphan anonymous-file lookup.
+claim_media_cleanup(max_files): server-only list/claim, bounded to 1000 paths.
+can_cleanup_snap(object_name): authenticated own snaps/voice/group paths, checks
+  every recipient and all cross-field/live refs despite hides, then claims it.
+begin_account_media_deletion(account): server-only verified deletion scope for
+  ten minutes, restricted to that account's owned files. Needed so intentional
+  account deletion can remove its own live/reported/claimed media; other accounts
+  remain protected. Auth-user deletion cascades its scope; interruptions expire.
+block_user(target,expected_user_id): authenticated actor-bound overload; a safety
+  dialog opened by A cannot execute after login changes to B. Legacy 1-arg stays.
+
+Coverage and remaining work
+---------------------------
+The database suite covers every public table's RLS flag, public privileged RPC
+anonymous grants, cross-user writes, profiles, audiences, files, blocks, social
+profile/hook behavior, stories, peeks, saved/expired media, comments/replies/likes,
+map privacy, friends, complete group lifecycle, group media/proofs/typing/replies/
+reactions/pins/read/mute, hides, activity, legal records, birthdays, hit ups,
+community/daily/chat dares, nominations/streaks/forfeits/ratings, push preferences,
+report alerts, reminder eligibility, cleanup claims/evidence/tombstones and actor
+binding. Fuzz inputs include empty/null, wrong types, huge text, emoji, SQL/XSS-like
+plain text, invalid coordinates/ages, negative numbers and duplicate writes.
+
+Final review: the account-deletion override is service-role-only, lasts ten
+minutes, checks only that account's owner id/path prefix, and cascades on Auth
+deletion. Report/file/reference path loops use distinct sorted paths. Complex
+multi-row transactions can still produce a PostgreSQL deadlock/retry under an
+opposite cross-record lock order; they fail closed rather than bypass retention.
+An already committed comment report retains its snapshot even if both the
+comment and parent post disappear. A report that starts after its source was
+already deleted cannot recover unknown paths by design.
+
+NOT VALID content constraints preserve older malformed data for review while
+blocking new bad rows. The new unique forfeit index deliberately refuses old
+duplicates. Run deployment-preflight.sql only on an approved test copy; review
+bad rows before a separate release. No remote migration/advisor/apply/push ran.
+
+One medium content-moderation gap remains a separate product decision: nuanced
+cleanWords.ts name/public-text rules are client-side, while SQL enforces lengths
+and formats only. A direct allowed-format offensive username such as f.u.c.k can
+bypass the client name rule. Porting its real-name and private-chat exceptions
+blindly would risk blocking legitimate content; the parent was informed. This
+is not an authorization or arbitrary-code execution claim.
+
+Historic report-alert setup assumes an owner row. The test fixture supplies a
+synthetic one; generic fresh-environment bootstrap still needs that assumption
+documented. Cron scheduling and Vault are stand-ins, not proof of hosted job
+execution. Signed links already issued may remain valid until their expiry even
+after access changes. No real users' data or device/native/OAuth flows were used.

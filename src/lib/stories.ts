@@ -24,7 +24,8 @@ export async function createStory(userId: string, capture: Capture, audience: Au
     .select('*')
     .single();
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
   return data as Story;
@@ -33,7 +34,7 @@ export async function createStory(userId: string, capture: Capture, audience: Au
 export async function deleteStory(story: Story): Promise<void> {
   const { error } = await supabase.from('stories').delete().eq('id', story.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(story));
+  await deleteMedia(mediaFiles(story)).catch((cleanupError) => console.warn('Story removed; its files could not be cleaned up yet', cleanupError));
 }
 
 // Stories that haven't expired yet. The privacy rules only return yours and your friends'.

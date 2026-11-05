@@ -1,4 +1,4 @@
-import { deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
+import { deleteAvatar, deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,8 @@ export async function sendGroupCapture(me: string, groupId: string, capture: Cap
     .from('group_messages')
     .insert({ group_id: groupId, kind: dareId ? 'proof' : fields.media_type, dare_id: dareId ?? null, ...fields });
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
 }
@@ -84,7 +85,8 @@ export async function sendGroupVoice(
     .select('*')
     .single();
   if (error) {
-    await deleteMedia([media_path]);
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia([media_path]).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
   return data as GroupMessage;
@@ -110,8 +112,33 @@ export async function pinGroupMessage(groupId: string, messageId: string | null)
 // The group's picture: uploaded like a profile picture (your own folder), then set for the group. null removes it.
 export async function setGroupPhoto(me: string, groupId: string, localUri: string | null): Promise<void> {
   const photo = localUri ? await uploadAvatar(me, localUri) : null;
-  const { error } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
-  if (error) throw error;
+  let failure: unknown = null;
+  let refused = false;
+  try {
+    const { error, status } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
+    failure = error;
+    refused = !!error && serverSaidNo(error, status);
+  } catch (error) {
+    // The request never got an answer (no internet, timed out…).
+    failure = error;
+  }
+  if (!failure) return;
+  // Only remove the new upload when the server clearly said no. If the answer got lost on the way (bad
+  // signal), the server may still have saved the picture – even a moment later – so the file is kept
+  // (better a spare file, which the daily clean-up can deal with, than a broken group picture).
+  if (photo && refused) {
+    await deleteAvatar(photo).catch((cleanupError) => console.warn('Could not remove an unfinished group photo', cleanupError));
+  }
+  throw failure;
+}
+
+// Did the server clearly refuse (rather than the answer getting lost)? The database's own errors carry a code
+// (like "P0001"), and a refusal comes with an HTTP status from 400 to 499. A network failure has neither
+// (status 0). A 5xx status without a code usually comes from a gateway that gave up waiting, while the
+// database may still have saved the change, so that doesn't count as a clear "no".
+function serverSaidNo(error: { code?: string | null }, status: number | undefined): boolean {
+  if (typeof error.code === 'string' && error.code !== '') return true;
+  return typeof status === 'number' && status >= 400 && status < 500;
 }
 
 // Live: the group itself changed (new pin, photo or name). Own channel name per listener.
@@ -150,7 +177,11 @@ export async function searchGroupMessages(groupId: string, text: string): Promis
 export async function deleteGroupMessage(message: GroupMessage): Promise<void> {
   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
   if (error) throw error;
-  const files = [message.media_path, message.poster_path, message.overlay_path].filter((f): f is string => !!f);
+  const files = [...new Set([message.media_path, message.poster_path, message.overlay_path].filter((f): f is string => !!f))];
+  for (const path of files) {
+    const { data: safe, error: checkError } = await supabase.rpc('can_cleanup_snap', { object_name: path });
+    if (checkError || safe !== true) return;
+  }
   if (files.length > 0) await deleteMedia(files).catch(() => {});
 }
 

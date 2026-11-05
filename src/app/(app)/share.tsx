@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -80,8 +80,9 @@ export default function Share() {
   const [friends, setFriends] = useState<Profile[] | null>(null);
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   // Remember what already worked, so trying again doesn't send twice.
-  const [done, setDone] = useState({ story: false, profile: false, snaps: false, post: false, guess: false });
+  const done = useRef({ story: false, profile: false, snaps: false, post: false, guess: false });
 
   useEffect(() => {
     fetchFriends(userId)
@@ -114,11 +115,11 @@ export default function Share() {
       setRulesOpen(true);
       return;
     }
-    if (toStory && !done.story && !storyOk) {
+    if (toStory && !done.current.story && !storyOk) {
       setStoryPreviewOpen(true);
       return;
     }
-    if (postToProfile && !done.profile) {
+    if (postToProfile && !done.current.profile) {
       setPreviewOpen(true);
       return;
     }
@@ -140,6 +141,15 @@ export default function Share() {
   }
 
   async function sendNow() {
+    // A second tap can arrive before React redraws the disabled button.
+    if (sending.current || nothingPicked) return;
+    // The caption can change in the preview, so check the final text too.
+    const notAllowed = checkClean(caption, 'content');
+    if (notAllowed) {
+      Alert.alert('Caption not allowed', notAllowed);
+      return;
+    }
+    sending.current = true;
     setPreviewOpen(false);
     setBusy(true);
     try {
@@ -147,34 +157,35 @@ export default function Share() {
       const photo: Capture = isVideo
         ? { kind: 'video', uri, overlayUri: overlay ?? null }
         : { kind: 'photo', uri: await resizePhoto(uri, 1080) };
-      if (toGuess && !done.guess) {
+      if (toGuess && !done.current.guess) {
         await postMystery(userId, photo, caption);
-        setDone((current) => ({ ...current, guess: true }));
+        done.current.guess = true;
       }
-      if (picked.length > 0 && !done.snaps) {
+      if (picked.length > 0 && !done.current.snaps) {
         await sendSnap(userId, picked, photo);
-        setDone((current) => ({ ...current, snaps: true }));
+        done.current.snaps = true;
       }
-      if (toStory && !done.story) {
+      if (toStory && !done.current.story) {
         await createStory(userId, photo, audience);
-        setDone((current) => ({ ...current, story: true }));
+        done.current.story = true;
       }
-      if (postToProfile && !done.profile) {
+      if (postToProfile && !done.current.profile) {
         await createPost(userId, photo, caption, { audience });
-        setDone((current) => ({ ...current, profile: true }));
+        done.current.profile = true;
       }
       // One post can be your drop, your dare answer, or both.
       let dropLate: number | null = null;
       let darePostId: string | null = null;
-      if ((toDare || toDrop || toForfeit) && !done.post) {
+      if ((toDare || toDrop || toForfeit) && !done.current.post) {
         const post = await createPost(userId, photo, caption, {
           dare: toDare,
           drop: toDrop,
           forfeit: toForfeit && forfeit ? forfeit : undefined,
+          audience,
         });
         dropLate = post.drop_late_seconds;
         if (toDare) darePostId = post.id;
-        setDone((current) => ({ ...current, post: true }));
+        done.current.post = true;
       }
       // A happy little buzz: it's sent!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -202,6 +213,7 @@ export default function Share() {
     } catch (error) {
       Alert.alert('Could not send', friendlyError(error));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -301,12 +313,12 @@ export default function Share() {
               onPress={() => toggle(setToProfile, !toProfile)}
             />
           )}
-          {toStory || postToProfile ? (
+          {toStory || postToProfile || toDare || toDrop || toForfeit ? (
             <View style={styles.closeRow}>
               <View style={styles.optionText}>
                 <Text style={styles.optionTitle}>⭐ Close friends only</Text>
                 <Text style={styles.optionSubtitle}>
-                  {audience === 'close_friends' ? 'Only your close friends will see it' : 'Off – all your friends will see it'}
+                  {audience === 'close_friends' ? 'Only your close friends will see it' : 'Off – uses your account’s privacy setting'}
                 </Text>
               </View>
               <Switch

@@ -37,7 +37,8 @@ export async function addKeep(userId: string, capture: Capture): Promise<Keep> {
   const { fields } = await uploadCapture(userId, 'keeps', capture);
   const { data, error } = await supabase.from('keeps').insert({ user_id: userId, ...fields }).select('*').single();
   if (error) {
-    await deleteMedia(mediaFiles(fields));
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
   return data as Keep;
@@ -52,7 +53,7 @@ export async function fetchKeeps(userId: string): Promise<Keep[]> {
 export async function deleteKeep(keep: Keep): Promise<void> {
   const { error } = await supabase.from('keeps').delete().eq('id', keep.id);
   if (error) throw error;
-  await deleteMedia(mediaFiles(keep));
+  await deleteMedia(mediaFiles(keep)).catch((cleanupError) => console.warn('Keep removed; its files could not be cleaned up yet', cleanupError));
 }
 
 // Downloads a keep's file to the phone (for saving to Photos or posting it again).

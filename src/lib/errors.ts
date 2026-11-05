@@ -1,3 +1,5 @@
+import { NAME_NOT_ALLOWED, WORD_NOT_ALLOWED } from './cleanWords';
+
 // Turns technical error messages into simple, friendly ones.
 export function friendlyError(error: unknown): string {
   const message =
@@ -7,6 +9,10 @@ export function friendlyError(error: unknown): string {
         ? String((error as { message: unknown }).message)
         : String(error ?? '');
   const lower = message.toLowerCase();
+
+  // The server's word filter said no (error code 23514). It sends the same sentence the app shows.
+  if (lower.includes(NAME_NOT_ALLOWED.toLowerCase())) return NAME_NOT_ALLOWED;
+  if (lower.includes(WORD_NOT_ALLOWED.toLowerCase())) return WORD_NOT_ALLOWED;
 
   if (lower.includes('invalid login credentials')) {
     return "That email or password doesn't look right. Try again!";

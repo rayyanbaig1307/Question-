@@ -1,5 +1,12 @@
 # How to test each feature on your phone
 
+The automated local-only suite and commands are in [tests/README.md](../tests/README.md).
+Use a dedicated test project for this manual checklist. The automated suite never
+needs a real Supabase URL, account or key. Its results do not replace phone checks:
+camera, microphone, gestures, native playback, push and real Apple/Google login
+still need a test build on a device. Use the new social sign-in/setup flow where
+available; the legacy signup steps below apply to fallback builds.
+
 Before anything: do the one-time setup in the [README](../README.md), then run `npx expo start`
 and scan the QR code with your phone (iPhone: Camera app, Android: Expo Go).
 
@@ -601,7 +608,7 @@ Use 2 friend accounts (A and B).
 
 ## Step 39 – Community dares 💡
 
-1. Dare screen → **💡 Suggest a dare · vote on ideas** → the Ideas screen. Type an idea (10–120 letters) → **Suggest**.
+1. Dare screen → **💡 Suggest tomorrow's dare for everyone · vote on ideas** → the Ideas screen. Type an idea (10–120 letters) → **Suggest**.
    One idea a day each. Dangerous words (fire, knife, roof, alcohol, nudity…) are refused by the database with
    "Keep it silly, not dangerous".
 2. Everyone sees the ideas under **Top** / **New** with the suggester's @name. Tap 🔥 to vote (tap again to take it back).
@@ -788,13 +795,15 @@ arrive with the normal update.
 
 ## Step 53 – Clean words 🧼
 
-1. **Usernames and display names: no swearing.** "big dick", "fuckboy", "f.u.c.k", "the_shit" say "Let's keep it
-   clean…" and won't save.
-2. **Real names are fine:** a display name like "Moby Dick", "Dick Smith" or "Alex Cock" (written with a capital
-   letter, like a name) saves. So do names like Ishita, Nazir, Pornsak, Hancock, Scunthorpe.
+1. **Usernames: no swearing.** "fuckboy", "f.u.c.k", "the_shit" say "Let's keep it clean…" and won't save.
+   Usernames like ishita, nazir, pornsak, hancock, scunthorpe are fine.
+2. **Display names (your name on your profile) may swear:** "Fuck Off" or "Big Dick" saves, and so do real names
+   like "Moby Dick" or "Alex Cock". (Changed 5 Nov: display names used to block swearing.)
 3. **Bios, chats, comments, captions, hit ups, group names:** swearing is allowed.
-4. **Slurs are blocked in public places** – names, bios, captions, comments, hit ups, dare ideas, group names
-   (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo".
+4. **Slurs are blocked in public places** – display names, bios, captions, comments, hit ups, dare ideas, group
+   names (also sneaky spellings like "n1gg3r"): "That word isn't allowed on Peekaboo" (in a username: "Let's keep
+   it clean…"). After the QA round 2 release the database checks this too, with the same words and the same
+   message (see Step 62).
 5. **Private chats aren't filtered at all**: any word goes through in a chat or a chat dare to a friend.
 
 ## Step 54 – Reports (owner, in Supabase) 🚩
@@ -809,6 +818,13 @@ day and act within 24 hours.
    with that id and delete it. Then set the report's `status` to `reviewed`.
 4. **Ban someone:** Supabase → **Authentication → Users** → find them → **Ban user**. (Unban the same way.)
 5. Nothing to do: set the report's `status` to `dismissed`.
+6. **After the QA round 2 release:** an open or `reviewed` report keeps the reported photo/video file safe, even
+   if its owner deletes it. `dismissed` lets go of the files for good (setting it back doesn't bring them back);
+   the daily cleanup can then delete them. To let go of one report's files yourself, run
+   `select public.release_report_evidence('<report id>');` in the SQL editor. Deleting a file in Storage that a
+   report still keeps should be refused (not yet checked on the live project). One exception: if the reported
+   person deletes their whole account, their files go too, even ones a report keeps, so save anything you need
+   first.
 
 ## Step 55 – Keeps 📦 (save your edits)
 
@@ -835,7 +851,9 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
 6. **Old accounts:** **Log in with username or email** still works with the password, e.g. @coolname.
 7. **Delete account** on an Apple account: Settings → Delete account → Apple asks for Face ID once more → the
    account is gone. On iPhone: Settings → your name → Sign-In & Security → Sign in with Apple → Peekaboo is no
-   longer listed (needs the Apple key secrets, see `docs/HANDOFF.md`).
+   longer listed (needs the Apple key secrets, see `docs/HANDOFF.md`). If the iPhone uses a different Apple ID
+   than the account, the account is still deleted. After the QA round 2 release, Peekaboo then stays listed
+   under both Apple IDs (see Step 62).
 8. **Sign-up guard** (once it's switched on): the old Create account button on an old download says "New accounts
    are made with Apple or Google now. Update Peekaboo to the newest version."
 
@@ -918,4 +936,59 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
 4. **Pinned message:** in a group chat hold a message → **📌 Pin to the top** → it shows in a bar under the name for
    everyone; tap it to jump there, ✕ (or hold → Unpin) to unpin.
 5. People outside a chat can't react or pin; a reply can only point at a message in the same chat.
+
+## Step 62 – Phone checks for the QA round 2 release 🧪
+
+The automated tests can't prove these. Do them **after** the QA release (database first, then the app update –
+see "Release order" in `docs/HANDOFF.md`). The new app needs the new database, so don't try it against the live
+database before the migrations are in. Use the real app (TestFlight / APK) on **both an iPhone and an Android**.
+These checks run on the live project (unlike the rest of this checklist). Use test accounts only, never a
+real person's account (deleting can't be undone).
+
+1. **Terms check at start-up:**
+   - With an account that already agreed: close the app fully and open it. A short plain cover (a spinner),
+     then the app. Nothing slides down and the Terms page never shows.
+   - With an account that must agree (for example after a Terms change): after the short cover the **Our Terms**
+     page shows. **I agree** → it slides away and you're in. **Log out** also works. ⚠️ If the Terms page ever
+     fails to appear for someone who must agree, stop and report it – it's the legal gate.
+   - Airplane mode on, open the app → after about 15 seconds **Couldn't check** with **Try again** and **Log out**.
+     Airplane mode off → **Try again** → straight in (no Terms page if you agreed before).
+2. **Chat ← Camera → Home:** swipe between the three pages and tap the tabs. The haptic tick on each page, the
+   shrink/dim animation, the tab bar fading and the camera warming up are all as before. The Friend Map and
+   hold-to-reveal photos still work.
+3. **Links from a closed app:** close the app fully, then tap a chat or friend notification (or a `peekaboo://`
+   link) → that page opens, not Home. The splash screen stays until it does, with no flash of the Welcome screen.
+4. **Word filter:**
+   - A display name, bio, caption, comment, hit up, dare idea or group name with a slur → "That word isn't
+     allowed on Peekaboo." and it isn't saved.
+   - A display name with swearing (Edit profile → Name → "Fuck Off") → it saves and shows on your profile.
+   - A username with swearing → "Let's keep it clean – that word can't be in a username or name."
+   - In a private chat (one-on-one or group, dares too) the same words still go through.
+5. **Photos stay on screen:** in a group chat with photos, have someone send a new photo → the photos already
+   there stay put (no blank flash). Same on the Home feed when you pull down to refresh.
+6. **Community dares:** Dare screen → **💡 Suggest tomorrow's dare for everyone · vote on ideas** → the
+   **🔥 Top** and **🆕 New** lists load, with each idea's @name.
+7. **Chat-dare proof for a dare that's gone:** A dares B in chat. While B takes the proof photo, A holds the
+   dare → **Delete for everyone**. B sends the photo → **Photo sent** "That dare isn't there any more, so it
+   can't be marked as done. Your photo is already sent." → back to the chat (no endless "Tap Send again").
+8. **Delete account with a different Apple ID** (use a throwaway Apple test account): on an iPhone signed in to
+   a different Apple ID than the one the Peekaboo account uses, Settings → **Delete account** → approve the
+   Apple prompt → the account is deleted (it is not blocked). Peekaboo then stays listed under both Apple IDs
+   (the account's and the iPhone's). Remove it under each one by hand (see `docs/HANDOFF.md`).
+9. **Username login after wrong passwords:** with a test account that has a password (log in with its
+   username, not its email; not @coolname or the App Review account, since it gets locked for 15 minutes),
+   type a wrong password 8 times from the same phone. The next try says "Lots of login tries for this
+   username – wait 15 minutes and try again" (even with the right password). Switch from Wi-Fi to mobile data → the right password works. A right
+   password never counts as a try.
+10. **Settings privacy switch:** turn on airplane mode → flip **Private account** → "Could not save" and the switch
+    stays where it was. Airplane mode off → flip it → "Your account is private 🔒". Flip it twice quickly on slow
+    data and leave Settings at once → your profile shows your last choice. VoiceOver/TalkBack read each switch
+    as a working switch (not "dimmed" or "disabled").
+11. **Delete a sent peek or voice note** in a chat → it disappears with no error.
+12. **Group photo:** change a group's photo → it works. On a flaky connection you may see an error, but nothing
+    breaks.
+13. **Web version** (`npx expo start`, then press **w**): log in, open the photo editor and tap **Send to** or the
+    save button → "Sending and saving from the web isn't ready yet. Please use the Peekaboo phone app." In Chrome
+    on Android, swiping right on Chat doesn't leave the app. (On iPhone Safari the edge swipe-back can still go
+    back – a web page can't block it.)
 

@@ -3,11 +3,11 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import PagerView from 'react-native-pager-view';
 
 import { CameraPage } from '@/components/home/CameraPage';
 import { ChatPage } from '@/components/home/ChatPage';
 import { HomePage } from '@/components/home/HomePage';
+import { HomePager, type HomePagerRef } from '@/components/home/HomePager';
 import { HomeTabBar } from '@/components/home/HomeTabBar';
 import { useActivity } from '@/lib/activity';
 import { useMe } from '@/lib/auth';
@@ -23,12 +23,10 @@ const CAMERA = 1;
 const HOME = 2;
 const PAGES = [CHAT, CAMERA, HOME];
 
-const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
-
 // Swipe left/right between Chat ← Camera → Home, like Snapchat, or tap the tabs at the bottom.
 export default function Home() {
   const { userId } = useMe();
-  const pager = useRef<PagerView>(null);
+  const pager = useRef<HomePagerRef>(null);
   const [page, setPage] = useState(CAMERA);
   // True while your finger is swiping (or the page is still gliding into place).
   const [swiping, setSwiping] = useState(false);
@@ -121,7 +119,7 @@ export default function Home() {
 
   return (
     <View style={styles.fill}>
-      <AnimatedPagerView
+      <HomePager
         ref={pager}
         style={styles.fill}
         initialPage={CAMERA}
@@ -132,7 +130,7 @@ export default function Home() {
           setPage(event.nativeEvent.position);
         }}>
         {pages}
-      </AnimatedPagerView>
+      </HomePager>
 
       <HomeTabBar
         page={page}
