@@ -199,6 +199,12 @@ those builds go out. The
 leave Chat. There's no realtime listener: it refreshes on focus, when the app comes back to the front, and
 when a push arrives.
 
+## Face mesh + Soft Glow lens (branch `mediapipe-faces`, not switched on)
+
+MediaPipe Face Landmarker (478 face points + 52 expression scores) as our own VisionCamera v5 camera output in
+`modules/face-mesh`, plus a Soft Glow demo lens (`src/components/lens/`). It isn't in `package.json` yet, so
+builds are unchanged. Not tested on a phone. Steps, sizes and risks: `docs/FACE_MESH.md`.
+
 ## Open items
 
 Owner's to-do:
