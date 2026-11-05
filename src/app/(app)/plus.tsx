@@ -180,7 +180,7 @@ export default function PlusScreen() {
         {/* The small print Apple asks for. */}
         {CAN_BUY_PLUS ? (
           <Text style={styles.smallPrint}>
-            Peekaboo+ is {price ?? 'charged'} per month, paid with your Apple ID. It renews automatically every month
+            Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple ID. It renews automatically every month
             until you cancel. Cancel anytime in Settings → Apple ID → Subscriptions, at least 24 hours before it renews.
           </Text>
         ) : null}
