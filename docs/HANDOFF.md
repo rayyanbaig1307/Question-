@@ -395,6 +395,24 @@ when a push arrives.
   only handed out by the server when `private.is_plus` says yes (a `plus_members` row) – the `TESTERS` list in
   `plus.ts` is app-only, so a tester without a row sees the free version of these screens.
 
+## Peekaboo+ extras (branch `plus-extras`, not live)
+
+- Migration `20261218000000_plus_extras.sql` (not applied; needs `20261215000000_peekaboo_plus.sql` first).
+  Every check is on the server with `private.is_plus`.
+- 🙈 **Peek-a-Save** (`public.peek_a_save`, `public.my_broken_streaks`, table `peek_a_saves`): a daily dare or
+  chat dare streak (2+ long) that broke less than 24 hours ago can be brought back, 1 per calendar month (UTC),
+  no carry-over. The friend gets a push. `dare_streaks()` and `private.dare_streak` were rewritten to count saves.
+  Cards: Dare screen (all broken streaks) and the 1-on-1 chat (that friend's chat dare streak). The daily drop
+  has no streak, so there's nothing to save there.
+- ⏰ **Drop rewind** (`posts.drop_rewound`, table `drop_rewinds`, trigger `posts_set_drop_fields_rewind`): once a
+  week (Monday–Sunday UTC) a late drop is posted as "On time". The real lateness is kept in `drop_rewinds`. If
+  the server says no, the drop is just posted late. Choice on Send to, only once the drop is late.
+- 🕵️ **Guess Who hint** (`public.mystery_hint`, table `mystery_hints`): one clue per post per person, never the
+  name or id. Button under the 4 names on Guess Who.
+- `public.plus_allowances()` tells the app what's left. Without the migration all three stay hidden.
+- The testers in `src/lib/plus.ts` only have Plus in the app: for the server features they also need a
+  `plus_members` row.
+
 ## Face mesh + Soft Glow lens (branch `mediapipe-faces`, not switched on)
 
 MediaPipe Face Landmarker (478 face points + 52 expression scores) as our own VisionCamera v5 camera output in

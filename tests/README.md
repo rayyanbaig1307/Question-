@@ -65,6 +65,10 @@ Database (PGlite, part of `npm test`):
   functions to app roles the way a hosted project does; the preflight file only reads, labels every query
   and finds what it should on an untouched database; its "names must still be free" list matches the names
   in the migration files.
+- `plus-extras.test.mjs`: Peekaboo+ extras. Peek-a-Save brings back a daily or chat dare streak only for Plus,
+  only within 24 hours, once a month, only with a friend, and pushes the friend; a drop rewind only works for
+  Plus, once a week, and can't be changed later; a Guess Who hint is Plus only, one per post, never names who
+  posted it, and isn't given after you've guessed. Nobody can write those tables directly.
 - `local-db.test.mjs`: the `applyMigrationFile` helper works on PGlite and keeps nothing of a file that fails.
 - `plus-insights.test.mjs`: Peekaboo+ insights (`20261217000000_plus_insights.sql`). A profile visit is saved at
   most once an hour, never for yourself or across a block; "Show me in Profile views" off hides you and your own

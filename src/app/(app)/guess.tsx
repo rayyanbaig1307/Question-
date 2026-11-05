@@ -33,6 +33,8 @@ import {
   type MysteryPost,
 } from '@/lib/guess';
 import { useMediaUrls } from '@/lib/media';
+import { usePlus } from '@/lib/plus';
+import { fetchMysteryHints, getMysteryHint } from '@/lib/plusExtras';
 import { REPORT_REASONS } from '@/lib/safety';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
@@ -52,11 +54,15 @@ export default function GuessWho() {
   // Posts you just guessed, to play the reveal animation once.
   const [justRevealed, setJustRevealed] = useState<Set<string>>(new Set());
   const [inView, setInView] = useState<string | null>(null);
+  // 🕵️ Hints you got (Peekaboo+): post id → hint. null = the server doesn't have hints yet (no Hint button).
+  const plus = usePlus();
+  const [hints, setHints] = useState<Map<string, string> | null>(null);
+  const [hinting, setHinting] = useState<string | null>(null);
 
-  const load = useCallback(
-    () => fetchMysteryFeed().then((loaded) => setFeed({ ...loaded, loadedAt: Date.now() })),
-    [],
-  );
+  const load = useCallback(() => {
+    fetchMysteryHints().then(setHints);
+    return fetchMysteryFeed().then((loaded) => setFeed({ ...loaded, loadedAt: Date.now() }));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +109,25 @@ export default function GuessWho() {
       Alert.alert('Could not guess', friendlyError(error));
     } finally {
       setGuessing(null);
+    }
+  }
+
+  // One clue about who posted it (Peekaboo+, once per post). Without Plus: off to the Peekaboo+ screen.
+  async function askHint(post: MysteryPost) {
+    if (!plus) {
+      router.push('/plus');
+      return;
+    }
+    if (hinting) return;
+    setHinting(post.id);
+    try {
+      const hint = await getMysteryHint(post.id);
+      Haptics.selectionAsync();
+      setHints((current) => new Map(current ?? []).set(post.id, hint));
+    } catch (error) {
+      Alert.alert('Could not get a hint', friendlyError(error));
+    } finally {
+      setHinting(null);
     }
   }
 
@@ -232,6 +257,11 @@ export default function GuessWho() {
               animate={justRevealed.has(item.id)}
               onGuess={(choice) => guess(item, choice)}
               onMenu={() => openMenu(item)}
+              hintsOn={hints !== null}
+              hint={hints?.get(item.id)}
+              plus={plus}
+              hinting={hinting === item.id}
+              onHint={() => askHint(item)}
             />
           )}
         />
@@ -240,7 +270,7 @@ export default function GuessWho() {
   );
 }
 
-function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, active, busy, animate, onGuess, onMenu }: {
+function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, active, busy, animate, onGuess, onMenu, hintsOn, hint, plus, hinting, onHint }: {
   post: MysteryPost;
   people: Map<string, Profile>;
   me: string;
@@ -253,6 +283,12 @@ function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, acti
   animate: boolean;
   onGuess: (choice: string) => void;
   onMenu: () => void;
+  // 🕵️ Hint (Peekaboo+): shown only when the server has hints; `hint` is the one you already got.
+  hintsOn: boolean;
+  hint: string | undefined;
+  plus: boolean;
+  hinting: boolean;
+  onHint: () => void;
 }) {
   const poster = post.poster ? people.get(post.poster) : undefined;
   const hoursLeft = Math.max(1, Math.round((Date.parse(post.expires_at) - now) / HOUR));
@@ -332,6 +368,22 @@ function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, acti
             );
           })}
           {busy ? <ActivityIndicator color={colors.accent} style={styles.choiceSpinner} /> : null}
+          {hint ? (
+            <Text style={styles.hint}>🕵️ Hint: {hint}</Text>
+          ) : hintsOn ? (
+            <Pressable
+              onPress={onHint}
+              disabled={hinting}
+              style={styles.hintButton}
+              accessibilityRole="button"
+              accessibilityLabel={plus ? 'Get a hint' : 'Get a hint with Peekaboo+'}>
+              {hinting ? (
+                <ActivityIndicator color={colors.purple} />
+              ) : (
+                <Text style={styles.hintButtonText}>{plus ? '🕵️ Hint' : '🕵️ Hint · Peekaboo+ ⭐'}</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
       )}
     </View>
@@ -479,6 +531,27 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     left: 0,
     right: 0,
+  },
+  hint: {
+    ...font.small,
+    color: colors.text,
+    fontWeight: '700',
+    width: '100%',
+    textAlign: 'center',
+  },
+  hintButton: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.purple,
+  },
+  hintButtonText: {
+    ...font.small,
+    color: colors.purple,
+    fontWeight: '800',
   },
   results: {
     padding: space.md,
