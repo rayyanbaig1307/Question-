@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   saveText: {
-    color: colors.white,
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 14,
   },

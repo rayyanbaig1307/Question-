@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   topText: {
-    color: colors.white,
+    color: colors.onAccent,
     fontSize: 15,
     fontWeight: '800',
   },
