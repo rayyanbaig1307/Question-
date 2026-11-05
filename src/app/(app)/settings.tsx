@@ -17,6 +17,7 @@ import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
+import { usePlus } from '@/lib/plus';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import type { HitUpsFrom } from '@/lib/types';
@@ -26,6 +27,7 @@ export default function Settings() {
   const { userId, profile, setProfile, signOut } = useMe();
   const { showToast, showOptions } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
+  const plus = usePlus();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
   const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
@@ -258,17 +260,34 @@ export default function Settings() {
 
         <Section title="Appearance">
           <View style={styles.themes}>
-            {THEMES.map((option) => (
-              <Pressable
-                key={option.key}
-                onPress={() => chooseTheme(option.key)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: themeChoice === option.key }}
-                style={[styles.theme, themeChoice === option.key && styles.themeOn]}>
-                <Text style={styles.themeEmoji}>{option.emoji}</Text>
-                <Text style={[styles.themeLabel, themeChoice === option.key && styles.themeLabelOn]}>{option.label}</Text>
-              </Pressable>
-            ))}
+            {THEMES.map((option) => {
+              const on = themeChoice === option.key;
+              // Plus themes are locked for people without Peekaboo+.
+              const locked = !!option.plus && !plus;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => (locked ? showToast('This theme comes with Peekaboo+ ⭐') : chooseTheme(option.key))}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on, disabled: locked }}
+                  accessibilityLabel={locked ? `${option.label}, Peekaboo+ only` : option.label}
+                  style={[styles.theme, on && styles.themeOn, locked && styles.themeLocked]}>
+                  {option.swatch ? (
+                    <View style={[styles.swatch, { backgroundColor: option.swatch[0], borderColor: option.swatch[1] }]}>
+                      <View style={[styles.swatchDot, { backgroundColor: option.swatch[1] }]} />
+                    </View>
+                  ) : (
+                    <Text style={styles.themeEmoji}>{option.emoji}</Text>
+                  )}
+                  <Text style={[styles.themeLabel, on && styles.themeLabelOn]} numberOfLines={1}>
+                    {option.label}
+                  </Text>
+                  {option.plus ? (
+                    <Text style={styles.plusTag}>{locked ? '🔒 ' : ''}⭐ Peekaboo+</Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </Section>
 
@@ -364,10 +383,14 @@ const openLegal = (doc: LegalPage) => router.push({ pathname: '/legal/[doc]', pa
 // The contact email from the Terms (shown once it's been filled in).
 const CONTACT = contactEmail(LEGAL_DOCS.terms);
 
-const THEMES: { key: ThemeChoice; label: string; emoji: string }[] = [
+// The theme buttons. Plus themes show a little colour sample (background + button colour) instead of an emoji.
+const THEMES: { key: ThemeChoice; label: string; emoji?: string; swatch?: [string, string]; plus?: boolean }[] = [
   { key: 'dark', label: 'Dark', emoji: '🌙' },
   { key: 'light', label: 'Light', emoji: '☀️' },
   { key: 'system', label: 'Match phone', emoji: '📱' },
+  { key: 'gold', label: 'Black & Gold', swatch: ['#0E0A08', '#E8A93A'], plus: true },
+  { key: 'midnight', label: 'Midnight', swatch: ['#0B1530', '#38B6FF'], plus: true },
+  { key: 'sunset', label: 'Sunset', swatch: ['#FFF1D6', '#FF7A1F'], plus: true },
 ];
 
 // Switching colors restarts the app for a second, so every screen is redrawn in the new colors.
@@ -385,11 +408,14 @@ async function chooseTheme(choice: ThemeChoice) {
 const styles = StyleSheet.create({
   themes: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: space.sm,
     padding: space.sm,
   },
   theme: {
-    flex: 1,
+    // Three to a row.
+    flexGrow: 1,
+    flexBasis: '30%',
     alignItems: 'center',
     gap: 4,
     paddingVertical: space.md,
@@ -401,8 +427,30 @@ const styles = StyleSheet.create({
   themeOn: {
     borderColor: colors.accent,
   },
+  themeLocked: {
+    opacity: 0.55,
+  },
   themeEmoji: {
     fontSize: 24,
+    lineHeight: 30,
+  },
+  swatch: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  plusTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textMuted,
   },
   themeLabel: {
     ...font.small,
