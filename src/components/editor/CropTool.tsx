@@ -16,7 +16,7 @@ import { colors, radius, space } from '@/theme';
 const MIN = 60;
 // Room around the photo for the handles and buttons.
 const TOP_ROOM = 120;
-const BOTTOM_ROOM = 190;
+const BOTTOM_ROOM = 240;
 
 type Shape = { key: string; label: string; ratio: number | null };
 const SHAPES: Shape[] = [
@@ -29,16 +29,18 @@ const SHAPES: Shape[] = [
 type Edge = 'left' | 'right' | 'top' | 'bottom' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'move';
 
 // Crop a photo: drag the sides or corners of the box (or drag inside it to move it), pick a shape if you like,
-// then Done. Gives back the cropped photo.
+// turn it with Rotate, then Done. Gives back the cropped photo.
 export function CropTool({ uri, onDone, onCancel }: { uri: string; onDone: (cropped: string) => void; onCancel: () => void }) {
   const { width: screenW, height: screenH } = useWindowDimensions();
+  // The photo being cropped – a turned copy after Rotate.
+  const [photo, setPhoto] = useState(uri);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [shape, setShape] = useState<Shape>(SHAPES[0]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    RNImage.getSize(uri, (w, h) => setSize({ w, h }), () => setSize({ w: screenW, h: screenH }));
-  }, [uri, screenW, screenH]);
+    RNImage.getSize(photo, (w, h) => setSize({ w, h }), () => setSize({ w: screenW, h: screenH }));
+  }, [photo, screenW, screenH]);
 
   // Where the whole photo sits on screen (fitted inside the space between the top and bottom bars).
   const areaW = screenW - space.lg * 2;
@@ -82,6 +84,36 @@ export function CropTool({ uri, onDone, onCancel }: { uri: string; onDone: (crop
     h.set(bh);
   }
 
+  // Turn the photo a quarter turn to the right. The crop box starts over on the whole (turned) photo.
+  async function rotate() {
+    if (!size || busy) return;
+    Haptics.selectionAsync();
+    setBusy(true);
+    try {
+      const rendered = await ImageManipulator.manipulate(photo).rotate(90).renderAsync();
+      const saved = await rendered.saveAsync({ compress: 0.95, format: SaveFormat.JPEG });
+      setShape(SHAPES[0]);
+      ratio.set(null);
+      setSize({ w: size.h, h: size.w });
+      setPhoto(saved.uri);
+    } catch (error) {
+      Alert.alert('Could not rotate', friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Back to the whole photo, any shape.
+  function reset() {
+    Haptics.selectionAsync();
+    setShape(SHAPES[0]);
+    ratio.set(null);
+    x.set(left0);
+    y.set(top0);
+    w.set(shownW);
+    h.set(shownH);
+  }
+
   async function done() {
     if (!size || busy) return;
     setBusy(true);
@@ -91,7 +123,7 @@ export function CropTool({ uri, onDone, onCancel }: { uri: string; onDone: (crop
       const originY = Math.max(0, Math.round((y.get() - top0) / scale));
       const width = Math.min(size.w - originX, Math.round(w.get() / scale));
       const height = Math.min(size.h - originY, Math.round(h.get() / scale));
-      const rendered = await ImageManipulator.manipulate(uri).crop({ originX, originY, width, height }).renderAsync();
+      const rendered = await ImageManipulator.manipulate(photo).crop({ originX, originY, width, height }).renderAsync();
       const saved = await rendered.saveAsync({ compress: 0.92, format: SaveFormat.JPEG });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onDone(saved.uri);
@@ -111,7 +143,7 @@ export function CropTool({ uri, onDone, onCancel }: { uri: string; onDone: (crop
   return (
     <View style={styles.fill}>
       {size ? (
-        <Image source={{ uri }} style={{ position: 'absolute', left: left0, top: top0, width: shownW, height: shownH }} contentFit="fill" />
+        <Image source={{ uri: photo }} style={{ position: 'absolute', left: left0, top: top0, width: shownW, height: shownH }} contentFit="fill" />
       ) : (
         <ActivityIndicator color={colors.white} style={styles.loading} />
       )}
@@ -163,8 +195,15 @@ export function CropTool({ uri, onDone, onCancel }: { uri: string; onDone: (crop
               <Text style={[styles.shapeText, shape.key === item.key && styles.shapeTextOn]}>{item.label}</Text>
             </Pressable>
           ))}
-          <Pressable onPress={() => pickShape(SHAPES[0])} style={styles.reset} accessibilityLabel="Reset">
-            <Ionicons name="refresh" size={18} color={colors.white} />
+        </View>
+        <View style={styles.shapes}>
+          <Pressable onPress={rotate} disabled={busy || !size} style={styles.tool} accessibilityRole="button" accessibilityLabel="Rotate">
+            <Ionicons name="reload" size={17} color={colors.white} />
+            <Text style={styles.shapeText}>Rotate</Text>
+          </Pressable>
+          <Pressable onPress={reset} disabled={busy || !size} style={styles.tool} accessibilityRole="button" accessibilityLabel="Reset">
+            <Ionicons name="arrow-undo" size={17} color={colors.white} />
+            <Text style={styles.shapeText}>Reset</Text>
           </Pressable>
         </View>
       </SafeEdge>
@@ -395,12 +434,13 @@ const styles = StyleSheet.create({
   shapeTextOn: {
     color: colors.black,
   },
-  reset: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  tool: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
 });

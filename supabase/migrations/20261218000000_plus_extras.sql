@@ -128,6 +128,39 @@ grant execute on function public.dare_streaks() to authenticated;
 
 -- Chat dare streaks, counted back from a moment (`since`): dares the two of you completed, with no gap over
 -- 3 days. A Peek-a-Save bridges the gap just before it and isn't counted as a dare.
+-- Group dares count too (one of you sent it, the other did it, and the proof counts right now) – the same rule as
+-- 20261216000000_group_dare_votes.sql. That part is only added once that migration is in the database, so this
+-- file works with or without it (the "what counts" query is put together as text for that reason).
+create or replace function private.streak_moments_sql(with_saves boolean)
+returns text language plpgsql stable security definer set search_path = '' as $$
+declare
+  q text := $q$
+    select m.dare_done_at as at, false as saved from public.messages m
+     where m.kind = 'dare' and m.dare_state = 'done' and m.dare_done_at <= $3
+       and ((m.sender_id = $1 and m.recipient_id = $2) or (m.sender_id = $2 and m.recipient_id = $1))$q$;
+begin
+  if to_regprocedure('private.group_proof_counts(integer,integer,boolean)') is not null then
+    q := q || $q$
+    union all
+    select min(pr.created_at) as at, false as saved from public.group_messages pr
+      join public.group_messages dr on dr.id = pr.dare_id and dr.kind = 'dare'
+     where pr.kind = 'proof' and pr.sender_id in ($1, $2) and dr.sender_id in ($1, $2) and pr.sender_id <> dr.sender_id
+       and pr.created_at <= $3
+       and private.group_proof_counts(pr.proof_legit, pr.proof_cap, pr.proof_legacy)
+     group by pr.dare_id, pr.sender_id$q$;
+  end if;
+  if with_saves then
+    q := q || $q$
+    union all
+    select s.saved_at as at, true as saved from public.peek_a_saves s
+     where s.kind = 'chat_dare' and s.saved_at <= $3
+       and ((s.user_id = $1 and s.friend_id = $2) or (s.user_id = $2 and s.friend_id = $1))$q$;
+  end if;
+  return q;
+end;
+$$;
+revoke all on function private.streak_moments_sql(boolean) from public, anon, authenticated;
+
 create or replace function private.dare_streak_since(a uuid, b uuid, since timestamptz)
 returns int language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -136,17 +169,8 @@ declare
   bridged boolean := false;
   d record;
 begin
-  for d in
-    select x.at, x.saved from (
-      select m.dare_done_at as at, false as saved from public.messages m
-       where m.kind = 'dare' and m.dare_state = 'done' and m.dare_done_at <= since
-         and ((m.sender_id = a and m.recipient_id = b) or (m.sender_id = b and m.recipient_id = a))
-      union all
-      select s.saved_at, true from public.peek_a_saves s
-       where s.kind = 'chat_dare' and s.saved_at <= since
-         and ((s.user_id = a and s.friend_id = b) or (s.user_id = b and s.friend_id = a))
-    ) x
-    order by x.at desc, x.saved
+  for d in execute 'select x.at, x.saved from (' || private.streak_moments_sql(true) || ') x order by x.at desc, x.saved'
+    using a, b, since
   loop
     exit when not bridged and previous - d.at > interval '3 days';
     if d.saved then
@@ -171,16 +195,13 @@ revoke all on function private.dare_streak(uuid, uuid) from public, anon, authen
 
 -- The last completed dare (or Peek-a-Save) between two people in chat.
 create or replace function private.chat_streak_last(a uuid, b uuid)
-returns timestamptz language sql stable security definer set search_path = '' as $$
-  select max(x.at) from (
-    select m.dare_done_at as at from public.messages m
-     where m.kind = 'dare' and m.dare_state = 'done'
-       and ((m.sender_id = a and m.recipient_id = b) or (m.sender_id = b and m.recipient_id = a))
-    union all
-    select s.saved_at from public.peek_a_saves s
-     where s.kind = 'chat_dare'
-       and ((s.user_id = a and s.friend_id = b) or (s.user_id = b and s.friend_id = a))
-  ) x;
+returns timestamptz language plpgsql stable security definer set search_path = '' as $$
+declare
+  last_at timestamptz;
+begin
+  execute 'select max(x.at) from (' || private.streak_moments_sql(true) || ') x' into last_at using a, b, now();
+  return last_at;
+end;
 $$;
 revoke all on function private.chat_streak_last(uuid, uuid) from public, anon, authenticated;
 

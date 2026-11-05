@@ -616,6 +616,7 @@ const AUTHENTICATED_ALLOWED = [
   'public.unregister_push_token(push_token text)',
   'public.username_available(name text)',
   'public.vote_dare(post uuid, legit boolean)',
+  'public.vote_group_proof(proof uuid, legit boolean, expected_user_id uuid)',
 ];
 const ANON_ALLOWED = [
   'public.username_available(name text)',

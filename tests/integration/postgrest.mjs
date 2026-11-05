@@ -384,6 +384,74 @@ try {
     const result = await request('objects', { jwt, method: 'POST', body: { bucket_id: 'media', name: `${users[39]}/posts/deleted-account.jpg` }, headers: { 'Content-Profile': 'storage' } });
     assert.equal(result.status, 403);
   });
+  // Group dares: the group votes Legit 🔥 or Cap 🧢 on each proof (20261216000000_group_dare_votes.sql).
+  // users[9] dares the group, users[14] posts proof, users[15] votes; users[3] is not in the group.
+  if (!original) {
+    await check('group dare proof votes through real REST: members vote, the poster and outsiders are refused, totals are live on the proof, leaving takes your vote away', async () => {
+      await friend(db, users[9], users[14]);
+      await friend(db, users[9], users[15]);
+      const crew = (await own(9, "select create_peek_group('REST vote crew',$1::uuid[],current_date) as id", [[users[14], users[15]]])).rows[0].id;
+      const dareId = (await own(9, "insert into group_messages(group_id,sender_id,kind,body) values($1,$2,'dare','Do ten jumps') returning id", [crew, users[9]])).rows[0].id;
+      // The app can't post a proof that already has votes, or one marked as "from before voting".
+      const posted = await request('group_messages', { user: 14, method: 'POST', headers: { Prefer: 'return=representation' }, body: {
+        group_id: crew, sender_id: users[14], kind: 'proof', dare_id: dareId, media_path: `${users[14]}/group/rest-proof.jpg`, media_type: 'photo',
+        proof_legit: 7, proof_cap: 0, proof_legacy: true } });
+      assert.equal(posted.status, 201, JSON.stringify(posted.data));
+      const proofId = posted.data[0].id;
+      assert.deepEqual([posted.data[0].proof_legit, posted.data[0].proof_cap, posted.data[0].proof_legacy], [0, 0, false]);
+      const voteAs = (user, legit, expected = users[user]) => request('rpc/vote_group_proof', { user, method: 'POST', body: { proof: proofId, legit, expected_user_id: expected } });
+      // A member votes, and so does the person who sent the dare.
+      let result = await voteAs(15, true);
+      assert.equal(result.status, 200, JSON.stringify(result.data)); assert.deepEqual(result.data, { legit: 1, cap: 0, mine: true, legacy: false });
+      result = await voteAs(9, false);
+      assert.equal(result.status, 200, JSON.stringify(result.data)); assert.deepEqual(result.data, { legit: 1, cap: 1, mine: false, legacy: false });
+      // Refused: the poster, someone outside the group, a different account than the one on screen, a visitor.
+      for (const [user, expected, message] of [[14, users[14], "You can't vote on your own proof"], [3, users[3], 'Only people in this group can vote'], [15, users[9], 'Your login has changed - please try again']]) {
+        const refused = await voteAs(user, true, expected);
+        assert.equal(refused.status, 400, `${user}: ${refused.status} ${JSON.stringify(refused.data)}`); assert.equal(refused.data.message, message);
+      }
+      const visitor = await request('rpc/vote_group_proof', { user: null, method: 'POST', body: { proof: proofId, legit: true, expected_user_id: users[15] } });
+      assert.ok([401, 403, 404].includes(visitor.status), `visitor ${visitor.status}`);
+      // The totals, as every member reads them over REST; nobody outside the group sees the proof.
+      for (const user of [9, 14, 15]) {
+        const row = await request(`group_messages?id=eq.${proofId}&select=proof_legit,proof_cap,proof_legacy`, { user });
+        assert.equal(row.status, 200); assert.deepEqual(row.data, [{ proof_legit: 1, proof_cap: 1, proof_legacy: false }]);
+      }
+      assert.deepEqual((await request(`group_messages?id=eq.${proofId}`, { user: 3 })).data, []);
+      // Votes are anonymous: you read only your own; the poster reads none.
+      assert.deepEqual((await request(`group_proof_votes?proof_id=eq.${proofId}&select=user_id,legit`, { user: 15 })).data, [{ user_id: users[15], legit: true }]);
+      assert.deepEqual((await request(`group_proof_votes?proof_id=eq.${proofId}`, { user: 14 })).data, []);
+      // Nobody can change the totals or write a vote around the vote function.
+      const patched = await request(`group_messages?id=eq.${proofId}`, { user: 14, method: 'PATCH', body: { proof_legit: 50, proof_legacy: true }, headers: { Prefer: 'return=representation' } });
+      assert.ok([200, 404].includes(patched.status), `PATCH ${patched.status}`); assert.deepEqual(patched.status === 200 ? patched.data : [], []);
+      const forged = await request('group_proof_votes', { user: 14, method: 'POST', body: { proof_id: proofId, user_id: users[14], legit: true } });
+      assert.ok([401, 403].includes(forged.status), `forged vote ${forged.status}`);
+      assert.deepEqual((await db.query('select proof_legit, proof_cap, proof_legacy from group_messages where id=$1', [proofId])).rows[0], { proof_legit: 1, proof_cap: 1, proof_legacy: false });
+      // The app's own voteGroupProof and fetchMyProofVotes (src/lib/groupChat.ts) through supabase-js.
+      const supabase = createClient('http://local.invalid', 'local-test-key', {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: { headers: { Authorization: `Bearer ${token(15)}` }, fetch: (url, init) => fetch(String(url).replace('http://local.invalid/rest/v1', runtime.base), init) },
+      });
+      const { voteGroupProof, fetchMyProofVotes } = loadLibrary('groupChat', { supabase, mocks: { './media': {} } });
+      // (The library runs in its own sandbox, so its answers are copied into plain values before comparing.)
+      const plain = (value) => JSON.parse(JSON.stringify(value));
+      assert.deepEqual(plain([...(await fetchMyProofVotes(users[15], [proofId]))]), [[proofId, true]]);
+      assert.deepEqual(plain(await voteGroupProof(users[15], proofId, null)), { legit: 0, cap: 1, mine: null, legacy: false });
+      assert.equal((await fetchMyProofVotes(users[15], [proofId])).size, 0);
+      assert.deepEqual(plain(await voteGroupProof(users[15], proofId, true)), { legit: 1, cap: 1, mine: true, legacy: false });
+      // The phone is logged in as users[15] now, but the screen still belongs to users[9]: refused.
+      await assert.rejects(() => voteGroupProof(users[9], proofId, false), (error) => /login has changed/.test(error.message));
+      assert.equal((await db.query('select count(*)::int as n from group_proof_votes where proof_id=$1', [proofId])).rows[0].n, 2);
+      // A vote only counts while you're in the group: users[15] leaves over REST, and their vote goes with them.
+      const left = await request(`peek_group_members?group_id=eq.${crew}&user_id=eq.${users[15]}`, { user: 15, method: 'DELETE' });
+      assert.ok([200, 204].includes(left.status), `leave ${left.status} ${JSON.stringify(left.data)}`);
+      const after = await request(`group_messages?id=eq.${proofId}&select=proof_legit,proof_cap`, { user: 9 });
+      assert.deepEqual(after.data, [{ proof_legit: 0, proof_cap: 1 }]);
+      const gone = await voteAs(15, true);
+      assert.equal(gone.status, 400); assert.equal(gone.data.message, 'Only people in this group can vote');
+      assert.equal((await db.query('select count(*)::int as n from group_proof_votes where proof_id=$1', [proofId])).rows[0].n, 1);
+    });
+  }
   await check(`${writeRequests} concurrent group writes keep exact counts, authors and unread state`, async () => {
     const groups = [];
     for (let n = 0; n < 6; n++) {

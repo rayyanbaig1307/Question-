@@ -50,6 +50,7 @@ const MEDIA_FIXES = '20261213200000_qa_review_media_fixes.sql';
 const ROBUSTNESS = '20261213210000_qa_review_robustness_fixes.sql';
 const USERNAME_LIMITS = '20261213220000_username_auth_limits.sql';
 const WORD_FILTER = '20261214000000_public_word_filter.sql';
+const GROUP_VOTES = '20261216000000_group_dare_votes.sql';
 // Every name the fix migrations create that must not exist before (made without
 // "if not exists" or "or replace", and not removed first). The preflight's
 // "names must still be free" query lists exactly the ones that exist.
@@ -572,8 +573,8 @@ try {
   await session.connect();
   try {
     await check('4. The fix migrations are the ones this rehearsal knows', async () => {
-      for (const name of [HARDENING, MEDIA_FIXES, ROBUSTNESS, USERNAME_LIMITS, WORD_FILTER]) assert(fixes.includes(name), `${name} is missing`);
-      const extra = fixes.filter((n) => ![HARDENING, MEDIA_FIXES, ROBUSTNESS, USERNAME_LIMITS, WORD_FILTER].includes(n));
+      for (const name of [HARDENING, MEDIA_FIXES, ROBUSTNESS, USERNAME_LIMITS, WORD_FILTER, GROUP_VOTES]) assert(fixes.includes(name), `${name} is missing`);
+      const extra = fixes.filter((n) => ![HARDENING, MEDIA_FIXES, ROBUSTNESS, USERNAME_LIMITS, WORD_FILTER, GROUP_VOTES].includes(n));
       if (extra.length) note(`also applying newer migrations (no extra checks for them here): ${extra.join(', ')}`);
       return { files: fixes.length };
     });
@@ -698,6 +699,28 @@ try {
       [WORD_FILTER]: async () => {
         // The word-filter query only works from this moment on.
         await runPreflight(db.pool, `4c. Right after ${WORD_FILTER}`, expectedAfter);
+      },
+      [GROUP_VOTES]: async () => {
+        // Group dare votes: the proofs already there were accepted under the old rule.
+        await check(`4c. ${GROUP_VOTES}: every proof from before is marked as an old proof, with no votes; nothing else is`, async () => {
+          const proofs = await sys("select id, proof_legit, proof_cap, proof_legacy from public.group_messages where kind = 'proof' order by id");
+          assert(proofs.length === 2, `${proofs.length} proofs`);
+          assert(proofs.every((r) => r.proof_legacy === true && r.proof_legit === 0 && r.proof_cap === 0), JSON.stringify(proofs));
+          const others = (await sys("select count(*)::int as n from public.group_messages where kind <> 'proof' and (proof_legacy or proof_legit <> 0 or proof_cap <> 0)"))[0].n;
+          assert(others === 0, `${others} other messages were changed`);
+          // They already counted, so their doers get no "The group says legit" push later.
+          const alerts = await sys("select a.proof_id, a.kind from private.group_proof_alerts a order by a.proof_id");
+          assert(alerts.length === 2 && alerts.every((a, n) => a.kind === 'legit' && a.proof_id === proofs[n].id), JSON.stringify(alerts));
+          return { oldProofs: proofs.length, legitAlertsMarked: alerts.length };
+        });
+        await check(`4c. ${GROUP_VOTES}: an old proof that breaks today's message rules can still be voted on`, async () => {
+          const cast = (await one(C, 'select public.vote_group_proof($1,false,$2) as r', [seed.g.proofTooLong, C])).r;
+          assert(cast.cap === 1 && cast.legit === 0, JSON.stringify(cast));
+          const back = (await one(C, 'select public.vote_group_proof($1,null,$2) as r', [seed.g.proofTooLong, C])).r;
+          // Someone voted on it, so it follows the normal rule from now on (no votes: not counting).
+          assert(back.cap === 0 && back.legit === 0 && back.legacy === false, JSON.stringify(back));
+          return { cast, back };
+        });
       },
     };
     for (const name of fixes) {

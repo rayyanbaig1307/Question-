@@ -37,22 +37,51 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Now: QA round 2 is done on this branch, but NOT released (4 Nov)
+## Now: QA round 2 database part is LIVE (5 Nov); the app update is not published yet
 
-**Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes. It
-is finished and **tested on this computer only**. **Nothing has been pushed, deployed, migrated on the
-hosted project or published as an OTA.** The live database is still the old one (migrations up to
-`20261212000000_chat_extras.sql`). The live app is `a9e5ddf` plus header-only changes another session
-published on 5 Nov (OTA `19dffe81…` from commit `23853ae`: Inbox bell in the Chat header, no profile picture
-at the top). None of the QA fixes are live. Releasing needs the owner's "go".
+**Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes.
+On 5 Nov the owner said "go" and the **server side was released** to the live project, in this order:
+1. Safety check (`tests/database/deployment-preflight.sql`, read-only): no hard blockers, no old stranger
+   reports to save, no broken old messages or keeps.
+2. `delete-account` deployed (version 8, "Verify JWT" off, as before).
+3. Migrations applied in order: `20261213102659` hardening, `20261213200000` media fixes, `20261213210000`
+   robustness, `20261213220000` username limits, `20261214000000` word filter, `20261214100000` final fixes.
+   Each was sent with a 15-second lock limit, so it could never keep live users waiting.
+4. `username-auth` (version 5, "Verify JWT" **on**, as before) and `cleanup-media` (version 2, "Verify JWT"
+   off, as before) deployed.
+5. Checked afterwards: every function, privacy rule, trigger and permission on the live database matches the
+   tested local copy (only differences: line endings and code comments in old functions that predate this
+   work). Supabase's security advisor shows nothing new.
+**Not applied:** `20261215000000_peekaboo_plus` (another session's, after RevenueCat) and
+`20261216000000_group_dare_votes` (Legit/Cap group votes, waiting for the owner's go).
+**Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
+(`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. Since 5 Nov they
+also have the crop fix `a6a4c62` (OTA `53587d08…`, built by another session from `23853ae` with `a6a4c62`
+cherry-picked; not a branch commit). **Any next live OTA must include `a6a4c62`** (the branch has it) or the
+crop Rotate button disappears again. One known side effect until the QA OTA: re-posting the same story to your
+profile after deleting that post shows an error.
+**Done after the release (5 Nov):** the 14 old photo files of deleted accounts were deleted. They were put on
+the cleanup waiting list (`private.media_deferred_deletions`) and the daily cleanup was started once by hand
+(the same call the pg_cron job makes); it answered `removed 14 of 14`, and the leftover-file check below now
+finds 0. **Still to do after the release:** the cf-connecting-ip check, the phone checks in `docs/TESTING.md`
+Step 62, and turning on "Prevent use of leaked passwords" in Supabase → Authentication → Email settings
+(the advisor suggests it; it was already off before; Supabase only offers it on the Pro plan and above).
 
-- **Commits** (local only): from `ac246c3` (the supplied patch: security fixes, hardening migration
+- **Commits**: from `ac246c3` (the supplied patch: security fixes, hardening migration
   `20261213102659`, local test suite) to the branch head. `ee96f61` makes the tests run on Linux,
   `468e792` patches dev-tool advisories (glob/minimatch overrides; no app or native package changed), and
   the commits after it hold the review fixes for the database, the Edge Functions and the app.
-- **New migrations (not applied):** `20261213102659_qa_round2_security_hardening`,
+- **New migrations (the first six applied live on 5 Nov, see above):** `20261213102659_qa_round2_security_hardening`,
   `20261213200000_qa_review_media_fixes`, `20261213210000_qa_review_robustness_fixes`,
   `20261213220000_username_auth_limits`, `20261214000000_public_word_filter`, `20261214100000_qa_final_db_fixes`.
+  Also `20261216000000_group_dare_votes` (group dares: Legit or Cap votes, see below): it ships with this
+  release, in step 3 with the others and before the OTA, because the new app needs it. It doesn't need
+  `20261215000000_peekaboo_plus` (another session's work, which sorts just before it), but apply that one too,
+  in order: it only adds an empty Peekaboo+ table and a "does this person have Plus?" check that nothing uses
+  until Peekaboo+ is released, so it's harmless and keeps the files in one simple order.
+  Between the migration and the OTA (and on any phone that hasn't picked up the update yet – close and reopen
+  the app twice), the group chat still shows every new proof as "✅ Did the dare" and has no Legit / Cap
+  buttons, while the notification already says "📸 Posted proof – legit or cap?".
   `20261207000000_report_alerts.sql` was also changed: it now adds the owner to the alert list only if that
   profile exists. The live database already ran it, so nothing changes there; it only lets a brand-new
   database set up cleanly. Don't run it again on live.
@@ -79,6 +108,19 @@ What people will notice once it's released:
 - A deleted photo, video or voice note disappears at once for everyone; its file is removed by the daily
   cleanup a little later. Files a report still needs stay hidden while the report is `open` or `reviewed`,
   until it is set to `dismissed` or let go with `release_report_evidence`.
+- Group dares: the group decides if a proof is real. A new proof doesn't count straight away any more:
+  everyone else in the group (the person who sent the dare too) taps **Legit 🔥** or **Cap 🧢**. Votes are
+  anonymous – everyone sees the totals ("🔥 2 · 🧢 1"), you see your own vote, nobody sees who voted what. Tap
+  your vote again to take it back. A proof counts when it has more Legit than Cap votes; no votes or a tie is
+  "not decided", more Cap votes means it doesn't count, and the doer can post new proof. Only counting proofs
+  go into "2 of 4 did it", "🔥 Everyone did it!" and "✅ You did it". A counting proof also keeps the dare
+  streak going between the doer and the person who sent the dare (shown in their one-to-one chat). The doer
+  gets one push the first time someone calls cap, and one when the group says legit. The proof's own
+  notification now says "📸 Posted proof – legit or cap?" instead of "✅ Did the dare!". Proofs posted before
+  the update keep counting until someone votes on them (after that, the normal rule applies). Group dares
+  now also count toward the 🔥 dare streak in one-to-one chats – old group proofs too – so some streaks can go
+  up on the day of the release. A vote only counts while the voter is in the group: someone who leaves (or is
+  removed) takes their votes with them, so spare accounts that join, vote and leave change nothing.
 - Friend search treats `_` as a real underscore. In Settings, a privacy choice is still saved if you leave
   quickly, and screen readers no longer call the switches "disabled".
 - The web version works when signed in (it used to crash). Sending or saving from the web editor says
@@ -177,6 +219,25 @@ rename files that are already live.
   (they can still report the author's profile).
 - Swearing is only blocked in @usernames (owner's choice, 5 Nov). Display names, bios, captions, comments, hit
   ups, dare ideas and group names may swear; slurs are blocked in all of them. The two messages stay the same.
+- Group dare votes, the small cases (decided while building it, 5 Nov; easy to change): someone who leaves
+  the group, or is removed by the group's maker, loses their votes and the totals are counted again (a vote
+  only counts while you're in the group – otherwise spare accounts could join, vote Legit and leave). So the
+  group's maker can take votes away by removing people; that is visible to everyone, and nobody learns who
+  voted what. A deleted account's votes are removed too. People added after a proof was posted can still vote
+  on it. Someone with a block (either way) with the poster can't vote on that proof – they can't see it
+  anyway. Vote pushes follow the group's mute and the doer's "Messages" notification setting; a doer who left
+  the group gets none. A proof that starts counting because a Cap voter left (rather than through a vote)
+  sends no "The group says legit" push; the next vote that keeps it counting does. Several counting proofs
+  for one dare add one dare to the streak, not several. An old proof (from before the update) follows the
+  normal rule as soon as anyone votes, even if every vote is taken back later, and its doer gets no "The
+  group says legit" push (it already counted). The "X of N did it" count still includes a proof by someone
+  who has since left the group (as before).
+- Rare: if someone deletes their account or leaves a group at the very same moment as someone else deletes a
+  dare (or the whole group) with several proofs they voted on, one of the two can fail once (deleting an
+  account then says "Could not finish deleting your account. Please try again."). Trying again works. With
+  one proof – deleting an account at the same moment as someone voting, leaving, deleting the proof, deleting
+  its dare, deleting the group or deleting their own account – the two just take turns (checked on real
+  PostgreSQL).
 - Profile song title/artist are not word-filtered (real song titles contain these words).
 - Private chat is not word-filtered on purpose (1:1 and group chat, chat dares). Checked by the app only, not
   the database: the hit-back note, the "Dare a friend" screen, and a slur split across username + display name

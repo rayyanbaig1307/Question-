@@ -88,7 +88,10 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
         .then(setGroupChats)
         .catch(() => {});
     loadGroupChats();
-    const stopGroupChats = subscribeToGroupChat(null, loadGroupChats);
+    // A vote on a group dare proof changes a message's totals ('UPDATE'), not the Chat list.
+    const stopGroupChats = subscribeToGroupChat(null, (change) => {
+      if (change.event !== 'UPDATE') loadGroupChats();
+    });
     fetchFriendSettings(userId)
       .then(setSettings)
       .catch(() => {});

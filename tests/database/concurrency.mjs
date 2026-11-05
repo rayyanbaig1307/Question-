@@ -518,6 +518,123 @@ try {
       return {oldPeeksWithoutFiles:20000,listed:listed.rows.length,noStats:{listMs:fresh.listed.ms,claimMs:fresh.claimed.ms},
         analyzed:{listMs:listed.ms,claimMs:claimed.ms,oldWayMs:old.ms}};
     });
+    // Group dares (20261216000000_group_dare_votes.sql): ten people vote on one proof at the same time, change
+    // their minds and take votes back, while someone who voted deletes their account. The totals on the proof
+    // must always equal the votes table, and the doer gets one "cap" push and one "legit" push, no more.
+    if(includeFixes)await check('Parallel group proof votes keep exact totals and send each push once',async()=>{
+      const people=[];
+      for(let i=0;i<12;i++)people.push((await db.query("insert into auth.users(id,email,raw_user_meta_data) values(gen_random_uuid(),$1,$2) returning id",[`votes${i}@example.invalid`,{username:`qa_votes_${i}`,display_name:`Votes ${i}`}])).rows[0].id);
+      const as=(i,sql,params=[])=>asUser(db,people[i],tx=>tx.query(sql,params));
+      for(let i=1;i<12;i++)await friend(db,people[0],people[i]);
+      const grp=(await as(0,"select create_peek_group('QA vote race',$1::uuid[],current_date) as id",[people.slice(1)])).rows[0].id;
+      const dare=(await as(0,"insert into group_messages(group_id,sender_id,kind,body) values($1,$2,'dare','Do ten jumps') returning id",[grp,people[0]])).rows[0].id;
+      const proof=(await as(1,"insert into group_messages(group_id,sender_id,kind,dare_id,media_path,media_type) values($1,$2,'proof',$3,$4,'photo') returning id",[grp,people[1],dare,`${people[1]}/group/vote-race.jpg`])).rows[0].id;
+      const token='ExponentPushToken[qa-native-votes]';
+      await db.query("insert into push_tokens(token,user_id,platform) values($1,$2,'ios')",[token,people[1]]);
+      const vote=(i,legit)=>as(i,'select vote_group_proof($1,$2,$3) as r',[proof,legit,people[i]]);
+      await vote(11,false);
+      const voters=[0,2,3,4,5,6,7,8,9,10];
+      await pause('group_proof_votes',true);
+      const runs=voters.map((who,n)=>(async()=>{for(const legit of [false,true,null,n<7]){await vote(who,legit);}})());
+      // The person being deleted also votes at that moment: their vote waits for the deletion (or the other way
+      // round), and is then refused or removed with the account. Neither may fail with a deadlock.
+      const ownVote=vote(11,true).then(()=>'saved',e=>e.message);
+      const deletion=db.query('delete from auth.users where id=$1',[people[11]]);
+      const all=await Promise.allSettled([...runs,deletion]);
+      await pause('group_proof_votes',false);
+      const failures=all.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+      assert.deepEqual(failures,[]);
+      const last=await ownVote;
+      assert.ok(['saved','Please log in again','Only people in this group can vote'].includes(last),last);
+      const row=(await db.query(`select g.proof_legit as legit,g.proof_cap as cap,
+        (select count(*)::int from group_proof_votes v where v.proof_id=g.id and v.legit) as real_legit,
+        (select count(*)::int from group_proof_votes v where v.proof_id=g.id and not v.legit) as real_cap
+        from group_messages g where g.id=$1`,[proof])).rows[0];
+      assert.equal(row.legit,row.real_legit);assert.equal(row.cap,row.real_cap);
+      assert.deepEqual([row.legit,row.cap],[7,3]);
+      const pushes=(await db.query("select body->0->>'title' as title from net.sent where body->0->>'to'=$1 and body->0->>'title' not like '👯 %' order by id",[token])).rows.map(r=>r.title);
+      assert.deepEqual(pushes,['Someone called cap on your proof 🧢','The group says legit 🔥']);
+      return {legit:row.legit,cap:row.cap,pushes:pushes.length,deletedVoter:last};
+    });
+    // A vote only counts while the voter is in the group. People leaving at the same moment as they (and others)
+    // vote: whatever the order, no vote from someone who left stays, and the totals equal the votes table.
+    if(includeFixes)await check('Members leaving while votes come in never leave a vote behind, and the totals stay exact',async()=>{
+      const people=[];
+      for(let i=0;i<12;i++)people.push((await db.query("insert into auth.users(id,email,raw_user_meta_data) values(gen_random_uuid(),$1,$2) returning id",[`leave${i}@example.invalid`,{username:`qa_leave_${i}`,display_name:`Leave ${i}`}])).rows[0].id);
+      const as=(i,sql,params=[])=>asUser(db,people[i],tx=>tx.query(sql,params));
+      for(let i=1;i<12;i++)await friend(db,people[0],people[i]);
+      const grp=(await as(0,"select create_peek_group('QA leave race',$1::uuid[],current_date) as id",[people.slice(1)])).rows[0].id;
+      const dare=(await as(0,"insert into group_messages(group_id,sender_id,kind,body) values($1,$2,'dare','Do ten jumps') returning id",[grp,people[0]])).rows[0].id;
+      const proof=(await as(1,"insert into group_messages(group_id,sender_id,kind,dare_id,media_path,media_type) values($1,$2,'proof',$3,$4,'photo') returning id",[grp,people[1],dare,`${people[1]}/group/leave-race.jpg`])).rows[0].id;
+      const vote=(i,legit)=>as(i,'select vote_group_proof($1,$2,$3) as r',[proof,legit,people[i]]);
+      const leave=i=>as(i,'delete from peek_group_members where group_id=$1 and user_id=$2',[grp,people[i]]);
+      // 2-5 stay; 6-11 vote while leaving (6-8 had already voted before).
+      for(let i=6;i<9;i++)await vote(i,true);
+      await pause('group_proof_votes',true);
+      const refused=[];
+      const runs=[
+        ...[2,3,4,5].map((who,n)=>(async()=>{for(const legit of [true,false,n%2===0]){await vote(who,legit);}})()),
+        ...[6,7,8,9,10,11].map(who=>Promise.all([vote(who,who%2===0).catch(e=>{refused.push(e.message);}),leave(who)])),
+      ];
+      const all=await Promise.allSettled(runs);
+      await pause('group_proof_votes',false);
+      const failures=all.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+      assert.deepEqual(failures,[]);
+      assert.ok(refused.every(m=>m==='Only people in this group can vote'),JSON.stringify(refused));
+      const stray=(await db.query('select count(*)::int as n from group_proof_votes v where v.proof_id=$1 and not exists (select 1 from peek_group_members m where m.group_id=$2 and m.user_id=v.user_id)',[proof,grp])).rows[0].n;
+      assert.equal(stray,0);
+      const row=(await db.query(`select g.proof_legit as legit,g.proof_cap as cap,
+        (select count(*)::int from group_proof_votes v where v.proof_id=g.id and v.legit) as real_legit,
+        (select count(*)::int from group_proof_votes v where v.proof_id=g.id and not v.legit) as real_cap
+        from group_messages g where g.id=$1`,[proof])).rows[0];
+      assert.equal(row.legit,row.real_legit);assert.equal(row.cap,row.real_cap);
+      assert.deepEqual([row.legit,row.cap],[2,2]);
+      return {legit:row.legit,cap:row.cap,refusedWhileLeaving:refused.length};
+    });
+    // Deleting an account at the same moment as something else removes the same proof. The deletion takes the
+    // proofs first (in a fixed order), so the two take turns. A pause after each vote row is removed (before the
+    // totals are counted again) widens the gap where they used to get stuck waiting for each other.
+    if(includeFixes)await check('A voter deleting their account while the proof, its dare, its poster or the voter\'s place goes never deadlocks',async()=>{
+      await db.exec(`create or replace function private.qa_pause_vote_delete() returns trigger language plpgsql as $$
+        begin if current_setting('qa.pause',true)='on' then perform pg_sleep(1); end if; return null; end $$;
+        create trigger a_qa_pause_votes after delete on public.group_proof_votes for each row execute function private.qa_pause_vote_delete();`);
+      const results={};
+      try {
+        const scenarios=[
+          ['the poster deletes the proof',({as,proof})=>as(1,'delete from group_messages where id=$1',[proof])],
+          ['the dare sender deletes the dare',({as,dare})=>as(0,'delete from group_messages where id=$1',[dare])],
+          ['the poster deletes their account',({people})=>db.query('delete from auth.users where id=$1',[people[1]])],
+          ['another voter deletes their account',({people})=>db.query('delete from auth.users where id=$1',[people[3]])],
+          ['the group maker removes the voter',({as,grp,people})=>as(0,'delete from peek_group_members where group_id=$1 and user_id=$2',[grp,people[2]])],
+          ['the group maker deletes the group',({as,grp})=>as(0,'delete from peek_groups where id=$1',[grp])],
+        ];
+        for(const [n,[label,other]] of scenarios.entries()){
+          const people=[];
+          for(let i=0;i<5;i++)people.push((await db.query("insert into auth.users(id,email,raw_user_meta_data) values(gen_random_uuid(),$1,$2) returning id",[`gone${n}_${i}@example.invalid`,{username:`qa_gone_${n}_${i}`,display_name:`Gone ${i}`}])).rows[0].id);
+          const as=(i,sql,params=[])=>asUser(db,people[i],tx=>tx.query(sql,params));
+          for(let i=1;i<5;i++)await friend(db,people[0],people[i]);
+          const grp=(await as(0,"select create_peek_group('QA gone',$1::uuid[],current_date) as id",[people.slice(1)])).rows[0].id;
+          const dare=(await as(0,"insert into group_messages(group_id,sender_id,kind,body) values($1,$2,'dare','Jump') returning id",[grp,people[0]])).rows[0].id;
+          const proof=(await as(1,"insert into group_messages(group_id,sender_id,kind,dare_id,media_path,media_type) values($1,$2,'proof',$3,$4,'photo') returning id",[grp,people[1],dare,`${people[1]}/group/gone-${n}.jpg`])).rows[0].id;
+          for(const i of [2,3])await as(i,'select vote_group_proof($1,true,$2)',[proof,people[i]]);
+          // The voter (people[2]) deletes their account, pausing after its vote row is removed.
+          const voter=(async()=>{
+            const client=await pool.connect();
+            try {await client.query('begin');await client.query("select set_config('qa.pause','on',true)");await client.query('delete from auth.users where id=$1',[people[2]]);await client.query('commit');return 'ok';}
+            catch(error){await client.query('rollback');return `ERR ${error.message}`;}finally{client.release();}
+          })();
+          await new Promise(r=>setTimeout(r,300));
+          const second=await other({as,people,grp,dare,proof}).then(()=>'ok',e=>`ERR ${e.message}`);
+          results[label]={voterDeletion:await voter,other:second};
+          const left=(await db.query('select g.proof_legit,g.proof_cap,(select count(*)::int from group_proof_votes v where v.proof_id=g.id) as n from group_messages g where g.id=$1',[proof])).rows[0];
+          if(left)assert.equal(left.proof_legit+left.proof_cap,left.n,label);
+        }
+      } finally {
+        await db.exec('drop trigger if exists a_qa_pause_votes on public.group_proof_votes; drop function if exists private.qa_pause_vote_delete();');
+      }
+      for(const [label,r] of Object.entries(results))assert.deepEqual(r,{voterDeletion:'ok',other:'ok'},`${label}: ${JSON.stringify(r)}`);
+      return results;
+    });
     await pool.end();pools=pools.filter(p=>p!==pool);
   }
   await admin.end();
