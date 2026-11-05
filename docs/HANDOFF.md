@@ -57,10 +57,12 @@ On 5 Nov the owner said "go" and the **server side was released** to the live pr
 **Not published yet:** the app OTA with the QA app fixes. Phones still run `a9e5ddf` plus the header-only OTA
 (`19dffe81…`, commit `23853ae`) against the new database; that pairing was tested and works. One known
 side effect until the OTA: re-posting the same story to your profile after deleting that post shows an error.
-**Still to do after the release:** 14 old photo files of deleted accounts are left in Storage (find them with
-the leftover-file check below; delete them in Supabase → Storage → `media`, not with SQL), the
-cf-connecting-ip check, the phone checks in `docs/TESTING.md` Step 62, and turning on "Leaked password
-protection" in Supabase Auth (the advisor suggests it; it was already off before).
+**Done after the release (5 Nov):** the 14 old photo files of deleted accounts were deleted. They were put on
+the cleanup waiting list (`private.media_deferred_deletions`) and the daily cleanup was started once by hand
+(the same call the pg_cron job makes); it answered `removed 14 of 14`, and the leftover-file check below now
+finds 0. **Still to do after the release:** the cf-connecting-ip check, the phone checks in `docs/TESTING.md`
+Step 62, and turning on "Prevent use of leaked passwords" in Supabase → Authentication → Email settings
+(the advisor suggests it; it was already off before; Supabase only offers it on the Pro plan and above).
 
 - **Commits**: from `ac246c3` (the supplied patch: security fixes, hardening migration
   `20261213102659`, local test suite) to the branch head. `ee96f61` makes the tests run on Linux,
