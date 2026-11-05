@@ -64,6 +64,15 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**Next app update ready, not published yet (5 Nov evening):** commits `f2e852c` + `ba31179` fix the owner's report
+that the message box hid behind the keyboard on his iPhone (chats, group chats, comments, dare and hit-up boxes
+now lift by the keyboard's height on iPhone; Android unchanged) and add story rings on profile pictures (glowing
+pink-purple, green for close friends, grey once watched; tap opens the story) in the Chat list, chat header,
+profile, feed, posts, friend lists, group chats, members and comments. All tests and the browser tests pass;
+two reviews done. Publishing was refused by the session's safety check (a production deploy needs the owner's
+explicit go in that message). Publish with the usual command from the branch head. Also live since 5 Nov evening:
+the Peekaboo+ session's `20261217000000_plus_insights` and `20261218000000_plus_extras` (pasted by the owner; no
+history rows); the functions this app calls kept the same shape (checked).
 **Group votes live (5 Nov, 20:40 UTC):** `20261216000000_group_dare_votes` is applied to the live database.
 Supabase's approval question never showed in the owner's app, so the owner pasted the file (with
 `set local lock_timeout = '15s';` after `begin;` and a migration-history row before `commit;`) into the SQL
