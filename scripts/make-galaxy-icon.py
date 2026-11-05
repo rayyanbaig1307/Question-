@@ -5,7 +5,7 @@
 #
 # Run from the project folder:  python3 scripts/make-galaxy-icon.py   (needs Pillow + numpy)
 # Writes design/galaxy-icon/fx-galaxy.png (1024 × 1024, no see-through parts) and fx-galaxy-preview.png (180 × 180).
-# They replace assets/icons/fx-galaxy.png and assets/icons/preview/fx-galaxy.png on the Peekaboo+ branch.
+# Run without a folder, it also writes assets/icons/fx-galaxy.png and assets/icons/preview/fx-galaxy.png.
 # App icons live inside the app: a new app build is needed (not an over-the-air update).
 import os
 import sys
@@ -199,4 +199,8 @@ icon = Image.fromarray(np.clip(img + 0.5, 0, 255).astype(np.uint8), 'RGB')
 os.makedirs(out, exist_ok=True)
 icon.save(f'{out}/fx-galaxy.png', optimize=True)
 icon.resize((180, 180), Image.LANCZOS).save(f'{out}/fx-galaxy-preview.png', optimize=True)
+# Without a folder given, also update the app's own icon files (assets/icons/…).
+if len(sys.argv) <= 1:
+    icon.save(f'{repo}/assets/icons/fx-galaxy.png', optimize=True)
+    icon.resize((180, 180), Image.LANCZOS).save(f'{repo}/assets/icons/preview/fx-galaxy.png', optimize=True)
 print('saved', f'{out}/fx-galaxy.png')

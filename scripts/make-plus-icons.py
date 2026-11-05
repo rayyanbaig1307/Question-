@@ -303,7 +303,7 @@ ICONS = {
     'fx-ocean': lambda: compose(bg_ocean(), shadow_colour=(10, 10, 60)),
     'fx-glitter-gold': lambda: compose(bg_glitter_gold(), outline=(42, 26, 6), pupils=(42, 26, 6), shadow=0.25, shadow_colour=(90, 50, 5)),
     'fx-candy': lambda: compose(bg_candy(), shadow=0.25, shadow_colour=(80, 30, 110)),
-    'fx-galaxy': lambda: compose(bg_galaxy(), sparkle=(255, 225, 77), shadow=0),
+    # 'fx-galaxy' (Milky Way + stars) is made by scripts/make-galaxy-icon.py, so this script leaves it alone.
 }
 
 os.makedirs(preview_dir, exist_ok=True)
