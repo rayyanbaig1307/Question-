@@ -64,6 +64,16 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**Everything on the owner's TestFlight build (5 Nov, owner: "push all the features… I want to test the features on
+TestFlight", RevenueCat later):** this branch now contains the whole Peekaboo+ branch (merged `00848ff`, then
+`ec6aa50`), and OTA `4b19b737-bf78-4180-bdf6-b46b1dcbd56a` on branch **`testing`** (the channel of the Peekaboo+
+TestFlight build 7; `--environment preview`, which has `EXPO_PUBLIC_REVENUECAT_IOS_KEY`) from `a54b189`: all
+Peekaboo+ features, group Legit / Cap votes, story rings, the keyboard fix and the new Galaxy icon picture in the
+icon picker. The chats keep one keyboard fix (`KeyboardSafeView`); the Peekaboo+ session's `useKeyboardLift` was
+removed when merging `ec6aa50` (agreed with that session). Tests on the merged code: `npm test` 434 + 373,
+`test:rest` 67, `test:preflight` 161, `test:concurrency` qa_fixed 33, browser 72 – all passed. The `preview`
+channel (everyone else's installed builds) still runs the non-Plus app (`c63740e4`): Plus code needs Plus native
+builds. Both sessions now merge each other's branch before publishing to `testing`.
 **App update published (5 Nov evening, owner's "publish"):** OTA `c63740e4-5224-48b6-a442-8315886ad9b3` on
 branch `preview` (runtime `exposdk:58.0.0`, Android + iOS) from `1ab940e`: the message box no longer hides behind
 the keyboard on iPhone (chats, group chats, comments, dare and hit-up boxes lift by the keyboard's height;
