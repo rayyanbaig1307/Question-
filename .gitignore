@@ -49,3 +49,6 @@ example
 .eas/.env/
 .env.asc
 *.p8
+
+# Temporary working copies made by Claude Code helpers
+.claude/worktrees/
