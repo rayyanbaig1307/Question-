@@ -7,7 +7,6 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import Animated from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 
-import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { ZoomableImage } from '@/components/ZoomableImage';
@@ -20,6 +19,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
@@ -164,7 +164,7 @@ export default function PostViewer() {
         <IconButton icon="close" label="Close" onPress={() => router.back()} />
         {author ? (
           <Pressable style={styles.author} onPress={() => router.push(`/profile/${author.id}`)}>
-            <Avatar path={author.avatar_path} name={authorName} size={36} />
+            <StoryAvatar person={author} size={36} />
             <View style={styles.authorText}>
               <Text style={styles.authorName} numberOfLines={1}>
                 {authorName}

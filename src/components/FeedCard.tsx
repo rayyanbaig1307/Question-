@@ -14,7 +14,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Bouncy, usePop } from '@/components/Bouncy';
 import { DareBackButton } from '@/components/DareBackButton';
@@ -23,6 +22,7 @@ import { DropBadge } from '@/components/DropPill';
 import { HypeRating } from '@/components/HypeRating';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import type { DropLock } from '@/lib/drop';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
@@ -134,7 +134,7 @@ export function FeedCard({
           style={styles.author}
           onPress={() => author && router.push(`/profile/${author.id}`)}
           accessibilityLabel={`Open ${name}'s profile`}>
-          <Avatar path={author?.avatar_path} name={name} size={36} />
+          <StoryAvatar person={author} size={36} />
           <View style={styles.authorText}>
             <Text style={styles.name} numberOfLines={1}>
               {name}

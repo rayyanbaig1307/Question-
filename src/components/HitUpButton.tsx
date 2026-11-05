@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TextInput } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { KeyboardSafeView } from '@/components/KeyboardSafeView';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
 import { checkClean } from '@/lib/cleanWords';
@@ -111,7 +112,7 @@ export function HitUpButton({ person, onConnected }: {
     <>
       <Button title="👋 Hit up" variant="pink" onPress={() => setWriting(true)} />
       <Modal visible={writing} transparent animationType="slide" onRequestClose={() => setWriting(false)}>
-        <KeyboardAvoidingView style={styles.fill} behavior="padding">
+        <KeyboardSafeView style={styles.fill} androidBehavior="padding">
           <Pressable style={styles.backdrop} onPress={() => setWriting(false)}>
             <SafeEdge edge="bottom" style={styles.sheet}>
               <Pressable style={styles.inner}>
@@ -139,7 +140,7 @@ export function HitUpButton({ person, onConnected }: {
               </Pressable>
             </SafeEdge>
           </Pressable>
-        </KeyboardAvoidingView>
+        </KeyboardSafeView>
       </Modal>
     </>
   );

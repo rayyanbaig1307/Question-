@@ -16,11 +16,11 @@ import {
 } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { postMedia, useDropStatus, useMyDropDays } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
@@ -258,7 +258,7 @@ export default function GroupScreen() {
                 style={styles.member}
                 onPress={() => router.push(`/profile/${member.userId}`)}
                 onLongPress={() => memberMenu(member)}>
-                <Avatar path={member.profile?.avatar_path} name={name} size={40} />
+                <StoryAvatar person={member.profile} size={40} onLongPress={() => memberMenu(member)} />
                 <View style={styles.memberText}>
                   <Text style={styles.memberName} numberOfLines={1}>
                     {name}

@@ -28,6 +28,7 @@ import { sendReaction, STORY_REACTIONS } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { mediaFiles, useMediaUrls } from '@/lib/media';
 import { deleteStory, fetchStoryRing, fetchStoryViewers, markStorySeen, type StoryRing } from '@/lib/stories';
+import { refreshStoryBadges } from '@/lib/storyRings';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
@@ -54,6 +55,9 @@ export default function StoryViewer() {
   // The last reaction you sent (its counter restarts the flying-emoji animation).
   const [burst, setBurst] = useState<{ count: number; emoji: string } | null>(null);
   const progress = useSharedValue(0);
+
+  // Closing the viewer: the rings on profile pictures catch up (a watched story turns grey, a deleted one goes).
+  useEffect(() => () => void refreshStoryBadges(userId, true), [userId]);
 
   useEffect(() => {
     fetchStoryRing(userId, user)

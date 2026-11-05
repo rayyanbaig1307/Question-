@@ -53,3 +53,34 @@ test('a vote on a group dare proof (a message UPDATE) does not reload the Chat l
     assert.equal(loads, before + 1);
   } finally { await unmount(tree); }
 });
+
+test('each friend\'s picture in the Chat list is a story picture: tap = their story (or the chat), hold = the menu; rings are checked when Chat opens', async () => {
+  const menus = [], refreshed = [], noop = () => {};
+  const screen = loadScreen('src/components/home/ChatPage.tsx', {
+    '@/components/FriendButton': { FriendButton: host('FriendButton') }, '@/components/GroupFaces': { GroupFaces: host('GroupFaces') }, '@/components/PersonRow': { PersonRow: host('PersonRow') },
+    '@/components/Overlays': { useOverlays: () => ({ showOptions: menu => menus.push(menu), showToast: noop }) },
+    '@/lib/chat': { fetchRecentMessages: async () => [], subscribeToMyMessages: () => noop, clearChat: async () => {} },
+    '@/lib/friends': { fetchFriends: async () => [{ id: 'bob', username: 'bob', display_name: 'Bob', avatar_path: 'bob/a.jpg' }] },
+    '@/lib/closeFriends': { fetchCloseFriendIds: async () => new Set() },
+    '@/lib/friendSettings': { fetchFriendSettings: async () => new Map() },
+    '@/lib/groupChat': { fetchGroupChats: async () => new Map(), subscribeToGroupChat: () => noop },
+    '@/lib/groups': { fetchGroups: async () => [] },
+    '@/lib/invite': { inviteFriends: noop }, '@/lib/time': { timeAgo: () => 'now' },
+    '@/lib/useSafetyActions': { useSafetyActions: () => ({ confirmBlock: noop }) },
+    '@/lib/storyRings': { refreshStoryBadges: async (...args) => { refreshed.push(args); } },
+    './HomeTabBar': { useTabBarSpace: () => 60 }, './PageHeader': { PageHeader: host('PageHeader') },
+  });
+  screen.Component = () => React.createElement(screen.exports.ChatPage, { visible: true, inboxCount: 0, onRefreshInbox: noop });
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(refreshed, [['alice']]);
+    const [picture] = tree.root.findAllByType('StoryAvatar');
+    assert.equal(picture.props.person.id, 'bob');
+    assert.equal(picture.props.size, 52);
+    // No story: tapping the picture opens the chat, like the rest of the row (StoryAvatar opens the story itself).
+    await act(() => picture.props.onPress());
+    assert.deepEqual(screen.calls.routes.at(-1), ['push', '/chat/bob']);
+    await act(() => picture.props.onLongPress());
+    assert.equal(menus.length, 1, 'holding the picture opens the same menu as holding the row');
+  } finally { await unmount(tree); }
+});

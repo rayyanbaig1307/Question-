@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { KeyboardSafeView } from '@/components/KeyboardSafeView';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 const MAX_LENGTH = 200;
@@ -39,7 +40,7 @@ export function DareComposer({ visible, friendName, onClose, onSend }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardSafeView style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={styles.sheet}>
           <Text style={styles.title}>🎯 Dare {friendName || 'them'}</Text>
@@ -70,7 +71,7 @@ export function DareComposer({ visible, friendName, onClose, onSend }: {
           </ScrollView>
           <Button title="Send dare" icon="paper-plane" onPress={send} loading={busy} disabled={!dare} />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </Modal>
   );
 }

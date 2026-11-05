@@ -18,6 +18,7 @@ import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
 import { useScratchToReveal } from '@/lib/preferences';
 import { fetchStoryRings } from '@/lib/stories';
+import { setStoryRings } from '@/lib/storyRings';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
@@ -60,10 +61,16 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   const loadAll = useCallback(async () => {
     const [rings, page, days, toGuess] = await Promise.all([
-      fetchStoryRings(userId).catch((error) => {
-        console.warn('Could not load stories', error);
-        return { mine: null, friends: [] } as Rings;
-      }),
+      fetchStoryRings(userId)
+        .then((loaded) => {
+          // The same list gives the rings on profile pictures everywhere else.
+          setStoryRings(userId, loaded);
+          return loaded;
+        })
+        .catch((error) => {
+          console.warn('Could not load stories', error);
+          return { mine: null, friends: [] } as Rings;
+        }),
       fetchDiscover(userId),
       fetchMyDropDays(userId).catch(() => new Set<string>()),
       countUnguessed().catch(() => 0),

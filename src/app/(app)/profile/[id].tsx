@@ -2,7 +2,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { FriendButton } from '@/components/FriendButton';
@@ -11,12 +10,14 @@ import { useOverlays } from '@/components/Overlays';
 import { PostGrid } from '@/components/PostGrid';
 import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { SongCard } from '@/components/SongCard';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { fetchRelation, type Relation } from '@/lib/friends';
 import { fetchUserPosts } from '@/lib/posts';
 import { fetchProfile, fetchProfileStats, type ProfileStats } from '@/lib/profiles';
 import { profileSong } from '@/lib/songs';
 import { fetchStoryRing } from '@/lib/stories';
+import type { StoryBadge } from '@/lib/storyRings';
 import type { Post, Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, radius, space } from '@/theme';
@@ -26,8 +27,8 @@ type Loaded = {
   stats: ProfileStats;
   posts: Post[];
   relation: Relation;
-  // They have a story up right now that you can see (tap their picture to watch it).
-  hasStory: boolean;
+  // Their story up right now that you can see (tap their picture to watch it); null if none.
+  story: StoryBadge | null;
 };
 
 export default function ProfileScreen() {
@@ -49,12 +50,18 @@ export default function ProfileScreen() {
         isMe ? Promise.resolve<Relation>({ kind: 'none' }) : fetchRelation(userId, id),
         fetchStoryRing(userId, id).catch(() => null),
       ]);
-      setData({ profile, stats, posts, relation, hasStory: !!story && story.stories.length > 0 });
+      setData({
+        profile,
+        stats,
+        posts,
+        relation,
+        story: story && story.stories.length > 0 ? { allSeen: story.allSeen, closeFriends: story.closeFriends } : null,
+      });
     } catch (error) {
       console.warn('Could not load profile', error);
       setData(
         (previous) =>
-          previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], relation: { kind: 'none' }, hasStory: false },
+          previous ?? { profile: null, stats: { posts: 0, friends: 0 }, posts: [], relation: { kind: 'none' }, story: null },
       );
     }
   }, [id, isMe, userId]);
@@ -127,14 +134,8 @@ export default function ProfileScreen() {
   const profileHeader = (
     <View style={styles.header}>
       <View style={styles.topRow}>
-        {/* A colorful ring = they have a story up: tap to watch it (on your own, you can delete from there). */}
-        <Pressable
-          disabled={!data.hasStory}
-          onPress={() => router.push({ pathname: '/stories/[user]', params: { user: profile.id } })}
-          accessibilityRole="button"
-          accessibilityLabel={isMe ? 'See my story' : `See ${profile.username}'s story`}>
-          <Avatar path={profile.avatar_path} name={profile.display_name || profile.username} size={92} ring={data.hasStory} />
-        </Pressable>
+        {/* A glowing ring = they have a story up: tap to watch it (on your own, you can delete from there). */}
+        <StoryAvatar person={profile} size={92} badge={data.story} />
         <View style={styles.stats}>
           <Stat number={data.stats.posts} label={data.stats.posts === 1 ? 'Post' : 'Posts'} />
           <Pressable

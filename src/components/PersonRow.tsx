@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar } from '@/components/Avatar';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
@@ -14,7 +14,7 @@ export function PersonRow({ person, right }: { person: Profile; right?: ReactNod
         style={styles.person}
         onPress={() => router.push(`/profile/${person.id}`)}
         accessibilityLabel={`Open @${person.username}`}>
-        <Avatar path={person.avatar_path} name={person.display_name || person.username} size={48} />
+        <StoryAvatar person={person} size={48} />
         <View style={styles.names}>
           <Text style={styles.name} numberOfLines={1}>
             {person.display_name || person.username}

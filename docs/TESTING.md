@@ -1022,3 +1022,27 @@ real person's account (deleting can't be undone).
       the first vote it follows the normal rule, even if that vote is taken back (then "⏳ Legit or cap? Vote!"),
       and its poster gets no "The group says legit 🔥" for it.
 
+
+## Step 63 – Message box above the keyboard, and story rings on pictures 💬🟣
+
+**Message box (iPhone).** The owner's iPhone hid the message box behind the keyboard. Check on an iPhone,
+also with Settings → Accessibility → Motion → **Reduce Motion** and **Prefer Cross-Fade Transitions** on:
+1. Open a one-to-one chat and tap **Send a chat** → the keyboard opens and the box sits right on top of it
+   (no gap, not hidden). Type a long message: the box grows upwards and stays visible.
+2. Switch to the emoji keyboard and back (the keyboard changes height) → the box follows it.
+3. Drag the messages down to close the keyboard → the box goes back to the bottom.
+4. The same in a group chat, in **Write a dare** (🚩) and in **Hit up** on someone's profile.
+5. On Android: everything works as before.
+
+**Story rings.**
+1. Friend B posts a story. On A's phone, B's picture gets a **glowing pink-purple ring** (green for a
+   close-friends story) in: the Chat list, the top of the chat with B, B's profile, B's posts in the feed, a
+   post opened on its own, friend lists, group chats (next to B's messages), the group's member list and
+   comments. (Up to 30 seconds after B posts, or open Home to see it at once.)
+2. Tap B's picture in any of those places → B's story opens. Close it → the ring turns **grey** (no glow) and
+   still opens the story.
+3. Without a story, tapping the picture does what it did before: the Chat list opens the chat, the chat top
+   and the feed open the profile, comments open the profile. Holding a picture in the Chat list (or the
+   member list) still opens the menu.
+4. Your own story: your picture on your profile has the ring and opens your story.
+5. Hide B's stories (hold B in the Chat list → hide stories) → B's ring goes away everywhere.

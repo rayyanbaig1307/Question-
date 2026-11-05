@@ -26,7 +26,7 @@ function host(name) {
 
 function loadScreen(relative, overrides = {}) {
   const calls = { alerts: [], toasts: [], routes: [], timers: [], intervals: new Map() };
-  const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText'];
+  const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText', 'KeyboardSafeView', 'StoryAvatar'];
   const modules = {
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
@@ -58,6 +58,7 @@ function loadScreen(relative, overrides = {}) {
     '@/lib/chat': { sendSnap: async () => {} },
     '@/lib/posts': { createPost: async () => ({ id: 'qa-post', drop_late_seconds: 0 }) },
     '@/lib/stories': { createStory: async () => {} },
+    '@/lib/storyRings': { refreshStoryBadges: async () => {}, setStoryRings: () => {}, useStoryBadge: () => null },
     '@/lib/guess': { postMystery: async () => {} },
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
   };

@@ -26,6 +26,7 @@ import { useDareRulesAccepted } from '@/lib/legal';
 import { postMystery } from '@/lib/guess';
 import { createPost } from '@/lib/posts';
 import { createStory } from '@/lib/stories';
+import { refreshStoryBadges } from '@/lib/storyRings';
 import type { Audience, Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
@@ -168,6 +169,8 @@ export default function Share() {
       if (toStory && !done.current.story) {
         await createStory(userId, photo, audience);
         done.current.story = true;
+        // Your picture gets its story ring straight away.
+        void refreshStoryBadges(userId, true);
       }
       if (postToProfile && !done.current.profile) {
         await createPost(userId, photo, caption, { audience });

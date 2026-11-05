@@ -11,6 +11,7 @@ import { FriendButton } from '@/components/FriendButton';
 import { GroupFaces } from '@/components/GroupFaces';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { clearChat, fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
@@ -23,6 +24,7 @@ import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
+import { refreshStoryBadges } from '@/lib/storyRings';
 import { colors, font, radius, space } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
@@ -96,6 +98,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
       .then(setCloseFriends)
       .catch(() => {});
     refresh();
+    // Who has a new story (the rings on the pictures below).
+    void refreshStoryBadges(userId);
     // Refresh instantly when a message arrives or gets opened.
     const stopMessages = subscribeToMyMessages(`chat-list-${userId}`, refresh);
     return () => {
@@ -170,6 +174,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
         const saved = await saveFriendSettings(userId, friend.id, changes);
         if (!active.current) return;
         setSettings((map) => new Map(map).set(friend.id, saved));
+        // Hiding (or showing) their stories takes their ring away (or brings it back) straight away.
+        if ('mute_stories' in changes) void refreshStoryBadges(userId, true);
         showToast(done);
       } catch (error) {
         Alert.alert('Could not save', friendlyError(error));
@@ -511,7 +517,16 @@ function ChatRowView({ row, me, pinned, muted, onMenu }: {
       }}
       accessibilityHint="Hold for options"
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <Avatar path={row.friend.avatar_path} name={row.friend.display_name || row.friend.username} size={52} />
+      {/* With a story: a ring, and tapping the picture opens the story. Otherwise it opens the chat like the row. */}
+      <StoryAvatar
+        person={row.friend}
+        size={52}
+        onPress={() => router.push(`/chat/${row.friend.id}`)}
+        onLongPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          onMenu();
+        }}
+      />
       <View style={styles.rowText}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, styles.nameText]} numberOfLines={1}>

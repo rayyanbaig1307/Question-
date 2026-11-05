@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
@@ -31,6 +30,8 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { ZoomableImage } from '@/components/ZoomableImage';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
+import { KeyboardSafeView } from '@/components/KeyboardSafeView';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -599,7 +600,7 @@ export default function GroupChat() {
         </Pressable>
       ) : null}
 
-      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+      <KeyboardSafeView style={styles.fill} bottomInset={insets.bottom} androidBehavior="padding">
         {search !== null && search.trim() ? (
           <FlatList
             data={results?.query === search ? results.list : []}
@@ -649,7 +650,7 @@ export default function GroupChat() {
                 <View style={[styles.row, mine ? styles.right : styles.left]}>
                   {!mine ? (
                     <View style={styles.avatarSlot}>
-                      {firstOfRun ? <Avatar path={sender?.avatar_path} name={name} size={28} /> : null}
+                      {firstOfRun ? <StoryAvatar person={sender} size={28} /> : null}
                     </View>
                   ) : null}
                   <View style={[styles.bubbleWrap, item.kind === 'dare' && styles.dareWrap, mine ? styles.alignRight : styles.alignLeft]}>
@@ -807,7 +808,7 @@ export default function GroupChat() {
             <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
       <DareComposer visible={dareOpen} friendName="the group" onClose={() => setDareOpen(false)} onSend={sendDare} />
       <MessageActions
         visible={menuFor !== null}

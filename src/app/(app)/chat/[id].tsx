@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Pressable,
   StyleSheet,
   Text,
@@ -26,7 +25,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '@/components/Avatar';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
@@ -34,6 +32,8 @@ import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { MicButton, VoiceBubble, type Recording } from '@/components/VoiceNote';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
+import { KeyboardSafeView } from '@/components/KeyboardSafeView';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import {
   canReplay,
@@ -373,7 +373,7 @@ export default function ChatScreen() {
         titleContent={
           friend ? (
             <Pressable style={styles.headerTitle} onPress={() => router.push(`/profile/${friend.id}`)}>
-              <Avatar path={friend.avatar_path} name={name} size={32} />
+              <StoryAvatar person={friend} size={32} />
               <View>
                 <Text style={styles.headerName} numberOfLines={1}>
                   {name}
@@ -416,8 +416,8 @@ export default function ChatScreen() {
         </View>
       ) : null}
 
-      {/* The negative offset stops a gap appearing between the message box and the keyboard. */}
-      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={-insets.bottom}>
+      {/* Keeps the message box just above the keyboard (bottomInset: no gap for the home-bar space). */}
+      <KeyboardSafeView style={styles.fill} bottomInset={insets.bottom} androidBehavior="padding">
         {search !== null && search.trim() ? (
           <FlatList
             data={results?.query === search ? results.list : []}
@@ -545,7 +545,7 @@ export default function ChatScreen() {
         ) : (
           <Text style={[styles.notFriends, { paddingBottom: insets.bottom + space.lg }]}>You need to be friends to chat.</Text>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
       <DareComposer visible={dareOpen} friendName={name} onClose={() => setDareOpen(false)} onSend={sendMyDare} />
       <MessageActions
         visible={menuFor !== null}

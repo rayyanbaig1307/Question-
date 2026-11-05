@@ -20,11 +20,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
+import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
@@ -219,9 +219,12 @@ export default function Comments() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       openMenu(item);
                     }}>
-                    <Pressable onPress={() => item.author && openProfile(item.author.id)}>
-                      <Avatar path={item.author?.avatar_path} name={name} size={isReply ? 28 : 36} />
-                    </Pressable>
+                    <StoryAvatar
+                      person={item.author}
+                      size={isReply ? 28 : 36}
+                      onPress={() => item.author && openProfile(item.author.id)}
+                      label={`Open ${name}'s profile`}
+                    />
                     <View style={styles.commentText}>
                       <Text style={styles.body}>
                         <Text style={styles.name}>{name} </Text>
