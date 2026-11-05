@@ -119,7 +119,10 @@ h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0; 
 /* ---- Theme phones: real logo pieces ---- */
 .ph-top { min-height: 30px; }
 .ph-word { height: 18px; width: auto; display: block; }
-.ph-eyes { height: 26px; width: auto; display: block; }
+.ph-side { width: 50px; display: flex; }
+.ph-right { justify-content: flex-end; align-items: center; gap: 4px; }
+.ph-bell { font-size: 13px; filter: grayscale(0.2); }
+.ph-me { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 2px solid var(--ring); }
 .ph-card { display: grid; place-items: center; }
 .ph-card-eyes { width: 46%; height: auto; opacity: 0.9; }
 .ph-bar { padding-inline: 10px; }
@@ -366,7 +369,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
     <div class="grid wide">
       <div class="item">
         <div class="phone" style="background:#FFF6FB;color:#1B1428;--ring:#FF3D8E;--soft:#F6E3F2;--barbg:#FFFFFF;--accent:linear-gradient(135deg,#FF3D8E,#8A4DFF)">
-          <div class="ph-top"><img class="ph-word" src="plus-icons/wordmark-navy.png" alt="peekaboo"><img class="ph-eyes" src="plus-icons/eyes-pink.png" alt=""></div>
+          <div class="ph-top"><span class="ph-side"></span><img class="ph-word" src="plus-icons/wordmark-navy.png" alt="peekaboo"><span class="ph-side ph-right"><span class="ph-bell">🔔</span><span class="ph-me"></span></span></div>
           <div class="ph-story"><span></span><span></span><span></span><span></span></div>
           <div class="ph-card"><img class="ph-card-eyes" src="plus-icons/eyes-pink.png" alt=""></div>
           <div class="ph-bar"><i></i><b class="ph-cam"><img src="plus-icons/eyes-pink.png" alt=""></b><i></i></div>
@@ -375,7 +378,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
       </div>
       <div class="item">
         <div class="phone" style="background:#0E0A08;color:#F2D9A8;--ring:#E8A93A;--soft:#2A2016;--barbg:#1C1510;--accent:#E8A93A">
-          <div class="ph-top"><img class="ph-word" src="plus-icons/wordmark-gold.png" alt="peekaboo"><img class="ph-eyes" src="plus-icons/eyes-gold.png" alt=""></div>
+          <div class="ph-top"><span class="ph-side"></span><img class="ph-word" src="plus-icons/wordmark-gold.png" alt="peekaboo"><span class="ph-side ph-right"><span class="ph-bell">🔔</span><span class="ph-me"></span></span></div>
           <div class="ph-story"><span></span><span></span><span></span><span></span></div>
           <div class="ph-card"><img class="ph-card-eyes" src="plus-icons/eyes-gold.png" alt=""></div>
           <div class="ph-bar"><i></i><b class="ph-cam"><img src="plus-icons/eyes-gold.png" alt=""></b><i></i></div>
@@ -384,7 +387,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
       </div>
       <div class="item">
         <div class="phone" style="background:linear-gradient(180deg,#0B1530,#1E3A8A);color:#EAF4FF;--ring:#38B6FF;--soft:rgba(255,255,255,0.10);--barbg:rgba(255,255,255,0.12);--accent:#38B6FF">
-          <div class="ph-top"><img class="ph-word" src="plus-icons/wordmark-white.png" alt="peekaboo"><img class="ph-eyes" src="plus-icons/eyes-sky.png" alt=""></div>
+          <div class="ph-top"><span class="ph-side"></span><img class="ph-word" src="plus-icons/wordmark-white.png" alt="peekaboo"><span class="ph-side ph-right"><span class="ph-bell">🔔</span><span class="ph-me"></span></span></div>
           <div class="ph-story"><span></span><span></span><span></span><span></span></div>
           <div class="ph-card"><img class="ph-card-eyes" src="plus-icons/eyes-sky.png" alt=""></div>
           <div class="ph-bar"><i></i><b class="ph-cam"><img src="plus-icons/eyes-sky.png" alt=""></b><i></i></div>
@@ -393,7 +396,7 @@ footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line)
       </div>
       <div class="item">
         <div class="phone" style="background:linear-gradient(180deg,#FFF1D6,#FFD1C2);color:#5A2A12;--ring:#FF7A1F;--soft:rgba(255,255,255,0.6);--barbg:rgba(255,255,255,0.75);--accent:#FF7A1F">
-          <div class="ph-top"><img class="ph-word" src="plus-icons/wordmark-navy.png" alt="peekaboo"><img class="ph-eyes" src="plus-icons/eyes-sunset.png" alt=""></div>
+          <div class="ph-top"><span class="ph-side"></span><img class="ph-word" src="plus-icons/wordmark-navy.png" alt="peekaboo"><span class="ph-side ph-right"><span class="ph-bell">🔔</span><span class="ph-me"></span></span></div>
           <div class="ph-story"><span></span><span></span><span></span><span></span></div>
           <div class="ph-card"><img class="ph-card-eyes" src="plus-icons/eyes-sunset.png" alt=""></div>
           <div class="ph-bar"><i></i><b class="ph-cam"><img src="plus-icons/eyes-sunset.png" alt=""></b><i></i></div>
