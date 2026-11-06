@@ -1,6 +1,6 @@
 import { Canvas, Picture, createPicture, useClock } from '@shopify/react-native-skia';
 import { StyleSheet } from 'react-native';
-import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { useAnimatedReaction, useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
 import { paintLook, type LensFace, type LensLook } from './lensPaint';
 
@@ -9,9 +9,17 @@ import { paintLook, type LensFace, type LensLook } from './lensPaint';
 // same code that puts the look on the saved photo (bakeLook.ts), so both look the same.
 // ---------------------------------------------------------------------------
 
-export function LensOverlay({ faces, look }: { faces: SharedValue<LensFace[]>; look: LensLook }) {
+// `shownTime` (optional) is told the moment on screen (in seconds), so a photo taken now can use the very same moment
+// of the moving shine and twinkles as you saw.
+export function LensOverlay({ faces, look, shownTime }: { faces: SharedValue<LensFace[]>; look: LensLook; shownTime?: SharedValue<number> }) {
   const clock = useClock();
   const size = useSharedValue({ width: 0, height: 0 });
+  useAnimatedReaction(
+    () => clock.value,
+    (now) => {
+      shownTime?.set(now / 1000);
+    },
+  );
   // Safety net: if the drawing ever fails, the filter stops drawing instead of closing the app (an error on
   // the drawing thread would otherwise stop the whole app).
   const broken = useSharedValue(false);

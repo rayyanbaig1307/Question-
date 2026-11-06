@@ -45,6 +45,8 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
   const camera = useRef<CameraRef | null>(null);
   const photoOutput = usePhotoOutput({ quality: 0.9 });
   const faces = useSharedValue<LensFace[]>([]);
+  // The moment the live filter is showing (seconds), so the photo gets the same shine and twinkles.
+  const shownTime = useSharedValue(0);
   const last = useRef<LensFace[]>([]);
   // The size of the camera view on screen (the face points are in these units).
   const viewSize = useRef({ width: 0, height: 0 });
@@ -97,8 +99,9 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
       async capture() {
         // The faces as they were when you pressed the button (the photo takes a moment).
         const shotFaces = last.current;
-        // (Only used for where the sparkles are in their twinkle.)
-        const shotTime = (Date.now() % 600_000) / 1000;
+        // The same moment of the moving shine, glints and twinkles as on screen when you pressed the button.
+        const shown = shownTime.get();
+        const shotTime = shown > 0 ? shown : (Date.now() % 600_000) / 1000;
         const file = await photoOutput.capturePhotoToFile({ flashMode: flash === 'on' && facing === 'back' ? 'on' : 'off' }, {});
         // Upright, and mirrored for selfies like the preview.
         let photo = ImageManipulator.manipulate(`file://${file.filePath}`);
@@ -114,7 +117,7 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
         }
       },
     }),
-    [photoOutput, flash, facing, look],
+    [photoOutput, flash, facing, look, shownTime],
   );
 
   function onLayout(event: LayoutChangeEvent) {
@@ -134,7 +137,7 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
         mirrorMode="auto"
         onError={(error) => console.warn('Face filter camera', error)}
       />
-      {active ? <LensOverlay faces={faces} look={look} /> : null}
+      {active ? <LensOverlay faces={faces} look={look} shownTime={shownTime} /> : null}
     </View>
   );
 }
