@@ -20,7 +20,7 @@ import { useScratchToReveal } from '@/lib/preferences';
 import { fetchStoryRings } from '@/lib/stories';
 import { setStoryRings, storyRingsTicket } from '@/lib/storyRings';
 import { useSafetyActions } from '@/lib/useSafetyActions';
-import { colors, font, space } from '@/theme';
+import { colors, font, space, pageBackground } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 import { StoryRow, type Rings } from './StoryRow';
@@ -305,9 +305,10 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 }
 
 const styles = StyleSheet.create({
+  // See-through on a Peekaboo+ theme with a moving picture behind (theme.ts pageBackground).
   fill: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: pageBackground,
   },
   content: {
     paddingHorizontal: space.lg,

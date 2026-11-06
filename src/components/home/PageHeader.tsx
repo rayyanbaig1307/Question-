@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Wordmark } from '@/components/Wordmark';
-import { colors, font, space } from '@/theme';
+import { colors, font, space, pageBackground } from '@/theme';
 
 // Top bar for the Chat and Home pages: a title (or the Peekaboo logo) in the middle, and the 🔔 Inbox bell on
 // the left, with a red number (and a pink ring) when something new is waiting. Your profile is on the Camera
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: space.lg,
     paddingBottom: space.md,
-    backgroundColor: colors.bg,
+    backgroundColor: pageBackground,
   },
   side: {
     width: 48,

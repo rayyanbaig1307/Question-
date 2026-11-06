@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bouncy } from '@/components/Bouncy';
-import { colors, isDark } from '@/theme';
+import { colors, isDark, themeScene } from '@/theme';
 
 // Height of the tab bar, not counting the phone's home-bar area below it.
 export const TAB_BAR_HEIGHT = 58;
@@ -74,9 +74,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     flexDirection: 'row',
   },
+  // Over a Peekaboo+ theme's moving picture: a see-through bar so the picture runs underneath.
   background: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: colors.bg,
+    backgroundColor: themeScene ? colors.bg + 'CC' : colors.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },

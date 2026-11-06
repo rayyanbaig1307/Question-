@@ -82,9 +82,11 @@ type SceneProps = {
 };
 
 // `small`: a little preview tile with fewer things moving.
-export const ChatBackground = memo(function ChatBackground({ id, small = false, style }: {
+// `paused`: keep still for now (the Home pages' theme picture while the camera is on screen).
+export const ChatBackground = memo(function ChatBackground({ id, small = false, paused = false, style }: {
   id: string | null | undefined;
   small?: boolean;
+  paused?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const [size, setSize] = useState<Size | null>(null);
@@ -98,7 +100,7 @@ export const ChatBackground = memo(function ChatBackground({ id, small = false, 
     'worklet';
     time.set(time.get() + Math.min(frame.timeSincePreviousFrame ?? 16, 100));
   }, false);
-  const running = !!info && !!size && focused && !reduceMotion;
+  const running = !!info && !!size && focused && !paused && !reduceMotion;
   useEffect(() => {
     clock.setActive(running);
   }, [clock, running]);

@@ -41,8 +41,8 @@ export const themeChoice: ThemeChoice = readThemeChoice();
 export const phoneScheme = Appearance.getColorScheme() === 'light' ? 'light' : 'dark';
 // The theme in use right now ("Match phone" turned into dark or light).
 const activeTheme: Exclude<ThemeChoice, 'system'> = themeChoice === 'system' ? phoneScheme : themeChoice;
-// Black & Gold and Midnight are dark themes; Sunset is a light one.
-export const isDark = activeTheme === 'dark' || activeTheme === 'gold' || activeTheme === 'midnight';
+// Every theme but Light is a dark one (Sunset is a dusk sky, so it's dark too).
+export const isDark = activeTheme !== 'light';
 
 // Make the phone's own pop-ups and keyboards match too.
 try {
@@ -105,29 +105,30 @@ const light: typeof dark = {
 // ⭐ Peekaboo+ themes. The fun colors (pink for dares, green, yellow…) stay the same so nothing gets confusing;
 // the background, cards, text, buttons and story rings change.
 
-// Black & Gold: almost-black warm background with gold text and gold buttons.
+// Black & Gold: true black with polished-gold text, gold-edged cards and sparkling gold dust behind the
+// Home and Chat pages.
 const gold: typeof dark = {
   ...dark,
-  bg: '#0E0A08',
-  surface: '#1C1510',
-  card: '#2A2016',
-  cardPressed: '#36291C',
-  border: '#3D2F20',
-  text: '#F2D9A8',
-  textMuted: '#BFA57A',
-  textFaint: '#7D6A4E',
-  accent: '#E8A93A',
+  bg: '#050403',
+  surface: '#14100A',
+  card: '#1E170D',
+  cardPressed: '#2B2112',
+  border: '#5A4420',
+  text: '#F7E2A8',
+  textMuted: '#CFAE6A',
+  textFaint: '#8C7445',
+  accent: '#E9B44C',
   onAccent: '#1A1006',
 };
 
-// Midnight: deep navy with sky-blue buttons.
+// Midnight: deep night sky with shooting stars behind the Home and Chat pages, and ice-blue buttons.
 const midnight: typeof dark = {
   ...dark,
-  bg: '#0B1530',
-  surface: '#13204A',
-  card: '#1A2A5A',
-  cardPressed: '#23366E',
-  border: '#2A3F7A',
+  bg: '#0A0820',
+  surface: '#141038',
+  card: '#1D1848',
+  cardPressed: '#28215C',
+  border: '#342C6E',
   text: '#EAF4FF',
   textMuted: '#A9BEDD',
   textFaint: '#6F84A8',
@@ -135,18 +136,19 @@ const midnight: typeof dark = {
   onAccent: '#06142E',
 };
 
-// Sunset: warm cream background, brown text and orange buttons.
+// Sunset: a dusk sky – purple at the top fading to pink and orange, with twinkling stars and glitter behind
+// the Home and Chat pages. Warm cream text and a glowing orange-to-pink for buttons and story rings.
 const sunset: typeof dark = {
-  ...light,
-  bg: '#FFF1D6',
-  surface: '#FFFAF0',
-  card: '#FFE6C7',
-  cardPressed: '#FFD9AE',
-  border: '#F3CFA3',
-  text: '#5A2A12',
-  textMuted: '#8A5A3C',
-  textFaint: '#B48A6C',
-  accent: '#FF7A1F',
+  ...dark,
+  bg: '#2B1A55',
+  surface: '#38215F',
+  card: '#47286B',
+  cardPressed: '#56317C',
+  border: '#6B3F8A',
+  text: '#FFF1E6',
+  textMuted: '#FFC9B0',
+  textFaint: '#C99AB8',
+  accent: '#FF8A3D',
   onAccent: '#FFFFFF',
 };
 
@@ -158,25 +160,48 @@ export const keyboardAppearance: 'dark' | 'light' = isDark ? 'dark' : 'light';
 
 // The main two-color blend (story rings, big buttons, the dare banner) and the soft glow behind some
 // screens, for each theme.
-const brandBlend: Record<typeof activeTheme, readonly [string, string]> = {
+type Blend = readonly [string, string, ...string[]];
+const brandBlend: Record<typeof activeTheme, Blend> = {
   dark: [colors.pink, colors.purple],
   light: [colors.pink, colors.purple],
-  gold: ['#F2C14E', '#C9861C'],
-  midnight: ['#38B6FF', '#3A86F0'],
-  sunset: ['#FF7A1F', '#FF4F6E'],
+  // Polished gold: light catching the edge, then deeper gold.
+  gold: ['#FFF0B8', '#E9B44C', '#A8741A'],
+  midnight: ['#9BE7FF', '#38B6FF', '#7B5CFF'],
+  sunset: ['#FFC15E', '#FF7A45', '#FF4F8B'],
+};
+// The letter pictures for people without a photo.
+const avatarBlend: Record<typeof activeTheme, Blend> = {
+  dark: [colors.blue, colors.purple],
+  light: [colors.blue, colors.purple],
+  gold: ['#3A2B12', '#1A1309'],
+  midnight: ['#2B3FA8', '#6C4DFF'],
+  sunset: ['#FF8A3D', '#B05CFF'],
 };
 const glowTop: Record<typeof activeTheme, string> = {
   dark: '#1B1030',
   light: '#FBE3F1',
   gold: '#2A1D0E',
   midnight: '#1E3A8A',
-  sunset: '#FFD1C2',
+  sunset: '#8A4DFF',
 };
+
+// ⭐ The moving picture behind the Home and Chat pages for each Peekaboo+ theme (one of the chat
+// backgrounds in components/chat/ChatBackground.tsx), or null for none.
+const scenes: Record<typeof activeTheme, 'dust' | 'night' | 'golden' | null> = {
+  dark: null,
+  light: null,
+  gold: 'dust',
+  midnight: 'night',
+  sunset: 'golden',
+};
+export const themeScene = scenes[activeTheme];
+// On a theme with a scene, the Home and Chat pages are see-through so it shows.
+export const pageBackground = themeScene ? 'transparent' : colors.bg;
 
 export const gradients = {
   brand: brandBlend[activeTheme],
   sunny: [colors.yellow, colors.orange] as const,
-  ocean: [colors.blue, colors.purple] as const,
+  ocean: avatarBlend[activeTheme],
   night: [glowTop[activeTheme], colors.bg] as const,
 };
 

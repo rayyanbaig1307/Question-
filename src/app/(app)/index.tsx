@@ -16,7 +16,8 @@ import { useUnreadCount } from '@/lib/chat';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { useHitUps } from '@/lib/hitups';
 import { useClearNotificationsWhenOpen } from '@/lib/notifications';
-import { colors, isDark } from '@/theme';
+import { colors, isDark, themeScene } from '@/theme';
+import { ThemeScene } from '@/components/ThemeScene';
 
 const CHAT = 0;
 const CAMERA = 1;
@@ -76,7 +77,7 @@ export default function Home() {
     const around = (index: number, outputRange: number[]) =>
       progress.interpolate({ inputRange: [index - 1, index, index + 1], outputRange, extrapolate: 'clamp' });
     const pageStyles = PAGES.map((index) => ({
-      page: [styles.fill, { transform: [{ scale: around(index, [0.92, 1, 0.92]) }] }],
+      page: [styles.page, { transform: [{ scale: around(index, [0.92, 1, 0.92]) }] }],
       dim: [styles.dim, { opacity: around(index, [0.6, 0, 0.6]) }],
     }));
     return {
@@ -119,6 +120,8 @@ export default function Home() {
 
   return (
     <View style={styles.fill}>
+      {/* ⭐ Peekaboo+ themes: the moving picture behind the Home and Chat pages. */}
+      <ThemeScene paused={page === CAMERA && !swiping} />
       <HomePager
         ref={pager}
         style={styles.fill}
@@ -148,6 +151,11 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
     backgroundColor: colors.black,
+  },
+  // Each page. See-through on a Peekaboo+ theme, so its moving picture (ThemeScene) shows behind Home and Chat.
+  page: {
+    flex: 1,
+    backgroundColor: themeScene ? 'transparent' : colors.black,
   },
   dim: {
     ...StyleSheet.absoluteFill,

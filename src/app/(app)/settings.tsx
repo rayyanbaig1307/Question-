@@ -504,9 +504,9 @@ const THEMES: { key: ThemeChoice; label: string; emoji?: string; swatch?: [strin
   { key: 'dark', label: 'Dark', emoji: '🌙' },
   { key: 'light', label: 'Light', emoji: '☀️' },
   { key: 'system', label: 'Match phone', emoji: '📱' },
-  { key: 'gold', label: 'Black & Gold', swatch: ['#0E0A08', '#E8A93A'], plus: true },
-  { key: 'midnight', label: 'Midnight', swatch: ['#0B1530', '#38B6FF'], plus: true },
-  { key: 'sunset', label: 'Sunset', swatch: ['#FFF1D6', '#FF7A1F'], plus: true },
+  { key: 'gold', label: 'Black & Gold', swatch: ['#050403', '#E9B44C'], plus: true },
+  { key: 'midnight', label: 'Midnight', swatch: ['#0A0820', '#9BE7FF'], plus: true },
+  { key: 'sunset', label: 'Sunset', swatch: ['#2B1A55', '#FF7A45'], plus: true },
 ];
 
 // Switching colors restarts the app for a second, so every screen is redrawn in the new colors.

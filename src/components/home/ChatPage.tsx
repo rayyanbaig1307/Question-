@@ -26,7 +26,7 @@ import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { refreshStoryBadges, useStoryBadge } from '@/lib/storyRings';
-import { colors, font, radius, space } from '@/theme';
+import { colors, font, radius, space, pageBackground } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 
@@ -626,9 +626,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     flex: 1,
   },
+  // See-through on a Peekaboo+ theme with a moving picture behind (theme.ts pageBackground).
   fill: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: pageBackground,
   },
   loading: {
     marginTop: space.xxl,
