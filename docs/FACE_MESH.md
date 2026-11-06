@@ -21,14 +21,19 @@ a few landmarks and contours. 478 points let lenses follow the real shape of a f
 - `src/lib/faceMesh.ts`: the guard (`FACE_MESH_AVAILABLE`), `useFaceMeshOutput`, `toScreenPoints` (camera
   coordinates → screen points) and the names of the useful points (`MESH`) and scores (`BLENDSHAPE`).
 - `src/components/lens/lensPaint.ts`: the drawing for both looks (Skia), used live AND for the saved photo.
-  - ✨ Soft Glow (`'glow'`): soft warm glow on the skin (not the eyes, brows or lips), light blush (a bit
-    stronger when smiling), brighter eyes + small catchlight (hidden while blinking), a few twinkling sparkles.
-  - 🌅 Golden Hour (`'golden'`): low evening sun from the top-left. Warm light on the cheekbone, temple and jaw
-    on the side that faces the sun, a touch of shade on the other side, a soft golden rim on the lit edge, a
-    warm haze and a few faint flare circles from the top-left corner, and a slightly warmer picture with warm
-    corners. How much each spot faces the sun comes from the face's 3D points (`src/lib/goldenLight.ts`,
-    tested in `tests/unit/golden-light.test.mjs`).
-  All faint on purpose.
+  - ✨ Soft Glow (`'glow'`): "heavenly gold" – warm gold on the skin (not the eyes, brows or lips) brightest
+    at the forehead, soft light from above with a glow over the head, golden highlights, warm blush (a bit
+    stronger when smiling), warmer eyes + small catchlight (hidden while blinking), twinkling gold glitter on
+    the skin and cream star sparkles all round the face.
+  - 🌅 Golden Hour (`'golden'`, redesigned 6 Nov because the owner found the two too alike): "liquid gold in
+    the low sun". Warm gold over the whole face (both sides; the nostrils, moustache, lips, eyes and brows keep
+    their own colour), polished highlights on the forehead, nose, cheekbones and lower lip, a thin gleam that
+    glides across the face every 5 s and flashes glints on the high points, a low sun just past the left edge
+    with a thin light streak and soft sunbeams, a light amber tint with warm dark corners, and a few soft
+    golden orbs drifting away from faces. No sparkles, glitter or halo (those are Soft Glow's). It no longer
+    uses `src/lib/goldenLight.ts` (the camera still works those numbers out; they could be dropped later).
+  Both are soft on purpose: real light, not stickers. `tests/unit/face-looks.test.mjs` checks the two stay
+  different and that Golden Hour stays cheap enough to draw every frame.
 - `src/components/lens/LensOverlay.tsx`: draws the look live on top of the camera (a Skia picture per frame).
 - `src/components/lens/bakeLook.ts`: draws the same look onto the saved photo (see "The look in the photo").
 - `src/components/lens/SoftGlowCamera.tsx`: VisionCamera + photo output + face mesh output + the overlay.
