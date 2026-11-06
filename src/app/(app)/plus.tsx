@@ -26,16 +26,20 @@ import { radius, space } from '@/theme';
 // ---------------------------------------------------------------------------
 // The Peekaboo+ ⭐ screen: what you get, the price, and the button to subscribe (iPhone only for now).
 // Opened from Settings and from anything locked (themes, chat backgrounds, stickers).
+// Everything fits on one screen: what you get is a grid of small tiles, and the Subscribe button, the price
+// and the small print stay pinned to the bottom (on a small phone only the tiles scroll).
 // ---------------------------------------------------------------------------
 
 // The same pink → purple as the app icon (the same in every theme).
 const BRAND = ['#FE59A5', '#E469C7', '#8650DB'] as const;
 const NAVY = '#2A1458';
 
+// Short names, so they fit in the small tiles.
 const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '👀', title: 'Who viewed your profile' },
   { emoji: '🔁', title: 'Who rewatched your story' },
-  { emoji: '📸', title: 'Who screenshotted your story & posts' },
+  { emoji: '📸', title: 'Who screenshotted you' },
+  { emoji: '🌅', title: 'Glow face filters' },
   { emoji: '🎨', title: 'App themes' },
   { emoji: '🌈', title: 'Moving chat backgrounds' },
   { emoji: '✨', title: '48 stickers' },
@@ -43,10 +47,10 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '💾', title: 'Peek-a-Save (1 a month)' },
   { emoji: '⏪', title: 'Drop rewind' },
   { emoji: '🕵️', title: 'Guess Who hint' },
-  { emoji: '📌', title: 'Pin your top 3 chats' },
+  { emoji: '📌', title: 'Pin top 3 chats' },
   { emoji: '🎬', title: '60-second videos' },
-  { emoji: '🌅', title: 'Soft Glow & Golden Hour filters' },
-  { emoji: '⭐', title: 'Plus badge next to your name' },
+  { emoji: '⭐', title: 'Plus badge' },
+  { emoji: '💖', title: 'Support Peekaboo' },
 ];
 
 export default function PlusScreen() {
@@ -108,37 +112,39 @@ export default function PlusScreen() {
 
   return (
     <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
-      <ScrollView
-        style={styles.fill}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.xl }]}>
-        {/* Top: the eyes, the name and a big "+". */}
-        <View style={styles.hero}>
-          <Animated.View style={eyesStyle}>
-            <Image source={logoEyes} style={styles.eyes} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
-          </Animated.View>
-          <View style={styles.logoLine}>
-            <Wordmark height={40} onDark />
-            <Text style={styles.plusSign}>+</Text>
+      {/* Top: the eyes, the name and a big "+". */}
+      <View style={[styles.hero, { paddingTop: insets.top + space.sm }]}>
+        <Animated.View style={eyesStyle}>
+          <Image source={logoEyes} style={styles.eyes} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
+        </Animated.View>
+        <View style={styles.logoLine}>
+          <Wordmark height={28} onDark />
+          <Text style={styles.plusSign}>+</Text>
+        </View>
+        <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
+        <Text style={styles.tagline}>
+          {plus ? 'Thank you for supporting Peekaboo!' : 'See more, peek more, glow more.'}
+        </Text>
+      </View>
+
+      {/* What you get: small tiles, three in a row. Only this part scrolls, and only on small phones. */}
+      <ScrollView style={styles.fill} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
+        {FEATURES.map((feature) => (
+          <View key={feature.title} style={styles.tile}>
+            <Text style={styles.tileEmoji}>{feature.emoji}</Text>
+            <Text style={styles.tileText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {feature.title}
+            </Text>
+            {feature.soon ? <Text style={styles.soon}>soon</Text> : null}
+            {plus && !feature.soon ? (
+              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={styles.tileCheck} />
+            ) : null}
           </View>
-          <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
-          <Text style={styles.tagline}>
-            {plus ? 'Thank you for supporting Peekaboo! Here is everything you get.' : 'See more, peek more, glow more.'}
-          </Text>
-        </View>
+        ))}
+      </ScrollView>
 
-        {/* What you get. */}
-        <View style={styles.card}>
-          {FEATURES.map((feature) => (
-            <View key={feature.title} style={styles.feature}>
-              <Text style={styles.featureEmoji}>{feature.emoji}</Text>
-              <Text style={styles.featureText}>{feature.title}</Text>
-              {feature.soon ? <Text style={styles.soon}>soon</Text> : null}
-              {plus && !feature.soon ? <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" /> : null}
-            </View>
-          ))}
-        </View>
-
-        {/* The buttons. */}
+      {/* Pinned to the bottom: the button, the price and the small print – always in view. */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + space.sm }]}>
         {plus ? (
           Platform.OS === 'ios' ? (
             <BigButton title="Manage subscription" onPress={() => Linking.openURL(MANAGE_SUBSCRIPTION_URL)} />
@@ -162,38 +168,42 @@ export default function PlusScreen() {
           />
         )}
 
-        {CAN_BUY_PLUS && !plus ? (
-          <Pressable
-            onPress={restore}
-            disabled={!!busy}
-            hitSlop={12}
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.restore, pressed && styles.pressed]}>
-            {busy === 'restore' ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.restoreText}>Restore purchases</Text>
-            )}
-          </Pressable>
-        ) : null}
-
         {/* The small print Apple asks for. */}
-        {CAN_BUY_PLUS ? (
+        {CAN_BUY_PLUS && !plus ? (
           <Text style={styles.smallPrint}>
             Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple ID. It renews automatically every month
             until you cancel. Cancel anytime in Settings → Apple ID → Subscriptions, at least 24 hours before it renews.
           </Text>
         ) : null}
-        <View style={styles.legalLinks}>
-          <Text style={styles.legalLink} onPress={() => openLegal('terms')} accessibilityRole="link">
-            Terms of Service
+
+        {/* Restore, Terms and Privacy on one line. */}
+        <View style={styles.links}>
+          {CAN_BUY_PLUS && !plus ? (
+            <>
+              <Pressable
+                onPress={restore}
+                disabled={!!busy}
+                hitSlop={10}
+                accessibilityRole="button"
+                style={({ pressed }) => pressed && styles.pressed}>
+                {busy === 'restore' ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.link}>Restore purchases</Text>
+                )}
+              </Pressable>
+              <Text style={styles.linkDot}>·</Text>
+            </>
+          ) : null}
+          <Text style={styles.link} onPress={() => openLegal('terms')} accessibilityRole="link">
+            Terms
           </Text>
-          <Text style={styles.legalDot}>·</Text>
-          <Text style={styles.legalLink} onPress={() => openLegal('privacy')} accessibilityRole="link">
-            Privacy Policy
+          <Text style={styles.linkDot}>·</Text>
+          <Text style={styles.link} onPress={() => openLegal('privacy')} accessibilityRole="link">
+            Privacy
           </Text>
         </View>
-      </ScrollView>
+      </View>
 
       {/* Close, floating at the top. */}
       <Pressable
@@ -230,17 +240,15 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: space.xl,
-    gap: space.lg,
-  },
   hero: {
     alignItems: 'center',
-    gap: space.sm,
+    gap: 2,
+    paddingHorizontal: space.xl,
+    paddingBottom: space.md,
   },
   eyes: {
-    width: 120,
-    height: 96,
+    width: 70,
+    height: 56,
   },
   logoLine: {
     flexDirection: 'row',
@@ -249,67 +257,86 @@ const styles = StyleSheet.create({
   },
   plusSign: {
     color: '#FFE14D',
-    fontSize: 44,
+    fontSize: 32,
     fontWeight: '900',
-    lineHeight: 48,
+    lineHeight: 36,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: -0.5,
-    marginTop: space.sm,
+    marginTop: space.xs,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
   tagline: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
   },
-  card: {
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.md,
+  },
+  tile: {
+    width: '31%',
+    minHeight: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: space.sm,
+    paddingHorizontal: 6,
+    borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderColor: 'rgba(255,255,255,0.3)',
     borderWidth: 1,
-    borderRadius: radius.lg,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.lg,
   },
-  feature: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.sm,
-  },
-  featureEmoji: {
+  tileEmoji: {
     fontSize: 22,
-    width: 30,
+  },
+  tileText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '800',
     textAlign: 'center',
   },
-  featureText: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+  tileCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
   },
   soon: {
     overflow: 'hidden',
     color: NAVY,
     backgroundColor: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
     paddingHorizontal: space.sm,
-    paddingVertical: 2,
+    paddingVertical: 1,
     borderRadius: radius.pill,
   },
+  footer: {
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
+    backgroundColor: 'rgba(42,20,88,0.25)',
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+  },
   bigButton: {
-    minHeight: 60,
+    minHeight: 56,
     borderRadius: radius.pill,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
@@ -330,55 +357,45 @@ const styles = StyleSheet.create({
   soonBox: {
     backgroundColor: 'rgba(0,0,0,0.2)',
     borderRadius: radius.lg,
-    padding: space.lg,
+    padding: space.md,
     alignItems: 'center',
     gap: space.xs,
   },
   soonTitle: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     textAlign: 'center',
   },
   soonText: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  restore: {
-    alignSelf: 'center',
-    minHeight: 24,
-    justifyContent: 'center',
-  },
-  restoreText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    textDecorationLine: 'underline',
   },
   pressed: {
     opacity: 0.6,
   },
   smallPrint: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
-    lineHeight: 17,
+    lineHeight: 15,
     textAlign: 'center',
   },
-  legalLinks: {
+  links: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: space.sm,
   },
-  legalLink: {
+  link: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
     textDecorationLine: 'underline',
   },
-  legalDot: {
+  linkDot: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 13,
   },
