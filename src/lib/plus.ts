@@ -18,8 +18,10 @@ import { supabase } from './supabase';
 // Expo Go, on Android or on an older download, the Plus screen just says "Peekaboo+ is coming soon".
 // ---------------------------------------------------------------------------
 
-// The owner's account (@coolname).
-const TESTERS = new Set(['df5aae76-7e6a-4e91-9645-5b897a533156']);
+// Accounts that always have Plus in the app, for testing. Empty on purpose: the owner (@coolname) asked to be
+// taken off (6 Nov 2026) so he can test buying the subscription like everyone else. An App Store reviewer must
+// also see the real paywall, so keep this empty for release builds.
+const TESTERS = new Set<string>([]);
 
 // Names used in App Store Connect and RevenueCat.
 const ENTITLEMENT = 'plus';
