@@ -37,6 +37,35 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Now: App Store launch (6 Nov) – build 10 ready, owner's checklist in progress
+
+**Owner's ask (6 Nov):** "work on the subscription and getting it onto the App Store and submitting it". This session
+leads RevenueCat + submission; the Peekaboo+ session (`session_01P3d3mZc9v7nJ2AKkZ6Jc5g`) holds the App Store Connect
+API key and does ASC API work on request (no double submits).
+- **Code:** `bcc76a1` + `2ea24d4` (launch fixes: legal/Terms/Privacy for Peekaboo+, TERMS_VERSION 2026-11-06, no
+  background audio, fuller camera/mic texts, no "Coming soon" buttons, App Store invite link on the production
+  channel, Report/Block on opened peeks, Dangerous dare + Self-harm reasons, robust purchases incl. Ask to Buy and
+  OTA reloads, "Unlocking your Peekaboo+…" while the webhook catches up, Delete account billing warning, safer
+  webhook). `7d838ef`: TESTERS empty (the owner's free Plus is gone; his plus_members row was expired by the Plus
+  session).
+- **Build 10** (EAS `25760a8b-441b-4077-91ab-d319b5d009d7`, profile `production`, **channel `production`**, env
+  `production`, from `2ea24d4`): VALID in App Store Connect, attached to version 1.0 (in place of build 4), in TestFlight
+  for the internal group. NOT submitted for review. EAS env `production` now has EXPO_PUBLIC_SUPABASE_URL/KEY (added
+  6 Nov) besides the RevenueCat key.
+- **Store app OTAs go to `production`** from now on (only from a commit already tried on `testing`, never during review):
+  `set -a && . ./.env && set +a && npx eas-cli@27.1.0 update --branch production --message "…" --platform ios
+  --non-interactive --environment production --clear-cache`, then the usual `strings` check. Builds 7–9 stay on `testing`.
+- **Waiting on the owner** (all in his checklist page https://claude.ai/artifact/VjK4WkoZUPJcBudybi5fYs):
+  1. Paste the safety migration `20261220000000_launch_safety.sql` (copy page https://claude.ai/artifact/Q253FQ6Jmwypt1zTZrnPPd;
+     the MCP approval pop-up timed out again). Check: `dare_ideas.approved_at` exists, trigger `friendships_need_their_ok`.
+  2. Paste the new `revenuecat-webhook` code in the dashboard (copy page https://claude.ai/artifact/RXoRpEYWtqPEgRu3dTqMNq;
+     live is still v1), Verify JWT off, then RevenueCat "Send test event" → check `private.plus_events` has a TEST row.
+  3. Subscription 6830983771 review screenshot (still MISSING_METADATA) and Paid Apps agreement Active.
+  4. Test buy on build 9 (testing channel, update `d0c8d510`), then build 10 checks; App Privacy (+Purchases,
+     Device ID purpose), age rating, review account content, website upload (website.zip sent), then submit
+     (subscription + version in one draft submission).
+- Description already has Terms, Privacy and Apple's standard EULA links (added by the Plus session via the API).
+
 ## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
 **Status.** A big QA and security review was folded in: the supplied QA patch plus our own review fixes.
