@@ -29,7 +29,11 @@ import { colors, gradients, radius, space } from '@/theme';
 export type CameraMode = 'photo' | 'googly' | 'glow' | 'golden' | 'dare' | 'drop' | 'guess';
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
+// Dare and Guess Who come first, and the Peekaboo+ filters last (the owner, 6 Nov): stopping on a Plus filter
+// without Plus opens the Peekaboo+ screen, so they mustn't sit between you and the everyday modes.
 export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
+  { key: 'dare', emoji: '🎯', label: 'Dare' },
+  { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
   { key: 'googly', emoji: '🤪', label: 'Googly' },
   ...(FACE_MESH_AVAILABLE
     ? [
@@ -37,8 +41,6 @@ export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; l
         { key: 'golden' as const, emoji: '🌅', label: 'Golden Hour' },
       ]
     : []),
-  { key: 'dare', emoji: '🎯', label: 'Dare' },
-  { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
 ];
 
 // Everything on the row, including the empty spot for the plain camera at the start.
