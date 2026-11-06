@@ -28,7 +28,7 @@ end of this file.
 
 PGlite executes the actual migrations, constraints, functions and RLS. Auth, Storage metadata, Vault,
 cron, push queues and native/provider services have local stand-ins. Queued notifications never leave the
-machine. The three Edge Function handlers are executed with fake HTTP, Auth, Apple and Storage responses.
+machine. The four Edge Function handlers (including revenuecat-webhook) are executed with fake HTTP, Auth, Apple and Storage responses.
 These are not hosted Edge gateway tests.
 
 ## What the newer test files cover
@@ -129,6 +129,16 @@ API and library (Vitest, part of `npm test`):
 - `tests/unit/group-proof-parity.test.mjs`: the app's "does this proof count?" rule (`proofCounts`) and the
   database's (`private.group_proof_counts`) give the same answer for every mix of 0–4 Legit, 0–4 Cap votes and
   the old-proof flag (PGlite).
+- `tests/unit/legal-docs.test.mjs`: the app's copy (`src/lib/legalDocs.ts`) and every website page match
+  `legal/*.md` (the operator-only part of the Dare Safety Rules never shows), and TERMS_VERSION is bumped when
+  the Terms change. The Terms have the Peekaboo+ wording Apple checks. The documents say what the app and the
+  database really do: who can add you as a friend straight away (18+ with a public account; everyone else gets
+  a request, from the newest `send_friend_request`), that community dares need our OK first (from the newest
+  `pick_daily_dare`), ML Kit's random code for each install (Privacy Policy and the App Privacy answers), every
+  report reason in the app's menu, and how to report (⋯ menu, or press and hold a comment or chat message,
+  checked against the screens). Support answers cancel, restore and refund. The legal README has no old
+  placeholders. Run `node scripts/sync-legal.mjs` and `node scripts/build-website.mjs` if it fails after a
+  change in `legal/`.
 - Changed: `edge-security.test.mjs` (word filter in username sign-up: a display name may swear, a slur in it
   or swearing in the username is refused before any account is made, with the same message as the app),
   `apple-deletion.test.mjs` (a password-only account that sends an Apple code is now deleted, still without

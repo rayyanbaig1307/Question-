@@ -16,7 +16,7 @@ These rules apply to every dare, forfeit, drop, dare chain, community dare and f
 10. **Nothing humiliating or hateful.** Dares must be fun for everyone, including the people watching. No dares that target someone's body, identity or beliefs.
 11. **Under 18?** Only do physical dares with a parent or adult present, and never do a dare a parent wouldn't be okay with.
 12. **Film safely.** Don't film while doing something that needs both hands or your full attention. Have a friend film.
-13. **Community dares** are written by other users. The same rules apply to them, and you can report any dare idea that breaks these rules. Ideas that break the rules are removed and their authors can be banned.
+13. **Community dares** are written by other users. The same rules apply to them, and you can report any dare idea that breaks these rules. A dare idea only becomes everyone's daily dare after the Peekaboo team has read it and approved it. Ideas that break the rules are removed and their authors can be banned.
 
 If you see a dare in Peekaboo that breaks these rules, report it.
 
@@ -54,3 +54,6 @@ Keep doing this whenever dares change:
 - Clothes stay on (the app is 13+).
 - Community dare ideas are checked automatically for dangerous words by the database, can be reported, and are
   hidden after 3 reports.
+- A community dare idea only becomes everyone's daily dare after you approve it (the `approved_at` column of
+  `dare_ideas`, from `supabase/migrations/20261220000000_launch_safety.sql`; the steps are at the top of that
+  file). Only approve an idea that follows every rule above and that you'd be happy for a 13-year-old to do.

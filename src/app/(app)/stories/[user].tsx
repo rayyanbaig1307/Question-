@@ -29,6 +29,7 @@ import { sendReaction, STORY_REACTIONS } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import { fetchStoryInsights, recordStoryView, useContentScreenshots, type StoryInsights } from '@/lib/insights';
 import { mediaFiles, useMediaUrls } from '@/lib/media';
+import { refreshServerPlus, useServerPlus, useStorePlus } from '@/lib/plus';
 import { deleteStory, fetchStoryRing, fetchStoryViewers, type StoryRing } from '@/lib/stories';
 import { refreshStoryBadges } from '@/lib/storyRings';
 import { timeAgo } from '@/lib/time';
@@ -56,6 +57,10 @@ export default function StoryViewer() {
   const [viewersOpen, setViewersOpen] = useState(false);
   // Peekaboo+ insights for your own story: who rewatched it 🔁 and who screenshotted it 📸.
   const [insights, setInsights] = useState<{ storyId: string; data: StoryInsights } | null>(null);
+  // The server decides who sees the insights. Right after buying, the App Store knows a few seconds before the
+  // server does: then the list says "Unlocking your Peekaboo+…" instead of asking you to buy it again.
+  const storePlus = useStorePlus();
+  const serverPlus = useServerPlus();
   // Swipe up on your own story: the list of everyone who viewed it.
   const openViewers = () => setViewersOpen(true);
   const swipeUp = usePanGesture({
@@ -145,10 +150,12 @@ export default function StoryViewer() {
   // 📸 A screenshot of a friend's story is recorded (they get a push; Peekaboo+ shows them who).
   useContentScreenshots('story', storyId, !isMine && !!storyId);
 
-  // On your own story: who has seen this photo (and, opening the list again, the latest).
+  // On your own story: who has seen this photo (and, opening the list again or once the server knows about your
+  // new Peekaboo+, the latest).
   useEffect(() => {
     if (!isMine || !storyId) return;
     let current = true;
+    if (viewersOpen && storePlus && !serverPlus) refreshServerPlus();
     fetchStoryViewers(storyId)
       .then((people) => current && setViewers({ storyId, people }))
       .catch(() => {});
@@ -158,7 +165,7 @@ export default function StoryViewer() {
     return () => {
       current = false;
     };
-  }, [isMine, storyId, viewersOpen]);
+  }, [isMine, storyId, viewersOpen, storePlus, serverPlus]);
 
   // Download the next photo in advance so it appears instantly.
   const nextUrl = ring ? urls[ring.stories[index + 1]?.media_path ?? ''] : undefined;
@@ -375,7 +382,12 @@ export default function StoryViewer() {
                 style={styles.sheetScroll}
                 ListEmptyComponent={<Text style={styles.sheetEmpty}>Nobody yet – check back soon!</Text>}
                 ListHeaderComponent={
-                  storyInsights && !storyInsights.plus ? (
+                  storyInsights && !storyInsights.plus && storePlus ? (
+                    <Pressable style={styles.teaser} onPress={() => refreshServerPlus()} accessibilityRole="button">
+                      <Text style={styles.teaserTitle}>⏳ Unlocking your Peekaboo+…</Text>
+                      <Text style={styles.teaserText}>This takes a few seconds. Tap here to check again.</Text>
+                    </Pressable>
+                  ) : storyInsights && !storyInsights.plus ? (
                     <Pressable style={styles.teaser} onPress={openPlus} accessibilityRole="button">
                       <Text style={styles.teaserTitle}>🔁 Who rewatched? ⭐</Text>
                       {storyInsights.rewatchers + storyInsights.screenshotters > 0 ? (

@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -24,7 +24,7 @@ import {
   buyPlus,
   CAN_BUY_PLUS,
   getPlusPrice,
-  MANAGE_SUBSCRIPTION_URL,
+  openManageSubscription,
   restorePurchases,
   usePlus,
   useServerPlus,
@@ -188,7 +188,8 @@ export default function PlusScreen() {
         ) : null}
         {plus ? (
           Platform.OS === 'ios' ? (
-            <BigButton title="Manage subscription" onPress={() => Linking.openURL(MANAGE_SUBSCRIPTION_URL)} />
+            // Apple's own subscriptions sheet (or Apple's page when the sheet can't open).
+            <BigButton title="Manage subscription" onPress={openManageSubscription} />
           ) : null
         ) : !CAN_BUY_PLUS ? (
           <View style={styles.soonBox}>

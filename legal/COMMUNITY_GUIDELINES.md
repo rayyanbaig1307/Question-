@@ -31,7 +31,7 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 
 ## Reporting and blocking
 
-- Every post, story, peek, chat message, comment, profile, Guess Who post, dare idea and hit up has **Report**: tap **⋯** (or press and hold a chat message), then pick a reason: spam, bullying, nudity, a dangerous dare, self-harm, or something else. Reports are confidential: the person isn't told who reported them.
+- Every post, story, peek, profile, Guess Who post, dare idea, hit up, comment and chat message can be reported. For a post, story, peek, profile, Guess Who post, dare idea or hit up, tap its **⋯** menu. For a comment or a chat message, **press and hold** it. Then tap **Report** and pick a reason: spam, bullying, nudity, a dangerous dare, self-harm, or something else. Reports are confidential: the person isn't told who reported them.
 - **Report dangerous dares and self-harm straight away.** If a dare, dare idea or post could get someone hurt, or someone seems to be thinking about hurting themselves, report it so we can act fast.
 - You can **block** anyone from their profile. Blocked people can't see your content, message you, or find you on the map, and you won't see them.
 - We review reports and act on objectionable content **within 24 hours**, removing content and the people who post it where needed.

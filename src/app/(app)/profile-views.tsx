@@ -8,25 +8,42 @@ import { HiddenPersonRow } from '@/components/HiddenPersonRow';
 import { PersonRow } from '@/components/PersonRow';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { fetchMyProfileViews, type ProfileViews } from '@/lib/insights';
+import { refreshServerPlus, useServerPlus, useStorePlus } from '@/lib/plus';
 import { timeAgo } from '@/lib/time';
 import { colors, font, space } from '@/theme';
 
 // 👀 Who viewed your profile in the last 30 days. Everyone sees how many; Peekaboo+ shows who.
+// The server decides who sees the names. Right after buying, the App Store knows a few seconds before the
+// server does: then this screen says "Unlocking your Peekaboo+…" instead of asking you to buy it again.
 export default function ProfileViewsScreen() {
   // undefined = loading, null = couldn't load.
   const [views, setViews] = useState<ProfileViews | null | undefined>(undefined);
+  const [refreshing, setRefreshing] = useState(false);
+  const storePlus = useStorePlus();
+  const serverPlus = useServerPlus();
 
+  // Loads the views when the screen opens, and again when your Plus changes (so the names show up as soon as
+  // the server knows). While Plus is still unlocking, it also asks the server again.
   useFocusEffect(
     useCallback(() => {
       let current = true;
+      if (storePlus && !serverPlus) refreshServerPlus();
       fetchMyProfileViews().then((loaded) => {
         if (current) setViews(loaded);
       });
       return () => {
         current = false;
       };
-    }, []),
+    }, [storePlus, serverPlus]),
   );
+
+  // Pull down to refresh.
+  async function refresh() {
+    setRefreshing(true);
+    const [loaded] = await Promise.all([fetchMyProfileViews(), refreshServerPlus()]);
+    setViews(loaded);
+    setRefreshing(false);
+  }
 
   let body;
   if (views === undefined) {
@@ -50,6 +67,8 @@ export default function ProfileViewsScreen() {
         data={views.viewers}
         keyExtractor={(viewer) => viewer.profile.id}
         contentContainerStyle={styles.list}
+        refreshing={refreshing}
+        onRefresh={refresh}
         ListHeaderComponent={<Summary views={views} />}
         renderItem={({ item }) => (
           <PersonRow
@@ -66,19 +85,29 @@ export default function ProfileViewsScreen() {
     );
   } else {
     // Free: the count, with the faces hidden. (The server doesn't send names without Peekaboo+.)
+    // Just bought it: the faces stay hidden until the server knows, with "Unlocking…" instead of the buy button.
     const hidden = Array.from({ length: Math.min(views.people, 8) }, (_, index) => index);
     body = (
       <FlatList
         data={hidden}
         keyExtractor={(index) => String(index)}
         contentContainerStyle={styles.list}
+        refreshing={refreshing}
+        onRefresh={refresh}
         ListHeaderComponent={<Summary views={views} />}
         renderItem={() => <HiddenPersonRow />}
         ListFooterComponent={
-          <View style={styles.upsell}>
-            <Text style={styles.upsellText}>{"Find out who's been checking you out 👀"}</Text>
-            <Button title="See who with Peekaboo+ ⭐" onPress={() => router.push('/plus')} />
-          </View>
+          storePlus ? (
+            <View style={styles.upsell}>
+              <Text style={styles.upsellText}>⏳ Unlocking your Peekaboo+…</Text>
+              <Text style={styles.unlockingText}>This takes a few seconds. Pull down to refresh.</Text>
+            </View>
+          ) : (
+            <View style={styles.upsell}>
+              <Text style={styles.upsellText}>{"Find out who's been checking you out 👀"}</Text>
+              <Button title="See who with Peekaboo+ ⭐" onPress={() => router.push('/plus')} />
+            </View>
+          )
         }
       />
     );
@@ -155,6 +184,10 @@ const styles = StyleSheet.create({
   upsellText: {
     ...font.body,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  unlockingText: {
+    ...font.small,
     textAlign: 'center',
   },
 });

@@ -34,8 +34,9 @@ import { colors, font, space } from '@/theme';
 const SECONDS = 10;
 // A video peek plays to its end (videos can be up to 30 seconds, or 60 with Peekaboo+).
 const MAX_VIDEO_SECONDS = 60;
-// After a pause the timer always gives you at least this long, so a report picked from the ⋯ menu
-// (which starts a moment after the menu closes) can't be cut off by the peek closing.
+// After a pause the timer gives you at least this long, so a report picked from the ⋯ menu (which starts a
+// moment after the menu closes) isn't cut off by the peek closing. You get this extra time only once per peek,
+// so opening and closing the menu again and again can't keep the peek on screen.
 const MIN_LEFT_MS = 1000;
 
 // first = opening it for the first time, replay = your one replay, saved = saved in the chat (no time limit).
@@ -66,10 +67,13 @@ export default function SnapViewer() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  // paused = the ⋯ menu is open. reporting = you're reporting it: the timer stops and the peek is covered.
+  // paused = the ⋯ menu is open: the timer waits and the peek is covered.
+  // reporting = you're reporting it: the timer stops for good and the peek stays covered.
   const [paused, setPaused] = useState(false);
   const [reporting, setReporting] = useState(false);
   const progress = useSharedValue(0);
+  // Whether this peek already got its one bit of extra time after a pause (see MIN_LEFT_MS).
+  const extraGiven = useRef(false);
   // Pinch-zoom on the photo: whether it's zoomed in, and when that last changed.
   const zoomRef = useRef({ zoomed: false, at: 0 });
 
@@ -131,8 +135,8 @@ export default function SnapViewer() {
   }, [id, userId]);
 
   // The timer runs unless the peek is saved (saving it stops the timer): 10 seconds for a photo, the video's
-  // length for a video (it starts once the video has loaded). It waits while the ⋯ menu is open, and stops
-  // for good once you report the peek.
+  // length for a video (it starts once the video has loaded). It waits while the ⋯ menu is open (the peek is
+  // covered then), and stops for good once you report the peek.
   const [videoSeconds, setVideoSeconds] = useState<number | null>(null);
   const isVideo = state.kind === 'showing' && state.video !== null;
   const seconds = isVideo ? Math.min(MAX_VIDEO_SECONDS, Math.max(1, videoSeconds ?? SECONDS)) : SECONDS;
@@ -141,9 +145,14 @@ export default function SnapViewer() {
   useEffect(() => {
     if (!timed) return;
     // Carry on from where the bar stopped (it starts empty, so the first run gets the full time).
-    const left = (1 - progress.get()) * seconds * 1000;
+    let left = Math.max(0, (1 - progress.get()) * seconds * 1000);
+    // Almost out of time after a pause: you get 1 second – but only the first time.
+    if (left < MIN_LEFT_MS && !extraGiven.current) {
+      extraGiven.current = true;
+      left = MIN_LEFT_MS;
+    }
     progress.set(
-      withTiming(1, { duration: Math.max(MIN_LEFT_MS, left), easing: Easing.linear }, (finished) => {
+      withTiming(1, { duration: left, easing: Easing.linear }, (finished) => {
         'worklet';
         if (finished) scheduleOnRN(close);
       }),
@@ -235,13 +244,7 @@ export default function SnapViewer() {
   return (
     <Pressable style={styles.fill} onPress={tapToClose} accessibilityLabel="Close peek">
       <StatusBar style="light" />
-      {reporting ? (
-        // While you report it, the peek is covered (it can't be kept on screen this way).
-        <View style={[StyleSheet.absoluteFill, styles.center]}>
-          <Text style={styles.coverTitle}>Peek hidden while you report it 🚩</Text>
-          <Text style={styles.loadingText}>Tap anywhere to close.</Text>
-        </View>
-      ) : state.video ? (
+      {reporting ? null : state.video ? (
         <VideoClip
           uri={state.url}
           posterUri={state.video.posterUrl}
@@ -261,6 +264,16 @@ export default function SnapViewer() {
           style={StyleSheet.absoluteFill}
         />
       )}
+      {paused || reporting ? (
+        // While the ⋯ menu is open or you report it, the peek is covered, so the menu can't be used to keep it on
+        // screen. (While the menu is open the photo or video stays underneath, paused, so it carries on after.)
+        <View style={[StyleSheet.absoluteFill, styles.center, styles.cover]}>
+          <Text style={styles.coverTitle}>
+            {reporting ? 'Peek hidden while you report it 🚩' : 'Peek hidden while the menu is open 🙈'}
+          </Text>
+          {reporting ? <Text style={styles.loadingText}>Tap anywhere to close.</Text> : null}
+        </View>
+      ) : null}
       <SafeEdge edge="top" style={styles.top}>
         <View style={[styles.track, !counting && styles.hidden]}>
           <Animated.View style={[styles.bar, barStyle]} />
@@ -378,6 +391,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  cover: {
+    backgroundColor: colors.black,
   },
   coverTitle: {
     ...font.body,

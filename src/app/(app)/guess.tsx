@@ -33,7 +33,7 @@ import {
   type MysteryPost,
 } from '@/lib/guess';
 import { useMediaUrls } from '@/lib/media';
-import { usePlus } from '@/lib/plus';
+import { refreshServerPlus, usePlus, useServerPlus, useStorePlus } from '@/lib/plus';
 import { fetchMysteryHints, getMysteryHint } from '@/lib/plusExtras';
 import { REPORT_REASONS } from '@/lib/safety';
 import { timeAgo } from '@/lib/time';
@@ -55,7 +55,13 @@ export default function GuessWho() {
   const [justRevealed, setJustRevealed] = useState<Set<string>>(new Set());
   const [inView, setInView] = useState<string | null>(null);
   // 🕵️ Hints you got (Peekaboo+): post id → hint. null = the server doesn't have hints yet (no Hint button).
-  const plus = usePlus();
+  // The server decides who gets a hint. Right after buying, the App Store knows a few seconds before the server
+  // does: then the button says "Unlocking Peekaboo+…" instead of sending you to buy it again.
+  const appPlus = usePlus();
+  const storePlus = useStorePlus();
+  const serverPlus = useServerPlus();
+  const unlocking = storePlus && !serverPlus;
+  const plus = !unlocking && appPlus;
   const [hints, setHints] = useState<Map<string, string> | null>(null);
   const [hinting, setHinting] = useState<string | null>(null);
 
@@ -70,9 +76,16 @@ export default function GuessWho() {
     }, [load]),
   );
 
+  // Opened while Plus is still unlocking: ask the server again.
+  useFocusEffect(
+    useCallback(() => {
+      if (unlocking) refreshServerPlus();
+    }, [unlocking]),
+  );
+
   async function refresh() {
     setRefreshing(true);
-    await load().catch(() => {});
+    await Promise.all([load().catch(() => {}), refreshServerPlus()]);
     setRefreshing(false);
   }
 
@@ -113,7 +126,13 @@ export default function GuessWho() {
   }
 
   // One clue about who posted it (Peekaboo+, once per post). Without Plus: off to the Peekaboo+ screen.
+  // Still unlocking: ask the server again, and say so.
   async function askHint(post: MysteryPost) {
+    if (unlocking) {
+      showToast('⏳ Unlocking your Peekaboo+… pull down to refresh in a few seconds.');
+      refreshServerPlus();
+      return;
+    }
     if (!plus) {
       router.push('/plus');
       return;
@@ -260,6 +279,7 @@ export default function GuessWho() {
               hintsOn={hints !== null}
               hint={hints?.get(item.id)}
               plus={plus}
+              unlocking={unlocking}
               hinting={hinting === item.id}
               onHint={() => askHint(item)}
             />
@@ -270,7 +290,7 @@ export default function GuessWho() {
   );
 }
 
-function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, active, busy, animate, onGuess, onMenu, hintsOn, hint, plus, hinting, onHint }: {
+function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, active, busy, animate, onGuess, onMenu, hintsOn, hint, plus, unlocking, hinting, onHint }: {
   post: MysteryPost;
   people: Map<string, Profile>;
   me: string;
@@ -287,6 +307,8 @@ function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, acti
   hintsOn: boolean;
   hint: string | undefined;
   plus: boolean;
+  // Just bought Peekaboo+, and the server doesn't know yet.
+  unlocking: boolean;
   hinting: boolean;
   onHint: () => void;
 }) {
@@ -376,11 +398,13 @@ function GuessCard({ post, people, me, now, stillUrl, videoUrl, overlayUrl, acti
               disabled={hinting}
               style={styles.hintButton}
               accessibilityRole="button"
-              accessibilityLabel={plus ? 'Get a hint' : 'Get a hint with Peekaboo+'}>
+              accessibilityLabel={unlocking ? 'Unlocking your Peekaboo+' : plus ? 'Get a hint' : 'Get a hint with Peekaboo+'}>
               {hinting ? (
                 <ActivityIndicator color={colors.purple} />
               ) : (
-                <Text style={styles.hintButtonText}>{plus ? '🕵️ Hint' : '🕵️ Hint · Peekaboo+ ⭐'}</Text>
+                <Text style={styles.hintButtonText}>
+                  {unlocking ? '⏳ Unlocking Peekaboo+…' : plus ? '🕵️ Hint' : '🕵️ Hint · Peekaboo+ ⭐'}
+                </Text>
               )}
             </Pressable>
           ) : null}

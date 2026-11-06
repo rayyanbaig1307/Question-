@@ -7,10 +7,10 @@ Need help with Peekaboo? We're here.
 ## Common questions
 
 **How do I report someone or something?**
-Tap the **⋯** on any post, story, peek, comment or profile and choose **Report**. We review every report within 24 hours.
+For a post, story, peek, profile, Guess Who post, dare idea or hit up, tap its **⋯** menu. For a comment or a chat message, **press and hold** it. Then tap **Report** and pick a reason. We review every report within 24 hours.
 
 **How do I block someone?**
-Open their profile → **⋯** → **Block**. They can't see your content, message you or find you on the map.
+Open their profile → **⋯** → **Block**. You can also press and hold their chat in your Chat list → **Block**. They can't see your content, message you or find you on the map.
 
 **How do I make an account?**
 Download Peekaboo and tap **Continue with Apple** (iPhone) or **Continue with Google** (Android). There's no password to remember, and you pick your username once.
@@ -26,6 +26,17 @@ Report it in the app, or email us with a screenshot and we'll remove it.
 
 **Is my location shared?**
 Only with your friends, and only while you turn sharing on. Ghost mode hides you any time.
+
+## Peekaboo+
+
+**How do I cancel Peekaboo+?**
+On your iPhone, go to **Settings → your name → Subscriptions → Peekaboo+** and tap **Cancel Subscription**. (Members can also tap **Manage subscription** on the Peekaboo+ screen in the app.) Cancel at least 24 hours before it renews. You keep Peekaboo+ until the end of the month you already paid for. Deleting the app or your Peekaboo account does **not** cancel it.
+
+**I paid, but I don't have Peekaboo+ (or I got a new phone).**
+Log in to the Peekaboo account you bought it with. Then open the Peekaboo+ screen (Settings → **⭐ Peekaboo+**) and tap **Restore purchases** at the bottom.
+
+**Can I get a refund?**
+Apple takes the payment, so Apple handles refunds – we can't give them ourselves. Go to **reportaproblem.apple.com**, sign in with your Apple Account, and ask for a refund for Peekaboo+. Apple decides.
 
 ## Legal
 

@@ -277,9 +277,9 @@ export default function DareScreen() {
           ) : null}
         </View>
       ) : null}
-      {/* Community dares: suggest one, vote, and the top one becomes everyone's dare with your name on it */}
+      {/* Community dares: suggest one and vote. The top one becomes everyone's dare only after we approve it. */}
       <Pressable onPress={() => router.push('/dare-ideas')} style={styles.ideasLink} accessibilityRole="link">
-        <Text style={styles.ideasLinkText}>💡 Suggest tomorrow&apos;s dare for everyone · vote on ideas ›</Text>
+        <Text style={styles.ideasLinkText}>💡 Suggest a dare for everyone · we approve ideas before they run ›</Text>
       </Pressable>
       <Text style={styles.sectionTitle}>
         Everyone&apos;s dares today{list && list.length > 0 ? ` (${list.length})` : ''}

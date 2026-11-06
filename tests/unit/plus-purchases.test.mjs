@@ -1,6 +1,7 @@
-// Peekaboo+ buying (src/lib/plus.ts) with a pretend RevenueCat library: cancelling, Ask to Buy, store errors,
-// Plus that didn't switch on, account switches, a missing monthly package, logging out, and the server
-// re-checks after a purchase. The real error numbers come from RevenueCat's own package.
+// Peekaboo+ buying (src/lib/plus.ts) with a pretend RevenueCat library: setting it up (also after an app
+// update reloads the app), cancelling, Ask to Buy, store errors, Plus that didn't switch on, account switches,
+// a missing monthly package, logging out, the server re-checks after a purchase, asking the server again, and
+// "Manage subscription". The real error numbers come from RevenueCat's own package.
 import { PURCHASES_ERROR_CODE } from '@revenuecat/purchases-typescript-internal';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { loadLibrary } from './libHarness.mjs';
@@ -16,11 +17,16 @@ const WITH_MONTHLY = offeringsWith({ identifier: 'default', monthly: MONTHLY, av
 
 // A pretend RevenueCat: remembers which account it's using, who bought, and every call.
 function fakeRevenueCat({ offerings = WITH_MONTHLY, configured = false, appUserId = null } = {}) {
-  const store = { configured, appUserId, owners: new Set(), boughtBy: [], listeners: [], failLogIns: 0, calls: [] };
+  const store = { configured, appUserId, owners: new Set(), boughtBy: [], listeners: [], failLogIns: 0, failConfigures: 0, calls: [] };
   const track = (name, fn) => vi.fn(async (...args) => { store.calls.push(name); return fn(...args); });
   const Purchases = {
     PURCHASES_ERROR_CODE,
-    configure: vi.fn(({ appUserID }) => { store.calls.push('configure'); store.configured = true; store.appUserId = appUserID; }),
+    configure: vi.fn(({ appUserID }) => {
+      store.calls.push('configure');
+      if (store.failConfigures > 0) { store.failConfigures--; throw new Error('RevenueCat could not start'); }
+      store.configured = true;
+      store.appUserId = appUserID;
+    }),
     isConfigured: vi.fn(async () => store.configured),
     getAppUserID: vi.fn(async () => store.appUserId),
     isAnonymous: vi.fn(async () => String(store.appUserId).startsWith('$RCAnonymousID')),
@@ -39,6 +45,10 @@ function fakeRevenueCat({ offerings = WITH_MONTHLY, configured = false, appUserI
       return { customerInfo: info(true), productIdentifier: pack.product.identifier };
     }),
     restorePurchases: track('restorePurchases', async () => info(store.owners.has(store.appUserId))),
+    // Apple's own subscriptions sheet.
+    showManageSubscriptions: track('showManageSubscriptions', async () => {
+      if (!store.configured) throw new Error('There is no singleton instance. Make sure you configure Purchases before trying to get the default instance.');
+    }),
   };
   // RevenueCat telling the app that something changed.
   const tell = (plus) => store.listeners.forEach((listener) => listener(info(plus)));
@@ -73,12 +83,16 @@ function fakeServer() {
 function loadPlus({ revenueCat = fakeRevenueCat(), server = fakeServer(), signedIn = 'alice' } = {}) {
   const afterSignOut = [];
   const timers = [];
+  const opened = [];
   const me = { userId: signedIn };
   const lib = loadLibrary('plus', {
     supabase: server.supabase,
     mocks: {
       'expo-constants': { __esModule: true, default: { executionEnvironment: 'standalone' }, ExecutionEnvironment: { StoreClient: 'store-client' } },
-      'react-native': { Platform: { OS: 'ios' }, NativeModules: { RNPurchases: {} }, TurboModuleRegistry: { get: () => null } },
+      'react-native': {
+        Platform: { OS: 'ios' }, NativeModules: { RNPurchases: {} }, TurboModuleRegistry: { get: () => null },
+        Linking: { openURL: async (url) => { opened.push(url); } },
+      },
       'react-native-purchases': { __esModule: true, default: revenueCat.Purchases, PURCHASES_ERROR_CODE },
       './auth': { useMe: () => ({ userId: me.userId }), runAfterSignOut: (step) => { afterSignOut.push(step); return () => {}; } },
       // Just enough React for the hooks to be called outside a screen.
@@ -92,7 +106,7 @@ function loadPlus({ revenueCat = fakeRevenueCat(), server = fakeServer(), signed
     },
   });
   const serverChecks = () => timers.filter((timer) => !timer.cleared && [2_000, 5_000, 10_000].includes(timer.ms));
-  return { lib, revenueCat, server, afterSignOut, me, serverChecks };
+  return { lib, revenueCat, server, afterSignOut, me, serverChecks, opened };
 }
 
 // Lets every waiting promise finish.
@@ -112,16 +126,41 @@ it('sets up RevenueCat once, with the Peekaboo account id, even if asked twice a
   expect(revenueCat.Purchases.logIn).not.toHaveBeenCalled();
 });
 
-it('after an app update reloads the app, RevenueCat is not set up a second time', async () => {
-  const same = loadPlus({ revenueCat: fakeRevenueCat({ configured: true, appUserId: 'alice' }) });
-  await same.lib.configurePurchases('alice');
-  expect(same.revenueCat.Purchases.configure).not.toHaveBeenCalled();
-  expect(same.revenueCat.Purchases.logIn).not.toHaveBeenCalled();
+// After an app update reloads the app, RevenueCat on the phone is still set up from before, but its line back to
+// the old code is gone. The new code must set it up again, or RevenueCat's news (bought, renewed, ran out…)
+// never reaches the app.
+it('after an app update reloads the app, RevenueCat is set up again once, so its news reaches the new code', async () => {
+  for (const before of ['alice', '$RCAnonymousID:phone', 'bob']) {
+    const reloaded = loadPlus({ revenueCat: fakeRevenueCat({ configured: true, appUserId: before }) });
+    const { Purchases } = reloaded.revenueCat;
+    await reloaded.lib.configurePurchases('alice');
+    expect(Purchases.configure, `RevenueCat was on ${before}`).toHaveBeenCalledTimes(1);
+    expect(Purchases.configure.mock.calls[0][0]).toMatchObject({ apiKey: 'appl_test_key', appUserID: 'alice' });
+    // Setting it up with Alice's id already puts RevenueCat on her account.
+    expect(Purchases.logIn).not.toHaveBeenCalled();
+    expect(reloaded.revenueCat.store.appUserId).toBe('alice');
+    expect(Purchases.addCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    // RevenueCat's news reaches the new code.
+    reloaded.revenueCat.tell(true);
+    expect(reloaded.lib.hasPlus('alice')).toBe(true);
+    // Only once per start of the code: the next check doesn't set it up again.
+    await reloaded.lib.configurePurchases('alice');
+    expect(Purchases.configure).toHaveBeenCalledTimes(1);
+  }
+});
 
-  const anonymous = loadPlus({ revenueCat: fakeRevenueCat({ configured: true, appUserId: '$RCAnonymousID:phone' }) });
-  await anonymous.lib.configurePurchases('alice');
-  expect(anonymous.revenueCat.Purchases.configure).not.toHaveBeenCalled();
-  expect(anonymous.revenueCat.Purchases.logIn).toHaveBeenCalledExactlyOnceWith('alice');
+it('a set-up that failed is tried again the next time', async () => {
+  const revenueCat = fakeRevenueCat();
+  revenueCat.store.failConfigures = 1;
+  const { lib } = loadPlus({ revenueCat });
+  await expect(lib.configurePurchases('alice')).resolves.toBeUndefined();
+  expect(revenueCat.store.configured).toBe(false);
+  await lib.configurePurchases('alice');
+  expect(revenueCat.Purchases.configure).toHaveBeenCalledTimes(2);
+  expect(revenueCat.store.appUserId).toBe('alice');
+  revenueCat.store.owners.add('alice');
+  await expect(lib.buyPlus()).resolves.toBe('bought');
+  expect(revenueCat.store.boughtBy).toEqual([['alice', '$rc_monthly']]);
 });
 
 it('closing Apple\'s sheet is quiet: "cancelled", no Plus, no server checks', async () => {
@@ -299,6 +338,17 @@ it('logging out of Peekaboo logs RevenueCat out too, only when it is set up and 
   expect(revenueCat.Purchases.logIn).toHaveBeenLastCalledWith('bob');
 });
 
+it('logging out right after an app update reloads the app, before this code set RevenueCat up, is quiet', async () => {
+  const { lib, revenueCat, afterSignOut } = loadPlus({ revenueCat: fakeRevenueCat({ configured: true, appUserId: 'alice' }) });
+  afterSignOut[0]('alice');
+  await settle();
+  expect(revenueCat.Purchases.logOut).not.toHaveBeenCalled();
+  // The next person to log in gets RevenueCat set up with their own account.
+  await lib.configurePurchases('bob');
+  expect(revenueCat.Purchases.configure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ appUserID: 'bob' }));
+  expect(revenueCat.store.appUserId).toBe('bob');
+});
+
 it('a RevenueCat problem while logging out never breaks the logout', async () => {
   const { lib, revenueCat, afterSignOut } = loadPlus();
   await lib.configurePurchases('alice');
@@ -308,11 +358,15 @@ it('a RevenueCat problem while logging out never breaks the logout', async () =>
 });
 
 it('Android, Expo Go or no key: buying is off and nothing touches RevenueCat', async () => {
+  const opened = [];
   const lib = loadLibrary('plus', {
     supabase: fakeServer().supabase,
     mocks: {
       './auth': { useMe: () => ({ userId: 'alice' }), runAfterSignOut: () => () => {} },
-      'react-native': { Platform: { OS: 'android' }, NativeModules: {}, TurboModuleRegistry: { get: () => null } },
+      'react-native': {
+        Platform: { OS: 'android' }, NativeModules: {}, TurboModuleRegistry: { get: () => null },
+        Linking: { openURL: async (url) => { opened.push(url); } },
+      },
     },
   });
   expect(lib.CAN_BUY_PLUS).toBe(false);
@@ -320,4 +374,50 @@ it('Android, Expo Go or no key: buying is off and nothing touches RevenueCat', a
   await expect(lib.getPlusPrice()).resolves.toBeNull();
   await expect(lib.buyPlus()).rejects.toThrow('Peekaboo+ is coming soon.');
   await expect(lib.restorePurchases()).resolves.toBe('not-found');
+  // "Manage subscription" opens Apple's page.
+  await lib.openManageSubscription();
+  expect(opened).toEqual(['https://apps.apple.com/account/subscriptions']);
+});
+
+it('"Manage subscription" opens Apple\'s own sheet in the app (it also shows test purchases)', async () => {
+  const { lib, revenueCat, opened } = loadPlus();
+  await lib.configurePurchases('alice');
+  await lib.openManageSubscription();
+  expect(revenueCat.Purchases.showManageSubscriptions).toHaveBeenCalledTimes(1);
+  expect(opened).toEqual([]);
+});
+
+it('"Manage subscription" opens Apple\'s page when the sheet can\'t open, and never throws', async () => {
+  const { lib, revenueCat, opened } = loadPlus();
+  await lib.configurePurchases('alice');
+  revenueCat.Purchases.showManageSubscriptions.mockRejectedValueOnce(new Error('No active window scene'));
+  await expect(lib.openManageSubscription()).resolves.toBeUndefined();
+  expect(opened).toEqual(['https://apps.apple.com/account/subscriptions']);
+
+  // RevenueCat isn't set up (no one has logged in yet): Apple's page too.
+  const fresh = loadPlus();
+  await expect(fresh.lib.openManageSubscription()).resolves.toBeUndefined();
+  expect(fresh.opened).toEqual(['https://apps.apple.com/account/subscriptions']);
+});
+
+it('asking the server again turns server Plus on, and screens asking at the same time share one question', async () => {
+  const { lib, server } = loadPlus();
+  await lib.configurePurchases('alice');
+  await settle();
+  expect(lib.useServerPlus()).toBe(false);
+  const before = server.reads.length;
+  server.rows.set('alice', SOON); // the webhook arrives
+  await Promise.all([lib.refreshServerPlus(), lib.refreshServerPlus(), lib.refreshServerPlus()]);
+  expect(server.reads.length - before).toBe(1);
+  expect(lib.useServerPlus()).toBe(true);
+  expect(lib.hasPlus('alice')).toBe(true);
+  // Later questions are asked again (not the old answer).
+  await lib.refreshServerPlus();
+  expect(server.reads.length - before).toBe(2);
+});
+
+it('asking the server again does nothing when nobody is logged in', async () => {
+  const { lib, server } = loadPlus();
+  await expect(lib.refreshServerPlus()).resolves.toBeUndefined();
+  expect(server.reads).toEqual([]);
 });

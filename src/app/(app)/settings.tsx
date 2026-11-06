@@ -18,7 +18,7 @@ import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
-import { MANAGE_SUBSCRIPTION_URL, usePlus, useStorePlus } from '@/lib/plus';
+import { openManageSubscription, usePlus, useStorePlus } from '@/lib/plus';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import type { HitUpsFrom, Profile } from '@/lib/types';
@@ -29,7 +29,7 @@ export default function Settings() {
   const { showToast, showOptions } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const plus = usePlus();
-  // You pay for Peekaboo+ through Apple (Delete account warns that deleting doesn't stop it).
+  // The App Store says you pay for Peekaboo+ (Delete account warns that deleting doesn't stop it).
   const storePlus = useStorePlus();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
@@ -185,18 +185,18 @@ export default function Settings() {
   }
 
   // Two warnings before anything is deleted – there's no undo.
-  // If you pay for Peekaboo+, the first one also says Apple keeps billing until you cancel (deleting your
-  // account can't stop an App Store subscription), with a button to Apple's subscriptions page.
+  // If you have Peekaboo+ (the App Store or the server says so), the first one also says Apple keeps billing until
+  // you cancel (deleting your account can't stop an App Store subscription), with a button to Apple's
+  // subscriptions sheet.
   function confirmDelete() {
     if (!active.current) return;
+    const billing = plus || storePlus;
     Alert.alert(
       'Delete your account?',
       'Your profile, posts, stories, chats and friends will be gone forever. This cannot be undone.' +
-        (storePlus ? '\n\nYour Peekaboo+ subscription keeps billing through Apple until you cancel it.' : ''),
+        (billing ? '\n\nIf you pay for Peekaboo+, Apple keeps billing you until you cancel it. Please cancel it first.' : ''),
       [
-        ...(storePlus
-          ? [{ text: 'Manage subscription', onPress: () => { Linking.openURL(MANAGE_SUBSCRIPTION_URL).catch(() => {}); } }]
-          : []),
+        ...(billing ? [{ text: 'Manage subscription', onPress: () => { openManageSubscription(); } }] : []),
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',

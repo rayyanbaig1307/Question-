@@ -103,14 +103,18 @@ person when the steps say so (Settings → Log out).
 
 1. As **Person A**: on the camera, tap the **👤+ button** (next to your picture, top-left) → **Friends**.
    - It says "Find your friends".
-2. Type part of Person B's username → they show up. Tap **Add**:
-   - B's account is **public** (the normal setting) → "You and @personB are friends! 🎉" straight away. No request.
-     B gets a notification "You have a new friend 🎉 · personA added you as a friend".
-   - B's account is **private** (Settings → Private account) → "Friend request sent 💌". The button changes to
-     **Requested**, and they appear under **Waiting for them**.
-3. (Private B only) As **Person B**: the **Chat** tab has a red number, and a **Friend requests 💌** box sits at
+2. Type part of Person B's username → they show up. Tap **Add**. What happens depends on B's account and on B's
+   age (from the birthday B saved in Settings → **Birthday**). A saved birthday can't be changed, so use one test
+   account for each case below (made-up birthdays are fine):
+   - B's account is **public** (the normal setting) **and B is 18 or over** → "You and @personB are friends! 🎉"
+     straight away. No request. B gets a notification "You have a new friend 🎉 · personA added you as a friend".
+   - B is **under 18**, or **hasn't saved a birthday** → "Friend request sent 💌", even if B's account is public.
+     The button changes to **Requested**, B appears under **Waiting for them**, and nothing changes until B
+     accepts. (This keeps strangers from becoming friends with a 13-year-old in one tap.)
+   - B's account is **private** (Settings → Private account) → a friend request too, whatever B's age.
+3. (Only if it was a request) As **Person B**: the **Chat** tab has a red number, and a **Friend requests 💌** box sits at
    the top of Chat with A's row and **Accept** / **✕**. (The 👤+ button on the camera shows a red 1 too.)
-4. (Private B only) Tap **Accept** → "You and @personA are friends! 🎉". Both of you now see each other under
+4. (Only if it was a request) Tap **Accept** → "You and @personA are friends! 🎉". Both of you now see each other under
    **My friends**, and the **Friends** count on your profiles went up.
    **Someone's friends:** on a **friend's** profile, tap the **Friends** number → their friends list, each with an
    **Add** button. On anyone you're not friends with, the number can't be tapped – add them first.
@@ -158,11 +162,20 @@ pop up live.
     Person A sees **Opened** under it.
 12. **No signal?** If the peek can't load, it says "Couldn't load the peek" and does **not** count as opened –
     try again later.
+13. **Report a peek:** Person A sends B a new peek. B opens it and taps **⋯** (top right, next to **Save**):
+    - While the menu is open, the peek is covered ("Peek hidden while the menu is open 🙈") and the timer bar
+      stops. A video peek pauses under the cover.
+    - **Cancel** → the peek is back and the bar carries on from where it stopped (a video plays on from the same
+      spot, not from the start). Opened the menu right at the end? You get 1 extra second, but only once per
+      peek: opening the menu again near the end gives no more time, so it can't be kept on screen this way.
+    - **Report peek** → the peek is covered ("Peek hidden while you report it 🚩") and the timer stops → pick a
+      reason → "Thanks for telling us 💛" → **Not now** or **Block**. Tap anywhere to close the peek.
+    - Your own peek (open one you saved in the chat) has no ⋯ button.
 
 **Safety checks**
-13. Unfriend Person B (their profile → **Friends** → **Unfriend**). The chat screen now says
+14. Unfriend Person B (their profile → **Friends** → **Unfriend**). The chat screen now says
     "You need to be friends to chat." and the message box is gone.
-14. In Supabase → **Storage → media**, opened peeks get deleted the next time the sender opens that chat.
+15. In Supabase → **Storage → media**, opened peeks get deleted the next time the sender opens that chat.
 
 ## Step 7 – Stories
 
@@ -608,15 +621,26 @@ Use 2 friend accounts (A and B).
 
 ## Step 39 – Community dares 💡
 
-1. Dare screen → **💡 Suggest tomorrow's dare for everyone · vote on ideas** → the Ideas screen. Type an idea (10–120 letters) → **Suggest**.
+1. Dare screen → **💡 Suggest a dare for everyone · we approve ideas before they run** → the Ideas screen. The card
+   says ideas with at least 3 🔥 get checked by the Peekaboo team. Type an idea (10–120 letters) → **Suggest**.
    One idea a day each. Dangerous words (fire, knife, roof, alcohol, nudity…) are refused by the database with
    "Keep it silly, not dangerous".
 2. Everyone sees the ideas under **Top** / **New** with the suggester's @name. Tap 🔥 to vote (tap again to take it back).
    ••• on someone's idea → **Report** (3 reports from different people hide it); on your own → **Delete**.
-3. At the next dare change (10:00 UTC), the top idea with **at least 3 🔥** that hasn't run yet becomes everyone's
-   dare: the Dare screen card says **💡 COMMUNITY DARE · by @name**, and the camera's Dare mode shows it too.
-   Dare posts from that day get a tag "🎯 Dare … · by @name".
-4. No idea with 3 votes → the built-in list runs as usual. An idea only ever runs once.
+3. **The owner's OK:** an idea with **at least 3 🔥** shows "👀 waiting for our check" after the @name. It can't run
+   yet – votes alone are not enough.
+   - To approve it (owner, Supabase dashboard): Table Editor → **dare_ideas** → read the text. Only approve it if
+     it follows the Dare Safety Rules and you'd be happy for a 13-year-old to do it. Then fill its **approved_at**
+     cell with the date and time now (for example `2026-11-06 09:00:00+00`) and save. The full steps are at the
+     top of `supabase/migrations/20261220000000_launch_safety.sql`.
+   - Back in the app (go back and open the Ideas screen again): the idea now shows "🔥 ready to run".
+   - People can't approve ideas, not even their own: a new idea always starts with approved_at empty.
+   - To take an approval back before it has run: set approved_at back to empty (NULL).
+4. At the next dare change **after** the approval (10:00 UTC), the top **approved** idea with at least 3 🔥 that
+   hasn't run yet becomes everyone's dare: the Dare screen card says **💡 COMMUNITY DARE · by @name**, and the
+   camera's Dare mode shows it too. Dare posts from that day get a tag "🎯 Dare … · by @name". An approval never
+   changes today's dare in the middle of the day.
+5. No approved idea with 3 votes → the built-in list runs as usual. An idea only ever runs once.
 
 ## Step 40 – Terms & safety 📜
 
@@ -967,7 +991,7 @@ real person's account (deleting can't be undone).
    - In a private chat (one-on-one or group, dares too) the same words still go through.
 5. **Photos stay on screen:** in a group chat with photos, have someone send a new photo → the photos already
    there stay put (no blank flash). Same on the Home feed when you pull down to refresh.
-6. **Community dares:** Dare screen → **💡 Suggest tomorrow's dare for everyone · vote on ideas** → the
+6. **Community dares:** Dare screen → **💡 Suggest a dare for everyone · we approve ideas before they run** → the
    **🔥 Top** and **🆕 New** lists load, with each idea's @name.
 7. **Chat-dare proof for a dare that's gone:** A dares B in chat. While B takes the proof photo, A holds the
    dare → **Delete for everyone**. B sends the photo → **Photo sent** "That dare isn't there any more, so it
@@ -1046,3 +1070,49 @@ also with Settings → Accessibility → Motion → **Reduce Motion** and **Pref
    member list) still opens the menu.
 4. Your own story: your picture on your profile has the ring and opens your story.
 5. Hide B's stories (hold B in the Chat list → hide stories) → B's ring goes away everywhere.
+
+## Step 64 – Peekaboo+ ⭐ (buy, restore, delete account)
+
+You need an iPhone with the newest **TestFlight** build. In TestFlight buying is free: Apple uses test
+("sandbox") payments, so no real money is taken. A test subscription renews every day, up to 6 times, and then
+stops by itself. Use a test account that doesn't have Peekaboo+ yet.
+
+⚠️ Never tap **Subscribe** or **Restore purchases** while logged in as the App Review account
+(`review@peekaboo.invalid`). The test subscription could move to it, and then Apple's reviewer would never see
+the buy screen.
+
+**Buy**
+1. Settings → **⭐ Peekaboo+** (or tap a 🔒 theme in Settings → Appearance) → the Peekaboo+ screen: "Unlock it
+   all ⭐", the list of extras, and at the bottom **Subscribe · (price)/month**. Under the button: the small print
+   (charged to your Apple Account every month, renews by itself, cancel in Settings → your name → Subscriptions
+   at least 24 hours before it renews) and **Restore purchases · Terms of Use · Privacy Policy**. Both documents
+   open when you tap them.
+   - No price after a few seconds → **Couldn't load the price · Retry**. Usually something in App Store Connect
+     isn't finished yet (see `docs/HANDOFF.md`).
+2. Tap **Subscribe** → Apple's buy sheet (free in TestFlight) → confirm → "Welcome to Peekaboo+ ⭐". The title now
+   says "You're a member ⭐", every extra has a ✓, and the button is **Manage subscription** (it opens Apple's
+   subscriptions sheet).
+   - Close Apple's sheet without buying → nothing happens and nothing changes.
+3. **"Unlocking…":** right after buying, the server can take a few seconds to hear about it. Straight away, open
+   your profile → **👀 Profile views** (and also a story's viewers list, a post's screenshots, a Guess Who hint, Drop
+   rewind or Peek-a-Save). They say **"⏳ Unlocking your Peekaboo+…"** – never the buy button again. Meanwhile
+   the Peekaboo+ screen may say "A few extras, like who viewed your profile, can take a few seconds to switch on."
+   - Wait a few seconds, then pull down (or tap it) → the names show.
+   - Still "Unlocking…" after a minute → the server never heard about the purchase. Stop and tell Claude.
+4. The extras that live only in the app work at once: a Plus theme, the Golden Hour filter, 60-second videos.
+
+**Restore**
+5. Delete Peekaboo, install it again from TestFlight and log in to the **same** test account → Settings →
+   ⭐ Peekaboo+ already says **You're a member ⭐** (there is no Restore button for members), and Profile views
+   shows the names again. (Restore itself can only be tried on an account that doesn't have Plus – never the
+   App Review account.)
+6. (If you can) on an Apple Account that never bought it → **Restore purchases** → "We didn't find a Peekaboo+
+   subscription on this Apple Account."
+
+**Delete account with Peekaboo+**
+7. Logged in to the test account that has Peekaboo+: Settings → **Delete account** → the first warning also
+   says "If you pay for Peekaboo+, Apple keeps billing you until you cancel it. Please cancel it first." and has
+   a **Manage subscription** button (it opens Apple's subscriptions sheet). Tap **Cancel** there unless you really
+   want to delete this test account.
+8. With an account that has no Peekaboo+, the same warning has no billing line and no **Manage subscription**.
+9. Deleting an account does **not** cancel the subscription. Cancel it in Settings → your name → Subscriptions.

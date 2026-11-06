@@ -1,6 +1,6 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
+import { Linking, NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 
 import { runAfterSignOut, useMe } from './auth';
 import { supabase } from './supabase';
@@ -121,6 +121,8 @@ function checkServerSoon(userId: string) {
 // The Peekaboo account RevenueCat is known to be using right now (null = not sure, or nobody).
 // Only set once configure/logIn has really worked, so a failed switch is tried again next time.
 let configuredFor: string | null = null;
+// True once this copy of the app's code has set RevenueCat up. It starts as false again after an app update
+// reloads the app, even though RevenueCat itself may still be set up from before (see switchStoreAccount).
 let configured = false;
 let listening = false;
 
@@ -149,14 +151,14 @@ function showStoreInfo(info: CustomerInfo) {
 async function switchStoreAccount(userId: string): Promise<void> {
   if (!Purchases) return;
   if (!configured) {
-    // After an app update reloads the app, RevenueCat is still set up from before, so don't set it up twice.
-    if (!(await Purchases.isConfigured())) {
-      Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId });
-      configured = true;
-      configuredFor = userId;
-      return;
-    }
+    // Set it up once every time the app's code starts, also after an app update reloads the app. RevenueCat may
+    // still be set up from before the reload, but its line back to the old code is gone, so it would never tell
+    // the new code about changes (bought, renewed, ran out…). Setting it up again fixes that: RevenueCat only
+    // writes a warning and uses the new set-up. It also puts RevenueCat straight onto this account.
+    Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId });
     configured = true;
+    configuredFor = userId;
+    return;
   }
   if ((await Purchases.getAppUserID()) !== userId) {
     // Someone else was using RevenueCat on this phone (another account, or nobody after a logout).
@@ -201,8 +203,9 @@ export function logOutPurchases(userId: string): Promise<void> {
   return inLine(async () => {
     configuredFor = null;
     try {
-      // RevenueCat can't log out when it was never set up, or when it isn't using an account.
-      if (!(await store.isConfigured()) || (await store.isAnonymous())) return;
+      // RevenueCat can't log out when it isn't using an account. And when this copy of the app never set it up,
+      // there's nothing to do: the next person to log in sets it up again with their own account.
+      if (!configured || (await store.isAnonymous())) return;
       await store.logOut();
     } catch (error) {
       console.warn('Could not log out of Peekaboo+ payments', error);
@@ -249,6 +252,22 @@ export function useServerPlus(): boolean {
   const { userId } = useMe();
   const now = useSyncExternalStore(watchMine, () => mine);
   return now.userId === userId && serverHasPlus(now);
+}
+
+// Asks the server again whether you have Peekaboo+. The screens whose Plus parts the server decides (who
+// viewed your profile, Peek-a-Save, …) call this when you pull down to refresh, or when they open while the
+// App Store already says Plus but the server doesn't yet. Several screens asking at once share one question.
+// Never throws.
+let serverRead: { userId: string; done: Promise<void> } | null = null;
+export function refreshServerPlus(): Promise<void> {
+  const userId = mine.userId;
+  if (!userId) return Promise.resolve();
+  if (serverRead?.userId === userId) return serverRead.done;
+  const done = loadMyServerPlus(userId).finally(() => {
+    if (serverRead?.done === done) serverRead = null;
+  });
+  serverRead = { userId, done };
+  return done;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,6 +413,22 @@ export async function restorePurchases(): Promise<RestoreResult> {
 
 // Where people cancel or change their subscription (Apple's own page).
 export const MANAGE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
+
+// "Manage subscription": on an iPhone that can buy Peekaboo+, this opens Apple's own subscriptions sheet right
+// inside the app (it also works for test purchases, which Apple's web page doesn't show). Everywhere else, or if
+// the sheet can't open, it opens Apple's subscriptions page instead. Never throws.
+export async function openManageSubscription(): Promise<void> {
+  const store = Purchases;
+  if (store) {
+    try {
+      await store.showManageSubscriptions();
+      return;
+    } catch (error) {
+      console.warn("Could not open Apple's subscriptions sheet", error);
+    }
+  }
+  await Linking.openURL(MANAGE_SUBSCRIPTION_URL).catch(() => {});
+}
 
 // ---------------------------------------------------------------------------
 // Other people's ⭐ badge: read from public.plus_members, kept for a few minutes. Lots of rows asking at

@@ -28,20 +28,20 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 | **Peekaboo+ (purchases)** | Whether you have Peekaboo+, until when, and which plan. The messages RevenueCat sends us when you buy, renew, cancel, get a refund or move Peekaboo+ to another account: the plan, the dates, the price and currency, your App Store country or region, and Apple's transaction number. We **never** see your card or bank details or your Apple Account password – Apple handles the payment. | To switch Peekaboo+ on and off, show the ⭐ badge, and answer billing questions. | Contract |
 | **Friends and safety** | Friend requests and friendships, close-friends list, groups, blocks, reports you make or that are made about you, forfeits given and received, dare chains and streaks (and any Peek-a-Save used on them). | To run the social features and keep people safe. | Contract; legitimate interest (safety) |
 | **Location** | Precise GPS position **only while you have the friend map's location sharing turned on**. Turning on ghost mode deletes your stored position. | Friend map. | Consent (phone permission + in-app switch) |
-| **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups for adults only (18+), limit them to 10 a day, and run the feature. | Contract; legitimate interest (safety) |
+| **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups for adults only (18+), limit them to 10 a day, and run the feature. Also, so that people under 18 always get a friend request instead of being added straight away (section 3). | Contract; legitimate interest (safety) |
 | **Device and technical data** | Push-notification token for your device, device type and app version, your time zone (so drop alerts come at your local time), when your phone last checked in with us (so we can send a drop reminder if you haven't opened Peekaboo for a while), the IP address and timestamps of requests to our servers (kept in server logs), and data from Expo's update service (device platform, app runtime version, when the app checked for updates). | To send notifications, keep the app updated, secure the service and fix problems. | Legitimate interest |
 | **Support** | Anything you send us by email. | To help you. | Legitimate interest |
 
-**Face filters.** The googly-eyes lens and the Soft Glow and Golden Hour filters use Google's ML Kit and MediaPipe tools, which run **on your phone**. They find the points of faces in the live camera picture (where the eyes, nose and mouth are) so the filter can follow a face. This happens on your phone only: we never store face points, never send them to our servers, and never use them to recognise who someone is. Only the photo or video you choose to post or send is saved, like any other post. Google's ML Kit tool may send Google basic technical information (such as device and app details, error codes and how fast it ran) so Google can keep it working; it does not send pictures or face data.
+**Face filters.** The googly-eyes lens and the Soft Glow and Golden Hour filters use Google's ML Kit and MediaPipe tools, which run **on your phone**. They find the points of faces in the live camera picture (where the eyes, nose and mouth are) so the filter can follow a face. This happens on your phone only: we never store face points, never send them to our servers, and never use them to recognise who someone is. Only the photo or video you choose to post or send is saved, like any other post. Google's ML Kit tool may send Google basic technical information (such as device and app details, a random code for this install, error codes and how fast it ran) so Google can keep it working and see how it is used. The random code only belongs to this install of the app: it is not your name, your Peekaboo account or an advertising ID. ML Kit never sends pictures or face data.
 
-We do **not** collect: contacts/address book, health data, payment card or bank details (Apple handles payments), advertising identifiers, or precise location when sharing is off. We do not show ads, and we do not use advertising or tracking tools. The only outside tools in the app that send data to their makers are Expo (app updates), RevenueCat (subscriptions – it also gives us summary charts, such as how many people subscribe) and Google ML Kit (basic technical data, as above). See section 4.
+We do **not** collect: contacts/address book, health data, payment card or bank details (Apple handles payments), advertising identifiers, or precise location when sharing is off. We do not show ads, and we do not use advertising or tracking tools. The only outside tools in the app that send data to their makers are Expo (app updates), RevenueCat (subscriptions – it also gives us summary charts, such as how many people subscribe) and Google ML Kit (basic technical data and a random code for this install, as above). See section 4.
 
 **Photos of other people.** If you post a photo or video with other people in it, you are responsible for having their permission. Anyone who finds themselves in content on Peekaboo without consent can email rbaig18@z2automation.net and we will remove it.
 
 ## 3. Who can see what (inside the app)
 
 - **Posts, stories, drops, dares:** your friends (or only close friends, or one group, when you choose that). If your account is public (the default), posts you share with everyone can also appear on Home for other Peekaboo users. Turn on **Private account** (Settings → Privacy & safety) so only friends see your posts. Home shows posts from friends first, then from public accounts.
-- **Friends:** if your account is public, anyone can add you as a friend straight away, without a request. If it is private, people send a request that you can accept or decline. Friends can chat with you, see your stories and, while your sharing is on, your place on the friend map. You can block anyone at any time.
+- **Friends:** if your account is public and you are 18 or over, anyone can add you as a friend straight away. If you are under 18 (or haven't saved your birthday), or your account is private, people send a request that you can accept or decline. Friends can chat with you, see your stories and, while your sharing is on, your place on the friend map. You can block anyone at any time.
 - **Guess Who posts:** shown to friends without your name until they guess.
 - **Peeks and messages:** only the person you sent them to, or the members of the group chat.
 - **Profile:** your username, display name, photo, bio, song, friend count and whether you have Peekaboo+ are visible to other users who find you.
@@ -54,7 +54,7 @@ We do **not** collect: contacts/address book, health data, payment card or bank 
 
 ## 4. Who we share data with (service providers)
 
-We share data only with companies that help run Peekaboo, under contracts that limit what they can do with it:
+We share data only with companies that help run Peekaboo, under contracts or terms that limit what they can do with it. We only use providers that protect your data at least as well as this policy does:
 
 | Provider | What they do | Where |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ We share data only with companies that help run Peekaboo, under contracts that l
 | **Expo (650 Industries, Inc.)** | Delivers app updates and routes push notifications to Apple and Google. | United States |
 | **RevenueCat, Inc.** | Keeps track of Peekaboo+ subscriptions for us. It gets your Peekaboo user ID (a random code, not your name or email), your purchase history from Apple (plan, dates, price, store country) and basic phone details (such as the iOS and app version), and tells our server when your subscription starts, renews or ends. It also gives us summary charts about subscriptions. | United States |
 | **Apple Inc.** | App Store and in-app payments for Peekaboo+ (Apple handles your payment details; we never see them), Sign in with Apple, push notifications on iPhone, iTunes Search for profile-song previews (your search words are sent to Apple). | United States and worldwide |
-| **Google LLC** | Google Play, Sign in with Google, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google), and the ML Kit and MediaPipe face tools inside the app (they run on your phone; ML Kit may send Google basic technical data, never pictures or face data). | United States and worldwide |
+| **Google LLC** | Google Play, Sign in with Google, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google), and the ML Kit and MediaPipe face tools inside the app (they run on your phone; ML Kit may send Google basic technical data and a random code for this install, never pictures or face data). | United States and worldwide |
 
 We also disclose data when the law requires it, to respond to a valid legal request, to protect someone's safety, to enforce our Terms, or as part of a sale or transfer of Peekaboo (we would tell you).
 
@@ -105,7 +105,7 @@ Wherever you live, you can: see the data we hold about you; correct it (most of 
 
 ## 8. Children
 
-Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission (also before buying Peekaboo+), and hit ups are not available to them: hit ups are only for people 18 and over.
+Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission (also before buying Peekaboo+), and hit ups are not available to them: hit ups are only for people 18 and over. Nobody can add someone under 18 as a friend straight away: they always get a friend request that they can accept or decline.
 
 ## 9. Security
 

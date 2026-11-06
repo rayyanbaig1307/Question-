@@ -1,5 +1,6 @@
 // Peekaboo+ extras in the app: the ⏰ drop rewind choice on Send to, the 🙈 Peek-a-Save card and the late-drop
-// choice itself. The server parts are tested in tests/database/plus-extras.test.mjs.
+// choice itself, also right after buying (the App Store says Plus, the server doesn't know yet). The server
+// parts are tested in tests/database/plus-extras.test.mjs.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScreen, renderScreen, renderer, act, button, textOf, unmount } = require('./harness.cjs');
@@ -49,14 +50,28 @@ test('Send to: when the server says no, the drop is posted late and the toast sa
   } finally { await unmount(tree); }
 });
 
-function rewindOption({ plus, late = true, left = 1 }) {
+// `store` = the App Store says you have Plus; `server` = the server knows it (from your plus_members row).
+// `refreshes` counts how often the server was asked again.
+function plusMock({ plus, store = false, server = false }) {
+  const state = { refreshes: 0 };
+  const mock = {
+    usePlus: () => plus,
+    useStorePlus: () => store,
+    useServerPlus: () => server,
+    refreshServerPlus: async () => { state.refreshes++; },
+  };
+  return { state, mock };
+}
+
+function rewindOption({ plus, late = true, store = false, server = false }) {
+  const { state, mock } = plusMock({ plus, store, server });
   const screen = loadScreen('src/components/DropRewindOption.tsx', {
     '@/lib/drop': { useDropStatus: () => ({ kind: late ? 'late' : 'live', now: 0 }) },
-    '@/lib/plus': { usePlus: () => plus },
+    '@/lib/plus': mock,
     '@/lib/plusExtras': { shortDate: () => '9 Nov' },
   });
   const element = (props) => require('react').createElement(screen.exports.DropRewindOption, props);
-  return { screen, element };
+  return { screen, element, state };
 }
 
 test('Drop rewind choice: shows the weekly count for Plus, and Peekaboo+ for everyone else', async () => {
@@ -88,10 +103,37 @@ test('Drop rewind choice: shows the weekly count for Plus, and Peekaboo+ for eve
   await unmount(tree);
 });
 
-function saveCard({ plus, peekASave = async () => 12 }) {
+test('Drop rewind choice right after buying: "Unlocking…" (asks the server again), never the Peekaboo+ screen', async () => {
+  const render = async (element) => { let tree; await act(async () => { tree = renderer.create(element); }); return tree; };
+  const changes = [];
+  const unlocking = rewindOption({ plus: true, store: true, server: false });
+  let tree = await render(unlocking.element({ allowances: { ...ALLOWANCES, plus: false }, selected: false, onChange: (on) => changes.push(on) }));
+  const texts = tree.root.findAllByType('Text').map(textOf);
+  assert.equal(texts[0], "⏰ Post without 'late'");
+  assert.equal(texts[1], '⏳ Unlocking your Peekaboo+… tap to check again');
+  assert.ok(!texts.includes('⭐'), 'no Peekaboo+ star');
+  assert.equal(unlocking.state.refreshes, 1, 'the server is asked again when the choice appears');
+  await act(() => tree.root.findByType('Pressable').props.onPress());
+  assert.equal(unlocking.state.refreshes, 2, 'tapping asks the server again');
+  assert.deepEqual(unlocking.screen.calls.routes, [], 'never sent to buy Peekaboo+ again');
+  assert.deepEqual(changes, [], 'it cannot be picked until the server knows');
+  await unmount(tree);
+
+  // The server knows now (even though this list of allowances is older): it can be picked.
+  const known = rewindOption({ plus: true, store: true, server: true });
+  tree = await render(known.element({ allowances: { ...ALLOWANCES, plus: false }, selected: false, onChange: (on) => changes.push(on) }));
+  assert.equal(textOf(tree.root.findAllByType('Text')[0]), "⏰ Post without 'late' (1 left this week)");
+  await act(() => tree.root.findByType('Pressable').props.onPress());
+  assert.deepEqual(changes, [true]);
+  assert.equal(known.state.refreshes, 0);
+  await unmount(tree);
+});
+
+function saveCard({ plus, store = false, server = false, peekASave = async () => 12 }) {
   const saved = [];
+  const { state, mock } = plusMock({ plus, store, server });
   const screen = loadScreen('src/components/PeekASaveCard.tsx', {
-    '@/lib/plus': { usePlus: () => plus },
+    '@/lib/plus': mock,
     '@/lib/plusExtras': {
       peekASave: async (...args) => { saved.push(args); return peekASave(); },
       brokenStreakText: (s, name) => `Your ${s.streak}-day streak with ${name} broke 😱`,
@@ -99,7 +141,7 @@ function saveCard({ plus, peekASave = async () => 12 }) {
       shortDate: () => '1 Dec',
     },
   });
-  return { screen, saved };
+  return { screen, saved, state };
 }
 
 test('Peek-a-Save card: a Plus member saves the streak after saying yes; others are sent to Peekaboo+', async () => {
@@ -145,3 +187,31 @@ test('Peek-a-Save card: a Plus member saves the streak after saying yes; others 
   await unmount(tree);
 });
 
+
+test('Peek-a-Save card right after buying: "Unlocking…" with Check again, never the Peekaboo+ screen', async () => {
+  const React = require('react');
+  const streak = { kind: 'daily_dare', friend_id: 'ayaan', streak: 12, broke_at: '', save_until: '' };
+  const friend = { id: 'ayaan', username: 'ayaan', display_name: 'Ayaan' };
+  const card = (fixture, allowances) => React.createElement(fixture.screen.exports.PeekASaveCard, { streak, friend, allowances, onSaved: () => {} });
+
+  const unlocking = saveCard({ plus: true, store: true, server: false });
+  let tree;
+  await act(async () => { tree = renderer.create(card(unlocking, { ...ALLOWANCES, plus: false })); });
+  assert.ok(tree.root.findAllByType('Text').some((t) => textOf(t).startsWith('⏳ Unlocking your Peekaboo+…')));
+  assert.equal(button(tree, 'Save it with Peekaboo+ ⭐'), undefined, 'no buy button');
+  assert.equal(button(tree, '🙈 Peek-a-Save'), undefined, 'the server would still say no');
+  assert.equal(unlocking.state.refreshes, 1, 'the server is asked again when the card appears');
+  await act(() => button(tree, 'Check again').props.onPress());
+  assert.equal(unlocking.state.refreshes, 2);
+  assert.deepEqual(unlocking.screen.calls.routes, []);
+  assert.deepEqual(unlocking.saved, []);
+  await unmount(tree);
+
+  // The server knows now (even though these allowances were loaded before): the real button is back.
+  const known = saveCard({ plus: true, store: true, server: true });
+  await act(async () => { tree = renderer.create(card(known, { ...ALLOWANCES, plus: false })); });
+  assert.ok(button(tree, '🙈 Peek-a-Save'));
+  assert.equal(button(tree, 'Check again'), undefined);
+  assert.equal(known.state.refreshes, 0);
+  await unmount(tree);
+});

@@ -5,7 +5,9 @@ import { supabase } from './supabase';
 import type { Profile } from './types';
 
 // ---------------------------------------------------------------------------
-// Community dares 💡: suggest a dare, vote 🔥, and the top one becomes everyone's dare with your name on it.
+// Community dares 💡: suggest a dare and vote 🔥. The owner reads ideas with enough votes and approves the safe
+// ones. Only then can the top idea become everyone's dare, with your name on it
+// (supabase/migrations/20261220000000_launch_safety.sql).
 // ---------------------------------------------------------------------------
 
 export const MIN_VOTES = 3;
@@ -19,6 +21,8 @@ export type DareIdea = {
   votes: number;
   hidden: boolean;
   used_on: string | null;
+  // When the owner approved it (empty = not approved yet). Only approved ideas can become everyone's dare.
+  approved_at: string | null;
   created_at: string;
   author: Profile;
   // Filled in by the app: did I vote for it?

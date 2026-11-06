@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { React, loadScreen, renderScreen, act, option, unmount } = require('./harness.cjs');
 
-function settingsHarness({ delayWrite = false, delayLocation = false, signOut = async () => {}, deleteAccount, refreshProfile, storePlus = false } = {}) {
+function settingsHarness({ delayWrite = false, delayLocation = false, signOut = async () => {}, deleteAccount, refreshProfile, storePlus = false, plus = storePlus } = {}) {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
   // `signedIn` is who the phone is logged in as right now (it can change while a request is still running).
@@ -22,11 +22,17 @@ function settingsHarness({ delayWrite = false, delayLocation = false, signOut = 
     '@/lib/notifications': { scheduleDropNotifications: async () => {} },
     '@/lib/preferences': { useScratchToReveal: () => [true, () => {}] },
     '@/lib/profiles': { deleteMyAccount: async (...args) => { state.deleted.push(args); if (deleteAccount) await deleteAccount(); }, updateMyProfile: async (_id, changes) => { if (++state.writes === 1 && delayWrite) await pending; Object.assign(saved, changes); return { ...saved }; } },
-    // Peekaboo+: `storePlus` = the App Store says you're paying (Delete account then warns about Apple billing).
-    '@/lib/plus': { usePlus: () => storePlus, useStorePlus: () => storePlus, MANAGE_SUBSCRIPTION_URL: 'https://apps.apple.com/account/subscriptions' },
+    // Peekaboo+: `storePlus` = the App Store says you're paying; `plus` = you have Plus (the App Store or the
+    // server). Delete account then warns about Apple billing.
+    '@/lib/plus': {
+      usePlus: () => plus, useStorePlus: () => storePlus,
+      MANAGE_SUBSCRIPTION_URL: 'https://apps.apple.com/account/subscriptions',
+      openManageSubscription: async () => { state.managed++; },
+    },
   });
-  // Links the screen opens (Apple's subscriptions page).
+  // Links the screen opens, and how often Apple's subscriptions sheet was opened.
   state.opened = [];
+  state.managed = 0;
   screen.modules['react-native'].Linking = { openURL: async url => { state.opened.push(url); } };
   return { screen, state, saved, release };
 }
@@ -246,18 +252,20 @@ test('Settings rows that only hold a switch are not marked as disabled (screen r
   } finally { await unmount(tree); }
 });
 
-test('Delete account warns a Peekaboo+ subscriber that Apple keeps billing, and links to Apple\'s page', async () => {
+const BILLING = 'If you pay for Peekaboo+, Apple keeps billing you until you cancel it. Please cancel it first.';
+
+test('Delete account warns a Peekaboo+ subscriber that Apple keeps billing, and opens Apple\'s subscriptions', async () => {
   const fixture = settingsHarness({ storePlus: true });
   const tree = await renderScreen(fixture.screen);
   try {
     await act(() => option(tree, 'Delete account').props.onPress());
     const [title, message, buttons] = fixture.screen.calls.alerts[0];
     assert.equal(title, 'Delete your account?');
-    assert.match(message, /Your Peekaboo\+ subscription keeps billing through Apple until you cancel it\./);
+    assert.ok(message.endsWith(`\n\n${BILLING}`), message);
     assert.deepEqual(Array.from(buttons, item => item.text), ['Manage subscription', 'Cancel', 'Delete']);
     await act(() => buttons.find(item => item.text === 'Manage subscription').onPress());
-    assert.deepEqual(fixture.state.opened, ['https://apps.apple.com/account/subscriptions']);
-    assert.equal(fixture.state.deleted.length, 0, 'opening Apple\'s page never deletes anything');
+    assert.equal(fixture.state.managed, 1, 'Manage subscription opens Apple\'s subscriptions');
+    assert.equal(fixture.state.deleted.length, 0, 'opening Apple\'s subscriptions never deletes anything');
     assert.equal(fixture.screen.calls.alerts.length, 1, 'no second warning until Delete is tapped');
     // Delete still works after the warning.
     await act(() => buttons.find(item => item.text === 'Delete').onPress());
@@ -266,7 +274,18 @@ test('Delete account warns a Peekaboo+ subscriber that Apple keeps billing, and 
   } finally { await unmount(tree); }
 });
 
-test('Delete account says nothing about billing without a store subscription', async () => {
+test('Delete account also warns when only the server knows about your Peekaboo+ (bought on another phone)', async () => {
+  const fixture = settingsHarness({ storePlus: false, plus: true });
+  const tree = await renderScreen(fixture.screen);
+  try {
+    await act(() => option(tree, 'Delete account').props.onPress());
+    const [, message, buttons] = fixture.screen.calls.alerts[0];
+    assert.ok(message.endsWith(`\n\n${BILLING}`), message);
+    assert.deepEqual(Array.from(buttons, item => item.text), ['Manage subscription', 'Cancel', 'Delete']);
+  } finally { await unmount(tree); }
+});
+
+test('Delete account says nothing about billing without Peekaboo+', async () => {
   const fixture = settingsHarness({ storePlus: false });
   const tree = await renderScreen(fixture.screen);
   try {

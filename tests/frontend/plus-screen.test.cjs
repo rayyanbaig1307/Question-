@@ -8,7 +8,7 @@ const { loadScreen, renderScreen, act, textOf, unmount, host } = require('./harn
 const WAITING = "Waiting for a parent to approve. You'll get Peekaboo+ as soon as it's approved.";
 
 function plusScreen({ buy = async () => 'bought', restore = async () => 'restored', price = async () => '$6.99', plus = false, store = false, server = false } = {}) {
-  const state = { plus, store, server, priceCalls: 0, opened: [] };
+  const state = { plus, store, server, priceCalls: 0, opened: [], managed: 0 };
   const screen = loadScreen('src/app/(app)/plus.tsx', {
     'expo-image': { Image: host('Image') },
     'expo-linear-gradient': { LinearGradient: host('LinearGradient') },
@@ -34,6 +34,7 @@ function plusScreen({ buy = async () => 'bought', restore = async () => 'restore
       usePlus: () => state.plus,
       useStorePlus: () => state.store,
       useServerPlus: () => state.server,
+      openManageSubscription: async () => { state.managed++; },
     },
   });
   screen.modules['react-native'].Platform = { OS: 'ios' };
@@ -129,7 +130,7 @@ test('a new member is told a few extras can take a few seconds, until the server
     assert.ok(waitNote(tree));
     assert.equal(bigButton(tree).props.accessibilityLabel, 'Manage subscription');
     await act(() => bigButton(tree).props.onPress());
-    assert.deepEqual(fixture.state.opened, ['https://apps.apple.com/account/subscriptions']);
+    assert.equal(fixture.state.managed, 1, "Manage subscription opens Apple's subscriptions (the sheet, or the page)");
   } finally { await unmount(tree); }
 
   fixture = plusScreen({ plus: true, store: true, server: true });

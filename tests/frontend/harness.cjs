@@ -64,7 +64,15 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/guess': { postMystery: async () => {} },
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
-    '@/lib/plus': { CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false, configurePurchases: async () => {} },
+    '@/lib/plus': {
+      CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false,
+      useStorePlus: () => false, useServerPlus: () => false, refreshServerPlus: async () => {},
+      configurePurchases: async () => {}, logOutPurchases: async () => {},
+      getPlusPrice: async () => null, buyPlus: async () => 'cancelled', restorePurchases: async () => 'not-found',
+      openManageSubscription: async () => {},
+      MANAGE_SUBSCRIPTION_URL: 'https://apps.apple.com/account/subscriptions',
+      WAITING_FOR_PARENT: "Waiting for a parent to approve. You'll get Peekaboo+ as soon as it's approved.",
+    },
     // Terms agreed on this phone: nothing remembered (tests that need it pass their own).
     '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.

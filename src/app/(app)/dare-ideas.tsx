@@ -32,7 +32,7 @@ import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 // Has the Peekaboo team checked this idea and said OK? Only checked ideas can become everyone's dare
 // (supabase/migrations/20261220000000_launch_safety.sql). The server sends approved_at with every idea.
 function isApproved(idea: DareIdea): boolean {
-  return Boolean((idea as DareIdea & { approved_at?: string | null }).approved_at);
+  return Boolean(idea.approved_at);
 }
 
 // Community dares: suggest one, vote 🔥 on everyone's, and once the Peekaboo team has checked it, the top one
