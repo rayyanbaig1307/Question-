@@ -711,14 +711,16 @@ function paintLiquidGold(canvas: SkCanvas, face: LensFace, sunX: number, sunY: n
   const toNose = -(pts[2 * 2] - eyesX) * frame[3] + (pts[2 * 2 + 1] - eyesY) * frame[2];
   if (toNose >= 1 && toNose < 1e6) {
     const goldFrame = [eyesX, eyesY, frame[2], frame[3], Math.max(0.15, Math.min(4, toNose / half))];
-    // How far up the gold goes (in steps): far enough to cover the whole forehead up into the hairline (point
-    // 10 often sits below the real hairline), and a little further for a tall forehead.
+    // How far up the gold goes (in steps): far enough to cover the whole forehead up to the hairline (point
+    // 10 often sits below the real hairline), a little further for a tall forehead, but not up into the hair
+    // (gold over dark hair turns it olive).
     const foreheadUp = ((pts[MESH.forehead * 2] - eyesX) * frame[3] - (pts[MESH.forehead * 2 + 1] - eyesY) * frame[2]) / toNose;
-    const above = Math.max(GOLD_DOWN + 2 * GOLD_UP, Math.min(2.6, foreheadUp + GOLD_OVER)) || 2;
+    const above = Math.max(2.2, Math.min(2.6, foreheadUp + GOLD_OVER)) || 2.2;
     // The gold is an egg shape: strongest across the lower forehead and the eyes' level, a little toward the
     // sun, fading out softly upward into the hair and a little faster downward, to the bottom of the nose.
     // `tall` is its middle size up and down and `egg` how far its widest part sits above where it is
-    // strongest (both in steps); `step` is one step in the oval's own coordinates.
+    // strongest (below it when less than 0; both in steps); `step` is one step in the oval's own coordinates.
+    // The gold reaches exactly `above` steps up and GOLD_DOWN steps down.
     const tall = (GOLD_DOWN + above) / 2;
     const egg = (above - GOLD_DOWN - 2 * GOLD_UP) / 2;
     canvas.save();
@@ -740,10 +742,10 @@ function paintLiquidGold(canvas: SkCanvas, face: LensFace, sunX: number, sunY: n
         { x: 0, y: -(GOLD_UP + egg) * step },
         reach,
         [
-          goldColor('255,204,104', FACE_GOLD * breathe),
-          goldColor('255,200,98', FACE_GOLD * breathe),
-          goldColor('252,190,88', FACE_GOLD * 0.97),
-          goldColor('246,178,74', FACE_GOLD * 0.84),
+          goldColor('255,206,92', FACE_GOLD * breathe),
+          goldColor('254,200,86', FACE_GOLD * breathe),
+          goldColor('251,190,76', FACE_GOLD * 0.97),
+          goldColor('246,178,66', FACE_GOLD * 0.84),
           goldColor('244,180,68', FACE_GOLD * 0.58),
           goldColor('232,160,52', FACE_GOLD * 0.3),
           goldColor('212,130,38', FACE_GOLD * 0.1),
@@ -795,8 +797,8 @@ function paintLiquidGold(canvas: SkCanvas, face: LensFace, sunX: number, sunY: n
         { x: 0, y: LOW_END * half },
         [
           goldColor('255,214,112', 0),
-          goldColor('255,200,100', LOW_GOLD * breathe),
-          goldColor('250,192,92', LOW_GOLD * breathe),
+          goldColor('255,202,90', LOW_GOLD * breathe),
+          goldColor('250,192,82', LOW_GOLD * breathe),
           goldColor('246,186,78', LOW_GOLD * 0.6),
           goldColor('232,160,56', LOW_GOLD * 0.25),
           goldColor('214,132,40', 0),
@@ -839,7 +841,7 @@ function paintLiquidGold(canvas: SkCanvas, face: LensFace, sunX: number, sunY: n
       const ya = k === 0 ? foreheadTop - half * 0.04 : k === 1 ? stripTop - gap : stripBottom + gap;
       // The piece under the eyes reaches down to the bottom of the nose on the cheeks, but over the nose (with
       // room for its glow) it stops above the nostrils, so it never lights them up.
-      const overNose = 1 - ease((Math.abs(bandX + (nostrils - bandY) * lean - (wingA + wingB) / 2) - Math.abs(wingB - wingA) / 2 - glowThin * 0.5) / (half * 0.1));
+      const overNose = 1 - ease((Math.abs(bandX + (nostrils - bandY) * lean - (wingA + wingB) / 2) - Math.abs(wingB - wingA) / 2 - glowThin * 0.5) / (half * 0.35));
       const yb = k === 0 ? stripTop - gap : k === 1 ? stripBottom + gap : noseBase - gap + (nostrils - gap * 1.5 - (noseBase - gap)) * overNose;
       // A piece with little room fades away smoothly instead of vanishing in one frame.
       const span = yb - ya;
@@ -850,12 +852,12 @@ function paintLiquidGold(canvas: SkCanvas, face: LensFace, sunX: number, sunY: n
       const my = (ya + yb) / 2;
       // Fade out near the face's edge (measured at the piece's middle and at its lower end).
       const room = Math.min(insideFace(outline, mx, my), insideFace(outline, xb, yb) + half * 0.1);
-      let fade = ease((room - half * 0.08) / (half * 0.16)) * ease((span - half * 0.04) / (half * 0.08));
+      let fade = ease((room - half * 0.08) / (half * 0.16)) * ease((span - half * 0.04) / (half * 0.3));
       if (k === 1) {
         // Only between the eyes and brows, with room to spare on both sides.
         let clear = 1e9;
         for (let i = 0; i + 3 < avoid.length; i += 4) clear = Math.min(clear, Math.abs(mx - avoid[i]) - avoid[i + 2]);
-        fade *= ease((clear - glowThin * 0.7) / (half * 0.08));
+        fade *= ease((clear - glowThin * 0.7) / (half * 0.3));
       }
       const glow = SHINE * shineGlow * fade;
       if (glow < 0.01) continue;
