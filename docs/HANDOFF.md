@@ -76,7 +76,8 @@ toned down by hand (FACE_GOLD 0.36, LOW_GOLD 0.27, warmer colours) because at fu
 paint. `a66ddcf`: the photo now uses the same moment of the gleam as the screen (LensOverlay → `shownTime`).
 `tests/unit/face-looks.test.mjs` checks the two looks stay different, the draw budget and the sun placement.
 Leftovers: the camera still works out `face.light`/`face.rim` (goldenLight.ts) every frame though no look uses them
-now. OTA `4e9d211e-b499-4a8a-b1aa-7ba828f95eed` on **`testing`**. Not yet seen on a phone.
+now. OTA `4e9d211e-b499-4a8a-b1aa-7ba828f95eed` on **`testing`**, then follow-up `3e4102c` (gold kept out of
+the hair, gleam pieces fade in smoothly, richer gold) as OTA `831dd1ef-fd0a-46f9-96ae-0f194c65b818`. Not yet seen on a phone.
 **Face filters draw live on the camera (5 Nov, late; owner: "I want to see it moving and tracking my face, like the
 googly eyes"):** ✨ Soft Glow and 🌅 Golden Hour never drew on the camera preview, only on the saved photo. The cause
 was `soft()` in `lensPaint.ts`: its default `style = BlurStyle.Normal` is worked out on the camera's drawing thread
