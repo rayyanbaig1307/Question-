@@ -1,6 +1,6 @@
 # Peekaboo – Terms of Service
 
-**Effective date:** 4 November 2026
+**Effective date:** 6 November 2026
 **Operator:** 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net ("Peekaboo", "we", "us")
 
 Please read these Terms carefully. They are a legal agreement between you and the operator of the Peekaboo app. By creating an account or using Peekaboo you agree to them, to our [Privacy Policy](PRIVACY_POLICY.md), our [Community Guidelines](COMMUNITY_GUIDELINES.md) and our [Dare Safety Rules](DARE_SAFETY_RULES.md), which are all part of these Terms. If you do not agree, do not use Peekaboo.
@@ -9,7 +9,7 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 1.1 You must be **at least 13 years old**. If you are under 13, you may not create an account, and we delete accounts we learn belong to children under 13.
 
-1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app. Hit ups are not available to you (see section 6).
+1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app, including any purchase (see section 9). Hit ups are not available to you (see section 6).
 
 1.3 **Hit ups are only for adults (18+)**: people under 18 cannot hit anyone up and cannot be hit up. This is based on the birthday you give us (section 6).
 
@@ -17,11 +17,11 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 ## 2. Your account
 
-2.1 You need a username and a password, and you can add an email address. If you sign up without an email, you log in with your username, and **we cannot get your account back if you forget your password**. Keep your password private; you are responsible for everything done with your account.
+2.1 New accounts are made with **Sign in with Apple** (iPhone) or **Sign in with Google** (Android), and then you pick a username. We never see your Apple or Google password. Some older accounts log in with a username or email and a password; if such an account has no email address, **we cannot get it back if you forget the password**. Keep your Apple or Google account and any password private. You are responsible for everything done with your Peekaboo account.
 
 2.2 One account per person. Give true information. Do not impersonate anyone.
 
-2.3 You can delete your account at any time in **Settings → Delete account**. Deletion is permanent (see the Privacy Policy for details).
+2.3 You can delete your account at any time in **Settings → Delete account**. Deletion is permanent (see the Privacy Policy for details). It does **not** cancel a Peekaboo+ subscription – cancel that in your iPhone Settings first (section 9.5).
 
 2.4 We may suspend or delete your account if you break these Terms, the Community Guidelines or the law, or if we are required to by law. Where reasonable we will tell you why.
 
@@ -59,7 +59,7 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 4.7 **Filming people.** Only film people who know they are being filmed and agree to appear in Peekaboo. Respect privacy laws and do not film in places where people expect privacy.
 
-4.8 Nothing in this section limits rights that the law does not allow to be limited (see section 11).
+4.8 Nothing in this section limits rights that the law does not allow to be limited (see section 12).
 
 ## 5. Rules of behaviour
 
@@ -85,67 +85,93 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 7.2 Camera, microphone, photo library, location and notification access are optional and controlled by your phone's settings. Some features do not work without them.
 
+7.3 Face filters (like googly eyes, Soft Glow and Golden Hour) find the points of faces in the camera picture **on your phone only**. Peekaboo never stores or sends those face points, and never uses them to recognise who someone is.
+
 ## 8. Our service
 
 8.1 Peekaboo is provided **"as is" and "as available"**. We are a small team and the app is in active development. We do not promise it will be error-free, uninterrupted, secure or available in your country, or that content will be deleted or disappear as intended.
 
 8.2 We may change, add, pause or remove features at any time, and may stop operating Peekaboo altogether. We will try to give notice of major changes.
 
-8.3 Peekaboo is free. If we ever add paid features we will tell you the price and terms first.
+8.3 Peekaboo is free to download and use. **Peekaboo+** is an optional paid subscription with extra features (section 9). You never have to buy it.
 
-## 9. Third-party services
+## 9. Peekaboo+ (optional subscription)
 
-Peekaboo runs on services provided by others, including Supabase (database, file storage and login), Expo (app updates and push notifications), Apple (iTunes song previews, App Store, push notifications) and Google (Android map, Google Play, push notifications). Their terms apply to their services. We are not responsible for their availability or actions.
+9.1 **What it is.** Peekaboo+ is a monthly subscription that adds extras, for example app themes, extra stickers, app icons, longer videos, insights (see 9.7) and a star badge (⭐) next to your name. The Peekaboo+ screen in the app lists what is included right now. For now, Peekaboo+ can only be bought in the iPhone app.
 
-## 10. Indemnity
+9.2 **Price.** The price is shown in the app, in your own currency, before you buy, and again on Apple's payment sheet. If we ever offer a free trial or a special first price, the app will say how long it lasts and what you pay after it ends.
+
+9.3 **Payment.** Apple takes the payment: it is charged to your **Apple Account** when you confirm the purchase. We never see your card or bank details. Apple's own Media Services Terms and Conditions also apply to your purchase.
+
+9.4 **It renews automatically.** Peekaboo+ renews **every month** unless you cancel it **at least 24 hours before the end of the current month**. Your Apple Account is charged for the next month within the 24 hours before the current month ends.
+
+9.5 **Cancelling.** You can manage or cancel Peekaboo+ any time on your iPhone: **Settings → your name → Subscriptions → Peekaboo+**. Members can also tap **Manage subscription** on the Peekaboo+ screen. After you cancel, you keep Peekaboo+ until the end of the month you have already paid for, and you are not charged again. **Deleting your Peekaboo account, or deleting the app, does not cancel your subscription** – Apple keeps billing you until you cancel it in Settings.
+
+9.6 **Refunds.** Apple handles all payments, so Apple also handles all refunds; we cannot give refunds ourselves. To ask for one, go to **reportaproblem.apple.com** (or contact Apple Support). Apple decides under its own rules. This does not take away any right to cancel or get a refund that the consumer-protection law where you live gives you.
+
+9.7 **Insights work both ways.** Peekaboo+ members can see who viewed their profile, who rewatched their stories, and who took screenshots of their stories and posts. So when you do these things, the other person may see that it was you. You can stop your profile visits being saved in **Settings → Privacy & safety → Show me in Profile views** (then you can't see your own visitors either). Everyone logged in to Peekaboo can see who has Peekaboo+ (the ⭐ badge). The [Privacy Policy](PRIVACY_POLICY.md) explains this in more detail.
+
+9.8 **Changes.** We may add, change or remove Peekaboo+ features, and we may change the price. Before a price increase applies to you, Apple tells you and, where Apple's rules require it, asks you to agree first. If you don't want the change, cancel before it applies. If we stop offering Peekaboo+, we will tell you in the app beforehand.
+
+9.9 **New phone or another account.** Peekaboo+ belongs to the Peekaboo account you were logged in to when you bought it. On a new phone, log in to that account and tap **Restore purchases** on the Peekaboo+ screen. If you tap Restore purchases while logged in to a different Peekaboo account, Peekaboo+ may move to that account.
+
+9.10 **When Peekaboo+ ends** (you cancel, a payment fails, or you get a refund), the extras switch off. Your account, posts, chats and everything else stay. If we suspend or close your account because you broke these Terms, cancel your subscription in Settings; any refund is up to Apple.
+
+9.11 **Under 18?** Ask a parent or guardian before you buy. Apple's Ask to Buy or Screen Time settings may need their OK first.
+
+## 10. Third-party services
+
+Peekaboo runs on services provided by others, including Supabase (database, file storage and login), Expo (app updates and push notifications), RevenueCat (keeps track of Peekaboo+ subscriptions), Apple (Sign in with Apple, App Store and in-app payments, iTunes song previews, push notifications) and Google (Sign in with Google, Android map, Google Play, push notifications, and the ML Kit and MediaPipe tools that run the face filters on your phone). Their terms apply to their services. We are not responsible for their availability or actions.
+
+## 11. Indemnity
 
 To the extent permitted by law, you agree to defend, compensate and hold harmless Peekaboo and its operator from any claim, demand, loss, liability or expense (including reasonable legal fees) brought by anyone that arises from: (a) your content; (b) your dares, forfeits, drops, challenges or the way you carried them out; (c) your breach of these Terms or the law; or (d) your interactions with other users, online or offline.
 
-## 11. Limitation of liability
+## 12. Limitation of liability
 
-11.1 To the fullest extent permitted by law, Peekaboo and its operator are **not liable** for: injury, illness or death arising from dares or other user activity; the behaviour of other users; content posted by users; loss of data or content; screenshots or re-sharing by others; indirect, incidental, special, consequential or punitive damages; or loss of profits, goodwill or reputation, whether in contract, tort (including negligence) or otherwise, even if we were told such damages were possible.
+12.1 To the fullest extent permitted by law, Peekaboo and its operator are **not liable** for: injury, illness or death arising from dares or other user activity; the behaviour of other users; content posted by users; loss of data or content; screenshots or re-sharing by others; indirect, incidental, special, consequential or punitive damages; or loss of profits, goodwill or reputation, whether in contract, tort (including negligence) or otherwise, even if we were told such damages were possible.
 
-11.2 To the fullest extent permitted by law, our **total liability** to you for everything arising out of Peekaboo in any 12-month period is limited to **CAD $100**, or the amount you paid us in that period if that is more.
+12.2 To the fullest extent permitted by law, our **total liability** to you for everything arising out of Peekaboo in any 12-month period is limited to **CAD $100**, or the amount you paid for Peekaboo+ in that period if that is more.
 
-11.3 **What this does not limit.** Nothing in these Terms excludes or limits liability for death or personal injury caused by our own negligence, for fraud, or for anything that the law where you live does not allow to be excluded. If you are a consumer in Ontario, Quebec, the European Union, the United Kingdom or another place with consumer-protection laws that cannot be waived, those laws apply and these Terms only limit our liability to the extent those laws allow.
+12.3 **What this does not limit.** Nothing in these Terms excludes or limits liability for death or personal injury caused by our own negligence, for fraud, or for anything that the law where you live does not allow to be excluded. If you are a consumer in Ontario, Quebec, the European Union, the United Kingdom or another place with consumer-protection laws that cannot be waived, those laws apply and these Terms only limit our liability to the extent those laws allow.
 
-## 12. Changes to these Terms
+## 13. Changes to these Terms
 
-We may update these Terms. For important changes we will show a notice in the app or email you at least 14 days before they take effect. Using Peekaboo after that date means you accept the new Terms. If you do not agree, delete your account before then.
+We may update these Terms. For important changes we will either ask you to agree to the new Terms in the app before you carry on, or tell you in the app or by email at least 14 days before they take effect. Using Peekaboo after that means you accept the new Terms. If you do not agree, stop using Peekaboo and delete your account – and if you have Peekaboo+, cancel it in your iPhone Settings too (section 9.5).
 
-## 13. Governing law and disputes
+## 14. Governing law and disputes
 
-13.1 These Terms are governed by the laws of the Province of Ontario and the federal laws of Canada that apply there, without regard to conflict-of-law rules.
+14.1 These Terms are governed by the laws of the Province of Ontario and the federal laws of Canada that apply there, without regard to conflict-of-law rules.
 
-13.2 **Talk to us first.** If you have a problem, email rbaig18@z2automation.net; most issues can be fixed quickly.
+14.2 **Talk to us first.** If you have a problem, email rbaig18@z2automation.net; most issues can be fixed quickly.
 
-13.3 Any dispute that cannot be settled will be decided by the courts of Ontario, Canada, and you agree to their jurisdiction – except that, if you are a consumer, you may bring a claim in the courts of the place where you live, and nothing here takes away your right to use a small-claims court or any right under consumer-protection law that cannot be waived (for example under Ontario's Consumer Protection Act, 2002).
+14.3 Any dispute that cannot be settled will be decided by the courts of Ontario, Canada, and you agree to their jurisdiction – except that, if you are a consumer, you may bring a claim in the courts of the place where you live, and nothing here takes away your right to use a small-claims court or any right under consumer-protection law that cannot be waived (for example under Ontario's Consumer Protection Act, 2002).
 
-## 14. Apple App Store terms
+## 15. Apple App Store terms
 
 If you downloaded Peekaboo from Apple's App Store, the following also applies, as Apple requires:
 
 - These Terms are between you and the operator of Peekaboo, not Apple. Apple is not responsible for the app or its content.
 - Your licence to use Peekaboo is limited, non-transferable, and only for Apple devices you own or control, as allowed by the App Store Terms of Service (including Family Sharing).
 - Apple has no obligation to provide maintenance or support for Peekaboo.
-- If Peekaboo fails to conform to any warranty, you may notify Apple and Apple will refund any purchase price (Peekaboo is free, so this is nil). To the extent permitted by law, Apple has no other warranty obligation.
+- If Peekaboo fails to conform to any applicable warranty, you may notify Apple, and Apple will refund the purchase price of the app to you (Peekaboo is free to download; refunds for Peekaboo+ are handled by Apple, see section 9.6). To the maximum extent permitted by law, Apple has no other warranty obligation for the app.
 - The operator, not Apple, is responsible for addressing any claims by you or a third party relating to the app, including product liability, legal or regulatory compliance, and consumer-protection claims.
 - If a third party claims the app infringes their intellectual property, the operator, not Apple, is responsible for the investigation, defence, settlement and discharge of that claim.
 - You confirm that you are not in a country subject to a U.S. Government embargo or designated as "terrorist supporting", and that you are not on any U.S. Government list of prohibited or restricted parties.
 - You must comply with applicable third-party terms when using Peekaboo.
 - Apple and its subsidiaries are third-party beneficiaries of these Terms and may enforce them against you.
 
-## 15. General
+## 16. General
 
-15.1 If any part of these Terms is found unenforceable, the rest still applies, and the unenforceable part is replaced by the closest enforceable version.
+16.1 If any part of these Terms is found unenforceable, the rest still applies, and the unenforceable part is replaced by the closest enforceable version.
 
-15.2 These Terms, the Privacy Policy, the Community Guidelines and the Dare Safety Rules are the whole agreement between you and us about Peekaboo.
+16.2 These Terms, the Privacy Policy, the Community Guidelines and the Dare Safety Rules are the whole agreement between you and us about Peekaboo. Apple's own terms also apply to anything you buy through Apple.
 
-15.3 We may transfer our rights under these Terms to a company we set up or to someone who takes over Peekaboo; we will tell you if we do. You may not transfer your account.
+16.3 We may transfer our rights under these Terms to a company we set up or to someone who takes over Peekaboo; we will tell you if we do. You may not transfer your account.
 
-15.4 If we do not enforce a term right away, we can still enforce it later.
+16.4 If we do not enforce a term right away, we can still enforce it later.
 
-## 16. Contact
+## 17. Contact
 
 2865113 Ontario Inc. (Ontario, Canada)
 rbaig18@z2automation.net

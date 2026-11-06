@@ -29,7 +29,14 @@ import { useDareRulesAccepted } from '@/lib/legal';
 import { REPORT_REASONS } from '@/lib/safety';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
-// Community dares: suggest one, vote 🔥 on everyone's, and the top one becomes tomorrow's dare with your name on it.
+// Has the Peekaboo team checked this idea and said OK? Only checked ideas can become everyone's dare
+// (supabase/migrations/20261220000000_launch_safety.sql). The server sends approved_at with every idea.
+function isApproved(idea: DareIdea): boolean {
+  return Boolean((idea as DareIdea & { approved_at?: string | null }).approved_at);
+}
+
+// Community dares: suggest one, vote 🔥 on everyone's, and once the Peekaboo team has checked it, the top one
+// becomes everyone's dare with your name on it.
 export default function DareIdeas() {
   const { userId } = useMe();
   const { showOptions, showToast } = useOverlays();
@@ -155,8 +162,8 @@ export default function DareIdeas() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Your dare could be everyone&apos;s dare</Text>
               <Text style={styles.cardText}>
-                Suggest one. The idea with the most 🔥 (at least {MIN_VOTES}) becomes the next day&apos;s dare for everyone –
-                with your name on it. One idea a day · silly, not dangerous.
+                Suggest one. Ideas with at least {MIN_VOTES} 🔥 get checked by the Peekaboo team. The top checked idea
+                becomes a day&apos;s dare for everyone – with your name on it. One idea a day · silly, not dangerous.
               </Text>
               <TextInput
                 value={text}
@@ -207,7 +214,7 @@ export default function DareIdeas() {
                   <Avatar path={item.author.avatar_path} name={name} size={20} />
                   <Text style={styles.ideaByText} numberOfLines={1}>
                     @{item.author.username}
-                    {item.votes >= MIN_VOTES ? ' · 🔥 ready to run' : ''}
+                    {item.votes >= MIN_VOTES ? (isApproved(item) ? ' · 🔥 ready to run' : ' · 👀 waiting for our check') : ''}
                   </Text>
                 </View>
               </Pressable>

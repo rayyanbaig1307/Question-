@@ -28,11 +28,15 @@ import { friendlyError } from '@/lib/errors';
 import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
 import type { Profile } from '@/lib/types';
+import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
 
 const SECONDS = 10;
 // A video peek plays to its end (videos can be up to 30 seconds, or 60 with Peekaboo+).
 const MAX_VIDEO_SECONDS = 60;
+// After a pause the timer always gives you at least this long, so a report picked from the ⋯ menu
+// (which starts a moment after the menu closes) can't be cut off by the peek closing.
+const MIN_LEFT_MS = 1000;
 
 // first = opening it for the first time, replay = your one replay, saved = saved in the chat (no time limit).
 type Mode = 'first' | 'replay' | 'saved';
@@ -57,10 +61,14 @@ type State =
 export default function SnapViewer() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
-  const { showToast } = useOverlays();
+  const { showToast, showOptions } = useOverlays();
+  const { report } = useSafetyActions();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // paused = the ⋯ menu is open. reporting = you're reporting it: the timer stops and the peek is covered.
+  const [paused, setPaused] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const progress = useSharedValue(0);
   // Pinch-zoom on the photo: whether it's zoomed in, and when that last changed.
   const zoomRef = useRef({ zoomed: false, at: 0 });
@@ -123,15 +131,19 @@ export default function SnapViewer() {
   }, [id, userId]);
 
   // The timer runs unless the peek is saved (saving it stops the timer): 10 seconds for a photo, the video's
-  // length for a video (it starts once the video has loaded).
+  // length for a video (it starts once the video has loaded). It waits while the ⋯ menu is open, and stops
+  // for good once you report the peek.
   const [videoSeconds, setVideoSeconds] = useState<number | null>(null);
   const isVideo = state.kind === 'showing' && state.video !== null;
   const seconds = isVideo ? Math.min(MAX_VIDEO_SECONDS, Math.max(1, videoSeconds ?? SECONDS)) : SECONDS;
-  const timed = state.kind === 'showing' && !saved && (!isVideo || videoSeconds !== null);
+  const counting = state.kind === 'showing' && !saved && !reporting && (!isVideo || videoSeconds !== null);
+  const timed = counting && !paused;
   useEffect(() => {
     if (!timed) return;
+    // Carry on from where the bar stopped (it starts empty, so the first run gets the full time).
+    const left = (1 - progress.get()) * seconds * 1000;
     progress.set(
-      withTiming(1, { duration: seconds * 1000, easing: Easing.linear }, (finished) => {
+      withTiming(1, { duration: Math.max(MIN_LEFT_MS, left), easing: Easing.linear }, (finished) => {
         'worklet';
         if (finished) scheduleOnRN(close);
       }),
@@ -192,25 +204,49 @@ export default function SnapViewer() {
   }
 
   const name = state.sender ? state.sender.display_name || state.sender.username : '';
+  // Peeks from someone else can be reported (then you're offered to block them), like a message in the chat.
+  const sender = state.sender && state.sender.id !== userId ? state.sender : null;
   // A tap closes the peek – but not while you're zoomed in, or right after pinching.
   function noteZoom(zoomed: boolean) {
     zoomRef.current = { zoomed, at: Date.now() };
   }
   function tapToClose() {
-    if (zoomRef.current.zoomed || Date.now() - zoomRef.current.at < 400) return;
+    if (!reporting && (zoomRef.current.zoomed || Date.now() - zoomRef.current.at < 400)) return;
     close();
+  }
+  function openMenu() {
+    if (!sender) return;
+    setPaused(true);
+    showOptions({
+      onClose: () => setPaused(false),
+      options: [
+        {
+          label: 'Report peek',
+          onPress: () => {
+            setReporting(true);
+            report({ user: sender, contentType: 'message', contentId: id });
+          },
+        },
+      ],
+    });
   }
   const label = saved ? 'Saved in chat 📌' : state.mode === 'replay' ? 'Replay 🔁' : null;
 
   return (
     <Pressable style={styles.fill} onPress={tapToClose} accessibilityLabel="Close peek">
       <StatusBar style="light" />
-      {state.video ? (
+      {reporting ? (
+        // While you report it, the peek is covered (it can't be kept on screen this way).
+        <View style={[StyleSheet.absoluteFill, styles.center]}>
+          <Text style={styles.coverTitle}>Peek hidden while you report it 🚩</Text>
+          <Text style={styles.loadingText}>Tap anywhere to close.</Text>
+        </View>
+      ) : state.video ? (
         <VideoClip
           uri={state.url}
           posterUri={state.video.posterUrl}
           overlayUri={state.video.overlayUrl}
-          playing
+          playing={!paused}
           loop={saved}
           onDuration={setVideoSeconds}
           style={StyleSheet.absoluteFill}
@@ -226,7 +262,7 @@ export default function SnapViewer() {
         />
       )}
       <SafeEdge edge="top" style={styles.top}>
-        <View style={[styles.track, !timed && styles.hidden]}>
+        <View style={[styles.track, !counting && styles.hidden]}>
           <Animated.View style={[styles.bar, barStyle]} />
         </View>
         <View style={styles.row}>
@@ -237,16 +273,23 @@ export default function SnapViewer() {
               {label ? <Text style={styles.label}>{label}</Text> : null}
             </View>
           </View>
-          <Bouncy
-            style={[styles.save, saved && styles.saveOn]}
-            pressScale={0.85}
-            disabled={saving}
-            onPress={toggleSaved}
-            accessibilityRole="button"
-            accessibilityLabel={saved ? 'Unsave' : 'Save in chat'}>
-            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.white} />
-            <Text style={styles.saveText}>{saved ? 'Saved' : 'Save'}</Text>
-          </Bouncy>
+          <View style={styles.actions}>
+            <Bouncy
+              style={[styles.save, saved && styles.saveOn]}
+              pressScale={0.85}
+              disabled={saving}
+              onPress={toggleSaved}
+              accessibilityRole="button"
+              accessibilityLabel={saved ? 'Unsave' : 'Save in chat'}>
+              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.white} />
+              <Text style={styles.saveText}>{saved ? 'Saved' : 'Save'}</Text>
+            </Bouncy>
+            {sender && !reporting ? (
+              <Bouncy style={styles.more} pressScale={0.85} onPress={openMenu} accessibilityRole="button" accessibilityLabel="More options">
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.white} />
+              </Bouncy>
+            ) : null}
+          </View>
         </View>
       </SafeEdge>
     </Pressable>
@@ -322,6 +365,25 @@ const styles = StyleSheet.create({
   },
   saveOn: {
     backgroundColor: colors.accent,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  more: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  coverTitle: {
+    ...font.body,
+    color: colors.white,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   saveText: {
     color: colors.onAccent,

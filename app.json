@@ -43,15 +43,17 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Peekaboo uses your camera so you can take photos.",
-          "microphonePermission": "Peekaboo uses your microphone so your videos have sound.",
+          "cameraPermission": "Peekaboo uses your camera to take photos and videos for your friends, and for face filters like googly eyes.",
+          "microphonePermission": "Peekaboo uses your microphone to record sound for your videos and to send voice notes.",
           "recordAudioAndroid": true
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Peekaboo lets you pick photos to post or use as your profile picture."
+          "photosPermission": "Peekaboo lets you pick photos and videos to share, or a picture for your profile or a group.",
+          "cameraPermission": "Peekaboo uses your camera to take photos and videos for your friends, and for face filters like googly eyes.",
+          "microphonePermission": "Peekaboo uses your microphone to record sound for your videos and to send voice notes."
         }
       ],
       [
@@ -60,6 +62,7 @@
           "locationWhenInUsePermission": "Peekaboo shows your spot to your friends on the friend map, only when you turn location sharing on.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
+          "locationFullAccuracyPermission": false,
           "motionUsagePermission": false
         }
       ],
@@ -71,11 +74,18 @@
         }
       ],
       "expo-video",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "microphonePermission": "Peekaboo uses your microphone to record sound for your videos and to send voice notes."
+        }
+      ],
       "expo-image",
       [
         "expo-media-library",
         {
+          "photosPermission": "Peekaboo lets you pick photos and videos to share, or a picture for your profile or a group.",
           "savePhotosPermission": "Peekaboo saves the photos and videos you keep to your Photos.",
           "isAccessMediaLocationEnabled": false
         }

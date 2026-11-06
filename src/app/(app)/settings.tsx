@@ -18,7 +18,7 @@ import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
-import { usePlus } from '@/lib/plus';
+import { MANAGE_SUBSCRIPTION_URL, usePlus, useStorePlus } from '@/lib/plus';
 import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import type { HitUpsFrom, Profile } from '@/lib/types';
@@ -29,6 +29,8 @@ export default function Settings() {
   const { showToast, showOptions } = useOverlays();
   const [scratchToReveal, setScratchToReveal] = useScratchToReveal();
   const plus = usePlus();
+  // You pay for Peekaboo+ through Apple (Delete account warns that deleting doesn't stop it).
+  const storePlus = useStorePlus();
   const [notify, setNotify] = useState<NotificationPrefs | null>(null);
   // Your birthday: undefined while loading, null if you haven't added it yet.
   const [birthday, setBirthday] = useState<string | null | undefined>(undefined);
@@ -183,12 +185,18 @@ export default function Settings() {
   }
 
   // Two warnings before anything is deleted – there's no undo.
+  // If you pay for Peekaboo+, the first one also says Apple keeps billing until you cancel (deleting your
+  // account can't stop an App Store subscription), with a button to Apple's subscriptions page.
   function confirmDelete() {
     if (!active.current) return;
     Alert.alert(
       'Delete your account?',
-      'Your profile, posts, stories, chats and friends will be gone forever. This cannot be undone.',
+      'Your profile, posts, stories, chats and friends will be gone forever. This cannot be undone.' +
+        (storePlus ? '\n\nYour Peekaboo+ subscription keeps billing through Apple until you cancel it.' : ''),
       [
+        ...(storePlus
+          ? [{ text: 'Manage subscription', onPress: () => { Linking.openURL(MANAGE_SUBSCRIPTION_URL).catch(() => {}); } }]
+          : []),
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',

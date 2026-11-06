@@ -193,12 +193,6 @@ export function TextComposer({ initial, onDone, onCancel }: {
               <Pressable onPress={() => insert('@')} style={styles.quick} accessibilityRole="button">
                 <Text style={styles.quickText}>@ Tag a friend</Text>
               </Pressable>
-              {['🎯 Dare', '📍 Spot', '🎵 Song'].map((label) => (
-                <Pressable key={label} onPress={() => showToast('Coming soon 👀')} style={[styles.quick, styles.soon]}>
-                  <Text style={styles.quickText}>{label}</Text>
-                  <Text style={styles.soonText}>soon</Text>
-                </Pressable>
-              ))}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -449,19 +443,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  soon: {
-    opacity: 0.55,
-  },
   quickText: {
     color: colors.white,
     fontSize: 13,
     fontWeight: '800',
-  },
-  soonText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: '700',
-    opacity: 0.8,
   },
   dock: {
     position: 'absolute',

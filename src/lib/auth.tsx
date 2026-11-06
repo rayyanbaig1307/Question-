@@ -105,6 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionUser.current = null;
     setSession(null);
     setProfile(null);
+    // Let other parts of the app tidy up too (Peekaboo+ payments stop using this account on this phone).
+    // A problem there never stops the logout.
+    if (target) {
+      afterSignOut.forEach((step) => {
+        try {
+          step(target);
+        } catch (error) {
+          console.warn('Could not tidy up after logging out', error);
+        }
+      });
+    }
   }, []);
 
   // Never show the previous person's profile after switching accounts.
@@ -116,6 +127,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+// Things to do after someone logs out on this phone. lib/plus.ts adds one: RevenueCat (Peekaboo+ payments)
+// logs out of that account too, so the next person's purchase can never go to them. It's added from there
+// (instead of this file importing plus.ts), so the two files don't import each other.
+const afterSignOut = new Set<(userId: string) => void>();
+
+export function runAfterSignOut(step: (userId: string) => void): () => void {
+  afterSignOut.add(step);
+  return () => {
+    afterSignOut.delete(step);
+  };
 }
 
 // Is this account still logged in on the phone? If we can't even tell, we say yes (to be safe).

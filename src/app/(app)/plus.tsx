@@ -20,7 +20,17 @@ import { useOverlays } from '@/components/Overlays';
 import { Wordmark } from '@/components/Wordmark';
 import { friendlyError } from '@/lib/errors';
 import type { LegalPage } from '@/lib/legal';
-import { buyPlus, CAN_BUY_PLUS, getPlusPrice, MANAGE_SUBSCRIPTION_URL, restorePurchases, usePlus } from '@/lib/plus';
+import {
+  buyPlus,
+  CAN_BUY_PLUS,
+  getPlusPrice,
+  MANAGE_SUBSCRIPTION_URL,
+  restorePurchases,
+  usePlus,
+  useServerPlus,
+  useStorePlus,
+  WAITING_FOR_PARENT,
+} from '@/lib/plus';
 import { radius, space } from '@/theme';
 
 // ---------------------------------------------------------------------------
@@ -53,13 +63,21 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '⭐', title: 'Plus badge next to your name' },
 ];
 
+// Apple said yes, but RevenueCat didn't switch Peekaboo+ on (yet).
+const NOT_SWITCHED_ON = "Apple says you subscribed, but Peekaboo+ hasn't switched on yet. Wait a minute, then tap Restore purchases.";
+
 export default function PlusScreen() {
   const plus = usePlus();
+  // The App Store says you're paying, but the server hasn't heard yet (it usually takes a few seconds).
+  const storePlus = useStorePlus();
+  const serverPlus = useServerPlus();
   const insets = useSafeAreaInsets();
   const { showToast } = useOverlays();
   // undefined = still loading; null = couldn't get it.
   const [price, setPrice] = useState<string | null | undefined>(CAN_BUY_PLUS ? undefined : null);
   const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
+  // A line that stays above the button (waiting for a parent, or Plus didn't switch on).
+  const [note, setNote] = useState<string | null>(null);
 
   // Ask the App Store for the price (in the person's own money) when the screen opens.
   useEffect(() => {
@@ -85,9 +103,17 @@ export default function PlusScreen() {
     try {
       const result = await buyPlus();
       if (result === 'bought') {
+        // Only said when the App Store says Plus is really switched on.
+        setNote(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast('Welcome to Peekaboo+ ⭐');
+      } else if (result === 'pending') {
+        // Ask to Buy: Plus switches on by itself once a parent says yes.
+        setNote(WAITING_FOR_PARENT);
+      } else if (result === 'not-active') {
+        setNote(NOT_SWITCHED_ON);
       }
+      // 'cancelled': you closed Apple's sheet, so there's nothing to say.
     } catch (error) {
       showToast(friendlyError(error));
     } finally {
@@ -99,8 +125,14 @@ export default function PlusScreen() {
     if (busy) return;
     setBusy('restore');
     try {
-      const found = await restorePurchases();
-      showToast(found ? 'Peekaboo+ is back ⭐' : "We didn't find a Peekaboo+ subscription on this Apple ID.");
+      const result = await restorePurchases();
+      if (result === 'restored') {
+        setNote(null);
+        showToast('Peekaboo+ is back ⭐');
+      } else if (result === 'not-found') {
+        showToast("We didn't find a Peekaboo+ subscription on this Apple Account.");
+      }
+      // 'cancelled': you closed Apple's sign-in, so there's nothing to say.
     } catch (error) {
       showToast(friendlyError(error));
     } finally {
@@ -128,6 +160,9 @@ export default function PlusScreen() {
           <Text style={styles.tagline}>
             {plus ? 'Thank you for supporting Peekaboo! Here is everything you get.' : 'See more, peek more, glow more.'}
           </Text>
+          {plus && storePlus && !serverPlus ? (
+            <Text style={styles.waitText}>A few extras, like who viewed your profile, can take a few seconds to switch on.</Text>
+          ) : null}
         </View>
 
         {/* What you get. */}
@@ -146,6 +181,11 @@ export default function PlusScreen() {
 
       {/* Pinned to the bottom: the button, the price and the small print – always in view. */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.sm }]}>
+        {note && !plus ? (
+          <Text style={styles.note} maxFontSizeMultiplier={MAX_GROW}>
+            {note}
+          </Text>
+        ) : null}
         {plus ? (
           Platform.OS === 'ios' ? (
             <BigButton title="Manage subscription" onPress={() => Linking.openURL(MANAGE_SUBSCRIPTION_URL)} />
@@ -172,8 +212,8 @@ export default function PlusScreen() {
         {/* The small print Apple asks for. */}
         {CAN_BUY_PLUS && !plus ? (
           <Text style={styles.smallPrint} maxFontSizeMultiplier={MAX_GROW}>
-            Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple ID. It renews automatically every month
-            until you cancel. Cancel anytime in Settings → Apple ID → Subscriptions, at least 24 hours before it renews.
+            Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple Account. It renews automatically every
+            month until you cancel. Cancel anytime in Settings → your name → Subscriptions, at least 24 hours before it renews.
           </Text>
         ) : null}
 
@@ -283,6 +323,23 @@ const styles = StyleSheet.create({
   tagline: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  waitText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  note: {
+    overflow: 'hidden',
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },

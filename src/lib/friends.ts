@@ -76,7 +76,12 @@ export async function searchUsers(query: string, me: string): Promise<Profile[]>
   return (data ?? []) as Profile[];
 }
 
-// Returns 'accepted' if they had already asked you (so you're now friends), else 'pending'.
+// Tapping "Add". The server decides (supabase/migrations/20261220000000_launch_safety.sql):
+// - 'accepted': you're friends now. That happens when they had already asked you, or when they're 18 or over
+//   and their account is public.
+// - 'pending': a friend request they must accept (the button shows "Requested"). That happens for private
+//   accounts and for anyone under 18 or without a birthday saved, even if their account is public.
+// Anything else the server might answer counts as 'pending', so the app never shows "Friends" by mistake.
 export async function sendFriendRequest(target: string): Promise<'pending' | 'accepted'> {
   const { data, error } = await supabase.rpc('send_friend_request', { target });
   if (error) throw error;

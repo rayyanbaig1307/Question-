@@ -2,7 +2,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 
-import { useMe } from './auth';
+import { runAfterSignOut, useMe } from './auth';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -78,11 +78,7 @@ function watchMine(watcher: () => void) {
 }
 
 const storeHasPlus = (info: CustomerInfo) => !!info.entitlements.active[ENTITLEMENT]?.isActive;
-
-// RevenueCat sends new info whenever something changes (bought, renewed, ran out…).
-function onCustomerInfo(info: CustomerInfo) {
-  setMine({ store: storeHasPlus(info) });
-}
+const serverHasPlus = (plus: MyPlus) => plus.serverUntil !== null && plus.serverUntil > Date.now();
 
 // Reads your own row in public.plus_members. Any problem (no internet, or the table isn't set up yet)
 // simply counts as "no row".
@@ -102,9 +98,76 @@ async function loadMyServerPlus(userId: string) {
   remember(userId, until !== null && until > Date.now());
 }
 
-// The RevenueCat account we're set up for (the Supabase user id), so switching accounts logs in again.
+// Right after buying (or restoring), the App Store knows at once, but the server only hears it from RevenueCat a
+// few seconds later. So we ask the server again after about 2, 5 and 10 seconds. That way the server features
+// (who viewed your profile, Peek-a-Save, …) switch on without closing the app.
+const SERVER_CHECKS_MS = [2_000, 5_000, 10_000];
+let serverChecks: ReturnType<typeof setTimeout>[] = [];
+
+function checkServerSoon(userId: string) {
+  serverChecks.forEach((check) => clearTimeout(check));
+  serverChecks = SERVER_CHECKS_MS.map((ms) =>
+    setTimeout(() => {
+      if (mine.userId === userId && !serverHasPlus(mine)) loadMyServerPlus(userId);
+    }, ms),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Which RevenueCat account the phone is using. It must always be the Peekaboo account that is logged in
+// (the Supabase user id), so a purchase is credited to the right person and the webhook knows who paid.
+// ---------------------------------------------------------------------------
+
+// The Peekaboo account RevenueCat is known to be using right now (null = not sure, or nobody).
+// Only set once configure/logIn has really worked, so a failed switch is tried again next time.
 let configuredFor: string | null = null;
+let configured = false;
 let listening = false;
+
+// Account changes, buying and restoring wait in one line, so they never mix (for example, a purchase can't
+// start halfway through switching to another account).
+let line: Promise<unknown> = Promise.resolve();
+function inLine<T>(job: () => Promise<T>): Promise<T> {
+  const run = line.then(job);
+  line = run.catch(() => {});
+  return run;
+}
+
+// Uses the App Store's answer only when it's about the person who is logged in. When it says Plus has just
+// switched on (bought, a parent said yes, renewed) and the server doesn't know yet, ask the server again soon.
+function showStoreInfo(info: CustomerInfo) {
+  const userId = configuredFor;
+  if (userId === null || userId !== mine.userId) return;
+  const store = storeHasPlus(info);
+  const switchedOn = store && !mine.store;
+  setMine({ store });
+  if (switchedOn && !serverHasPlus(mine)) checkServerSoon(userId);
+}
+
+// Makes RevenueCat use this Peekaboo account (sets it up the first time, logs in again after a switch).
+// Throws if that didn't work. Call it only inside inLine().
+async function switchStoreAccount(userId: string): Promise<void> {
+  if (!Purchases) return;
+  if (!configured) {
+    // After an app update reloads the app, RevenueCat is still set up from before, so don't set it up twice.
+    if (!(await Purchases.isConfigured())) {
+      Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId });
+      configured = true;
+      configuredFor = userId;
+      return;
+    }
+    configured = true;
+  }
+  if ((await Purchases.getAppUserID()) !== userId) {
+    // Someone else was using RevenueCat on this phone (another account, or nobody after a logout).
+    configuredFor = null;
+    const { customerInfo } = await Purchases.logIn(userId);
+    configuredFor = userId;
+    showStoreInfo(customerInfo);
+    return;
+  }
+  configuredFor = userId;
+}
 
 // Call once you're logged in (src/app/(app)/_layout.tsx does). Sets up payments for this account and checks
 // whether you have Plus. Never throws.
@@ -112,32 +175,55 @@ export async function configurePurchases(userId: string): Promise<void> {
   if (mine.userId !== userId) setMine({ userId, store: false, serverUntil: null });
   loadMyServerPlus(userId);
   if (!Purchases) return;
-  const previous = configuredFor;
-  configuredFor = userId;
+  const store = Purchases;
   try {
-    if (previous === null) {
-      // The RevenueCat account is the same as the Peekaboo account, so the webhook knows who paid.
-      Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId });
-    } else if (previous !== userId) {
-      // Someone else logged in on this phone.
-      const { customerInfo } = await Purchases.logIn(userId);
-      onCustomerInfo(customerInfo);
-    }
-    if (!listening) {
-      Purchases.addCustomerInfoUpdateListener(onCustomerInfo);
-      listening = true;
-    }
-    onCustomerInfo(await Purchases.getCustomerInfo());
+    await inLine(async () => {
+      await switchStoreAccount(userId);
+      if (!listening) {
+        // RevenueCat sends new info whenever something changes (bought, renewed, ran out…).
+        store.addCustomerInfoUpdateListener(showStoreInfo);
+        listening = true;
+      }
+      showStoreInfo(await store.getCustomerInfo());
+    });
   } catch (error) {
     console.warn('Could not set up Peekaboo+ payments', error);
   }
 }
 
+// When someone logs out, RevenueCat stops using their account on this phone. Never throws.
+export function logOutPurchases(userId: string): Promise<void> {
+  if (mine.userId === userId) setMine({ userId: null, store: false, serverUntil: null });
+  serverChecks.forEach((check) => clearTimeout(check));
+  serverChecks = [];
+  const store = Purchases;
+  if (!store) return Promise.resolve();
+  return inLine(async () => {
+    configuredFor = null;
+    try {
+      // RevenueCat can't log out when it was never set up, or when it isn't using an account.
+      if (!(await store.isConfigured()) || (await store.isAnonymous())) return;
+      await store.logOut();
+    } catch (error) {
+      console.warn('Could not log out of Peekaboo+ payments', error);
+    }
+  });
+}
+
+// src/lib/auth.tsx runs this after every logout on this phone.
+runAfterSignOut((userId) => {
+  logOutPurchases(userId);
+});
+
+// ---------------------------------------------------------------------------
+// Who has Plus.
+// ---------------------------------------------------------------------------
+
 // Whether someone has Plus, using only what's known right away (testers, and your own Plus once it's loaded).
 export function hasPlus(userId: string | null | undefined): boolean {
   if (!userId) return false;
   if (TESTERS.has(userId)) return true;
-  if (userId === mine.userId) return mine.store || (mine.serverUntil !== null && mine.serverUntil > Date.now());
+  if (userId === mine.userId) return mine.store || serverHasPlus(mine);
   return cache.get(userId)?.plus ?? false;
 }
 
@@ -149,21 +235,41 @@ export function usePlus(): boolean {
   return hasPlus(userId);
 }
 
+// True when the App Store says you're paying for Peekaboo+ right now (so Apple keeps billing you until you
+// cancel – Delete account warns about that).
+export function useStorePlus(): boolean {
+  const { userId } = useMe();
+  const now = useSyncExternalStore(watchMine, () => mine);
+  return now.userId === userId && now.store;
+}
+
+// True when the server already knows you have Peekaboo+ (the server features check this). Right after
+// buying it can still be false for a few seconds.
+export function useServerPlus(): boolean {
+  const { userId } = useMe();
+  const now = useSyncExternalStore(watchMine, () => mine);
+  return now.userId === userId && serverHasPlus(now);
+}
+
 // ---------------------------------------------------------------------------
 // Buying, restoring and the price.
 // ---------------------------------------------------------------------------
 
-// The monthly package from the "default" offering in RevenueCat.
+// The monthly package from the "default" offering in RevenueCat. Only the monthly one, so "/month" on the
+// Plus screen is always true. Null when there isn't one.
 async function monthlyPackage(): Promise<PurchasesPackage | null> {
   if (!Purchases) return null;
   const offerings = await Purchases.getOfferings();
   const offering = offerings.all[OFFERING] ?? offerings.current;
-  return offering?.monthly ?? offering?.availablePackages[0] ?? null;
+  return offering?.monthly ?? null;
 }
 
-// The price in the person's own money, e.g. "$6.99" or "CA$9.99". Null when it can't be bought here.
+// The price in the person's own money, e.g. "$6.99" or "CA$9.99". Null when it can't be bought here
+// (the Plus screen then shows "Couldn't load the price · Retry").
 export async function getPlusPrice(): Promise<string | null> {
   try {
+    // Wait for payments to be set up first (it starts when you log in).
+    await line;
     return (await monthlyPackage())?.product.priceString ?? null;
   } catch (error) {
     console.warn('Could not load the Peekaboo+ price', error);
@@ -171,30 +277,119 @@ export async function getPlusPrice(): Promise<string | null> {
   }
 }
 
-export type BuyResult = 'bought' | 'cancelled';
+// Errors with messages we write ourselves (they're already in plain words). Marked with `plain`, so they're
+// shown as they are.
+function plainError(message: string): Error {
+  return Object.assign(new Error(message), { plain: true });
+}
+const isPlainError = (error: unknown): error is Error => (error as { plain?: unknown } | null)?.plain === true;
 
-// Opens Apple's "Subscribe" sheet. Returns 'cancelled' if the person closed it. Throws on real problems.
-export async function buyPlus(): Promise<BuyResult> {
-  if (!Purchases) throw new Error('Peekaboo+ is coming soon.');
-  const pack = await monthlyPackage();
-  if (!pack) throw new Error("Peekaboo+ isn't for sale right now. Please try again later.");
-  try {
-    const { customerInfo } = await Purchases.purchasePackage(pack);
-    onCustomerInfo(customerInfo);
-  } catch (error) {
-    if ((error as { userCancelled?: boolean | null }).userCancelled) return 'cancelled';
-    throw error;
-  }
-  if (mine.userId) loadMyServerPlus(mine.userId);
-  return 'bought';
+const NOT_FOR_SALE = "Peekaboo+ isn't for sale right now. Please try again later.";
+const STORE_TROUBLE = "The App Store couldn't complete this. Try again in a minute.";
+// Shown when a parent has to say yes first (Ask to Buy).
+export const WAITING_FOR_PARENT = "Waiting for a parent to approve. You'll get Peekaboo+ as soon as it's approved.";
+
+// RevenueCat's error number ("1", "20", …), or null when it isn't a RevenueCat error.
+function storeErrorCode(error: unknown): string | null {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code !== undefined && code !== null && /^\d+$/.test(String(code)) ? String(code) : null;
 }
 
+// Turns an App Store / RevenueCat problem into plain words.
+function storeErrorText(error: unknown): string {
+  if (isPlainError(error)) return error.message;
+  const code = storeErrorCode(error);
+  if (!Purchases || code === null) return STORE_TROUBLE;
+  const CODE = Purchases.PURCHASES_ERROR_CODE;
+  switch (code) {
+    case CODE.PRODUCT_ALREADY_PURCHASED_ERROR:
+      return 'You already have Peekaboo+ – tap Restore purchases.';
+    case CODE.RECEIPT_ALREADY_IN_USE_ERROR:
+    case CODE.RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR:
+    case CODE.PURCHASE_BELONGS_TO_OTHER_USER:
+      return "This Apple Account's Peekaboo+ is on another Peekaboo account.";
+    case CODE.PURCHASE_NOT_ALLOWED_ERROR:
+      return 'Purchases are turned off on this iPhone (Screen Time).';
+    case CODE.NETWORK_ERROR:
+    case CODE.OFFLINE_CONNECTION_ERROR:
+      return 'No internet – try again.';
+    case CODE.PAYMENT_PENDING_ERROR:
+      return WAITING_FOR_PARENT;
+    case CODE.OPERATION_ALREADY_IN_PROGRESS_ERROR:
+      return 'The App Store is still busy with your last tap. Wait a moment, then try again.';
+    // Store problems, set-up problems and anything else.
+    default:
+      return STORE_TROUBLE;
+  }
+}
+
+// What happened when you tapped Subscribe:
+// - 'bought': paid, and Peekaboo+ is switched on;
+// - 'cancelled': you closed Apple's sheet (nothing to say);
+// - 'pending': waiting for a parent to say yes (Ask to Buy) – Plus switches on by itself once they do;
+// - 'not-active': Apple took it, but Peekaboo+ didn't switch on (yet).
+// Any other problem throws an error with a plain message.
+export type BuyResult = 'bought' | 'cancelled' | 'pending' | 'not-active';
+
+// Opens Apple's "Subscribe" sheet.
+export async function buyPlus(): Promise<BuyResult> {
+  const store = Purchases;
+  if (!store) throw plainError('Peekaboo+ is coming soon.');
+  const userId = mine.userId;
+  if (!userId) throw plainError('Log in first to get Peekaboo+.');
+  const CODE = store.PURCHASES_ERROR_CODE;
+  let result: BuyResult;
+  try {
+    result = await inLine(async () => {
+      // Make sure the purchase goes to the account that is logged in.
+      await switchStoreAccount(userId);
+      const pack = await monthlyPackage();
+      if (!pack) throw plainError(NOT_FOR_SALE);
+      const { customerInfo } = await store.purchasePackage(pack);
+      showStoreInfo(customerInfo);
+      return storeHasPlus(customerInfo) ? 'bought' : 'not-active';
+    });
+  } catch (error) {
+    const code = storeErrorCode(error);
+    if (code === CODE.PURCHASE_CANCELLED_ERROR) return 'cancelled';
+    if (code === CODE.PAYMENT_PENDING_ERROR) return 'pending';
+    if (!isPlainError(error)) console.warn('Peekaboo+ purchase failed', error);
+    throw plainError(storeErrorText(error));
+  }
+  if (mine.userId === userId) {
+    loadMyServerPlus(userId);
+    checkServerSoon(userId);
+  }
+  return result;
+}
+
+// What "Restore purchases" found: 'restored' (you have Plus now), 'not-found', or 'cancelled' (you closed
+// Apple's sign-in).
+export type RestoreResult = 'restored' | 'not-found' | 'cancelled';
+
 // "Restore purchases": asks the App Store again for anything you already paid for (new phone, reinstall).
-// Returns true if you have Plus afterwards.
-export async function restorePurchases(): Promise<boolean> {
-  if (mine.userId) await loadMyServerPlus(mine.userId);
-  if (Purchases) onCustomerInfo(await Purchases.restorePurchases());
-  return hasPlus(mine.userId);
+// Any problem throws an error with a plain message.
+export async function restorePurchases(): Promise<RestoreResult> {
+  const userId = mine.userId;
+  if (!userId) return 'not-found';
+  const server = loadMyServerPlus(userId);
+  const store = Purchases;
+  if (store) {
+    try {
+      await inLine(async () => {
+        await switchStoreAccount(userId);
+        showStoreInfo(await store.restorePurchases());
+      });
+    } catch (error) {
+      await server;
+      if (storeErrorCode(error) === store.PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) return 'cancelled';
+      console.warn('Could not restore Peekaboo+', error);
+      throw plainError(storeErrorText(error));
+    }
+  }
+  await server;
+  if (mine.userId === userId && mine.store && !serverHasPlus(mine)) checkServerSoon(userId);
+  return hasPlus(userId) ? 'restored' : 'not-found';
 }
 
 // Where people cancel or change their subscription (Apple's own page).

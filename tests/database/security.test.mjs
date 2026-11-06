@@ -288,6 +288,8 @@ test('Auth throttle reservations allow only the configured count', async () => {
 });
 
 test('Adding a public user immediately creates exactly one friendship', async () => {
+  // Only an adult's public account makes friends at once (20261220000000_launch_safety.sql).
+  await birthday(1);
   assert.equal((await rpc(0,'select send_friend_request($1) as state',[users[1]])).rows[0].state,'accepted');
   await rpc(0,'select send_friend_request($1)',[users[1]]);
   await rpc(1,'select send_friend_request($1)',[users[0]]);
@@ -438,6 +440,8 @@ test('Three distinct reports hide a community dare, duplicate reports count once
 test('Daily dare picker is idempotent and will not choose future dates',async()=>{
   const idea=(await rpc(0,"insert into dare_ideas(user_id,text) values($1,'Wear a silly hat today') returning id",[users[0]])).rows[0].id;
   for(let i=1;i<=3;i++)await rpc(i,'insert into dare_votes(idea_id,user_id) values($1,$2)',[idea,users[i]]);
+  // Only ideas the owner approved before today's dare started can run (20261220000000_launch_safety.sql).
+  await db.query("update dare_ideas set approved_at=now()-interval '2 days' where id=$1",[idea]);
   const a=(await rpc(1,'select * from pick_daily_dare(private.current_dare_day())')).rows;
   const b=(await rpc(2,'select * from pick_daily_dare(private.current_dare_day())')).rows;
   assert.equal(a[0].idea_id,idea);assert.deepEqual(a,b);

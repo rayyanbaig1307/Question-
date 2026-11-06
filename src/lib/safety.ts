@@ -1,11 +1,14 @@
 import { supabase } from './supabase';
 import type { Profile, ReportContentType } from './types';
 
-// What you can pick when reporting something. The short code is what's saved.
+// What you can pick when reporting something. The short code is what's saved (the server takes any short text,
+// so a new reason needs no database change).
 export const REPORT_REASONS = [
   { code: 'spam', label: 'Spam 🗑️' },
   { code: 'bullying', label: 'Bullying 😢' },
   { code: 'nudity', label: 'Nudity 🔞' },
+  { code: 'dangerous_dare', label: 'Dangerous dare 🚑' },
+  { code: 'self_harm', label: 'Self-harm' },
   { code: 'other', label: 'Something else 🤔' },
 ] as const;
 
