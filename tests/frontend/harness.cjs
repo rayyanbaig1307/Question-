@@ -65,6 +65,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
     '@/lib/plus': { CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false, configurePurchases: async () => {} },
+    // Terms agreed on this phone: nothing remembered (tests that need it pass their own).
+    '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.
     '@/lib/chatPins': { MAX_PINS: 3, pinKeyForFriend: id => `friend:${id}`, pinKeyForGroup: id => `group:${id}`, sortByPins: items => items, useChatPins: () => ({ pins: [], plus: false, toggle: async () => 'needs-plus' }) },
     // Peekaboo+ insights (profile views, rewatches, screenshots): nothing to show, and the setting is unknown.

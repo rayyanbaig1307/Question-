@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { acceptLegal, hasAccepted, LEGAL_PAGES, TERMS_VERSION, type LegalPage } from '@/lib/legal';
 import { LEGAL_DOCS } from '@/lib/legalDocs';
+import { forgetAgreed, knownAgreed, rememberAgreed } from '@/lib/termsCache';
 import { colors, font, radius, space } from '@/theme';
 
 // Makes sure everyone has agreed to the current Terms of Service.
@@ -30,7 +31,9 @@ export function TermsGate() {
   // The answer, and whose account it's about (a different login is always checked again first).
   // `tapped` is true when the person agreed on the Terms page just now (so the page may slide away).
   const [answer, setAnswer] = useState<{ user: string; status: TermsStatus; tapped?: boolean } | null>(null);
-  const status: TermsStatus = userId && answer?.user === userId ? answer.status : 'checking';
+  // Known on this phone to have agreed already: straight in, no cover (the check still runs below).
+  const cached = !!userId && knownAgreed(userId, TERMS_VERSION);
+  const status: TermsStatus = userId && answer?.user === userId ? answer.status : cached ? 'agreed' : 'checking';
   // Goes up by one for every new try of the check.
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -49,7 +52,7 @@ export function TermsGate() {
     let answered = false;
     // Taking too long counts as "couldn't check". If the real answer still comes later, it wins.
     const timer = setTimeout(() => {
-      if (!cancelled && !answered) setAnswer({ user: userId, status: 'failed' });
+      if (!cancelled && !answered && !cached) setAnswer({ user: userId, status: 'failed' });
     }, CHECK_TIME_LIMIT_MS);
     hasAccepted(userId, 'terms', TERMS_VERSION)
       .then(async (accepted): Promise<TermsStatus> => {
@@ -67,13 +70,17 @@ export function TermsGate() {
       .then((result) => {
         answered = true;
         clearTimeout(timer);
+        if (result === 'agreed') rememberAgreed(userId, TERMS_VERSION);
+        if (result === 'needed') forgetAgreed(userId);
+        // Couldn't check, but this phone knows they agreed: let them carry on.
+        if (result === 'failed' && cached) return;
         if (!cancelled) setAnswer({ user: userId, status: result });
       });
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [userId, agreedAtSignUp, attempt]);
+  }, [userId, agreedAtSignUp, attempt, cached]);
 
   function tryAgain() {
     if (!active.current) return;
@@ -99,6 +106,7 @@ export function TermsGate() {
     setBusy(true);
     try {
       await acceptLegal('terms', TERMS_VERSION);
+      if (userId) rememberAgreed(userId, TERMS_VERSION);
       if (!active.current || !userId) return;
       setAnswer({ user: userId, status: 'agreed', tapped: true });
     } catch (error) {

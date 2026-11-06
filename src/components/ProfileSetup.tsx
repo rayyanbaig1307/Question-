@@ -12,6 +12,7 @@ import { friendlyError } from '@/lib/errors';
 import { acceptLegal, hasAcceptedAnyTerms, TERMS_VERSION } from '@/lib/legal';
 import { checkUsernameFormat, cleanUsername, isUsernameAvailable, updateMyProfile, USERNAME_RULES } from '@/lib/profiles';
 import { madeWithAppleOrGoogle, sharedName } from '@/lib/socialAuth';
+import { knownAgreedAny } from '@/lib/termsCache';
 import { colors, font, radius, space } from '@/theme';
 
 // ---------------------------------------------------------------------------
@@ -92,7 +93,9 @@ export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
     return () => subscription.remove();
   }, [failed, retry]);
 
-  const needed = !userId || !social ? false : current ? current.needed : null;
+  // Known on this phone to have agreed to the Terms: they finished making their account, so no waiting.
+  const cachedDone = !!userId && knownAgreedAny(userId);
+  const needed = !userId || !social ? false : current && !(cachedDone && current.failed) ? current.needed : cachedDone ? false : null;
   return [needed, () => userId && setAnswer({ user: userId, needed: false, failed: false }), { failed, checking: retrying, retry }];
 }
 

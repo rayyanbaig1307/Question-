@@ -226,3 +226,55 @@ test('when agreeing is needed, the Terms page shows on the same pop-up (never a 
     assert.deepEqual(log.at(-1), { id: cover.id, visible: false, animationType: 'slide' });
   } finally { resolve(false); await unmount(tree); }
 });
+
+// Start-up: someone this phone already knows has agreed goes straight in (no cover flashing after the logo),
+// but the server still decides – if the Terms changed, the Terms page shows.
+function rememberedScreen(hasAccepted) {
+  const saved = { alice: 'qa-terms' };
+  const screen = loadScreen('src/components/TermsGate.tsx', {
+    '@/lib/auth': { useAuth: () => ({ userId: 'alice', session: { user: { user_metadata: {} } }, signOut: async () => {} }) },
+    '@/lib/legal': { hasAccepted, acceptLegal: async () => {}, TERMS_VERSION: 'qa-terms', LEGAL_PAGES: {} },
+    '@/lib/legalDocs': { LEGAL_DOCS: {} },
+    '@/lib/termsCache': {
+      knownAgreed: (user, version) => saved[user] === version,
+      knownAgreedAny: user => user in saved,
+      rememberAgreed: (user, version) => { saved[user] = version; },
+      forgetAgreed: user => { delete saved[user]; },
+    },
+  });
+  screen.modules['react-native'].AppState = appState();
+  screen.Component = screen.exports.TermsGate;
+  screen.saved = saved;
+  return screen;
+}
+
+test('already agreed on this phone: no cover at start-up, even while the server check is still running', async () => {
+  let resolve;
+  const screen = rememberedScreen(() => new Promise(done => { resolve = done; }));
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(tree.root.findAllByType('Modal').length, 0, 'straight into the app');
+    await act(() => resolve(true));
+    assert.equal(tree.root.findAllByType('Modal').length, 0);
+  } finally { resolve(true); await unmount(tree); }
+});
+
+test('already agreed on this phone, but the Terms changed on the server: the Terms page still shows', async () => {
+  const screen = rememberedScreen(async () => false);
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.equal(tree.root.findAllByType('Modal').length, 1);
+    assert.match(allText(tree), /Our Terms/);
+    assert.equal('alice' in screen.saved, false, 'the phone forgets the old agreement');
+  } finally { await unmount(tree); }
+});
+
+test('already agreed on this phone and the server check fails (no internet): carries on, no "Couldn\'t check"', async () => {
+  const screen = rememberedScreen(async () => { throw new Error('offline'); });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.equal(tree.root.findAllByType('Modal').length, 0);
+  } finally { await unmount(tree); }
+});
