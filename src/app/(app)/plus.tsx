@@ -26,20 +26,20 @@ import { radius, space } from '@/theme';
 // ---------------------------------------------------------------------------
 // The Peekaboo+ ⭐ screen: what you get, the price, and the button to subscribe (iPhone only for now).
 // Opened from Settings and from anything locked (themes, chat backgrounds, stickers).
-// Everything fits on one screen: what you get is a grid of small tiles, and the Subscribe button, the price
-// and the small print stay pinned to the bottom (on a small phone only the tiles scroll).
+// The header and what you get scroll; the Subscribe button, the price and the small print stay pinned to the
+// bottom, so they're always in view.
 // ---------------------------------------------------------------------------
 
 // The same pink → purple as the app icon (the same in every theme).
 const BRAND = ['#FE59A5', '#E469C7', '#8650DB'] as const;
 const NAVY = '#2A1458';
+// The pinned bottom part grows only a little with big phone text sizes, so it never covers the list.
+const MAX_GROW = 1.1;
 
-// Short names, so they fit in the small tiles.
 const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '👀', title: 'Who viewed your profile' },
   { emoji: '🔁', title: 'Who rewatched your story' },
-  { emoji: '📸', title: 'Who screenshotted you' },
-  { emoji: '🌅', title: 'Glow face filters' },
+  { emoji: '📸', title: 'Who screenshotted your story & posts' },
   { emoji: '🎨', title: 'App themes' },
   { emoji: '🌈', title: 'Moving chat backgrounds' },
   { emoji: '✨', title: '48 stickers' },
@@ -47,10 +47,10 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '💾', title: 'Peek-a-Save (1 a month)' },
   { emoji: '⏪', title: 'Drop rewind' },
   { emoji: '🕵️', title: 'Guess Who hint' },
-  { emoji: '📌', title: 'Pin top 3 chats' },
+  { emoji: '📌', title: 'Pin your top 3 chats' },
   { emoji: '🎬', title: '60-second videos' },
-  { emoji: '⭐', title: 'Plus badge' },
-  { emoji: '💖', title: 'Support Peekaboo' },
+  { emoji: '🌅', title: 'Soft Glow & Golden Hour filters' },
+  { emoji: '⭐', title: 'Plus badge next to your name' },
 ];
 
 export default function PlusScreen() {
@@ -112,35 +112,36 @@ export default function PlusScreen() {
 
   return (
     <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
-      {/* Top: the eyes, the name and a big "+". */}
-      <View style={[styles.hero, { paddingTop: insets.top + space.sm }]}>
-        <Animated.View style={eyesStyle}>
-          <Image source={logoEyes} style={styles.eyes} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
-        </Animated.View>
-        <View style={styles.logoLine}>
-          <Wordmark height={28} onDark />
-          <Text style={styles.plusSign}>+</Text>
-        </View>
-        <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
-        <Text style={styles.tagline}>
-          {plus ? 'Thank you for supporting Peekaboo!' : 'See more, peek more, glow more.'}
-        </Text>
-      </View>
-
-      {/* What you get: small tiles, three in a row. Only this part scrolls, and only on small phones. */}
-      <ScrollView style={styles.fill} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
-        {FEATURES.map((feature) => (
-          <View key={feature.title} style={styles.tile}>
-            <Text style={styles.tileEmoji}>{feature.emoji}</Text>
-            <Text style={styles.tileText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
-              {feature.title}
-            </Text>
-            {feature.soon ? <Text style={styles.soon}>soon</Text> : null}
-            {plus && !feature.soon ? (
-              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={styles.tileCheck} />
-            ) : null}
+      <ScrollView
+        style={styles.fill}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + space.xxl, paddingBottom: space.lg }]}>
+        {/* Top: the eyes, the name and a big "+". */}
+        <View style={styles.hero}>
+          <Animated.View style={eyesStyle}>
+            <Image source={logoEyes} style={styles.eyes} contentFit="contain" accessibilityLabel="Peekaboo eyes" />
+          </Animated.View>
+          <View style={styles.logoLine}>
+            <Wordmark height={40} onDark />
+            <Text style={styles.plusSign}>+</Text>
           </View>
-        ))}
+          <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
+          <Text style={styles.tagline}>
+            {plus ? 'Thank you for supporting Peekaboo! Here is everything you get.' : 'See more, peek more, glow more.'}
+          </Text>
+        </View>
+
+        {/* What you get. */}
+        <View style={styles.card}>
+          {FEATURES.map((feature) => (
+            <View key={feature.title} style={styles.feature}>
+              <Text style={styles.featureEmoji}>{feature.emoji}</Text>
+              <Text style={styles.featureText}>{feature.title}</Text>
+              {feature.soon ? <Text style={styles.soon}>soon</Text> : null}
+              {plus && !feature.soon ? <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" /> : null}
+            </View>
+          ))}
+        </View>
+
       </ScrollView>
 
       {/* Pinned to the bottom: the button, the price and the small print – always in view. */}
@@ -151,15 +152,15 @@ export default function PlusScreen() {
           ) : null
         ) : !CAN_BUY_PLUS ? (
           <View style={styles.soonBox}>
-            <Text style={styles.soonTitle}>Coming soon ⭐</Text>
-            <Text style={styles.soonText}>
+            <Text style={styles.soonTitle} maxFontSizeMultiplier={MAX_GROW}>Coming soon ⭐</Text>
+            <Text style={styles.soonText} maxFontSizeMultiplier={MAX_GROW}>
               {Platform.OS === 'ios'
                 ? "You'll be able to get it right here. Keep Peekaboo up to date!"
                 : "It's coming to Android a bit later. Hang tight!"}
             </Text>
           </View>
         ) : price === null ? (
-          <BigButton title="Couldn't load the price · Try again" onPress={retryPrice} />
+          <BigButton title="Couldn't load the price · Retry" onPress={retryPrice} />
         ) : (
           <BigButton
             title={price ? `Subscribe · ${price}/month` : 'Subscribe'}
@@ -170,14 +171,14 @@ export default function PlusScreen() {
 
         {/* The small print Apple asks for. */}
         {CAN_BUY_PLUS && !plus ? (
-          <Text style={styles.smallPrint}>
+          <Text style={styles.smallPrint} maxFontSizeMultiplier={MAX_GROW}>
             Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple ID. It renews automatically every month
             until you cancel. Cancel anytime in Settings → Apple ID → Subscriptions, at least 24 hours before it renews.
           </Text>
         ) : null}
 
         {/* Restore, Terms of Use and Privacy Policy (on one line when they fit). */}
-        <View style={styles.links}>
+        <View style={styles.legalLinks}>
           {CAN_BUY_PLUS && !plus ? (
             <>
               <Pressable
@@ -189,17 +190,17 @@ export default function PlusScreen() {
                 {busy === 'restore' ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.link}>Restore purchases</Text>
+                  <Text style={styles.legalLink} maxFontSizeMultiplier={MAX_GROW}>Restore purchases</Text>
                 )}
               </Pressable>
-              <Text style={styles.linkDot}>·</Text>
+              <Text style={styles.legalDot} maxFontSizeMultiplier={MAX_GROW}>·</Text>
             </>
           ) : null}
-          <Text style={styles.link} onPress={() => openLegal('terms')} accessibilityRole="link">
+          <Text style={styles.legalLink} onPress={() => openLegal('terms')} accessibilityRole="link" maxFontSizeMultiplier={MAX_GROW}>
             Terms of Use
           </Text>
-          <Text style={styles.linkDot}>·</Text>
-          <Text style={styles.link} onPress={() => openLegal('privacy')} accessibilityRole="link">
+          <Text style={styles.legalDot} maxFontSizeMultiplier={MAX_GROW}>·</Text>
+          <Text style={styles.legalLink} onPress={() => openLegal('privacy')} accessibilityRole="link" maxFontSizeMultiplier={MAX_GROW}>
             Privacy Policy
           </Text>
         </View>
@@ -231,7 +232,9 @@ function BigButton({ title, onPress, loading = false }: { title: string; onPress
         onPress();
       }}
       style={styles.bigButton}>
-      {loading ? <ActivityIndicator color={NAVY} /> : <Text style={styles.bigButtonText}>{title}</Text>}
+      {loading ? <ActivityIndicator color={NAVY} /> : <Text style={styles.bigButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={MAX_GROW}>
+          {title}
+        </Text>}
     </Bouncy>
   );
 }
@@ -240,15 +243,17 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
+  content: {
+    paddingHorizontal: space.xl,
+    gap: space.lg,
+  },
   hero: {
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: space.xl,
-    paddingBottom: space.md,
+    gap: space.sm,
   },
   eyes: {
-    width: 70,
-    height: 56,
+    width: 120,
+    height: 96,
   },
   logoLine: {
     flexDirection: 'row',
@@ -257,83 +262,64 @@ const styles = StyleSheet.create({
   },
   plusSign: {
     color: '#FFE14D',
-    fontSize: 32,
+    fontSize: 44,
     fontWeight: '900',
-    lineHeight: 36,
+    lineHeight: 48,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: -0.5,
-    marginTop: space.xs,
+    marginTop: space.sm,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
   tagline: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingBottom: space.md,
-  },
-  tile: {
-    width: '31%',
-    minHeight: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    paddingVertical: space.sm,
-    paddingHorizontal: 6,
-    borderRadius: radius.md,
+  card: {
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderColor: 'rgba(255,255,255,0.3)',
     borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
   },
-  tileEmoji: {
+  feature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.sm,
+  },
+  featureEmoji: {
     fontSize: 22,
-  },
-  tileText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '800',
+    width: 30,
     textAlign: 'center',
   },
-  tileCheck: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
+  featureText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
   soon: {
     overflow: 'hidden',
     color: NAVY,
     backgroundColor: 'rgba(255,255,255,0.85)',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
     paddingHorizontal: space.sm,
-    paddingVertical: 1,
+    paddingVertical: 2,
     borderRadius: radius.pill,
-  },
-  footer: {
-    gap: space.sm,
-    paddingHorizontal: space.xl,
-    paddingTop: space.md,
-    backgroundColor: 'rgba(42,20,88,0.25)',
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
   },
   bigButton: {
     minHeight: 56,
@@ -357,21 +343,29 @@ const styles = StyleSheet.create({
   soonBox: {
     backgroundColor: 'rgba(0,0,0,0.2)',
     borderRadius: radius.lg,
-    padding: space.md,
+    padding: space.lg,
     alignItems: 'center',
     gap: space.xs,
   },
   soonTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     textAlign: 'center',
   },
   soonText: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  footer: {
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
+    backgroundColor: 'rgba(42,20,88,0.25)',
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
   },
   pressed: {
     opacity: 0.6,
@@ -383,20 +377,20 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     textAlign: 'center',
   },
-  links: {
+  legalLinks: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: space.sm,
   },
-  link: {
+  legalLink: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
     textDecorationLine: 'underline',
   },
-  linkDot: {
+  legalDot: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 13,
   },
