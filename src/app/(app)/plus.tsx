@@ -176,7 +176,7 @@ export default function PlusScreen() {
           </Text>
         ) : null}
 
-        {/* Restore, Terms and Privacy on one line. */}
+        {/* Restore, Terms of Use and Privacy Policy (on one line when they fit). */}
         <View style={styles.links}>
           {CAN_BUY_PLUS && !plus ? (
             <>
@@ -196,11 +196,11 @@ export default function PlusScreen() {
             </>
           ) : null}
           <Text style={styles.link} onPress={() => openLegal('terms')} accessibilityRole="link">
-            Terms
+            Terms of Use
           </Text>
           <Text style={styles.linkDot}>·</Text>
           <Text style={styles.link} onPress={() => openLegal('privacy')} accessibilityRole="link">
-            Privacy
+            Privacy Policy
           </Text>
         </View>
       </View>
@@ -385,6 +385,7 @@ const styles = StyleSheet.create({
   },
   links: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: space.sm,
