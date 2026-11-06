@@ -33,6 +33,8 @@ import { radius, space } from '@/theme';
 // The same pink → purple as the app icon (the same in every theme).
 const BRAND = ['#FE59A5', '#E469C7', '#8650DB'] as const;
 const NAVY = '#2A1458';
+// Big phone text sizes make everything bigger. Let it grow a little, but not so much that the screen stops fitting.
+const MAX_GROW = 1.1;
 
 // Short names, so they fit in the small tiles.
 const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
@@ -119,10 +121,10 @@ export default function PlusScreen() {
         </Animated.View>
         <View style={styles.logoLine}>
           <Wordmark height={28} onDark />
-          <Text style={styles.plusSign}>+</Text>
+          <Text style={styles.plusSign} maxFontSizeMultiplier={MAX_GROW}>+</Text>
         </View>
-        <Text style={styles.title}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
-        <Text style={styles.tagline}>
+        <Text style={styles.title} maxFontSizeMultiplier={MAX_GROW}>{plus ? "You're a member ⭐" : 'Unlock it all ⭐'}</Text>
+        <Text style={styles.tagline} maxFontSizeMultiplier={MAX_GROW}>
           {plus ? 'Thank you for supporting Peekaboo!' : 'See more, peek more, glow more.'}
         </Text>
       </View>
@@ -131,8 +133,8 @@ export default function PlusScreen() {
       <ScrollView style={styles.fill} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
         {FEATURES.map((feature) => (
           <View key={feature.title} style={styles.tile}>
-            <Text style={styles.tileEmoji}>{feature.emoji}</Text>
-            <Text style={styles.tileText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={styles.tileEmoji} maxFontSizeMultiplier={MAX_GROW}>{feature.emoji}</Text>
+            <Text style={styles.tileText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={MAX_GROW}>
               {feature.title}
             </Text>
             {feature.soon ? <Text style={styles.soon}>soon</Text> : null}
@@ -159,7 +161,7 @@ export default function PlusScreen() {
             </Text>
           </View>
         ) : price === null ? (
-          <BigButton title="Couldn't load the price · Try again" onPress={retryPrice} />
+          <BigButton title="Couldn't load the price · Retry" onPress={retryPrice} />
         ) : (
           <BigButton
             title={price ? `Subscribe · ${price}/month` : 'Subscribe'}
@@ -170,7 +172,7 @@ export default function PlusScreen() {
 
         {/* The small print Apple asks for. */}
         {CAN_BUY_PLUS && !plus ? (
-          <Text style={styles.smallPrint}>
+          <Text style={styles.smallPrint} maxFontSizeMultiplier={MAX_GROW}>
             Peekaboo+ is {price ?? 'charged'} per month, and payment is charged to your Apple ID. It renews automatically every month
             until you cancel. Cancel anytime in Settings → Apple ID → Subscriptions, at least 24 hours before it renews.
           </Text>
@@ -189,17 +191,17 @@ export default function PlusScreen() {
                 {busy === 'restore' ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.link}>Restore purchases</Text>
+                  <Text style={styles.link} maxFontSizeMultiplier={MAX_GROW}>Restore purchases</Text>
                 )}
               </Pressable>
-              <Text style={styles.linkDot}>·</Text>
+              <Text style={styles.linkDot} maxFontSizeMultiplier={MAX_GROW}>·</Text>
             </>
           ) : null}
-          <Text style={styles.link} onPress={() => openLegal('terms')} accessibilityRole="link">
+          <Text style={styles.link} onPress={() => openLegal('terms')} accessibilityRole="link" maxFontSizeMultiplier={MAX_GROW}>
             Terms of Use
           </Text>
-          <Text style={styles.linkDot}>·</Text>
-          <Text style={styles.link} onPress={() => openLegal('privacy')} accessibilityRole="link">
+          <Text style={styles.linkDot} maxFontSizeMultiplier={MAX_GROW}>·</Text>
+          <Text style={styles.link} onPress={() => openLegal('privacy')} accessibilityRole="link" maxFontSizeMultiplier={MAX_GROW}>
             Privacy Policy
           </Text>
         </View>
@@ -231,7 +233,9 @@ function BigButton({ title, onPress, loading = false }: { title: string; onPress
         onPress();
       }}
       style={styles.bigButton}>
-      {loading ? <ActivityIndicator color={NAVY} /> : <Text style={styles.bigButtonText}>{title}</Text>}
+      {loading ? <ActivityIndicator color={NAVY} /> : <Text style={styles.bigButtonText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={MAX_GROW}>
+          {title}
+        </Text>}
     </Bouncy>
   );
 }
@@ -291,11 +295,11 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: '31%',
-    minHeight: 72,
+    minHeight: 64,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingVertical: space.sm,
+    paddingVertical: 6,
     paddingHorizontal: 6,
     borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.16)',
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tileEmoji: {
-    fontSize: 22,
+    fontSize: 20,
   },
   tileText: {
     color: '#FFFFFF',
