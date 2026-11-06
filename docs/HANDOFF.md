@@ -64,6 +64,19 @@ publishing: both bundles contain the project URL and key (the "setup-needed" tex
 fallback). No native package changed since the installed builds, so no new build is needed. The other session's
 Peekaboo+ TestFlight build 7 listens on the `testing` channel, so this update does not reach it. **Any next
 `preview` OTA must be built from this branch (or include `e3fbac4`)**, or the QA fixes and votes disappear.
+**Golden Hour redesigned (6 Nov; owner: "the filters look very similar… golden hour… less similar, more golden and
+shiny"):** `b2cc907` (+ merge `7927868`). Golden Hour is now "liquid gold in the low sun": warm gold over the whole
+face (nostrils, moustache, lips, eyes and brows keep their colour), polished highlights, a thin gleam gliding across
+the face every 5 s with glints (never over the eyes/brows), a low sun just past the left edge with a thin streak and
+sunbeams (placed from `fill`, so the saved photo matches), a light amber tint with warm corners and a few golden
+orbs. None of Soft Glow's sparkles/glitter/halo; Soft Glow is pixel-identical. About 16 draws/3 blurred per frame
+(was 45/41). Made with a design round (4 variants, 3 judges) and 3 fix-and-check rounds on the owner's own selfie
+(preview tools: real MediaPipe points + CanvasKit, in the session scratchpad, not committed); the face gold was then
+toned down by hand (FACE_GOLD 0.36, LOW_GOLD 0.27, warmer colours) because at full strength it read as yellow face
+paint. `a66ddcf`: the photo now uses the same moment of the gleam as the screen (LensOverlay → `shownTime`).
+`tests/unit/face-looks.test.mjs` checks the two looks stay different, the draw budget and the sun placement.
+Leftovers: the camera still works out `face.light`/`face.rim` (goldenLight.ts) every frame though no look uses them
+now. OTA `4e9d211e-b499-4a8a-b1aa-7ba828f95eed` on **`testing`**. Not yet seen on a phone.
 **Face filters draw live on the camera (5 Nov, late; owner: "I want to see it moving and tracking my face, like the
 googly eyes"):** ✨ Soft Glow and 🌅 Golden Hour never drew on the camera preview, only on the saved photo. The cause
 was `soft()` in `lensPaint.ts`: its default `style = BlurStyle.Normal` is worked out on the camera's drawing thread
