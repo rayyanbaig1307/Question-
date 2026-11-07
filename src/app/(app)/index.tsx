@@ -23,12 +23,15 @@ const CHAT = 0;
 const CAMERA = 1;
 const HOME = 2;
 const PAGES = [CHAT, CAMERA, HOME];
+// The page the app opens on: Home (stories and posts), not the camera (the owner, 7 Nov). The camera only switches
+// on once you go to it. The page, the swipe animation and the pager must all start here together.
+const START_PAGE = HOME;
 
 // Swipe left/right between Chat ← Camera → Home, like Snapchat, or tap the tabs at the bottom.
 export default function Home() {
   const { userId } = useMe();
   const pager = useRef<HomePagerRef>(null);
-  const [page, setPage] = useState(CAMERA);
+  const [page, setPage] = useState(START_PAGE);
   // True while your finger is swiping (or the page is still gliding into place).
   const [swiping, setSwiping] = useState(false);
   const focused = useIsFocused();
@@ -70,7 +73,7 @@ export default function Home() {
   // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Home (1.5 = halfway to Home).
   // Tracked on the phone's animation thread, so the pages move smoothly with your finger.
   const [swipe] = useState(() => {
-    const position = new Animated.Value(CAMERA);
+    const position = new Animated.Value(START_PAGE);
     const offset = new Animated.Value(0);
     const progress = Animated.add(position, offset);
     // The page you're leaving shrinks back a little and darkens, the new one grows into place.
@@ -125,7 +128,7 @@ export default function Home() {
       <HomePager
         ref={pager}
         style={styles.fill}
-        initialPage={CAMERA}
+        initialPage={START_PAGE}
         onPageScroll={swipe.onPageScroll}
         onPageScrollStateChanged={(event) => setSwiping(event.nativeEvent.pageScrollState !== 'idle')}
         onPageSelected={(event) => {

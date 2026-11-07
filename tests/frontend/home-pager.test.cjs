@@ -23,10 +23,21 @@ test('the home screen still sends the same pager settings and the native-driver 
   assert.match(source, /import \{ HomePager, type HomePagerRef \} from '@\/components\/home\/HomePager'/);
   assert.doesNotMatch(source, /react-native-pager-view/, 'the screen must not load the native pager itself (it crashes the web)');
   const pager = source.slice(source.indexOf('<HomePager'), source.indexOf('</HomePager>'));
-  for (const prop of ['ref={pager}', 'initialPage={CAMERA}', 'onPageScroll={swipe.onPageScroll}', 'onPageScrollStateChanged=', 'onPageSelected=', 'Haptics.selectionAsync()']) {
+  for (const prop of ['ref={pager}', 'initialPage={START_PAGE}', 'onPageScroll={swipe.onPageScroll}', 'onPageScrollStateChanged=', 'onPageSelected=', 'Haptics.selectionAsync()']) {
     assert.ok(pager.includes(prop), `missing ${prop}`);
   }
   assert.match(source, /Animated\.event\(\[\{ nativeEvent: \{ position, offset \} \}\], \{ useNativeDriver: true \}\)/);
+});
+
+test('the app opens on Home, and the page, the swipe animation and the pager all start there together', () => {
+  const { readSource } = require('./harness.cjs');
+  const source = readSource('src/app/(app)/index.tsx');
+  // The owner (7 Nov): Home first, not the camera.
+  assert.match(source, /const START_PAGE = HOME;/);
+  // If these disagreed, the camera could be switched on while Home is showing (or the tabs would point at the wrong page).
+  assert.match(source, /useState\(START_PAGE\)/);
+  assert.match(source, /new Animated\.Value\(START_PAGE\)/);
+  assert.doesNotMatch(source, /useState\(CAMERA\)|new Animated\.Value\(CAMERA\)|initialPage=\{CAMERA\}/);
 });
 
 function loadWebPager() {
