@@ -44,7 +44,8 @@ let openChat: string | null = null;
 export function chatOfNotification(data: unknown): string | null {
   const info = (data ?? {}) as { type?: unknown; from?: unknown; group?: unknown };
   if (info.type === 'message' && typeof info.from === 'string') return `friend:${info.from}`;
-  if (info.type === 'group' && typeof info.group === 'string') return `group:${info.group}`;
+  // Group chat messages come as 'group_chat' ('group' is a group peek or "added you to a group" – not the chat).
+  if (info.type === 'group_chat' && typeof info.group === 'string') return `group:${info.group}`;
   return null;
 }
 
