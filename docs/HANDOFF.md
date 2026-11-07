@@ -74,6 +74,11 @@ API key and does ASC API work on request (no double submits).
 - **Production OTA `31ebc3e2-31f1-41ed-a6d5-06ecc62fa720`** (7 Nov, owner's "publish") from `7df92ea`: the app opens on
   Home (`START_PAGE = HOME`), Plus ends cleanly (`691e4ed`: plusSurelyOff + plusLapse resets a Plus theme/icon), and no
   banner for the chat you have open (`4182b4a` + `afe9652`: group chat pushes are type 'group_chat').
+- **Submission (7 Nov, by the Plus session on the owner's ask):** website re-uploaded (/terms has "9. Peekaboo+"),
+  App Privacy published (Purchase History, Product Interaction, Device ID, Diagnostics), review notes set, age rating
+  override 13+, Australia + Brazil (and China) unavailable, draft review submission `be1312d0` with version 1.0 / build 10;
+  the owner attaches Peekaboo+ Monthly in the web UI and submits (the first subscription can't be added by API).
+  **No `production` OTAs while in review.** Still open: content on @peekaboo_review (0 posts/stories/groups on 7 Nov).
 
 ## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
