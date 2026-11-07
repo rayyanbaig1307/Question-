@@ -65,6 +65,12 @@ API key and does ASC API work on request (no double submits).
      Device ID purpose), age rating, review account content, website upload (website.zip sent), then submit
      (subscription + version in one draft submission).
 - Description already has Terms, Privacy and Apple's standard EULA links (added by the Plus session via the API).
+- **Later on 6 Nov:** the safety migration and the new webhook are live (owner pasted both; TEST event arrived),
+  subscription 6830983771 is READY_TO_SUBMIT (review screenshot + the missing Zimbabwe price), Paid Apps / bank /
+  tax all Active, and the owner's sandbox test buy on build 10 worked end to end (INITIAL_PURCHASE 00:16:44Z →
+  plus_members). First `production` OTA: `1e03f9f5-859b-4cdd-b87f-d37829eada69` (by the Plus session, owner's ask)
+  = `35b7986` (Plus unlocks without a restart: 'use no memo' in usePlus/usePersonPlus/useDare) + `490c38e`
+  (camera bubbles: Dare, Guess Who, Googly, Soft Glow, Golden Hour).
 
 ## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
