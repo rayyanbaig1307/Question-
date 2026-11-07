@@ -79,6 +79,9 @@ API key and does ASC API work on request (no double submits).
   override 13+, Australia + Brazil (and China) unavailable, draft review submission `be1312d0` with version 1.0 / build 10;
   the owner attaches Peekaboo+ Monthly in the web UI and submits (the first subscription can't be added by API).
   **No `production` OTAs while in review.** Still open: content on @peekaboo_review (0 posts/stories/groups on 7 Nov).
+- **SUBMITTED 7 Nov 2026 01:52 UTC** (submission `be1312d0`): Peekaboo 1.0 (build 10), Peekaboo+ Monthly and the Peekaboo+
+  group are WAITING_FOR_REVIEW. Release is manual ("Manually release this version"). After approval: the owner presses
+  Release; then production OTAs are allowed again (only from commits tried on `testing`).
 
 ## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
