@@ -74,6 +74,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
       WAITING_FOR_PARENT: "Waiting for a parent to approve. You'll get Peekaboo+ as soon as it's approved.",
     },
     // Terms agreed on this phone: nothing remembered (tests that need it pass their own).
+    // When Peekaboo+ ends (puts the free theme and icon back): does nothing in these tests.
+    '@/lib/plusLapse': { usePlusLapse() {}, endPlusExtras: async () => {} },
     '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.
     '@/lib/chatPins': { MAX_PINS: 3, pinKeyForFriend: id => `friend:${id}`, pinKeyForGroup: id => `group:${id}`, sortByPins: items => items, useChatPins: () => ({ pins: [], plus: false, toggle: async () => 'needs-plus' }) },

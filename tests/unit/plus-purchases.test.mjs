@@ -421,3 +421,59 @@ it('asking the server again does nothing when nobody is logged in', async () => 
   await expect(lib.refreshServerPlus()).resolves.toBeUndefined();
   expect(server.reads).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// When Peekaboo+ ends: plusSurelyOff is only true when BOTH the server and the App Store have really said "no".
+// ---------------------------------------------------------------------------
+
+it('Plus that ends is "surely off" only once the server and the App Store have both answered no', async () => {
+  const { lib, revenueCat, server } = loadPlus();
+  server.rows.set('alice', new Date(Date.now() - 60_000).toISOString()); // ran out a minute ago
+  expect(lib.plusSurelyOff()).toBe(false); // nobody has answered yet
+  await lib.configurePurchases('alice');
+  await settle();
+  expect(lib.hasPlus('alice')).toBe(false);
+  expect(lib.plusSurelyOff()).toBe(true);
+  // Paying again turns it straight back on.
+  revenueCat.tell(true);
+  expect(lib.hasPlus('alice')).toBe(true);
+  expect(lib.plusSurelyOff()).toBe(false);
+});
+
+it('a member is never "surely off": not while the App Store is still answering, nor with server Plus', async () => {
+  const revenueCat = fakeRevenueCat();
+  const server = fakeServer();
+  server.rows.set('alice', SOON);
+  const { lib } = loadPlus({ revenueCat, server });
+  await lib.configurePurchases('alice');
+  await settle();
+  expect(lib.hasPlus('alice')).toBe(true);
+  expect(lib.plusSurelyOff()).toBe(false);
+});
+
+it('no internet is never "surely off" – and a later failed server check keeps the Plus we knew about', async () => {
+  const revenueCat = fakeRevenueCat();
+  const server = fakeServer();
+  let offline = true;
+  const realFrom = server.supabase.from;
+  server.supabase.from = (...args) => {
+    const query = realFrom(...args);
+    const maybeSingle = query.maybeSingle;
+    query.maybeSingle = async () => (offline ? { data: null, error: { message: 'Network request failed' } } : maybeSingle());
+    return query;
+  };
+  const { lib } = loadPlus({ revenueCat, server });
+  await lib.configurePurchases('alice');
+  await settle();
+  expect(lib.plusSurelyOff()).toBe(false); // the server never answered
+  // Online again, with Plus on the server.
+  offline = false;
+  server.rows.set('alice', SOON);
+  await lib.refreshServerPlus();
+  expect(lib.hasPlus('alice')).toBe(true);
+  // Offline again: still Plus (never "no Plus" because of no internet).
+  offline = true;
+  await lib.refreshServerPlus();
+  expect(lib.hasPlus('alice')).toBe(true);
+  expect(lib.plusSurelyOff()).toBe(false);
+});

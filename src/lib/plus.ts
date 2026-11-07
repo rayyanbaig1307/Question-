@@ -60,9 +60,14 @@ type MyPlus = {
   store: boolean;
   // When your Plus runs out according to the server (milliseconds), or null for "no row".
   serverUntil: number | null;
+  // True once the App Store (through RevenueCat) and the server have really answered for this account (not just
+  // "no answer yet" or "no internet"). Only then can we be sure someone doesn't have Plus (see plusSurelyOff).
+  storeKnown: boolean;
+  serverKnown: boolean;
 };
 
-let mine: MyPlus = { userId: null, store: false, serverUntil: null };
+const NOBODY: MyPlus = { userId: null, store: false, serverUntil: null, storeKnown: false, serverKnown: false };
+let mine: MyPlus = NOBODY;
 const watchers = new Set<() => void>();
 
 function setMine(change: Partial<MyPlus>) {
@@ -84,18 +89,36 @@ const serverHasPlus = (plus: MyPlus) => plus.serverUntil !== null && plus.server
 // simply counts as "no row".
 async function loadMyServerPlus(userId: string) {
   let until: number | null = null;
+  let answered = false;
   try {
     const { data, error } = await supabase
       .from('plus_members')
       .select('expires_at')
       .eq('user_id', userId)
       .maybeSingle();
+    answered = !error;
     if (!error && data?.expires_at) until = new Date(data.expires_at).getTime();
   } catch {
     // counts as no row
   }
-  if (mine.userId === userId) setMine({ serverUntil: until });
+  // No answer (no internet): keep what we knew, never turn it into "no Plus".
+  if (!answered && mine.userId === userId && mine.serverKnown) return;
+  if (mine.userId === userId) {
+    setMine({ serverUntil: until, serverKnown: mine.serverKnown || answered });
+    lockWhenItRunsOut(until);
+  }
   remember(userId, until !== null && until > Date.now());
+}
+
+// Plus that runs out while the app stays open: at that moment every screen checks again (and locks).
+let runsOutTimer: ReturnType<typeof setTimeout> | null = null;
+function lockWhenItRunsOut(until: number | null) {
+  if (runsOutTimer) clearTimeout(runsOutTimer);
+  runsOutTimer = null;
+  if (until === null || until <= Date.now()) return;
+  // (A timer can wait at most about 24 days; a longer wait is simply checked again at the next app start.)
+  const wait = Math.min(until - Date.now() + 1000, 2_000_000_000);
+  runsOutTimer = setTimeout(() => setMine({}), wait);
 }
 
 // Right after buying (or restoring), the App Store knows at once, but the server only hears it from RevenueCat a
@@ -142,7 +165,7 @@ function showStoreInfo(info: CustomerInfo) {
   if (userId === null || userId !== mine.userId) return;
   const store = storeHasPlus(info);
   const switchedOn = store && !mine.store;
-  setMine({ store });
+  setMine({ store, storeKnown: true });
   if (switchedOn && !serverHasPlus(mine)) checkServerSoon(userId);
 }
 
@@ -174,7 +197,7 @@ async function switchStoreAccount(userId: string): Promise<void> {
 // Call once you're logged in (src/app/(app)/_layout.tsx does). Sets up payments for this account and checks
 // whether you have Plus. Never throws.
 export async function configurePurchases(userId: string): Promise<void> {
-  if (mine.userId !== userId) setMine({ userId, store: false, serverUntil: null });
+  if (mine.userId !== userId) setMine({ ...NOBODY, userId });
   loadMyServerPlus(userId);
   if (!Purchases) return;
   const store = Purchases;
@@ -195,7 +218,7 @@ export async function configurePurchases(userId: string): Promise<void> {
 
 // When someone logs out, RevenueCat stops using their account on this phone. Never throws.
 export function logOutPurchases(userId: string): Promise<void> {
-  if (mine.userId === userId) setMine({ userId: null, store: false, serverUntil: null });
+  if (mine.userId === userId) setMine(NOBODY);
   serverChecks.forEach((check) => clearTimeout(check));
   serverChecks = [];
   const store = Purchases;
@@ -229,6 +252,20 @@ export function hasPlus(userId: string | null | undefined): boolean {
   if (userId === mine.userId) return mine.store || serverHasPlus(mine);
   return cache.get(userId)?.plus ?? false;
 }
+
+// True only when we're SURE the person using the app doesn't have Peekaboo+: the server answered "no" and (on an
+// iPhone that can buy) the App Store answered "no" too. "Not sure yet" or "no internet" is never "surely off", so
+// nobody loses their theme or icon because of a slow connection. (lib/plusLapse.ts uses this.)
+export function plusSurelyOff(): boolean {
+  const userId = mine.userId;
+  if (!userId || TESTERS.has(userId)) return false;
+  if (!mine.serverKnown || serverHasPlus(mine)) return false;
+  if (Purchases) return mine.storeKnown && !mine.store;
+  return true;
+}
+
+// Call `listener` whenever your own Plus changes. Returns the way to stop.
+export const watchMyPlus = watchMine;
 
 // True when the person using the app has Peekaboo+.
 export function usePlus(): boolean {

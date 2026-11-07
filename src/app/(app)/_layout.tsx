@@ -9,6 +9,7 @@ import { useShareLocationWhileOpen } from '@/lib/location';
 import { fetchNotificationPrefs } from '@/lib/notificationPrefs';
 import { registerForPush, scheduleDropNotifications, useNotificationTaps } from '@/lib/notifications';
 import { configurePurchases } from '@/lib/plus';
+import { usePlusLapse } from '@/lib/plusLapse';
 import { colors } from '@/theme';
 
 // Every screen you can reach once you're logged in.
@@ -38,6 +39,8 @@ export default function AppLayout() {
   useEffect(() => {
     if (userId) configurePurchases(userId);
   }, [userId]);
+  // Peekaboo+ ended: put the free app theme and icon back (every Plus feature locks again by itself).
+  usePlusLapse();
 
   // Just made your account with Apple or Google: pick a username first (shown instead of the app).
   // If we couldn't check (no internet?), or your profile isn't loaded yet, say so and offer "Try again" –
