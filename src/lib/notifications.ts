@@ -1,7 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo';
-import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { dropAt, localDay } from './drop';
@@ -33,6 +33,39 @@ export function useClearNotificationsWhenOpen(enabled: boolean) {
   }, [enabled]);
 }
 
+// ---------------------------------------------------------------------------
+// The chat that's on screen right now ("friend:<id>" or "group:<id>"), so its own messages don't also pop up
+// as a banner on top of it.
+// ---------------------------------------------------------------------------
+
+let openChat: string | null = null;
+
+// Which chat a notification is about, or null (likes, drops, friend requests…).
+export function chatOfNotification(data: unknown): string | null {
+  const info = (data ?? {}) as { type?: unknown; from?: unknown; group?: unknown };
+  if (info.type === 'message' && typeof info.from === 'string') return `friend:${info.from}`;
+  if (info.type === 'group' && typeof info.group === 'string') return `group:${info.group}`;
+  return null;
+}
+
+export function isForOpenChat(data: unknown): boolean {
+  const chat = chatOfNotification(data);
+  return chat !== null && chat === openChat;
+}
+
+// For a chat screen: while it's on screen, its own messages don't pop up as notifications.
+export function useOpenChat(chat: string | null) {
+  useFocusEffect(
+    useCallback(() => {
+      if (!chat) return;
+      openChat = chat;
+      return () => {
+        if (openChat === chat) openChat = null;
+      };
+    }, [chat]),
+  );
+}
+
 const DROP_DAYS_AHEAD = 7;
 const DROP_ID = 'peekaboo-drop-';
 
@@ -43,12 +76,16 @@ async function getReady(): Promise<boolean> {
   Notifications.setNotificationHandler({
     // While Peekaboo is open: a quick banner, but it isn't kept in the phone's notification list
     // (you're already in the app, so it would only pile up there).
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: false,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    // Nothing at all for a message from the chat you're looking at right now (you can already see it).
+    handleNotification: async (notification) => {
+      const forOpenChat = isForOpenChat(notification.request.content.data);
+      return {
+        shouldShowBanner: !forOpenChat,
+        shouldShowList: false,
+        shouldPlaySound: !forOpenChat,
+        shouldSetBadge: false,
+      };
+    },
   });
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('drops', {

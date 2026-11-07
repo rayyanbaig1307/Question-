@@ -69,11 +69,14 @@ import { useTyping } from '@/lib/typing';
 import { Audio, sendVoice } from '@/lib/voice';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
+import { useOpenChat } from '@/lib/notifications';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // A 1-on-1 chat with a friend. New messages pop in live.
 export default function ChatScreen() {
   const { id: friendId } = useLocalSearchParams<{ id: string }>();
+  // While this chat is open, its own new messages don't also pop up as a notification banner.
+  useOpenChat(`friend:${friendId}`);
   const { userId } = useMe();
   const { showToast, showOptions } = useOverlays();
   const { report } = useSafetyActions();

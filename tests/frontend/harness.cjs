@@ -75,6 +75,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     },
     // Terms agreed on this phone: nothing remembered (tests that need it pass their own).
     // When Peekaboo+ ends (puts the free theme and icon back): does nothing in these tests.
+    // Chat screens tell the notifications which chat is open (so its own messages don't pop up): nothing here.
+    '@/lib/notifications': { useOpenChat() {} },
     '@/lib/plusLapse': { usePlusLapse() {}, endPlusExtras: async () => {} },
     '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.

@@ -69,6 +69,7 @@ import type { Profile } from '@/lib/types';
 import { useGroupTyping } from '@/lib/typing';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { Audio } from '@/lib/voice';
+import { useOpenChat } from '@/lib/notifications';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 // How often to check who has read the chat (for "Seen by …") while it's open.
@@ -80,6 +81,8 @@ const READS_EVERY_MS = 15_000;
 // Tap the top to see the group (drops, members). Hold a message: yours → delete for everyone; theirs → report.
 export default function GroupChat() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
+  // While this chat is open, its own new messages don't also pop up as a notification banner.
+  useOpenChat(`group:${groupId}`);
   const { userId } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
