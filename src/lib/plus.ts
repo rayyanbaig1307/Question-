@@ -232,6 +232,10 @@ export function hasPlus(userId: string | null | undefined): boolean {
 
 // True when the person using the app has Peekaboo+.
 export function usePlus(): boolean {
+  // 'use no memo': the React Compiler would otherwise remember the answer per account and never ask again, because
+  // it can't see that the answer depends on a shared value that changes (screens already open kept the old answer
+  // until the app restarted). tests/unit/compiler-hooks.test.mjs checks this.
+  'use no memo';
   const { userId } = useMe();
   // Re-draws when your Plus changes (the snapshot is the little "mine" object, replaced on every change).
   useSyncExternalStore(watchMine, () => mine);
@@ -478,6 +482,10 @@ function lookUp(userId: string) {
 
 // True when this person has Peekaboo+ (for the ⭐ badge next to their name).
 export function usePersonPlus(userId: string | null | undefined): boolean {
+  // 'use no memo': the React Compiler would otherwise remember the answer per person and never ask again, because
+  // it can't see that the answer depends on a shared value that changes (screens already open kept the old answer
+  // until the app restarted). tests/unit/compiler-hooks.test.mjs checks this.
+  'use no memo';
   const me = usePlus();
   const { userId: myId } = useMe();
   const [, redraw] = useState(0);

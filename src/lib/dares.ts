@@ -79,6 +79,10 @@ export function dareFor(day: string): Dare {
 
 // The same, for screens: redraws when a community dare for that day shows up.
 export function useDare(day: string): Dare {
+  // 'use no memo': the React Compiler would otherwise remember the answer per day and never ask again, because
+  // it can't see that the answer depends on a shared value that changes (screens already open kept the old answer
+  // until the app restarted). tests/unit/compiler-hooks.test.mjs checks this.
+  'use no memo';
   // Subscribing here makes the screen redraw whenever an override arrives.
   useSyncExternalStore(
     (listener) => {
