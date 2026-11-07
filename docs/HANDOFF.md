@@ -71,6 +71,9 @@ API key and does ASC API work on request (no double submits).
   plus_members). First `production` OTA: `1e03f9f5-859b-4cdd-b87f-d37829eada69` (by the Plus session, owner's ask)
   = `35b7986` (Plus unlocks without a restart: 'use no memo' in usePlus/usePersonPlus/useDare) + `490c38e`
   (camera bubbles: Dare, Guess Who, Googly, Soft Glow, Golden Hour).
+- **Production OTA `31ebc3e2-31f1-41ed-a6d5-06ecc62fa720`** (7 Nov, owner's "publish") from `7df92ea`: the app opens on
+  Home (`START_PAGE = HOME`), Plus ends cleanly (`691e4ed`: plusSurelyOff + plusLapse resets a Plus theme/icon), and no
+  banner for the chat you have open (`4182b4a` + `afe9652`: group chat pushes are type 'group_chat').
 
 ## Now: QA round 2 and group dare votes are LIVE (5 Nov): database and app update
 
