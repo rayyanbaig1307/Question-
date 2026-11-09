@@ -22,18 +22,21 @@
 --   all happens (no request, no notification), but the app still says "Friend request sent".
 -- * Already friends → "already". Your own link → "self". A request they sent you → you're friends now.
 --   A request you already sent them → it just stays a request.
+-- * The child-safety rule below stopped it → "busy" (the app says the link is busy; nothing was saved).
 -- * An unknown or old code, a deleted or banned account, or a block either way all give the same answer:
 --   "This invite link doesn't work any more" (so a block is never given away).
 -- * The second lock from 20261220000000_launch_safety.sql still checks every friendship that is saved.
 --
 -- Limits (a deleted friendship never gives an invite back – every use is written down for good):
--- * You can use 20 invite links a day (counting uses that made a friend or a request).
+-- * You can use 20 invite links a day (counting uses that made a friend or a request, and tries that the
+--   child-safety rule stopped).
 -- * One person's link can be used 20 times a day. After that: "This invite link is busy – try again
 --   tomorrow". When it reaches 20, its owner gets one notification that day: "Lots of people used your
 --   invite link today – not you? Get a new link".
--- * Child safety: once 3 people under 18 have used one adult's link in 24 hours, anyone else under 18 who
---   uses it only sends a friend request, and the people who get report alerts (private.report_alert_people)
---   get one notification about it that day.
+-- * Child safety: once 3 people under 18 (or with no birthday saved) have used one adult's link in 24 hours,
+--   nobody else under 18 can use it for now. Nothing is saved that the adult could see or accept: no friend
+--   request and no notification to them. The app just says "busy". The try is written down, and the people
+--   who get report alerts (private.report_alert_people) get one notification about it that day.
 --
 -- Notifications only ever go to the person who made the link, never to the person who tapped it:
 -- "You have a new friend 🎉 / <name> added you as a friend", "New friend request 👋 / <name> wants to be
@@ -44,7 +47,7 @@
 --
 -- For the owner (Supabase → Table Editor → schema "private"):
 -- * invite_accepts: every invite that made a friend or a request (who used whose link, when, and what
---   happened). "held_for_safety" = an under-18 who got a request because of the child-safety rule above.
+--   happened). outcome "held" = an under-18 that the child-safety rule above stopped.
 -- * invite_alerts: the "busy" and child-safety notifications that went out.
 --
 -- Safe to run again: everything is "if not exists", "or replace" or removed first.
@@ -80,26 +83,32 @@ create index if not exists invite_uses_invitee_idx on private.invite_uses (invit
 
 -- Two people whose friendship (or friend request) was removed: unfriended, declined, cancelled or blocked.
 -- One line per pair (the smaller id first), with the last time it happened.
+-- On purpose this table is NOT linked to profiles: then writing a line never has to wait for an account
+-- that is being deleted at that moment (that wait could get two people stuck waiting for each other).
+-- A person's lines are removed by a trigger when their account is deleted (see section 2).
 create table if not exists private.past_links (
-  person_a uuid not null references public.profiles (id) on delete cascade,
-  person_b uuid not null references public.profiles (id) on delete cascade,
+  person_a uuid not null,
+  person_b uuid not null,
   removed_at timestamptz not null default now(),
   primary key (person_a, person_b),
   check (person_a < person_b)
 );
+-- An earlier copy of this file had those links. Remove them if they are there.
+alter table private.past_links drop constraint if exists past_links_person_a_fkey;
+alter table private.past_links drop constraint if exists past_links_person_b_fkey;
 create index if not exists past_links_person_b_idx on private.past_links (person_b);
 
 -- Every invite that made a friend or a friend request. Never removed when the friendship goes,
 -- so unfriending can't give anyone more invites.
 -- outcome: 'friends' (friends straight away), 'requested' (a friend request to the link's owner),
--- 'accepted_request' (the link's owner had already asked you, and now you're friends).
+-- 'accepted_request' (the link's owner had already asked you, and now you're friends),
+-- 'held' (someone under 18 that the child-safety rule stopped: nothing was saved for the link's owner).
 create table if not exists private.invite_accepts (
   id bigint generated always as identity primary key,
   accepter uuid not null references public.profiles (id) on delete cascade,
   inviter uuid not null references public.profiles (id) on delete cascade,
-  outcome text not null check (outcome in ('friends', 'requested', 'accepted_request')),
+  outcome text not null check (outcome in ('friends', 'requested', 'accepted_request', 'held')),
   accepter_adult boolean not null default false,
-  held_for_safety boolean not null default false,
   friendship_id uuid,
   used_at timestamptz not null default now()
 );
@@ -167,7 +176,8 @@ returns boolean language sql stable security definer set search_path = '' as $$
      and not private.is_banned(person);
 $$;
 
--- Stops an invite when the person using it, or the link, has had 20 uses in the last 24 hours.
+-- Stops an invite when the person using it, or the link, has had 20 uses in the last 24 hours
+-- (tries that the child-safety rule stopped count too).
 create or replace function private.check_invite_limits(accepter_id uuid, owner_id uuid)
 returns void language plpgsql stable security definer set search_path = '' as $$
 begin
@@ -183,19 +193,16 @@ end;
 $$;
 
 -- When a friendship or friend request is removed (unfriend, decline, cancel, block), remember the pair.
--- Not when an account is being deleted (the friendship goes with the account, and so does this line).
+-- Not when an account is being deleted: then that person's profile is already gone here, so nothing is
+-- written (the friendship goes with the account).
 create or replace function private.remember_past_link()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if exists (select 1 from public.profiles p where p.id = old.requester_id)
      and exists (select 1 from public.profiles p where p.id = old.addressee_id) then
-    begin
-      insert into private.past_links (person_a, person_b, removed_at)
-      values (least(old.requester_id, old.addressee_id), greatest(old.requester_id, old.addressee_id), now())
-      on conflict (person_a, person_b) do update set removed_at = excluded.removed_at;
-    exception when foreign_key_violation then
-      null;                                   -- one of them is deleting their account right now
-    end;
+    insert into private.past_links (person_a, person_b, removed_at)
+    values (least(old.requester_id, old.addressee_id), greatest(old.requester_id, old.addressee_id), now())
+    on conflict (person_a, person_b) do update set removed_at = excluded.removed_at;
   end if;
   return null;
 end;
@@ -203,6 +210,20 @@ $$;
 drop trigger if exists friendships_remember_past_link on public.friendships;
 create trigger friendships_remember_past_link after delete on public.friendships
   for each row execute function private.remember_past_link();
+
+-- When an account is deleted, its past_links lines go too. Triggers run in name order, and the "zz_" makes
+-- this one run after everything that is deleted with the account (friendships included). So it also
+-- removes a line that someone else's unfriend wrote while the account was being deleted.
+create or replace function private.forget_past_links()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  delete from private.past_links l where l.person_a = old.id or l.person_b = old.id;
+  return null;
+end;
+$$;
+drop trigger if exists zz_profiles_forget_past_links on public.profiles;
+create trigger zz_profiles_forget_past_links after delete on public.profiles
+  for each row execute function private.forget_past_links();
 
 -- ---------------------------------------------------------------------
 -- 3. Your code: get it (made the first time you ask) or get a new one
@@ -306,9 +327,10 @@ grant execute on function public.invite_preview(text) to authenticated;
 -- ---------------------------------------------------------------------
 -- 5. Tapping "Add <name>" on an invite
 -- ---------------------------------------------------------------------
--- Returns 'friends' (you're friends now), 'requested' (a friend request), 'already' (already friends) or
--- 'self' (your own link). expected_user_id is the account the app thinks is logged in (like block_user):
--- if the phone switched accounts in the meantime, nothing happens.
+-- Returns 'friends' (you're friends now), 'requested' (a friend request), 'already' (already friends),
+-- 'self' (your own link) or 'busy' (the child-safety rule stopped it: nothing was saved for the link's
+-- owner). expected_user_id is the account the app thinks is logged in (like block_user): if the phone
+-- switched accounts in the meantime, nothing happens.
 create or replace function public.accept_invite(invite_code text, expected_user_id uuid)
 returns text language plpgsql security definer set search_path = '' as $$
 declare
@@ -320,7 +342,6 @@ declare
   saved public.friendships%rowtype;
   i_am_adult boolean;
   instant boolean;
-  held boolean := false;
   what text;
   person uuid;
 begin
@@ -350,6 +371,10 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('invite-inviter:' || them::text, 0));
   perform pg_advisory_xact_lock(hashtextextended(
     'invite-pair:' || least(me, them)::text || ':' || greatest(me, them)::text, 0));
+  -- Hold their account first, and only then their code: the same order as deleting an account, so this
+  -- and their account deletion never wait for each other. If they are deleting their account right now,
+  -- this waits until that is done, and then their code is gone too ("doesn't work any more" below).
+  perform 1 from public.profiles p where p.id = them for key share;
   -- The link must still be theirs (they may have just made a new one). Holding it makes "Get a new link"
   -- wait until this invite is finished.
   select c.user_id into still_theirs from public.invite_codes c where c.code = clean for share;
@@ -386,6 +411,34 @@ begin
     end if;
     perform private.check_invite_limits(me, them);
     i_am_adult := coalesce(private.age_group(me) = 'adult', false);
+    -- Child safety: 3 people under 18 (or with no birthday) already used this adult's link in 24 hours →
+    -- more of them can't use it for now. Nothing is saved that the adult could see or accept (no friend
+    -- request, no notification to them), so they can't collect under-18s through a link. The try is written
+    -- down (it counts towards the daily limits), and the people who get report alerts are told (once a day
+    -- per link). The answer is "busy" and not an error, because an error would undo the note and the alert.
+    if not i_am_adult
+       and coalesce(private.age_group(them) = 'adult', false)
+       and (select count(distinct a.accepter) from private.invite_accepts a
+             where a.inviter = them and not a.accepter_adult
+               and a.used_at > now() - interval '24 hours') >= 3 then
+      insert into private.invite_accepts (accepter, inviter, outcome, accepter_adult)
+      values (me, them, 'held', false);
+      if not exists (select 1 from private.invite_alerts x
+                      where x.inviter = them and x.kind = 'under_18' and x.sent_at > now() - interval '24 hours') then
+        insert into private.invite_alerts (inviter, kind) values (them, 'under_18');
+        for person in select r.user_id from private.report_alert_people r loop
+          begin
+            perform private.send_push(person, 'reports', '🚩 Invite link check',
+              'Lots of under-18s used one adult''s invite link today, so more under-18s can''t use it for now. '
+                || 'Check private.invite_accepts in Supabase.',
+              jsonb_build_object('type', 'invite_check', 'inviter', them));
+          exception when others then
+            null;                             -- never stop this because of a notification problem
+          end;
+        end loop;
+      end if;
+      return 'busy';
+    end if;
     -- Friends straight away only with an adult's public account, and only the first time ever.
     instant := coalesce((select not p.is_private from public.profiles p where p.id = them), false)
       and coalesce(private.age_group(them) = 'adult', false)
@@ -393,14 +446,6 @@ begin
                        where l.person_a = least(me, them) and l.person_b = greatest(me, them))
       and not exists (select 1 from private.invite_uses u
                        where (u.inviter = them and u.invitee = me) or (u.inviter = me and u.invitee = them));
-    -- Child safety: 3 under-18s already used this adult's link in 24 hours → more under-18s only send a request.
-    if instant and not i_am_adult
-       and (select count(distinct a.accepter) from private.invite_accepts a
-             where a.inviter = them and not a.accepter_adult
-               and a.used_at > now() - interval '24 hours') >= 3 then
-      instant := false;
-      held := true;
-    end if;
     -- The person tapping is the one asking. The second lock (friendships_need_their_ok) checks it again.
     insert into public.friendships (requester_id, addressee_id, status, accepted_at)
     values (me, them, case when instant then 'accepted' else 'pending' end, case when instant then now() end)
@@ -423,8 +468,8 @@ begin
   end if;
 
   insert into private.invite_uses (inviter, invitee) values (them, me) on conflict do nothing;
-  insert into private.invite_accepts (accepter, inviter, outcome, accepter_adult, held_for_safety, friendship_id)
-  values (me, them, what, coalesce(private.age_group(me) = 'adult', false), held, saved.id);
+  insert into private.invite_accepts (accepter, inviter, outcome, accepter_adult, friendship_id)
+  values (me, them, what, coalesce(private.age_group(me) = 'adult', false), saved.id);
 
   -- The link's 20th use in 24 hours: tell its owner (once a day) in case it got out.
   if (select count(*) from private.invite_accepts a
@@ -434,21 +479,6 @@ begin
     insert into private.invite_alerts (inviter, kind) values (them, 'busy');
     perform private.send_push(them, 'invite_alerts', '🔗 Your invite link',
       'Lots of people used your invite link today – not you? Get a new link', jsonb_build_object('type', 'friends'));
-  end if;
-  -- The child-safety rule just kicked in: tell the people who get report alerts (once a day per link).
-  if held and not exists (select 1 from private.invite_alerts x
-                           where x.inviter = them and x.kind = 'under_18' and x.sent_at > now() - interval '24 hours') then
-    insert into private.invite_alerts (inviter, kind) values (them, 'under_18');
-    for person in select r.user_id from private.report_alert_people r loop
-      begin
-        perform private.send_push(person, 'reports', '🚩 Invite link check',
-          'Lots of under-18s used one adult''s invite link today, so new ones only send a friend request. '
-            || 'Check private.invite_accepts in Supabase.',
-          jsonb_build_object('type', 'invite_check', 'inviter', them));
-      exception when others then
-        null;                                 -- never stop the invite because of a notification problem
-      end;
-    end loop;
   end if;
 
   return case when saved.status = 'accepted' then 'friends' else 'requested' end;
@@ -466,5 +496,6 @@ revoke execute on function private.is_banned(uuid) from public, anon, authentica
 revoke execute on function private.invite_user_ok(uuid) from public, anon, authenticated;
 revoke execute on function private.check_invite_limits(uuid, uuid) from public, anon, authenticated;
 revoke execute on function private.remember_past_link() from public, anon, authenticated;
+revoke execute on function private.forget_past_links() from public, anon, authenticated;
 
 commit;

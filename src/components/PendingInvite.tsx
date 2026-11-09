@@ -6,7 +6,7 @@ import { readPendingInvite } from '@/lib/invite';
 // An invite link you opened before you were in the app (for example before logging in or signing up) is kept
 // on the phone for up to 7 days. Once you're in (after setting up your profile), this opens it – once.
 // You still have to tap "Add" yourself: nothing happens by itself. The invite screen forgets the saved
-// invite when you've dealt with it.
+// invite as soon as it opens, and logging out (or a login that ends by itself) forgets it too.
 export function PendingInvite() {
   const pathname = usePathname();
   const where = useRef(pathname);

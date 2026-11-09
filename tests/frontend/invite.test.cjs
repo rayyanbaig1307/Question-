@@ -35,9 +35,12 @@ function loadInvite({ os, channel, session = null, rpc, stored = [] } = {}) {
       },
     },
   });
-  return { invite: screen.exports, state, calls: screen.calls };
+  return { invite: screen.exports, state, calls: screen.calls, screen };
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
+// Moves the loaded file's clock (Date.now) to `ms` – the file has its own Date, so the test's clock is untouched.
+const setClock = (screen, ms) => { screen.getBinding('Date').now = () => ms; };
+const MINUTE = 60 * 1000;
 
 test('the App Store app invites with the App Store link and no Android download', () => {
   const { invite } = loadInvite({ os: 'ios', channel: 'production' });
@@ -211,7 +214,7 @@ test('preview and accept call the database with the agreed names', async () => {
   answers.invite_preview = { data: [], error: null };
   assert.equal(await invite.previewInvite('BCDFGHJKLM'), null);
   // Every answer the app knows, and anything else counts as a request (never "friends").
-  for (const result of ['friends', 'requested', 'already', 'self']) {
+  for (const result of ['friends', 'requested', 'already', 'self', 'busy']) {
     answers.accept_invite = { data: result, error: null };
     assert.equal(await invite.acceptInvite('BCDFGHJKLM', 'alice'), result);
   }
@@ -244,4 +247,99 @@ test('a saved invite is read back for 7 days, and only the matching code is forg
   loaded = loadInvite({ os: 'ios', channel: 'production', stored: save('BCDFGHJKLM', now - 8 * 24 * 60 * 60 * 1000) });
   assert.equal(await loaded.invite.readPendingInvite(now), null, 'older than 7 days');
   assert.equal(loaded.state.store.has('peekaboo-pending-invite'), false, 'an old one is tidied away');
+});
+
+test('"busy" (the link was used a lot today) comes back as busy – never as friends or a request', async () => {
+  const { invite } = loadInvite({ os: 'ios', channel: 'production', session: 'alice', rpc: () => ({ data: 'busy', error: null }) });
+  assert.equal(await invite.acceptInvite('BCDFGHJKLM', 'alice'), 'busy');
+  // Other words the app doesn't know still count as a request.
+  const other = loadInvite({ os: 'ios', channel: 'production', session: 'alice', rpc: () => ({ data: 'something new', error: null }) });
+  assert.equal(await other.invite.acceptInvite('BCDFGHJKLM', 'alice'), 'requested');
+});
+
+test('a new link made on another phone: asking fresh shows it, and the next share uses it', async () => {
+  // The server's code for Alice. "Get a new link" on her tablet changes it.
+  const server = { code: 'BCDFGHJKLM' };
+  const { invite, state } = loadInvite({
+    os: 'ios', channel: 'production', session: 'alice',
+    rpc: name => (name === 'my_invite_code' ? { data: server.code, error: null } : { data: null, error: { message: 'unexpected' } }),
+  });
+  invite.prefetchInviteCode('alice');
+  await flush();
+  assert.equal(await invite.fetchMyInviteCode('alice'), 'BCDFGHJKLM');
+  server.code = 'NPQRSTVWXZ';
+  // "Your invite link" asks the server again (fresh), even though a code is remembered.
+  assert.equal(await invite.fetchMyInviteCode('alice', { fresh: true }), 'NPQRSTVWXZ');
+  assert.equal(invite.rememberedInviteCode('alice'), 'NPQRSTVWXZ');
+  // ... and the next share uses the new code, without asking again.
+  await invite.inviteFriends('alice');
+  assert.match(state.shared[0].message, /invite\?c=NPQRSTVWXZ/);
+  assert.doesNotMatch(state.shared[0].message, /BCDFGHJKLM/);
+  assert.equal(state.rpcCalls.length, 2);
+});
+
+test('a remembered code is only used for 10 minutes, so a new link made on another phone is picked up', async () => {
+  const server = { code: 'BCDFGHJKLM' };
+  const { invite, state, screen } = loadInvite({
+    os: 'ios', channel: 'production', session: 'alice',
+    rpc: () => ({ data: server.code, error: null }),
+  });
+  const start = Date.now();
+  setClock(screen, start);
+  invite.prefetchInviteCode('alice');
+  await flush();
+  server.code = 'NPQRSTVWXZ';
+  // 9 minutes later: the remembered code is still used (no extra question to the server).
+  setClock(screen, start + 9 * MINUTE);
+  invite.prefetchInviteCode('alice');
+  await flush();
+  assert.equal(state.rpcCalls.length, 1);
+  assert.equal(invite.rememberedInviteCode('alice'), 'BCDFGHJKLM');
+  // 11 minutes later: Home loads it again, and sharing uses the new code.
+  setClock(screen, start + 11 * MINUTE);
+  assert.equal(invite.rememberedInviteCode('alice'), null, 'too old to use');
+  invite.prefetchInviteCode('alice');
+  await flush();
+  assert.equal(state.rpcCalls.length, 2);
+  await invite.inviteFriends('alice');
+  assert.match(state.shared[0].message, /invite\?c=NPQRSTVWXZ/);
+  // A clock that jumped back doesn't keep an old code either.
+  setClock(screen, start);
+  assert.equal(invite.rememberedInviteCode('alice'), null);
+  // Never another account's code.
+  setClock(screen, start + 11 * MINUTE);
+  assert.equal(invite.rememberedInviteCode('bob'), null);
+});
+
+test('asking fresh: a late answer can never undo "Get a new link", or replace a newer answer', async () => {
+  // 1. A fresh question is still on its way when you get a new link: the old code must not come back.
+  let lateAnswer;
+  let loaded = loadInvite({
+    os: 'ios', channel: 'production', session: 'alice',
+    rpc: name => (name === 'reset_invite_code' ? { data: 'NPQRSTVWXZ', error: null } : new Promise(resolve => { lateAnswer = resolve; })),
+  });
+  const asking = loaded.invite.fetchMyInviteCode('alice', { fresh: true });
+  await flush();
+  assert.equal(await loaded.invite.resetInviteCode('alice'), 'NPQRSTVWXZ');
+  lateAnswer({ data: 'BCDFGHJKLM', error: null });
+  await asking;
+  assert.equal(loaded.invite.rememberedInviteCode('alice'), 'NPQRSTVWXZ');
+  assert.equal(await loaded.invite.fetchMyInviteCode('alice'), 'NPQRSTVWXZ');
+
+  // 2. An older question (Home loading it early) answers after a fresh one: the fresh answer stays.
+  const answers = [];
+  loaded = loadInvite({
+    os: 'ios', channel: 'production', session: 'alice',
+    rpc: () => new Promise(resolve => { answers.push(resolve); }),
+  });
+  loaded.invite.prefetchInviteCode('alice');
+  await flush();
+  const fresh = loaded.invite.fetchMyInviteCode('alice', { fresh: true });
+  await flush();
+  assert.equal(answers.length, 2, 'fresh asks the server itself, even while another question is on its way');
+  answers[1]({ data: 'NPQRSTVWXZ', error: null });
+  assert.equal(await fresh, 'NPQRSTVWXZ');
+  answers[0]({ data: 'BCDFGHJKLM', error: null });
+  await flush();
+  assert.equal(loaded.invite.rememberedInviteCode('alice'), 'NPQRSTVWXZ');
 });

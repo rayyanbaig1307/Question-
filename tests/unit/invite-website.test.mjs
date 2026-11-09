@@ -129,8 +129,21 @@ describe('the Privacy Policy and invite links', () => {
     expect(privacy).toContain("If you are under 18 (or haven't saved your birthday), or your account is private, people send a request that you can accept or decline.");
   });
 
+  it('says what is kept about removed friendships and invite uses, and for how long', () => {
+    // The database: removed friendships and requests are remembered in private.past_links, and every invite use is
+    // logged with the person's age group in private.invite_accepts (supabase/migrations/20261223000000_invite_links.sql).
+    const friends = privacy.split('\n').find((line) => line.startsWith('| **Friends and safety**'));
+    expect(friends).toContain('When a friendship or friend request is removed (unfriend, decline, cancel or block), we keep a note that the two accounts were linked and when, so that person can\'t use an invite link to add you straight away.');
+    expect(friends).toContain('Each time someone uses an invite link we log whether they were 18 or over, and the Peekaboo team is alerted when several under-18s use one adult\'s link in a day.');
+    expect(privacy).toContain('| Notes of removed friendships and friend requests, and invite logs | Kept until either account is deleted (so the invite and child-safety rules keep working). |');
+  });
+
   it('the app copy and the website have the new wording too', () => {
     expect(file('src/lib/legalDocs.ts')).toContain('The invite web page only shows the invite code – never your name or photo.');
     expect(file('website/privacy.html')).toContain('The invite web page only shows the invite code – never your name or photo.');
+    for (const copy of [file('src/lib/legalDocs.ts'), file('website/privacy.html')]) {
+      expect(copy).toContain('we keep a note that the two accounts were linked and when');
+      expect(copy).toContain('Notes of removed friendships and friend requests, and invite logs');
+    }
   });
 });

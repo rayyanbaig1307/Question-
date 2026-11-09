@@ -16,6 +16,7 @@ import {
   inviteLink,
   isAdultBirthday,
   normalizeInviteCode,
+  rememberedInviteCode,
   resetInviteCode,
   shareInviteLink,
 } from '@/lib/invite';
@@ -43,8 +44,15 @@ export default function YourInviteLink() {
     };
   }, []);
 
+  // Always asks the server, so a new link made on another phone shows up here. If the server can't be reached,
+  // the code loaded in the last few minutes is shown instead.
   const loadCode = useCallback(() => {
-    fetchMyInviteCode(userId)
+    fetchMyInviteCode(userId, { fresh: true })
+      .catch((error) => {
+        const remembered = rememberedInviteCode(userId);
+        if (remembered) return remembered;
+        throw error;
+      })
       .then((loaded) => {
         if (!active.current) return;
         setCode(loaded);

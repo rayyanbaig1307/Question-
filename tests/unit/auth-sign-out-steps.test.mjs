@@ -90,3 +90,85 @@ it('a step can be taken off again', async () => {
     expect(step).not.toHaveBeenCalled();
   } finally { await unmount(tree); }
 });
+
+// A login can also end without "Log out": Supabase removes it by itself (it ran out, or the account was banned
+// or deleted on another phone) and just sends SIGNED_OUT, or another account takes its place. The same steps
+// must run then, so nothing of the old account is left for the next person on the phone.
+it('a login that ends without Log out runs each step once, with that account', async () => {
+  const h = harness(async () => ({ data: { session: { user: { id: 'A' } } } }));
+  const step = vi.fn();
+  h.screen.exports.runAfterSignOut(step);
+  const tree = await h.render();
+  try {
+    expect(h.current.userId).toBe('A');
+    await act(() => h.event('SIGNED_OUT', null));
+    expect(h.current.userId).toBeNull();
+    expect(step).toHaveBeenCalledExactlyOnceWith('A');
+    // Someone logging in after that runs nothing more.
+    await act(() => h.event('SIGNED_IN', { user: { id: 'B' } }));
+    expect(step).toHaveBeenCalledTimes(1);
+  } finally { await unmount(tree); }
+});
+
+it('another account taking over straight away runs the steps for the old account', async () => {
+  const h = harness(async () => ({ data: { session: { user: { id: 'A' } } } }));
+  const step = vi.fn();
+  h.screen.exports.runAfterSignOut(step);
+  const tree = await h.render();
+  try {
+    await act(() => h.event('SIGNED_IN', { user: { id: 'B' } }));
+    expect(h.current.userId).toBe('B');
+    expect(step).toHaveBeenCalledExactlyOnceWith('A');
+  } finally { await unmount(tree); }
+});
+
+it('logging in after nobody, or a refreshed login for the same account, runs no step', async () => {
+  const h = harness(async () => ({ data: { session: null } }));
+  const step = vi.fn();
+  h.screen.exports.runAfterSignOut(step);
+  const tree = await h.render();
+  try {
+    await act(() => h.event('SIGNED_IN', { user: { id: 'A' } }));
+    await act(() => h.event('TOKEN_REFRESHED', { user: { id: 'A' } }));
+    await act(() => h.event('USER_UPDATED', { user: { id: 'A' } }));
+    expect(h.current.userId).toBe('A');
+    expect(step).not.toHaveBeenCalled();
+  } finally { await unmount(tree); }
+});
+
+it('a Log out during which Supabase sends SIGNED_OUT (as it really does) still runs each step only once', async () => {
+  let saved = { user: { id: 'A' } }, h;
+  h = harness(async () => ({ data: { session: saved }, error: null }), async () => {
+    saved = null;
+    h.event('SIGNED_OUT', null);
+    return { error: null };
+  });
+  const step = vi.fn();
+  h.screen.exports.runAfterSignOut(step);
+  const tree = await h.render();
+  try {
+    await act(() => h.current.signOut('A'));
+    expect(h.current.userId).toBeNull();
+    expect(step).toHaveBeenCalledExactlyOnceWith('A');
+  } finally { await unmount(tree); }
+});
+
+it('a Log out that ends the login but then reports a problem still runs the steps once', async () => {
+  // Supabase removed the login (and sent SIGNED_OUT), but then the phone couldn't even say who is logged in,
+  // so the logout is reported as failed (to be safe). Nobody is logged in, so the tidy-up must still happen.
+  let saved = { user: { id: 'A' } }, broken = false, h;
+  h = harness(async () => (broken ? { data: { session: null }, error: new Error('Storage broke') } : { data: { session: saved }, error: null }), async () => {
+    saved = null;
+    h.event('SIGNED_OUT', null);
+    broken = true;
+    return { error: new Error('Failed to fetch') };
+  });
+  const step = vi.fn();
+  h.screen.exports.runAfterSignOut(step);
+  const tree = await h.render();
+  try {
+    await act(async () => { await expect(h.current.signOut('A')).rejects.toThrow('Failed to fetch'); });
+    expect(h.current.userId).toBeNull();
+    expect(step).toHaveBeenCalledExactlyOnceWith('A');
+  } finally { await unmount(tree); }
+});

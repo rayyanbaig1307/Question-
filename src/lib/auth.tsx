@@ -27,13 +27,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [initializing, setInitializing] = useState(true);
   const sessionUser = useRef<string | null>(null);
+  // The account that "Log out" (signOut below) is logging out right now. signOut tidies up for it itself.
+  const signingOut = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let authChanged = false;
+    // Who is logged in now. When someone's login ends without "Log out" (for example it ran out, or the
+    // account was banned or deleted on another phone), or another account takes its place, the same tidy-up
+    // steps as "Log out" run for them, so nothing of theirs (like an invite waiting on the phone) is left for
+    // the next person. Nothing runs when someone logs in after nobody was.
+    const follow = (next: string | null) => {
+      const previous = sessionUser.current;
+      sessionUser.current = next;
+      if (previous && previous !== next && signingOut.current !== previous) runStepsAfterSignOut(previous);
+    };
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       authChanged = true;
-      sessionUser.current = newSession?.user.id ?? null;
+      follow(newSession?.user.id ?? null);
       if (!cancelled) setSession(newSession);
     });
     supabase.auth
@@ -42,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
         // A logout or account change that happened while loading is newer than this saved login.
         if (!cancelled && !authChanged) {
-          sessionUser.current = data.session?.user.id ?? null;
+          follow(data.session?.user.id ?? null);
           setSession(data.session);
         }
       })
@@ -96,25 +107,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Stop sending this account's notifications to this phone.
     await unregisterPush().catch(() => {});
     await checkAccount();
-    const { error } = await supabase.auth.signOut();
-    // If the server can't be reached, Supabase still removes the login from this phone (and then reports
-    // the error). Only say "could not log out" when this account really is still logged in here.
-    if (error && (await stillLoggedIn(target))) throw error;
-    // A newer login event must not be overwritten by this older operation finishing.
-    if (sessionUser.current !== null && sessionUser.current !== target) return;
-    sessionUser.current = null;
-    setSession(null);
-    setProfile(null);
-    // Let other parts of the app tidy up too (Peekaboo+ payments stop using this account on this phone).
-    // A problem there never stops the logout.
-    if (target) {
-      afterSignOut.forEach((step) => {
-        try {
-          step(target);
-        } catch (error) {
-          console.warn('Could not tidy up after logging out', error);
-        }
-      });
+    let tidied = false;
+    signingOut.current = target;
+    try {
+      const { error } = await supabase.auth.signOut();
+      // If the server can't be reached, Supabase still removes the login from this phone (and then reports
+      // the error). Only say "could not log out" when this account really is still logged in here.
+      if (error && (await stillLoggedIn(target))) throw error;
+      // A newer login event must not be overwritten by this older operation finishing.
+      if (sessionUser.current !== null && sessionUser.current !== target) return;
+      sessionUser.current = null;
+      setSession(null);
+      setProfile(null);
+      // Let other parts of the app tidy up too (Peekaboo+ payments stop using this account on this phone).
+      // A problem there never stops the logout.
+      if (target) {
+        tidied = true;
+        runStepsAfterSignOut(target);
+      }
+    } finally {
+      if (signingOut.current === target) signingOut.current = null;
+      // The login did end (nobody is logged in now), but something went wrong after that: still tidy up.
+      if (!tidied && target && sessionUser.current === null) runStepsAfterSignOut(target);
     }
   }, []);
 
@@ -129,10 +143,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Things to do after someone logs out on this phone. lib/plus.ts adds one: RevenueCat (Peekaboo+ payments)
-// logs out of that account too, so the next person's purchase can never go to them. It's added from there
-// (instead of this file importing plus.ts), so the two files don't import each other.
+// Things to do after someone logs out on this phone (or their login ends by itself). lib/plus.ts adds one:
+// RevenueCat (Peekaboo+ payments) logs out of that account too, so the next person's purchase can never go to
+// them. lib/invite.ts adds one too. They're added from there (instead of this file importing those files), so
+// the files don't import each other.
 const afterSignOut = new Set<(userId: string) => void>();
+
+// Runs every step for the account that logged out. A problem in one step never stops the others.
+function runStepsAfterSignOut(userId: string) {
+  afterSignOut.forEach((step) => {
+    try {
+      step(userId);
+    } catch (error) {
+      console.warn('Could not tidy up after logging out', error);
+    }
+  });
+}
 
 export function runAfterSignOut(step: (userId: string) => void): () => void {
   afterSignOut.add(step);

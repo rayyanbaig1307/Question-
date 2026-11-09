@@ -19,7 +19,8 @@ let users;
 before(async () => { db = await createLocalDatabase(); });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
-  await db.exec('truncate auth.users cascade; truncate storage.objects, net.sent restart identity;');
+  // private.past_links is not linked to profiles (on purpose), so "cascade" doesn't reach it: empty it too.
+  await db.exec('truncate auth.users cascade; truncate private.past_links, storage.objects, net.sent restart identity;');
   users = await seedUsers(db, 8);
 });
 
@@ -60,7 +61,7 @@ const ban = (id, until = "now() + interval '30 days'") => db.query(`update auth.
 const can = async (role, fn) => (await one("select has_function_privilege($1, $2, 'EXECUTE') as ok", [role, fn])).ok;
 const FUNCTIONS = ['public.my_invite_code()', 'public.reset_invite_code()', 'public.invite_preview(text)', 'public.accept_invite(text,uuid)'];
 const HELPERS = ['private.clean_invite_code(text)', 'private.new_invite_code()', 'private.is_banned(uuid)', 'private.invite_user_ok(uuid)',
-  'private.check_invite_limits(uuid,uuid)', 'private.remember_past_link()'];
+  'private.check_invite_limits(uuid,uuid)', 'private.remember_past_link()', 'private.forget_past_links()'];
 
 // ---------------------------------------------------------------------------
 // 1. The code
@@ -203,8 +204,8 @@ test('An adult with a public account: friends straight away, and only the link o
   assert.equal(await accept(users[1], code), 'already');
   assert.equal((await pushes()).length, 1);
   // Written down once (a second tap that changed nothing isn't counted).
-  assert.deepEqual((await db.query('select accepter, inviter, outcome, accepter_adult, held_for_safety from private.invite_accepts')).rows,
-    [{ accepter: users[1], inviter: users[0], outcome: 'friends', accepter_adult: false, held_for_safety: false }]);
+  assert.deepEqual((await db.query('select accepter, inviter, outcome, accepter_adult from private.invite_accepts')).rows,
+    [{ accepter: users[1], inviter: users[0], outcome: 'friends', accepter_adult: false }]);
   assert.equal(await count('private.invite_uses where inviter = $1 and invitee = $2', [users[0], users[1]]), 1);
   // The link owner's Inbox shows "added you as a friend".
   const activity = (await rpc(0, 'select * from my_activity()')).rows;
@@ -317,7 +318,7 @@ test('Using the same person\'s link again only sends a request, and nothing at a
   assert.equal(await accept(users[5], code), 'requested');
   assert.deepEqual(await pairState(users[5], users[0]), [[users[5], users[0], 'pending']]);
   // Someone new still becomes friends at once. (An adult: three under-18s already used this link today,
-  // so a new under-18 would only send a request – see the child-safety test.)
+  // so a new under-18 would get "busy" – see the child-safety test.)
   await birthday(users[6], 30);
   assert.equal(await accept(users[6], code), 'friends');
 });
@@ -442,8 +443,9 @@ test('One link can be used 20 times a day; its owner gets one notification when 
   assert.deepEqual(await pushTitlesTo(guestToken), []);
 });
 
-test('Child safety: after 3 under-18s use one adult\'s link in a day, more under-18s only send a request, and the alert people hear once', async () => {
+test('Child safety: after 3 under-18s use one adult\'s link in a day, more under-18s get "busy", nothing reaches the adult, and the alert people hear once', async () => {
   await birthday(users[0], 30);
+  const owner = await pushTo(users[0]);
   await db.query('insert into private.report_alert_people(user_id) values ($1)', [users[7]]);
   const alerts = await pushTo(users[7]);
   const code = await codeOf(users[0]);
@@ -452,28 +454,66 @@ test('Child safety: after 3 under-18s use one adult\'s link in a day, more under
     assert.equal(await accept(users[i], code), 'friends', `teen ${i}`);
   }
   assert.deepEqual(await pushTitlesTo(alerts), []);
-  // The 4th under-18 (no birthday counts as under 18): only a request, and the alert people are told.
-  assert.equal(await accept(users[4], code), 'requested');
-  assert.deepEqual(await pairState(users[4], users[0]), [[users[4], users[0], 'pending']]);
+  // The 4th under-18 (no birthday counts as under 18): "busy". Nothing the adult could see or accept:
+  // no friendship row (not even a request) and no notification to the adult (or to the teen).
+  const fourth = await pushTo(users[4]);
+  assert.equal(await accept(users[4], code), 'busy');
+  assert.deepEqual(await links(users[0], users[4]), []);
+  assert.equal(await count("friendships where addressee_id = $1 and status = 'pending'", [users[0]]), 0);
+  assert.deepEqual(await pushTitlesTo(owner), Array(3).fill('You have a new friend 🎉'));
+  assert.deepEqual(await pushTitlesTo(fourth), []);
+  assert.equal(await count('private.invite_uses where invitee = $1', [users[4]]), 0);
+  // The people who get report alerts are told, once.
   const told = (await pushes()).filter((p) => p.to === alerts);
   assert.equal(told.length, 1);
   assert.equal(told[0].title, '🚩 Invite link check');
+  assert.equal(told[0].body, "Lots of under-18s used one adult's invite link today, so more under-18s can't use it for now. "
+    + 'Check private.invite_accepts in Supabase.');
   assert.deepEqual(told[0].data, { type: 'invite_check', inviter: users[0] });
-  // The 5th: a request too, but no second alert that day.
+  assert.equal(await count("private.invite_alerts where inviter = $1 and kind = 'under_18'", [users[0]]), 1);
+  // The 5th: "busy" too, but no second alert that day. Tapping again is "busy" again.
   await birthday(users[5], 16);
-  assert.equal(await accept(users[5], code), 'requested');
+  assert.equal(await accept(users[5], code), 'busy');
+  assert.equal(await accept(users[4], code), 'busy');
+  assert.deepEqual(await links(users[0], users[5]), []);
   assert.equal((await pushes()).filter((p) => p.to === alerts).length, 1);
   // Adults are not affected.
   await birthday(users[6], 30);
   assert.equal(await accept(users[6], code), 'friends');
-  assert.deepEqual((await db.query('select accepter, outcome, accepter_adult, held_for_safety from private.invite_accepts order by id')).rows.map(
-    (r) => [r.accepter, r.outcome, r.accepter_adult, r.held_for_safety]), [
+  assert.deepEqual(await pushTitlesTo(owner), Array(4).fill('You have a new friend 🎉'));
+  // Every try is written down, the stopped ones as "held".
+  assert.deepEqual((await db.query('select accepter, outcome, accepter_adult, friendship_id is null as nothing_saved from private.invite_accepts order by id')).rows.map(
+    (r) => [r.accepter, r.outcome, r.accepter_adult, r.nothing_saved]), [
     [users[1], 'friends', false, false], [users[2], 'friends', false, false], [users[3], 'friends', false, false],
-    [users[4], 'requested', false, true], [users[5], 'requested', false, true], [users[6], 'friends', true, false],
+    [users[4], 'held', false, true], [users[5], 'held', false, true], [users[4], 'held', false, true],
+    [users[6], 'friends', true, false],
   ]);
+  // Stopped tries count towards the link's 20 a day: 7 so far, 13 more stopped tries make 20, and then
+  // even an adult gets "busy". The adult still never hears about any of the stopped tries.
+  const kids = await morePeople(13);
+  for (const id of kids) assert.equal(await accept(id, code), 'busy');
+  const [grownUp] = await morePeople(1, 200);
+  await birthday(grownUp, 40);
+  assert.equal(await failure(accept(grownUp, code)), BUSY);
+  assert.deepEqual(await pushTitlesTo(owner), Array(4).fill('You have a new friend 🎉'));
+  assert.equal(await count("friendships where addressee_id = $1 and status = 'pending'", [users[0]]), 0);
+
+  // The same for an adult with a private account (they would only get requests): after 3 under-18s,
+  // more under-18s get "busy" and send nothing. Its own alert goes out (one a day for each link).
+  const [quiet, ...teens] = await morePeople(5, 300);
+  await birthday(quiet, 35);
+  await as(quiet, 'update profiles set is_private = true where id = $1', [quiet]);
+  const quietToken = await pushTo(quiet);
+  const quietCode = await codeOf(quiet);
+  for (const id of teens.slice(0, 3)) assert.equal(await accept(id, quietCode), 'requested');
+  assert.equal(await accept(teens[3], quietCode), 'busy');
+  assert.deepEqual(await links(quiet, teens[3]), []);
+  assert.deepEqual(await pushTitlesTo(quietToken), Array(3).fill('New friend request 👋'));
+  assert.equal((await pushes()).filter((p) => p.to === alerts).length, 2);
+
   // A day later, under-18s are friends at once again.
   await db.query("update private.invite_accepts set used_at = now() - interval '25 hours'");
-  const [teen] = await morePeople(1);
+  const [teen] = await morePeople(1, 400);
   await birthday(teen, 15);
   assert.equal(await accept(teen, code), 'friends');
 });
@@ -499,6 +539,45 @@ test('Deleting an account still works and takes its code and invite history with
   assert.equal(await count('friendships'), 0);
   assert.equal(await count('invite_codes'), 1);
   assert.equal(await failure(accept(users[3], code)), NOT_WORKING);
+  // The removed-friendship lines go with either person's account (the one with the bigger id too).
+  const [small, big] = [users[4], users[5]].sort();
+  await friend(db, small, big);
+  await as(small, 'delete from friendships where requester_id = $1 or addressee_id = $1', [small]);
+  assert.deepEqual((await db.query('select person_a, person_b from private.past_links')).rows, [{ person_a: small, person_b: big }]);
+  await db.query('delete from auth.users where id = $1', [big]);
+  assert.equal(await count('private.past_links'), 0);
+});
+
+test('Removed-friendship lines are not linked to profiles (so an unfriend never waits for an account deletion), and are cleaned up after everything else', async () => {
+  // No links from past_links to profiles: writing a line never has to wait for (or get stuck with) an
+  // account that is being deleted at that moment (tests/database/concurrency.mjs runs that race for real).
+  assert.equal(await count("pg_constraint where conrelid = 'private.past_links'::regclass and contype = 'f'"), 0);
+  const source = (await one("select prosrc from pg_proc where oid = 'private.remember_past_link()'::regprocedure")).prosrc;
+  assert.doesNotMatch(source, /foreign_key_violation/, 'the old fallback for a missing profile could never run');
+  // The clean-up trigger runs after every link that deletes things with the account (triggers run in name order).
+  const order = await one(`select bool_and(t.tgname::text < 'zz_profiles_forget_past_links' collate "C") as later, count(*)::int as n
+    from pg_trigger t where t.tgrelid = 'public.profiles'::regclass and t.tgisinternal`);
+  assert.ok(order.n > 0 && order.later, JSON.stringify(order));
+  // Stand-in for someone else's unfriend that finishes while the account is being deleted: removing the
+  // account's friendships waits for that unfriend, so its line is there by the time they are removed.
+  // Here the line is written while the friendships are removed. The clean-up runs after that: no line is left.
+  const [leaver, pal, other] = [users[0], users[1], users[2]];
+  await friend(db, leaver, pal);
+  await friend(db, other, pal);
+  await db.exec(`
+    create function public.qa_line_during_deletion() returns trigger language plpgsql as $$
+    begin insert into private.past_links(person_a, person_b) values (least(old.requester_id, old.addressee_id), greatest(old.requester_id, old.addressee_id))
+      on conflict do nothing; return old; end; $$;
+    create trigger qa_line_during_deletion before delete on public.friendships for each row execute function public.qa_line_during_deletion();`);
+  try {
+    await db.query('delete from auth.users where id = $1', [leaver]);
+  } finally {
+    await db.exec('drop trigger qa_line_during_deletion on public.friendships; drop function public.qa_line_during_deletion();');
+  }
+  assert.equal(await count('private.past_links where $1 in (person_a, person_b)', [leaver]), 0);
+  // Other people's lines stay.
+  await as(other, 'delete from friendships where requester_id = $1', [other]);
+  assert.equal(await count('private.past_links'), 1);
 });
 
 test('Running the migration again changes nothing', async () => {
@@ -515,10 +594,16 @@ test('Running the migration again changes nothing', async () => {
     friends: (await db.query('select * from friendships order by id')).rows,
   });
   const before = await snapshot();
+  // An earlier copy of the file linked past_links to profiles: running it again removes those links.
+  await db.exec(`alter table private.past_links
+    add constraint past_links_person_a_fkey foreign key (person_a) references public.profiles (id) on delete cascade,
+    add constraint past_links_person_b_fkey foreign key (person_b) references public.profiles (id) on delete cascade`);
   await applyMigrationFile(db, MIGRATION);
   await applyMigrationFile(db, MIGRATION);
   assert.deepEqual(await snapshot(), before);
   assert.equal(await count("pg_trigger where tgname = 'friendships_remember_past_link'"), 1);
+  assert.equal(await count("pg_trigger where tgname = 'zz_profiles_forget_past_links'"), 1);
+  assert.equal(await count("pg_constraint where conrelid = 'private.past_links'::regclass and contype = 'f'"), 0);
   assert.equal(await count("pg_policies where tablename = 'invite_codes'"), 1);
   for (const fn of FUNCTIONS) {
     assert.equal(await can('authenticated', fn), true, fn);

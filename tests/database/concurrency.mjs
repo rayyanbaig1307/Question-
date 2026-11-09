@@ -744,6 +744,91 @@ try {
       assert.equal(await acceptInvite(guests[0],old),"This invite link doesn't work any more");
       return {results:tally(results),requestsLeft:left};
     });
+    // Account deletions racing invites and unfriends. A pause (only while qa.pause is on, in that one
+    // transaction) widens the gaps where they used to get stuck waiting for each other ("deadlock detected"):
+    // * "A_qa_pause_profile" runs right after the leaving person's profile row is removed and before
+    //   everything that goes with it (triggers run in name order, and "A" comes before the others);
+    // * "A_qa_pause_friendship" runs while an invite is saving its friendship.
+    const withAccountPauses=async fn=>{
+      await db.exec(`create or replace function private.qa_pause_when_asked() returns trigger language plpgsql as $$
+          begin if current_setting('qa.pause',true)='on' then perform pg_sleep(tg_argv[0]::float8); end if;
+          if tg_op='INSERT' then return new; end if; return old; end $$;
+        create trigger "A_qa_pause_profile" after delete on public.profiles for each row execute function private.qa_pause_when_asked('1.5');
+        create trigger "A_qa_pause_friendship" before insert on public.friendships for each row execute function private.qa_pause_when_asked('0.5');`);
+      try {return await fn();}
+      finally {await db.exec('drop trigger if exists "A_qa_pause_profile" on public.profiles; drop trigger if exists "A_qa_pause_friendship" on public.friendships; drop function if exists private.qa_pause_when_asked();');}
+    };
+    const deleteAccount=async(id,{paused=false}={})=>{
+      const client=await pool.connect();
+      try {await client.query('begin');if(paused)await client.query("select set_config('qa.pause','on',true)");await client.query('delete from auth.users where id=$1',[id]);await client.query('commit');return 'ok';}
+      catch(error){await client.query('rollback');return `ERR ${error.message}`;}finally{client.release();}
+    };
+    const leftOf=async id=>(await db.query(`select (select count(*)::int from auth.users where id=$1) as account,
+        (select count(*)::int from public.friendships where $1 in (requester_id,addressee_id)) as friendships,
+        (select count(*)::int from public.invite_codes where user_id=$1) as codes,
+        (select count(*)::int from private.past_links where $1 in (person_a,person_b)) as "pastLinks"`,[id])).rows[0];
+    const nothingLeft={account:0,friendships:0,codes:0,pastLinks:0};
+    // Someone uses a link while its owner deletes their account. The invite takes the owner's profile before
+    // the code, like the deletion does, so the two take turns: the deletion always goes through, and the invite
+    // either finished first (and is removed with the account) or says the link doesn't work any more.
+    if(includeFixes)await check("An invite link used while its owner deletes their account never deadlocks: the deletion goes through, the invite finishes first or \"doesn't work any more\"",async()=>{
+      const NOT_WORKING="This invite link doesn't work any more";
+      return withAccountPauses(async()=>{
+        // 1. The owner is already deleting their account when Add is tapped (the deletion pauses for 1.5 s).
+        const [owner1,guest1]=await invitePeople('invgone',2);
+        const code1=await inviteCode(owner1);
+        const deletion1=deleteAccount(owner1,{paused:true});
+        await new Promise(r=>setTimeout(r,300));
+        const accept1=await acceptInvite(guest1,code1);
+        const first={deletion:await deletion1,accept:accept1,left:await leftOf(owner1)};
+        assert.deepEqual(first,{deletion:'ok',accept:NOT_WORKING,left:nothingLeft},`deletion first: ${JSON.stringify(first)}`);
+        // 2. Add is tapped just before the owner deletes their account (the invite pauses 0.5 s while saving).
+        const [owner2,guest2]=await invitePeople('invgone2',2);
+        const code2=await inviteCode(owner2);
+        const accepting=asUser(db,guest2,async tx=>{
+          await tx.query("select set_config('qa.pause','on',true)");
+          return (await tx.query('select accept_invite($1,$2) as r',[code2,guest2])).rows[0].r;
+        }).catch(e=>e.message);
+        await new Promise(r=>setTimeout(r,150));
+        const deletion2=await deleteAccount(owner2);
+        const second={deletion:deletion2,accept:await accepting,left:await leftOf(owner2)};
+        assert.equal(second.deletion,'ok',`invite first: ${JSON.stringify(second)}`);
+        assert.ok(['friends',NOT_WORKING].includes(second.accept),`invite first: ${JSON.stringify(second)}`);
+        assert.deepEqual(second.left,nothingLeft,`invite first: ${JSON.stringify(second)}`);
+        assert.equal((await db.query('select count(*)::int as n from public.friendships where $1 in (requester_id,addressee_id)',[guest2])).rows[0].n,0);
+        return {deletionFirst:first.accept,inviteFirst:second.accept};
+      });
+    });
+    // Someone unfriends (or says no to) a person who is deleting their account at that moment. Remembering the
+    // removed pair (private.past_links) doesn't wait for the leaving person's profile, so the two never get
+    // stuck, and the deletion still removes that line afterwards.
+    if(includeFixes)await check('Unfriending or saying no while the other person deletes their account never deadlocks, and no past_links line is left for the deleted account',async()=>{
+      return withAccountPauses(async()=>{
+        const results={};
+        const scenarios=[
+          ['unfriend',async(leaver,other)=>{await friend(db,leaver,other);return ()=>asUser(db,other,tx=>tx.query('delete from friendships where requester_id=$1 or addressee_id=$1',[other]));}],
+          ['say no to a friend request',async(leaver,other)=>{
+            const id=(await db.query("insert into friendships(requester_id,addressee_id,status) values($1,$2,'pending') returning id",[leaver,other])).rows[0].id;
+            return ()=>asUser(db,other,tx=>tx.query('select respond_to_friend_request($1,false)',[id]));
+          }],
+        ];
+        for(const [n,[label,setup]] of scenarios.entries()){
+          const [leaver,other]=await invitePeople(`pastgone${n}`,2);
+          const removal=await setup(leaver,other);
+          const deletion=deleteAccount(leaver,{paused:true});
+          await new Promise(r=>setTimeout(r,300));
+          const removed=await removal().then(()=>'ok',e=>`ERR ${e.message}`);
+          results[label]={deletion:await deletion,removal:removed,left:await leftOf(leaver)};
+        }
+        for(const [label,r] of Object.entries(results))assert.deepEqual(r,{deletion:'ok',removal:'ok',left:nothingLeft},`${label}: ${JSON.stringify(r)}`);
+        // Without a deletion, unfriending still remembers the pair.
+        const [a,b]=await invitePeople('pastkept',2);
+        await friend(db,a,b);
+        await asUser(db,a,tx=>tx.query('delete from friendships where requester_id=$1 or addressee_id=$1',[a]));
+        assert.equal((await leftOf(a)).pastLinks,1);
+        return results;
+      });
+    });
     await pool.end();pools=pools.filter(p=>p!==pool);
   }
   await admin.end();

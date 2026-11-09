@@ -44,24 +44,43 @@ function plainInviteMessage(username?: string | null): string {
   return withAppLink(`Come hang out with me on Peekaboo 👀 Photos, stories and daily dares.${me}`);
 }
 
-// Your code, remembered while the app is open – only for the account that loaded it.
-let cached: { userId: string; code: string } | null = null;
-// Goes up when you get a new link, so an older answer that arrives late can't bring the old code back.
+// Your code, remembered for a short while – only for the account that loaded it. loadedAt is when (in ms).
+let cached: { userId: string; code: string; loadedAt: number } | null = null;
+// How long a remembered code is used before we ask the server again (you may have made a new link on another
+// phone or tablet – then the old code doesn't work any more).
+const REMEMBER_MS = 10 * 60 * 1000;
+// Goes up when you get a new link (or ask the server again), so an older answer that arrives late can't bring
+// the old code back.
 let generation = 0;
 const loading = new Map<string, Promise<string>>();
 
+// Your code as it was last loaded on this phone, if that was less than 10 minutes ago (null otherwise).
+export function rememberedInviteCode(me: string): string | null {
+  if (!cached || cached.userId !== me) return null;
+  const age = Date.now() - cached.loadedAt;
+  return age >= 0 && age < REMEMBER_MS ? cached.code : null;
+}
+
 // Your invite code (made the first time you ask). `me` is who is logged in.
-export function fetchMyInviteCode(me: string): Promise<string> {
-  if (cached?.userId === me) return Promise.resolve(cached.code);
-  const already = loading.get(me);
-  if (already) return already;
+// `fresh: true` always asks the server (the "Your invite link" screen does this), instead of using the code
+// remembered from the last 10 minutes.
+export function fetchMyInviteCode(me: string, options: { fresh?: boolean } = {}): Promise<string> {
+  if (!options.fresh) {
+    const remembered = rememberedInviteCode(me);
+    if (remembered) return Promise.resolve(remembered);
+    const already = loading.get(me);
+    if (already) return already;
+  } else {
+    // An answer to an older question must not replace the one we're about to get.
+    generation++;
+  }
   const started = generation;
   const request = (async () => {
     const { data, error } = await supabase.rpc('my_invite_code');
     if (error) throw error;
     const code = normalizeInviteCode(typeof data === 'string' ? data : null);
     if (!code) throw new Error("Couldn't load your invite link");
-    if (started === generation) cached = { userId: me, code };
+    if (started === generation) cached = { userId: me, code, loadedAt: Date.now() };
     return code;
   })().finally(() => {
     if (loading.get(me) === request) loading.delete(me);
@@ -88,7 +107,7 @@ export async function resetInviteCode(me: string): Promise<string> {
   const code = normalizeInviteCode(typeof data === 'string' ? data : null);
   if (!code) throw new Error("Couldn't make a new invite link");
   generation++;
-  cached = { userId: me, code };
+  cached = { userId: me, code, loadedAt: Date.now() };
   return code;
 }
 
@@ -108,13 +127,14 @@ export async function previewInvite(code: string): Promise<InvitePerson | null> 
 // - 'requested': a friend request was sent (it never says why)
 // - 'already': you were already friends
 // - 'self': it's your own invite
-export type InviteResult = 'friends' | 'requested' | 'already' | 'self';
+// - 'busy': the link was used a lot today, so nothing was added ("This invite link is busy – try again tomorrow")
+export type InviteResult = 'friends' | 'requested' | 'already' | 'self' | 'busy';
 
 export async function acceptInvite(code: string, me: string): Promise<InviteResult> {
   const { data, error } = await supabase.rpc('accept_invite', { invite_code: code, expected_user_id: me });
   if (error) throw error;
   // Anything unexpected counts as a request (it never claims you're friends when you might not be).
-  return data === 'friends' || data === 'already' || data === 'self' ? data : 'requested';
+  return data === 'friends' || data === 'already' || data === 'self' || data === 'busy' ? data : 'requested';
 }
 
 // The server's words for an invite that doesn't work (any reason – a block is never revealed).
@@ -222,7 +242,8 @@ export async function clearPendingInvite(code?: string): Promise<void> {
   }
 }
 
-// Logging out forgets your code and any invite waiting on this phone (the next person must not get them).
+// Logging out – or a login that ends by itself (src/lib/auth.tsx runs these steps then too) – forgets your
+// code and any invite waiting on this phone (the next person must not get them).
 runAfterSignOut(() => {
   cached = null;
   generation++;

@@ -49,6 +49,13 @@ export default function OpenInvite() {
     if (code) clearPendingInvite(code).catch(() => {});
   }, [code]);
 
+  // Someone who is logged in has the invite open now, so the saved copy has done its job: forget it straight
+  // away. Then it can never open by itself later for someone else on this phone. (If the app closes before
+  // you tap Add, just tap the link again.)
+  useEffect(() => {
+    done();
+  }, [done]);
+
   useEffect(() => {
     active.current = true;
     return () => {
@@ -193,6 +200,9 @@ function resultText(result: InviteResult, person: InvitePerson): string {
       return "You're already friends 🙌";
     case 'self':
       return "That's your own invite 😄";
+    case 'busy':
+      // The link was used a lot today: nothing was added (the same words the server uses).
+      return 'This invite link is busy – try again tomorrow';
     default:
       return 'Friend request sent 💌';
   }
