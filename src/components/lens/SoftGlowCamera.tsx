@@ -4,16 +4,17 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { Camera, usePhotoOutput, type CameraOutput, type CameraRef } from 'react-native-vision-camera';
 
-import { BLENDSHAPE, MESH, toScreenPoints, useFaceMeshOutput, type FaceMeshFace } from '@/lib/faceMesh';
-import { faceLight } from '@/lib/goldenLight';
+import { toScreenPoints, useFaceMeshOutput, type FaceMeshFace } from '@/lib/faceMesh';
 
 import { bakeLook } from './bakeLook';
+import { newTrackMemory, trackFaces, type RawFace } from './faceTrack';
 import { LensOverlay } from './LensOverlay';
 import { MAX_LENS_FACES, type LensFace, type LensLook } from './lensPaint';
 
 // ---------------------------------------------------------------------------
-// The live camera with a face filter, using MediaPipe's 478 face points: ✨ Soft Glow (look="glow") or
-// 🌅 Golden Hour (look="golden"). The drawing is in lensPaint.ts.
+// The live camera with a face filter, using MediaPipe's 478 face points: ✨ Soft Glow (look="glow"),
+// 🌅 Golden Hour (look="golden") and the Peekaboo+ filters 👀 😭 🧠 ⚡ 😘 (the list is in lib/lensLooks.ts).
+// The drawing is in lensPaint.ts; following the faces and the filters' memory is in faceTrack.ts.
 //
 // Only load this file when FACE_MESH_AVAILABLE is true (lib/faceMesh.ts), the same way CameraPage loads
 // FaceLensCamera only when FACE_LENS_AVAILABLE is true:
@@ -28,10 +29,6 @@ export type SoftGlowHandle = {
   // Takes the photo with the look drawn on it (bakeLook.ts). If that fails, you still get the plain photo.
   capture: () => Promise<{ uri: string }>;
 };
-
-// The tracker's points shiver by a pixel or so even when you hold still. Small moves are smoothed a lot,
-// big moves are followed straight away, so the glow stays calm but never lags behind.
-const CALM = 0.35;
 
 export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom = 0 }: {
   ref: Ref<SoftGlowHandle>;
@@ -50,29 +47,18 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
   const last = useRef<LensFace[]>([]);
   // The size of the camera view on screen (the face points are in these units).
   const viewSize = useRef({ width: 0, height: 0 });
+  // The faces seen lately, so each face keeps its smoothing and its filter memory from frame to frame.
+  const track = useRef(newTrackMemory());
 
   function handleFaces(found: FaceMeshFace[]) {
     const cam = camera.current;
     if (!cam?.preview) return;
-    const next: LensFace[] = [];
+    const raw: RawFace[] = [];
     for (const face of found.slice(0, MAX_LENS_FACES)) {
       if (face.points.length < 478 * 3) continue;
-      const pts = toScreenPoints(face, cam);
-      const shapes = face.blendshapes;
-      // Golden Hour: how the face is turned to the sun, from its 3D shape (each point's depth).
-      const depth = new Array<number>(478);
-      for (let i = 0; i < 478; i++) depth[i] = face.points[i * 3 + 2];
-      const { light, rim } = faceLight(pts, depth);
-      const glow: LensFace = {
-        pts,
-        blinkLeft: shapes[BLENDSHAPE.eyeBlinkLeft] ?? 0,
-        blinkRight: shapes[BLENDSHAPE.eyeBlinkRight] ?? 0,
-        smile: ((shapes[BLENDSHAPE.mouthSmileLeft] ?? 0) + (shapes[BLENDSHAPE.mouthSmileRight] ?? 0)) / 2,
-        light,
-        rim,
-      };
-      next.push(smooth(glow, closest(glow, last.current)));
+      raw.push({ pts: toScreenPoints(face, cam), shapes: face.blendshapes });
     }
+    const next = trackFaces(raw, track.current, look, performance.now() / 1000);
     last.current = next;
     faces.set(next);
   }
@@ -140,52 +126,4 @@ export function SoftGlowCamera({ ref, look = 'glow', active, facing, flash, zoom
       {active ? <LensOverlay faces={faces} look={look} shownTime={shownTime} /> : null}
     </View>
   );
-}
-
-// The face from the last frame that is nearest to this one (by the nose tip), so each face is smoothed with
-// its own history even when two people are in the picture.
-function closest(face: LensFace, before: LensFace[]): LensFace | undefined {
-  const nx = face.pts[MESH.noseTip * 2];
-  const ny = face.pts[MESH.noseTip * 2 + 1];
-  let best: LensFace | undefined;
-  let bestDistance = Infinity;
-  for (const old of before) {
-    const d = Math.hypot(old.pts[MESH.noseTip * 2] - nx, old.pts[MESH.noseTip * 2 + 1] - ny);
-    if (d < bestDistance) {
-      best = old;
-      bestDistance = d;
-    }
-  }
-  const width = Math.hypot(
-    face.pts[MESH.leftFaceSide * 2] - face.pts[MESH.rightFaceSide * 2],
-    face.pts[MESH.leftFaceSide * 2 + 1] - face.pts[MESH.rightFaceSide * 2 + 1],
-  );
-  // Too far away to be the same face.
-  return bestDistance < width * 0.5 ? best : undefined;
-}
-
-function smooth(face: LensFace, before: LensFace | undefined): LensFace {
-  if (!before || before.pts.length !== face.pts.length) return face;
-  const width =
-    Math.hypot(
-      face.pts[MESH.leftFaceSide * 2] - face.pts[MESH.rightFaceSide * 2],
-      face.pts[MESH.leftFaceSide * 2 + 1] - face.pts[MESH.rightFaceSide * 2 + 1],
-    ) || 1;
-  // How far the face moved, compared with its size. Still → heavy smoothing; moving → none.
-  const moved = Math.hypot(
-    face.pts[MESH.noseTip * 2] - before.pts[MESH.noseTip * 2],
-    face.pts[MESH.noseTip * 2 + 1] - before.pts[MESH.noseTip * 2 + 1],
-  ) / width;
-  const follow = Math.min(1, CALM + moved * 10);
-  const pts = new Array<number>(face.pts.length);
-  for (let i = 0; i < pts.length; i++) pts[i] = before.pts[i] + (face.pts[i] - before.pts[i]) * follow;
-  const ease = (a: number, b: number) => a + (b - a) * 0.5;
-  return {
-    pts,
-    blinkLeft: ease(before.blinkLeft, face.blinkLeft),
-    blinkRight: ease(before.blinkRight, face.blinkRight),
-    smile: ease(before.smile, face.smile),
-    light: before.light.length === face.light.length ? face.light.map((value, i) => ease(before.light[i], value)) : face.light,
-    rim: ease(before.rim, face.rim),
-  };
 }

@@ -139,13 +139,37 @@ export const MESH = {
   noseTip: 1,
   chin: 152,
   forehead: 10,
+  // For the Peekaboo+ face filters (components/lens/filters): eye corners and the bottom of each eye, the
+  // bottom of the nose, the inner lips, the mouth corners and a spot on each cheek for blush.
+  rightEyeOuter: 33,
+  rightEyeInner: 133,
+  rightEyeBottom: 145,
+  leftEyeOuter: 263,
+  leftEyeInner: 362,
+  leftEyeBottom: 374,
+  noseBottom: 2,
+  upperLipInner: 13,
+  lowerLipInner: 14,
+  mouthRightCorner: 61,
+  mouthLeftCorner: 291,
+  rightBlush: 50,
+  leftBlush: 280,
 } as const;
 
-// A few of the 52 expression scores (their place in `blendshapes`).
+// A few of the 52 expression scores (their place in `blendshapes`). This is MediaPipe's standard order: the
+// native part puts each score at its category's index, and tests/unit/face-track.test.mjs checks these numbers
+// against the full list of 52 names.
 export const BLENDSHAPE = {
+  browInnerUp: 3,
+  browOuterUpLeft: 4,
+  browOuterUpRight: 5,
   eyeBlinkLeft: 9,
   eyeBlinkRight: 10,
+  eyeSquintLeft: 19,
+  eyeSquintRight: 20,
   jawOpen: 25,
+  mouthFunnel: 32,
+  mouthPucker: 38,
   mouthSmileLeft: 44,
   mouthSmileRight: 45,
 } as const;

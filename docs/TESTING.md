@@ -1153,3 +1153,29 @@ You need a group chat with **at least 3 people** (you + 2 test accounts or frien
    any more".
 5. Logged out on the second phone: open the link → Open in Peekaboo → log in → the invite screen opens by itself.
 6. Type the code instead: Settings → Invite friends → Got a code from a friend? → enter it → the same invite screen.
+
+## Step 67 – Peekaboo+ face filters 🎭
+
+Five new Peekaboo+ filters sit at the end of the camera's bubble row, after ✨ Soft Glow and 🌅 Golden Hour:
+👀 Peekaboo Eyes, 🧠 Brain Buffering, 😭 Crybaby, ⚡ Aura Overload and 😘 Heart Eyes. iPhone only (App Store build 10
+or a TestFlight build), after the update.
+
+1. **With Peekaboo+:** swipe to each new bubble. The camera turns to the selfie side and the filter is drawn on your
+   face straight away, and follows it when you move. Then try the expression: 👀 raise your eyebrows (the eyes pop
+   bigger), 🧠 hold still, 😭 squint (more tears), ⚡ open your mouth (more lightning), 😘 blow a kiss (more hearts).
+   Soft Glow and Golden Hour still look the same as before.
+2. 🧠 **Brain Buffering:** hold still → the number counts up to 100 % (about 9 seconds) and the screen flashes green
+   with a ✓. Move around while it's loading → it goes down again. Once it's at 100 %, shake your head → it starts
+   again from 0.
+3. Take a photo with each filter → the photo in the editor looks like the screen did (the tears, hearts, sparks and
+   the brain's number are in the same places).
+4. Two people in the picture → each face gets its own filter.
+5. **Without Peekaboo+** (a test account without Plus): the filter bubbles have a small gold ⭐. Tap one, or swipe
+   onto one → the Peekaboo+ screen opens, and when you come back the row has slid back to where you were (the
+   camera stays plain).
+6. Open a chat → 📷 → the filters are in that camera's bubble row too (same ⭐ rule). Send a peek with a filter.
+7. With a filter on, **hold** the shutter → it records a normal video without the filter (expected for now).
+8. Plus ends while a filter is on (or log in to an account without Plus) → the filter switches off and the camera is
+   plain again.
+9. An older download or an Android phone → no filter bubbles at all (only Dare, Guess Who and Googly).
+10. On the oldest iPhone you have: does the camera still feel smooth with each filter on? Tell us if one stutters.

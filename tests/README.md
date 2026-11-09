@@ -177,6 +177,18 @@ Frontend (rendered screens, part of `npm test`):
   display name or bio (in any disguise) or swearing in the username is refused and nothing is saved. On Sign up
   and Edit profile, a slur split across the username and the name is refused too (the app checks this; the
   database doesn't).
+- 🎭 Peekaboo+ face filters (9 Nov), on the camera side:
+  - `mode-dial.test.cjs` (added to): the row is Dare, Guess Who, Googly, then the 7 Plus filters in the order of
+    `src/lib/lensLooks.ts` (chat cameras get all of them); without Plus only the filter bubbles get the ⭐ and say
+    "needs Peekaboo+"; a refused swipe or tap glides the row back; every filter has a VoiceOver hint and no
+    caption.
+  - `camera-plus-filters.test.cjs` (new): CameraPage with face tracking. Without Plus a filter is refused and opens
+    Peekaboo+; with Plus it shows on the selfie camera with its ring colour, and switching filters keeps the same
+    camera; Plus running out switches the filter off (the Peekaboo+ screen only if the camera is on screen);
+    "not sure yet" lets it on and switches it off after the wait unless Plus is confirmed; chat cameras; the
+    shutter photo comes from the face camera; holding the shutter records a plain video.
+  - `harness.cjs`: `@/lib/lensLooks` is the real file, loaded with a `require` that throws (that file must stay
+    free of imports); `usePlusAnswer` defaults to 'no'; `calls.clearedTimers` lists the timers a screen stopped.
 
 ## Real PostgreSQL and HTTP tests (Windows and Linux)
 

@@ -40,14 +40,14 @@ function loadCamera(firstAnswer) {
     React.useEffect(() => { calls.glowMounts++; }, []);
     return React.createElement('SoftGlow', props);
   });
-  const shared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
+  const useShared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
   const screen = loadScreen('src/components/home/CameraPage.tsx', {
     'expo-camera': { CameraView, useCameraPermissions: () => [{ granted: true }, noop], useMicrophonePermissions: () => [{ granted: true }, noop] },
     'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: true, assets: [] }) },
     'expo-router': { router: { push: to => calls.pushed.push(to), back: noop } },
     'react-native-reanimated': {
       __esModule: true, default: { View: host('AnimatedView') },
-      cancelAnimation: noop, Easing: { linear: 'linear' }, useAnimatedStyle: callback => callback(), useSharedValue: shared,
+      cancelAnimation: noop, Easing: { linear: 'linear' }, useAnimatedStyle: callback => callback(), useSharedValue: useShared,
       withSequence: (...values) => values[0], withTiming: value => value,
     },
     'react-native-gesture-handler': { GestureDetector: host('GestureDetector'), usePinchGesture: () => ({}), useSimultaneousGestures: () => ({}), useTapGesture: () => ({}) },

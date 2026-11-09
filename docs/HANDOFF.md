@@ -37,7 +37,7 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who and invite links
+## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who, invite links and face filters
 
 - **Live:** Peekaboo 1.0 (build 10) is "Ready for Distribution" and Peekaboo+ Monthly is APPROVED (owner's screenshot
   8 Nov; the Plus session confirmed via the ASC API). App Store link: https://apps.apple.com/app/id6829561855
@@ -76,6 +76,26 @@ and the owner's standing preferences.
   adult or has no birthday saved – `private.age_group(owner) is distinct from 'teen'`; the app treats the server's
   "This invite link is busy" error the same as a `busy` result); removed friendships are remembered
   (`private.past_links`) so a link can't undo a decline/unfriend/block; ban and block checks.
+- **Face filters 🎭** (owner, 9 Nov: bring the web app's filters into the camera; "don't test them, just push it and
+  add it properly to the app"). Five new **Peekaboo+** filters, drawn live over the camera and onto the photo:
+  👀 Peekaboo Eyes, 🧠 Brain Buffering, 😭 Crybaby, ⚡ Aura Overload, 😘 Heart Eyes (ported from the web branch
+  `claude/wonderful-planck-oe81zm`, never merged). JS only, so they ship **by OTA** to every iPhone build that has
+  face tracking (App Store build 10 and TestFlight builds 7–9). Each one shows at rest and an expression makes it
+  stronger (raise your brows, hold still, squint, open your mouth, blow a kiss).
+  - Where: the list is `src/lib/lensLooks.ts` (no imports – the camera and mode row read it); drawing in
+    `src/components/lens/filters/`; each face's springs/progress/charge in `src/components/lens/faceTrack.ts`
+    (details and rules in `docs/FACE_MESH.md`). Soft Glow and Golden Hour are unchanged.
+  - Plus gate (`CameraPage` + `usePlusAnswer()` in `lib/plus.ts`): when we're sure you don't have Plus, the Plus
+    bubbles show a small ⭐, and a tap or swipe onto one opens Peekaboo+ and the row glides back. "Not sure yet"
+    (cold start, no internet) lets the filter on and switches it off after 8 s if Plus never shows up. When Plus
+    ends, a filter that's on switches off. Chat cameras have the filters too. Videos stay plain (as before).
+  - Peekaboo+ screen: "7 live face filters (Heart Eyes, Crybaby, Aura & more)". Privacy Policy now 9 Nov (the
+    filters read simple expressions too; still on the phone only) – the owner must **re-upload `website/`**
+    (one upload together with the invite page). App Store screenshots or subscription text that show a filter
+    must say it's Plus. Phone checks: TESTING Step 67.
+  - **Not in this update:** the 4 stretchy filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic) change the camera
+    picture itself, so they need **a new native build** (task "Face filters B"). **Android has no face mesh yet**,
+    so Android shows no filter bubbles until a new APK.
 
 ## Now: App Store launch (6 Nov) – build 10 ready, owner's checklist in progress
 
@@ -162,7 +182,7 @@ toned down by hand (FACE_GOLD 0.36, LOW_GOLD 0.27, warmer colours) because at fu
 paint. `a66ddcf`: the photo now uses the same moment of the gleam as the screen (LensOverlay → `shownTime`).
 `tests/unit/face-looks.test.mjs` checks the two looks stay different, the draw budget and the sun placement.
 Leftovers: the camera still works out `face.light`/`face.rim` (goldenLight.ts) every frame though no look uses them
-now. OTA `4e9d211e-b499-4a8a-b1aa-7ba828f95eed` on **`testing`**, then follow-up `3e4102c` (gold kept out of
+now (9 Nov: stopped with the face filters work – see "Face filters" under Now). OTA `4e9d211e-b499-4a8a-b1aa-7ba828f95eed` on **`testing`**, then follow-up `3e4102c` (gold kept out of
 the hair, gleam pieces fade in smoothly, richer gold) as OTA `831dd1ef-fd0a-46f9-96ae-0f194c65b818`. Not yet seen on a phone.
 **Face filters draw live on the camera (5 Nov, late; owner: "I want to see it moving and tracking my face, like the
 googly eyes"):** ✨ Soft Glow and 🌅 Golden Hour never drew on the camera preview, only on the saved photo. The cause
@@ -629,11 +649,12 @@ when a push arrives.
 - The testers in `src/lib/plus.ts` only have Plus in the app: for the server features they also need a
   `plus_members` row.
 
-## Face mesh + Soft Glow lens (branch `mediapipe-faces`, not switched on)
+## Face mesh + face filters (merged; on iPhone builds 10+)
 
 MediaPipe Face Landmarker (478 face points + 52 expression scores) as our own VisionCamera v5 camera output in
-`modules/face-mesh`, plus a Soft Glow demo lens (`src/components/lens/`). It isn't in `package.json` yet, so
-builds are unchanged. Not tested on a phone. Steps, sizes and risks: `docs/FACE_MESH.md`.
+`modules/face-mesh`, with the face filters drawn in `src/components/lens/` (Soft Glow, Golden Hour and, since
+9 Nov, the five new Plus filters – see "Face filters" under Now). It's in the iPhone builds from build 10; Android
+has no face mesh yet. Steps, sizes and risks: `docs/FACE_MESH.md`.
 
 ## Open items
 

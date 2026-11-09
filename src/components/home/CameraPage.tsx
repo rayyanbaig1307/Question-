@@ -173,11 +173,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
-  // The face filters (Peekaboo+): the face-tracking camera with the chosen look drawn on top.
-  // Only for the length of videos (30 or 60 seconds).
+  // Peekaboo+: `plus` only decides how long videos can be (30 or 60 seconds).
   const plus = usePlus();
   // 'yes', 'no', or 'checking' (not sure yet) – decides whether a Plus filter may be switched on.
   const plusAnswer = usePlusAnswer();
+  // The face filters (Peekaboo+): the face-tracking camera with the chosen look drawn on top.
   const meshLook: LensLook | null = lensesHere && SoftGlow !== null && isLensLook(homeMode) ? homeMode : null;
   const glowOn = meshLook !== null;
   const glowRef = useRef<SoftGlowHandle>(null);

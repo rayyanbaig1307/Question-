@@ -20,18 +20,19 @@ export function LensOverlay({ faces, look, shownTime }: { faces: SharedValue<Len
       shownTime?.set(now / 1000);
     },
   );
-  // Safety net: if the drawing ever fails, the filter stops drawing instead of closing the app (an error on
-  // the drawing thread would otherwise stop the whole app).
-  const broken = useSharedValue(false);
+  // Safety net: if the drawing ever fails, that filter stops drawing instead of closing the app (an error on
+  // the drawing thread would otherwise stop the whole app). Only the look that failed stops: switching to
+  // another filter still draws it (this overlay stays the same when you switch looks).
+  const brokenLooks = useSharedValue<string[]>([]);
   const picture = useDerivedValue(() =>
     createPicture((canvas) => {
-      if (broken.value) return;
+      if (brokenLooks.value.includes(look)) return;
       try {
         paintLook(canvas, look, faces.value, size.value.width, size.value.height, clock.value / 1000);
       } catch (error) {
         // Say why once, so a filter that stops drawing is never a silent mystery again.
-        broken.value = true;
-        console.warn('Face filter stopped drawing', error);
+        brokenLooks.value = [...brokenLooks.value, look];
+        console.warn(`Face filter "${look}" stopped drawing`, error);
       }
     }),
   );

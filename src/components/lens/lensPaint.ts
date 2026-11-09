@@ -11,6 +11,13 @@ import {
 } from '@shopify/react-native-skia';
 
 import { MESH } from '@/lib/faceMesh';
+import type { LensLook } from '@/lib/lensLooks';
+
+import { paintAuraOverload } from './filters/auraOverload';
+import { paintBrainBuffering } from './filters/brainBuffering';
+import { paintCrybaby } from './filters/crybaby';
+import { paintHeartEyes } from './filters/heartEyes';
+import { paintPeekabooEyes } from './filters/peekabooEyes';
 
 // ---------------------------------------------------------------------------
 // The drawing for the face filters, in one place. The same code draws the live camera (LensOverlay.tsx)
@@ -44,6 +51,10 @@ import { MESH } from '@/lib/faceMesh';
 //    the other. A few soft golden orbs drift slowly through the air, away from the sun and away from faces.
 //    No star sparkles, no glitter and no glow above the head: those belong to Soft Glow.
 //
+// The five Peekaboo+ face filters have a file each in ./filters (👀 Peekaboo Eyes, 🧠 Brain Buffering,
+// 😭 Crybaby, ⚡ Aura Overload, 😘 Heart Eyes); paintLook below picks the right one. Their bouncy springs,
+// the brain's loading and the aura's charge are worked out in faceTrack.ts and kept on each face.
+//
 // The light is soft on purpose: it should look like real light, not like a sticker.
 // These run on the drawing thread too, hence 'worklet'.
 //
@@ -51,19 +62,43 @@ import { MESH } from '@/lib/faceMesh';
 // blur or relight the pixels underneath (see docs/FACE_MESH.md).
 // ---------------------------------------------------------------------------
 
-export type LensLook = 'glow' | 'golden';
+// The list of looks lives in lib/lensLooks.ts (no Skia there, so the mode row can use it anywhere).
+export type { LensLook };
 
-// One face, ready to draw: screen points (x0, y0, x1, y1, …), how closed each eye is, how big the smile is,
-// and how much each light spot faces the sun and how much the face edge catches it (lib/goldenLight.ts).
-// The drawing here doesn't use `light` and `rim` right now: Golden Hour works its light out from the face
-// points and where its sun is in the picture.
+// One face, ready to draw (faceTrack.ts makes it from the camera's face points and expression scores).
 export type LensFace = {
+  // Screen points x0, y0, x1, y1, … (478 points, already mirrored for selfies).
   pts: number[];
+  // How closed each eye is and how big the smile is (0–1).
   blinkLeft: number;
   blinkRight: number;
   smile: number;
+  // Not filled any more ([] and 0) and not drawn by anything; kept so older code still fits.
   light: number[];
   rim: number;
+  // Expressions, 0–1, smoothed: raised brows, squinting, an open mouth and a kiss (pursed or round lips).
+  browUp: number;
+  squint: number;
+  jawOpen: number;
+  pucker: number;
+  // The face filters' memory, stepped in faceTrack.ts on the app's main thread (the drawing only reads it).
+  // Stays the same while this face is followed; picks its tears, hearts and sparks.
+  seed: number;
+  // 👀 The googly eyes' size and its speed (a spring), and the pupils' wobble (in face widths) and its speed.
+  pop: number;
+  popSpeed: number;
+  wobbleX: number;
+  wobbleY: number;
+  wobbleSpeedX: number;
+  wobbleSpeedY: number;
+  // 🧠 How fast the head moves (face widths a second), 1 holding still … 0 moving, how far the brain has
+  //    loaded (0–1) and the green flash just after it loads (1 → 0).
+  motion: number;
+  still: number;
+  progress: number;
+  flash: number;
+  // ⚡ The aura's charge (0–1).
+  charge: number;
 };
 
 export const MAX_LENS_FACES = 2;
@@ -1169,12 +1204,41 @@ function paintGoldenHour(canvas: SkCanvas, faces: LensFace[], width: number, hei
 }
 
 // Draws `look` for these faces. `width`/`height` is the camera view. `fill` is the area the whole-picture
-// parts (warm tint, corners, sun, sunbeams, streak and orbs) must cover – the view itself live, the whole
-// photo when saving. `time` is in seconds (for the twinkle, the gleam and a slow shimmer).
+// parts (warm tint, corners, sun, sunbeams, streak and orbs, the aura's purple corners, the brain's green
+// flash) must cover – the view itself live, the whole photo when saving. `time` is in seconds (for the
+// twinkle, the gleam, a slow shimmer, the spinner, the heartbeat, and where each tear and heart is).
+// A look it doesn't know is an error (never a quiet stand-in): the live camera then switches only that look
+// off, and the saved photo comes without it.
 export function paintLook(canvas: SkCanvas, look: LensLook, faces: LensFace[], width: number, height: number, time: number, fill?: SkRect) {
   'worklet';
   if (width <= 0 || height <= 0) return;
   const now = Number.isFinite(time) ? time : 0;
-  if (look === 'golden') paintGoldenHour(canvas, faces, width, height, now, fill ?? Skia.XYWHRect(0, 0, width, height));
-  else for (const face of faces) paintSoftGlow(canvas, face, time);
+  const area = fill ?? Skia.XYWHRect(0, 0, width, height);
+  switch (look) {
+    case 'glow':
+      for (const face of faces) paintSoftGlow(canvas, face, time);
+      return;
+    case 'golden':
+      paintGoldenHour(canvas, faces, width, height, now, area);
+      return;
+    case 'peekabooEyes':
+      paintPeekabooEyes(canvas, faces, now);
+      return;
+    case 'brainBuffering':
+      paintBrainBuffering(canvas, faces, now, area);
+      return;
+    case 'crybaby':
+      paintCrybaby(canvas, faces, now);
+      return;
+    case 'auraOverload':
+      paintAuraOverload(canvas, faces, now, area, width, height);
+      return;
+    case 'heartEyes':
+      paintHeartEyes(canvas, faces, now);
+      return;
+    default: {
+      const unknown: never = look;
+      throw new Error(`Unknown face filter: ${String(unknown)}`);
+    }
+  }
 }
