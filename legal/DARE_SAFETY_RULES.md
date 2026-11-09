@@ -14,7 +14,7 @@ These rules apply to every dare, forfeit, drop, dare chain, community dare and f
 8. **Only people who agree.** Everyone who takes part or appears on camera must know what's happening and say yes. No pranks on sleeping people, strangers, children or anyone who can't consent. No touching anyone without their clear consent.
 9. **Nothing illegal and no damage.** No trespassing, theft, vandalism, disturbing businesses or traffic, or breaking rules of the place you're in (shops, pools, schools, workplaces). If staff ask you to stop, stop.
 10. **Nothing humiliating or hateful.** Dares must be fun for everyone, including the people watching. No dares that target someone's body, identity or beliefs. No bullying, no slurs and no abuse.
-11. **Nothing sexual.** No nudity, no sexual dares, and underwear stays on. Taking off a shirt or pants for a fun dare is okay.
+11. **Nothing sexual.** No nudity and no sexual dares.
 12. **Under 18?** Only do physical dares with a parent or adult present, and never do a dare a parent wouldn't be okay with.
 13. **Film safely.** Don't film while doing something that needs both hands or your full attention. Have a friend film.
 14. **Community dares** are written by other users. The same rules apply to them, and you can report any dare idea that breaks these rules. A dare idea only becomes everyone's daily dare after the Peekaboo team has read it and approved it. Ideas that break the rules are removed and their authors can be banned.
