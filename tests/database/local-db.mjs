@@ -39,7 +39,9 @@ export async function initializeDatabase(db,{includeFixes=true}={}) {
       id uuid primary key default gen_random_uuid(),
       email text,
       raw_user_meta_data jsonb not null default '{}'::jsonb,
-      raw_app_meta_data jsonb not null default '{}'::jsonb
+      raw_app_meta_data jsonb not null default '{}'::jsonb,
+      -- Set when the owner bans someone (Supabase → Authentication → Users → Ban user), like the real table.
+      banned_until timestamptz
     );
     create function auth.uid() returns uuid language sql stable as $$
       select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),

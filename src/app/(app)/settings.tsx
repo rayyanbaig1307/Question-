@@ -12,7 +12,7 @@ import { useMe } from '@/lib/auth';
 import { fetchMyBirthday } from '@/lib/birthday';
 import { friendlyError } from '@/lib/errors';
 import { fetchShowInProfileViews, setShowInProfileViews } from '@/lib/insights';
-import { inviteFriends } from '@/lib/invite';
+import { prefetchInviteCode } from '@/lib/invite';
 import { contactEmail, type LegalPage } from '@/lib/legal';
 import { LEGAL_DOCS } from '@/lib/legalDocs';
 import { setLocationSharing } from '@/lib/location';
@@ -81,6 +81,11 @@ export default function Settings() {
 
   useEffect(() => {
     fetchShowInProfileViews(userId).then((on) => active.current && setShowInViews(on));
+  }, [userId]);
+
+  // Get your invite link ready, so "Invite friends" opens with it straight away.
+  useEffect(() => {
+    prefetchInviteCode(userId);
   }, [userId]);
 
   async function changeShowInViews(on: boolean) {
@@ -364,8 +369,8 @@ export default function Settings() {
             icon="paper-plane"
             color={colors.accent}
             title="Invite friends"
-            subtitle="Tell your friends about Peekaboo"
-            onPress={() => inviteFriends(profile?.username)}
+            subtitle="Your invite link, or add a friend with their code"
+            onPress={() => router.push('/invite')}
           />
           <Row icon="people" color={colors.blue} title="My friends" onPress={() => router.push('/friends')} />
           <Row

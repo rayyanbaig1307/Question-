@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
 import { ProfileSetup, useNeedsSetup } from '@/components/ProfileSetup';
+import { PendingInvite } from '@/components/PendingInvite';
 import { CouldNotCheck, TermsGate } from '@/components/TermsGate';
 import { useAuth } from '@/lib/auth';
 import { syncCommunityDares } from '@/lib/communityDares';
@@ -78,6 +79,8 @@ export default function AppLayout() {
     </Stack>
     {/* Everyone must have agreed to the current Terms of Service. */}
     <TermsGate />
+    {/* An invite link opened before you were in the app (e.g. before logging in) opens now. */}
+    <PendingInvite />
     </>
   );
 }

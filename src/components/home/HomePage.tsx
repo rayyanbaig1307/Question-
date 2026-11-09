@@ -12,7 +12,7 @@ import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { countUnguessed } from '@/lib/guess';
-import { inviteFriends } from '@/lib/invite';
+import { inviteFriends, prefetchInviteCode } from '@/lib/invite';
 import { noteDropSeen } from '@/lib/peeks';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
@@ -58,6 +58,11 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
     },
     [],
   );
+
+  // Get your invite link ready, so "Invite friends" can share it straight away.
+  useEffect(() => {
+    prefetchInviteCode(userId);
+  }, [userId]);
 
   const loadAll = useCallback(async () => {
     const ticket = storyRingsTicket();

@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -10,7 +10,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { fetchMyFriendLinks, otherPerson, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
-import { inviteFriends } from '@/lib/invite';
+import { inviteFriends, prefetchInviteCode } from '@/lib/invite';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 import { colors, font, space } from '@/theme';
@@ -47,6 +47,11 @@ export default function Friends() {
       };
     }, [loadLinks, userId]),
   );
+
+  // Get your invite link ready, so sharing it is instant.
+  useEffect(() => {
+    prefetchInviteCode(userId);
+  }, [userId]);
 
   // Search a moment after you stop typing.
   const trimmed = query.trim().replace(/^@/, '');
@@ -135,7 +140,8 @@ export default function Friends() {
           </EmptyState>
         ) : (
           <>
-            <Button title="Invite friends" icon="paper-plane" onPress={invite} />
+            {/* Your invite link (share it, get a new one, or type a friend's code). */}
+            <Button title="Invite friends" icon="paper-plane" onPress={() => router.push('/invite')} />
             {received.length > 0 ? (
               <Section title={`Friend requests (${received.length})`}>{received.map(renderLink)}</Section>
             ) : null}
