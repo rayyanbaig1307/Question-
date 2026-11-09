@@ -20,7 +20,7 @@ export type DareProblem = 'harm' | 'sexual' | 'hate' | 'spam';
 // What people see when a dare isn't allowed. The database uses exactly the same sentences.
 export const DARE_NOT_ALLOWED: Record<DareProblem, string> = {
   harm: "That dare isn't allowed – no hurting anyone (or yourself), no violence and no abuse. 🙏",
-  sexual: "That dare isn't allowed – nothing sexual, and clothes stay on. 🙏",
+  sexual: "That dare isn't allowed – nothing sexual and no nudity. 🙏",
   hate: "That dare isn't allowed – no hate, bullying or slurs. 🙏",
   spam: "That dare looks like spam – no links, phone numbers or the same thing over and over. 🙏",
 };
@@ -44,7 +44,7 @@ export const DARE_RULES: Record<Exclude<DareProblem, 'spam'>, string[]> = {
   sexual: [
     ' (nude|nudes|naked|nudity|sex|sexting|porn|porno|pornhub|blowjob|handjob|masturbate|masturbating|jerk off|jerking off|jerkoff|cum|horny|onlyfans|strip|stripping|striptease|boob|boobs|tits|titties|dickpic|dick pic|nipple|nipples|pussy|vagina|penis|asshole|condom|panties) ',
     ' (show|send|flash|pic of|picture of|photo of|video of|touch|lick|grab) ([a-z]+ ){0,2}(ass|butt|bum|dick|cock|crotch|privates|private parts|chest|body|boobs|tits|penis|vagina) ',
-    ' (take off|remove) ([a-z]+ ){0,2}(clothes|shirt|top|pants|trousers|underwear|bra|boxers|panties|skirt) ',
+    ' (take off|remove) ([a-z]+ ){0,2}(clothes|underwear|bra|boxers|panties) ',
   ],
   hate: [
     ' (nazi|nazis|hitler|heil|kkk|white power|hate crime|n word|nword|terrorist|terrorists) ',
