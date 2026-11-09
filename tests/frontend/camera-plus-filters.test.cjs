@@ -182,6 +182,52 @@ test('not sure yet: the filter goes on, then switches off after a while if Plus 
   } finally { await unmount(camera.tree); }
 });
 
+// The camera's clock (Date.now inside the camera file), moved by hand.
+function fakeClock(camera) {
+  const clock = { now: 1_000_000 };
+  camera.screen.getBinding('Date').now = () => clock.now;
+  return clock;
+}
+
+test('not sure yet: swapping filters never starts the wait again, and once it is used up a Plus filter is refused', async () => {
+  const camera = await renderCamera('checking');
+  try {
+    const clock = fakeClock(camera);
+    assert.equal(await camera.pick('brainBuffering'), true);
+    clock.now += 5000;
+    assert.equal(await camera.pick('crybaby'), true, 'swapping filters is fine');
+    clock.now += 2000;
+    await camera.pick('photo');
+    assert.equal(await camera.pick('heartEyes'), true, 'off and on again within the wait is fine');
+    // The wait (counted from the first filter) runs out.
+    await camera.runTimers();
+    assert.equal(camera.dial().props.mode, 'photo');
+    assert.deepEqual(camera.calls.pushed, ['/plus']);
+    // Still not sure: no more Plus filters until Plus is confirmed.
+    assert.equal(await camera.pick('crybaby'), false);
+    assert.equal(camera.dial().props.mode, 'photo');
+    assert.equal(camera.softGlow().length, 0);
+    assert.deepEqual(camera.calls.pushed, ['/plus', '/plus']);
+    await camera.setAnswer('yes');
+    assert.equal(await camera.pick('crybaby'), true);
+    assert.equal(camera.softGlow()[0].props.look, 'crybaby');
+  } finally { await unmount(camera.tree); }
+});
+
+test('not sure yet: switching a filter off before the wait ends and on again after it is refused', async () => {
+  const camera = await renderCamera('checking');
+  try {
+    const clock = fakeClock(camera);
+    assert.equal(await camera.pick('auraOverload'), true);
+    clock.now += 3000;
+    await camera.pick('photo');
+    clock.now += 6000;
+    assert.equal(await camera.pick('auraOverload'), false, '9 s after the first filter, the wait is used up');
+    assert.equal(camera.dial().props.mode, 'photo');
+    assert.deepEqual(camera.calls.pushed, ['/plus']);
+  } finally { await unmount(camera.tree); }
+});
+
 test('not sure yet, then Plus is confirmed: the filter stays on', async () => {
   const camera = await renderCamera('checking');
   try {

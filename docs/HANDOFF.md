@@ -87,8 +87,10 @@ and the owner's standing preferences.
     (details and rules in `docs/FACE_MESH.md`). Soft Glow and Golden Hour are unchanged.
   - Plus gate (`CameraPage` + `usePlusAnswer()` in `lib/plus.ts`): when we're sure you don't have Plus, the Plus
     bubbles show a small ⭐, and a tap or swipe onto one opens Peekaboo+ and the row glides back. "Not sure yet"
-    (cold start, no internet) lets the filter on and switches it off after 8 s if Plus never shows up. When Plus
-    ends, a filter that's on switches off. Chat cameras have the filters too. Videos stay plain (as before).
+    (cold start, no internet) lets the filter on and switches it off after 8 s if Plus never shows up. The 8 s
+    count from the first filter you pick: swapping filters, or off and on again, doesn't start them again, and
+    once they're used up a Plus filter is refused until Plus is confirmed. When Plus ends, a filter that's on
+    switches off. Chat cameras have the filters too. Videos stay plain (as before).
   - Peekaboo+ screen: "7 live face filters (Heart Eyes, Crybaby, Aura & more)". Privacy Policy now 9 Nov (the
     filters read simple expressions too; still on the phone only) – the owner must **re-upload `website/`**
     (one upload together with the invite page). App Store screenshots or subscription text that show a filter
@@ -649,12 +651,12 @@ when a push arrives.
 - The testers in `src/lib/plus.ts` only have Plus in the app: for the server features they also need a
   `plus_members` row.
 
-## Face mesh + face filters (merged; on iPhone builds 10+)
+## Face mesh + face filters (merged; on the iPhone builds that have face tracking)
 
 MediaPipe Face Landmarker (478 face points + 52 expression scores) as our own VisionCamera v5 camera output in
 `modules/face-mesh`, with the face filters drawn in `src/components/lens/` (Soft Glow, Golden Hour and, since
-9 Nov, the five new Plus filters – see "Face filters" under Now). It's in the iPhone builds from build 10; Android
-has no face mesh yet. Steps, sizes and risks: `docs/FACE_MESH.md`.
+9 Nov, the five new Plus filters – see "Face filters" under Now). It's in App Store build 10 and TestFlight builds
+7–9 (the same list as `docs/FACE_MESH.md`); Android has no face mesh yet. Steps, sizes and risks: `docs/FACE_MESH.md`.
 
 ## Open items
 

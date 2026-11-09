@@ -185,7 +185,8 @@ Frontend (rendered screens, part of `npm test`):
   - `camera-plus-filters.test.cjs` (new): CameraPage with face tracking. Without Plus a filter is refused and opens
     Peekaboo+; with Plus it shows on the selfie camera with its ring colour, and switching filters keeps the same
     camera; Plus running out switches the filter off (the Peekaboo+ screen only if the camera is on screen);
-    "not sure yet" lets it on and switches it off after the wait unless Plus is confirmed; chat cameras; the
+    "not sure yet" lets it on and switches it off after the wait unless Plus is confirmed, and swapping filters
+    (or off and on again) never starts the wait again – once it's used up a Plus filter is refused; chat cameras; the
     shutter photo comes from the face camera; holding the shutter records a plain video.
   - `harness.cjs`: `@/lib/lensLooks` is the real file, loaded with a `require` that throws (that file must stay
     free of imports); `usePlusAnswer` defaults to 'no'; `calls.clearedTimers` lists the timers a screen stopped.

@@ -185,12 +185,22 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const [lensRecording, setLensRecording] = useState(false);
   const lensVideoItems = useRef<LensItem[]>([]);
 
+  // While we're still checking, the Plus filters get PLUS_CHECK_MS in all, counted from the first one you switch
+  // on. Swapping to another filter, or switching off and on again, doesn't start the wait again (otherwise you
+  // could keep a Plus filter for ever without Plus). A sure answer (yes or no) ends the wait.
+  const plusWaitStart = useRef<number | null>(null);
+  const plusWaitOver = useRef(false);
+  const plusLookOn = isPlusMode(homeMode);
+
   // Lenses are for faces – picking one turns to the selfie camera.
   // Returns false when the mode isn't allowed (the mode row then glides back).
   function changeMode(next: CameraMode): boolean {
     // The face filters are Peekaboo+: when we're sure you don't have Plus, show what Peekaboo+ is instead.
-    // (While we're still checking, the filter goes on – see just below.)
-    if (isPlusMode(next) && plusAnswer === 'no') {
+    // The same once the wait for an answer is used up. (While we're still checking, the filter goes on – see
+    // just below.)
+    const waitUsedUp =
+      plusWaitOver.current || (plusWaitStart.current !== null && Date.now() - plusWaitStart.current >= PLUS_CHECK_MS);
+    if (isPlusMode(next) && (plusAnswer === 'no' || (plusAnswer === 'checking' && waitUsedUp))) {
       router.push('/plus');
       return false;
     }
@@ -200,16 +210,26 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   }
 
   // A Plus filter is on, but Plus isn't (or is no longer) confirmed: back to the plain camera. Right away when
-  // we're sure you don't have Plus (e.g. it ran out), or after PLUS_CHECK_MS when we still can't tell.
-  // The Peekaboo+ screen only opens if this camera is on screen.
+  // we're sure you don't have Plus (e.g. it ran out), or once the PLUS_CHECK_MS wait is used up when we still
+  // can't tell. The Peekaboo+ screen only opens if this camera is on screen.
   useEffect(() => {
-    if (!isPlusMode(homeMode) || plusAnswer === 'yes') return;
+    if (plusAnswer !== 'checking') {
+      plusWaitStart.current = null;
+      plusWaitOver.current = false;
+    }
+    if (!plusLookOn || plusAnswer === 'yes') return;
+    let wait = 0;
+    if (plusAnswer === 'checking') {
+      if (plusWaitStart.current === null) plusWaitStart.current = Date.now();
+      wait = Math.max(0, PLUS_CHECK_MS - (Date.now() - plusWaitStart.current));
+    }
     const timer = setTimeout(() => {
+      if (plusAnswer === 'checking') plusWaitOver.current = true;
       setHomeMode('photo');
       if (active) router.push('/plus');
-    }, plusAnswer === 'no' ? 0 : PLUS_CHECK_MS);
+    }, wait);
     return () => clearTimeout(timer);
-  }, [homeMode, plusAnswer, active]);
+  }, [plusLookOn, plusAnswer, active]);
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
     router.push({
