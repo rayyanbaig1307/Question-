@@ -76,6 +76,8 @@ and the owner's standing preferences.
   adult or has no birthday saved – `private.age_group(owner) is distinct from 'teen'`; the app treats the server's
   "This invite link is busy" error the same as a `busy` result); removed friendships are remembered
   (`private.past_links`) so a link can't undo a decline/unfriend/block; ban and block checks.
+- **Published to `production` 9 Nov** (owner's "publish"): group `cd0eef12-4695-4667-bf9d-dd3ad7cd1dfe` (iOS) from
+  `fa7efb5` – face filters, group Guess Who, invite links, chat stickers, dare safety. `testing`: `db65d278` (same commit).
 - **Face filters 🎭** (owner, 9 Nov: bring the web app's filters into the camera; "don't test them, just push it and
   add it properly to the app"). Five new **Peekaboo+** filters, drawn live over the camera and onto the photo:
   👀 Peekaboo Eyes, 🧠 Brain Buffering, 😭 Crybaby, ⚡ Aura Overload, 😘 Heart Eyes (ported from the web branch
