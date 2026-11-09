@@ -81,6 +81,28 @@ export async function resizePhoto(uri: string, maxWidth: number): Promise<string
   return saved.uri;
 }
 
+// Cuts the middle of a photo to the shape width × height and saves it at exactly that size (a fresh JPEG).
+// Used for Guess Who in a group chat: every photo then has the same size and shape, so the file itself can't
+// hint at whose phone took it.
+export async function fixedSizePhoto(uri: string, width: number, height: number): Promise<string> {
+  const original = await ImageManipulator.manipulate(uri).renderAsync();
+  const shape = width / height;
+  // The biggest box with the right shape that fits inside the photo, right in the middle.
+  const cropWidth = Math.min(original.width, Math.round(original.height * shape));
+  const cropHeight = Math.min(original.height, Math.round(cropWidth / shape));
+  const rendered = await ImageManipulator.manipulate(original)
+    .crop({
+      originX: Math.floor((original.width - cropWidth) / 2),
+      originY: Math.floor((original.height - cropHeight) / 2),
+      width: cropWidth,
+      height: cropHeight,
+    })
+    .resize({ width, height })
+    .renderAsync();
+  const saved = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+  return saved.uri;
+}
+
 async function readBytes(uri: string): Promise<ArrayBuffer> {
   return new File(uri).arrayBuffer();
 }

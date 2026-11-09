@@ -2,14 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { React, loadScreen, renderScreen, act, unmount, host, textOf } = require('./harness.cjs');
 
-function fixture({ group = false, chatDare = false, failClaim = false, claimError = 'Simulated dare update failure', send } = {}) {
-  const calls = { snaps: 0, groups: 0, claimed: 0, dismissedTo: [] };
+// params: more route params (e.g. groupGuess). groupGuess: what postGroupGuess does (by default it works).
+function fixture({ group = false, chatDare = false, failClaim = false, claimError = 'Simulated dare update failure', send, params = {}, groupGuess } = {}) {
+  const calls = { snaps: 0, groups: 0, claimed: 0, dismissedTo: [], groupGuesses: [], mysteries: [], pushed: [] };
   const passthrough = Object.fromEntries(['CropTool', 'DraggableItem', 'StickerPicker', 'TextComposer'].map(name => [`@/components/editor/${name}`, { [name]: host(name) }]));
   const shared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
   const screen = loadScreen('src/app/(app)/editor.tsx', {
     ...passthrough,
     'expo-crypto': { randomUUID: () => 'qa-id' },
-    'expo-router': { router: { dismissTo(path) { calls.dismissedTo.push(path); }, push() {}, back() {} }, useLocalSearchParams: () => ({ uri: 'file:///qa-photo.jpg', ...(group ? { group: 'squad' } : { to: 'bob' }), ...(chatDare ? { chatDare: 'dare1' } : {}) }) },
+    'expo-router': { router: { dismissTo(path) { calls.dismissedTo.push(path); }, push(to) { calls.pushed.push(to); }, back() {} }, useLocalSearchParams: () => ({ uri: 'file:///qa-photo.jpg', ...(group ? { group: 'squad' } : { to: 'bob' }), ...(chatDare ? { chatDare: 'dare1' } : {}), ...params }) },
     'expo-status-bar': { StatusBar: host('StatusBar') },
     'react-native-gesture-handler': { GestureDetector: host('GestureDetector'), usePanGesture: () => ({}), usePinchGesture: () => ({}), useTapGesture: () => ({}), useSimultaneousGestures: () => ({}) },
     'react-native-reanimated': { __esModule: true, default: { View: host('AnimatedView') }, useSharedValue: shared, useAnimatedStyle: callback => callback(), withTiming: value => value },
@@ -21,6 +22,8 @@ function fixture({ group = false, chatDare = false, failClaim = false, claimErro
     '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
     '@/lib/chat': { sendSnap: async () => { calls.snaps++; if (send) await send(); }, claimChatDare: async () => { if (++calls.claimed === 1 && failClaim) throw new Error(claimError); } },
     '@/lib/groupChat': { sendGroupCapture: async () => { calls.groups++; if (send) await send(); } },
+    '@/lib/groupGuess': { postGroupGuess: async (...args) => { calls.groupGuesses.push(args); if (groupGuess) await groupGuess(...args); } },
+    '@/lib/guess': { postMystery: async (...args) => { calls.mysteries.push(args); } },
     '@/lib/eyeTrack': { CAN_TRACK_EYES: false },
     '@/lib/keeps': { CAN_SAVE_TO_PHOTOS: false, addKeep: async () => {} },
   }, { timers: 'real' }); // the editor waits a moment for moving text to stop before it takes the picture
@@ -68,5 +71,76 @@ test('a chat proof whose dare is gone says so once and goes back to the chat ins
     await act(() => sendButton(tree).props.onPress());
     assert.equal(calls.snaps, 1);
     assert.equal(calls.claimed, 1);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 🕵️ Guess Who in a group chat. It must NEVER go out as a normal group photo (that shows your name) or as a
+// friends-wide Guess Who.
+// ---------------------------------------------------------------------------
+test('a group Guess Who goes to that group with no name: never as a group photo, never to friends', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send Guess Who');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groups, 0, 'not sent as a normal (named) group photo');
+    assert.equal(calls.mysteries.length, 0, 'not posted to friends');
+    assert.equal(calls.groupGuesses.length, 1);
+    const [me, group, capture] = calls.groupGuesses[0];
+    assert.deepEqual([me, group, capture.kind, capture.uri], ['alice', 'squad', 'photo', 'file:///qa-finished.jpg']);
+    assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Guess Who sent 🕵️ No name on it – let the group guess!']);
+    // Pressing again on the way out sends nothing more.
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupGuesses.length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a refused group Guess Who says why, and Send can be tried again', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1' }, groupGuess: async () => { throw new Error('You can post 3 Guess Whos in this group a day'); } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not send', 'You can post 3 Guess Whos in this group a day']);
+    assert.deepEqual(calls.dismissedTo, []);
+    assert.equal(calls.groups, 0);
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupGuesses.length, 2);
+  } finally { await unmount(tree); }
+});
+
+test('a group camera can never post a friends-wide Guess Who (guess=1 with a group)', async () => {
+  const { screen, calls } = fixture({ group: true, params: { guess: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.notEqual(textOf(sendButton(tree)), 'Post Guess Who');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.mysteries.length, 0);
+    assert.equal(calls.groupGuesses.length, 0);
+    assert.equal(calls.groups, 0);
+  } finally { await unmount(tree); }
+});
+
+test('a group dare proof is never a Guess Who, even with groupGuess=1', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1', groupDare: 'dare1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupGuesses.length, 0);
+    assert.equal(calls.groups, 0, 'nor a named proof the person thought was anonymous');
+    assert.equal(calls.mysteries.length, 0);
+  } finally { await unmount(tree); }
+});
+
+test('a normal group photo still goes to the group as before', async () => {
+  const { screen, calls } = fixture({ group: true });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send to group');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groups, 1);
+    assert.equal(calls.groupGuesses.length, 0);
+    assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
   } finally { await unmount(tree); }
 });

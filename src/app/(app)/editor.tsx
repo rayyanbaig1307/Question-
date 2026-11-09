@@ -23,6 +23,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { claimChatDare, sendSnap } from '@/lib/chat';
 import { sendGroupCapture } from '@/lib/groupChat';
+import { postGroupGuess } from '@/lib/groupGuess';
 import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
@@ -42,12 +43,14 @@ const PICTURE_NOT_ON_WEB = "Sending and saving from the web isn't ready yet. Ple
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, chatDare, group, groupDare, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
+  const { uri, fit, video, to, chatDare, group, groupDare, groupGuess, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
     // A peek from a chat camera that's the proof for the friend's dare (marks the dare as done for you).
     chatDare?: string;
     // From a group chat's camera: send it to that group (as proof for `groupDare` if set).
     group?: string;
     groupDare?: string;
+    // '1' from a group chat's camera in Guess Who mode: it goes to that group with no name on it.
+    groupGuess?: string;
     uri: string;
     fit?: 'cover' | 'contain';
     // '1' when it's a video
@@ -133,11 +136,15 @@ export default function Editor() {
   // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
   const straightToChat = !!to && !dare && !drop && !guess && !forfeit;
   // Opened from the Guess Who camera: it posts straight to Guess Who (the 🕵️ circle on Home) with no name on it.
-  // Never to your story or your profile grid, so there's no "Send to…" choice.
-  const straightToGuess = !!guess && !to && !dare && !drop && !forfeit;
+  // Never to your story or your profile grid, so there's no "Send to…" choice. Never from a group chat's camera
+  // either (that would show it to all your friends instead of the group).
+  const straightToGuess = !!guess && !group && !to && !dare && !drop && !forfeit;
+  // Opened from a group chat's camera in Guess Who mode: it goes to that group chat with no name on it.
+  // It must never be sent as a normal group photo (that would show your name).
+  const straightToGroupGuess = !!group && groupGuess === '1' && !groupDare && !to && !dare && !drop && !forfeit;
   // Opened from a group chat's camera: it goes straight back to that group chat.
-  const straightToGroup = !!group && !to && !dare && !drop && !guess && !forfeit;
-  const straightAway = straightToChat || straightToGuess || straightToGroup;
+  const straightToGroup = !!group && groupGuess !== '1' && !to && !dare && !drop && !guess && !forfeit;
+  const straightAway = straightToChat || straightToGuess || straightToGroupGuess || straightToGroup;
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
   const [filterIndex, setFilterIndex] = useState(() => Math.max(0, FILTERS.findIndex((f) => f.name === startFilter)));
   const [filterFlash, setFilterFlash] = useState(0);
@@ -315,6 +322,15 @@ export default function Editor() {
               overlayUri: await videoLayer(),
             }
           : { kind: 'photo', uri: await resizePhoto(await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+        // 🕵️ Guess Who in the group: checked first, so it can never go out as a normal (named) group photo.
+        if (straightToGroupGuess && group) {
+          await postGroupGuess(userId, group, photo);
+          finishedDirect.current = true;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast('Guess Who sent 🕵️ No name on it – let the group guess!');
+          router.dismissTo(`/groups/chat/${group}`);
+          return;
+        }
         if (straightToGroup && group) {
           await sendGroupCapture(userId, group, photo, groupDare);
           finishedDirect.current = true;
@@ -362,7 +378,10 @@ export default function Editor() {
       } else if (straightToChat && chatDare && sentToChat.current) {
         Alert.alert('Photo sent, dare not updated', `${friendlyError(error)}\n\nYour photo is already sent. Tap Send again to update the dare.`);
       } else {
-        Alert.alert(straightToChat || straightToGroup ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo', friendlyError(error));
+        Alert.alert(
+          straightToChat || straightToGroup || straightToGroupGuess ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo',
+          friendlyError(error),
+        );
       }
     } finally {
       working.current = false;
@@ -476,7 +495,19 @@ export default function Editor() {
                 style={({ pressed }) => [styles.send, (pressed || busy) && styles.sendPressed]}
                 accessibilityRole="button">
                 <Text style={styles.sendText}>
-                  {busy ? (straightAway ? 'Sending…' : 'Saving…') : straightToChat ? 'Send' : straightToGuess ? 'Post Guess Who' : straightToGroup ? 'Send to group' : 'Send to'}
+                  {busy
+                    ? straightAway
+                      ? 'Sending…'
+                      : 'Saving…'
+                    : straightToChat
+                      ? 'Send'
+                      : straightToGuess
+                        ? 'Post Guess Who'
+                        : straightToGroupGuess
+                          ? 'Send Guess Who'
+                          : straightToGroup
+                            ? 'Send to group'
+                            : 'Send to'}
                 </Text>
                 <Ionicons name="send" size={18} color={colors.onAccent} />
               </Pressable>

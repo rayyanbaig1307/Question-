@@ -36,7 +36,7 @@ import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
 import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
 import { usePlus } from '@/lib/plus';
 import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
-import { ModeDial, type CameraMode } from './ModeDial';
+import { GroupGuessCaption, ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
 const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_LENS_AVAILABLE
@@ -63,7 +63,7 @@ const MODE_RING: Record<CameraMode, string> = {
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
+export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, groupGuess = false, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -75,6 +75,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // Opened from a group chat: what you take goes to that group (or is your proof for `groupDare`).
   sendToGroup?: string;
   groupDare?: string;
+  // Opened from a group chat straight in Guess Who mode (the photo goes to the group with no name on it).
+  groupGuess?: boolean;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
   // Taking your Peekaboo drop photo (2-minute countdown at the top).
@@ -101,8 +103,10 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
+  // A group chat's camera (not a group dare proof): its dial has a Guess Who bubble too.
+  const groupGuessHere = !!sendToGroup && !groupDare && !sendTo && !dare && !drop && !guess && !forfeit;
   // On the home camera you pick what you're posting with the mode dial above the shutter.
-  const [homeMode, setHomeMode] = useState<CameraMode>('photo');
+  const [homeMode, setHomeMode] = useState<CameraMode>(groupGuess && groupGuessHere ? 'guess' : 'photo');
   const dropStatus = useDropStatus();
   const dareOn = dare || (isHome && homeMode === 'dare');
   // While today's drop is live (2 minutes) and you haven't posted it, the normal camera IS the drop camera:
@@ -112,6 +116,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // Missed it: a small "post today's drop · you're late" button on the camera until you do.
   const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false;
   const guessOn = guess || (isHome && homeMode === 'guess');
+  // 🕵️ Guess Who in this group chat: photos only (no videos), and it goes to the group with no name on it.
+  const groupGuessOn = groupGuessHere && homeMode === 'guess';
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
   const [bannerGoneDay, setBannerGoneDay] = useState<string | null>(null);
   const hideBanner = () => setBannerGoneDay(todayDareDay());
@@ -184,6 +190,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
         ...(sendTo && chatDare ? { chatDare } : {}),
         ...(sendToGroup ? { group: sendToGroup } : {}),
         ...(sendToGroup && groupDare ? { groupDare } : {}),
+        ...(groupGuessOn ? { groupGuess: '1' } : {}),
         ...(dareOn ? { dare: '1' } : {}),
         ...(dropOn ? { drop: '1' } : {}),
         ...(guessOn ? { guess: '1' } : {}),
@@ -338,7 +345,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
 
   async function pickFromGallery() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
+      // Guess Who in a group is photos only.
+      mediaTypes: groupGuessOn ? ['images'] : ['images', 'videos'],
       quality: 0.9,
       // The picker allows the Peekaboo+ length; a longer-than-free video is checked just below.
       videoMaxDuration: PLUS_VIDEO_SECONDS,
@@ -476,8 +484,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             dots={{ dare: dareDone === false }}
           />
         ) : lensesHere ? (
-          // In a chat: just the lenses.
-          <ModeDial mode={homeMode} onChange={changeMode} lensesOnly />
+          // In a chat: just the lenses. In a group chat (not a dare proof), Guess Who too.
+          <>
+            {groupGuessOn ? <GroupGuessCaption /> : null}
+            <ModeDial mode={homeMode} onChange={changeMode} lensesOnly withGuess={groupGuessHere} />
+          </>
         ) : null}
         {recording ? (
           <View style={styles.recordTrack} pointerEvents="none">
@@ -489,12 +500,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           {/* The big shutter button: tap for a photo, hold for a video. It squishes when you press it. */}
           <Bouncy
             onPress={takePhoto}
-            onLongPress={startRecording}
+            // Guess Who in a group is photos only: holding the shutter just takes a photo.
+            onLongPress={groupGuessOn ? takePhoto : startRecording}
             delayLongPress={250}
             onPressOut={stopRecording}
             disabled={!permission?.granted || (busy && !recording)}
             accessibilityRole="button"
-            accessibilityLabel={autoDrop ? 'Take your Peekaboo drop photo' : 'Take photo, or hold to record a video'}
+            accessibilityLabel={autoDrop ? 'Take your Peekaboo drop photo' : groupGuessOn ? 'Take your Guess Who photo' : 'Take photo, or hold to record a video'}
             pressScale={0.82}
             style={[
               styles.shutter,

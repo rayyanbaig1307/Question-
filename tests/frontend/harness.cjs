@@ -62,6 +62,9 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/stories': { createStory: async () => {} },
     '@/lib/storyRings': { refreshStoryBadges: async () => {}, setStoryRings: () => {}, useStoryBadge: () => null },
     '@/lib/guess': { postMystery: async () => {} },
+    // 🕵️ Guess Who in group chats: a server without it (nothing to show, nothing to listen to).
+    '@/lib/groupGuess': { fetchGroupGuesses: async () => null, subscribeToGroupGuesses: () => () => {}, postGroupGuess: async () => {} },
+    '@/components/groups/GroupGuessCard': { GroupGuessCard: host('GroupGuessCard') },
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
     '@/lib/plus': {

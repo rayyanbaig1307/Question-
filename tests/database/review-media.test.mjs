@@ -571,6 +571,7 @@ const AUTHENTICATED_ALLOWED = [
   'public.get_profile_stats(target uuid)',
   'public.give_forfeit(nomination uuid, choice text)',
   'public.group_hold(post posts)',
+  'public.group_mystery_feed(grp uuid)',
   'public.guess_mystery(post uuid, guess uuid)',
   'public.hide_message(message uuid)',
   'public.hit_up(target uuid, note text)',

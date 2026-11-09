@@ -471,6 +471,83 @@ try {
       assert.equal((await db.query('select count(*)::int as n from group_proof_votes where proof_id=$1', [proofId])).rows[0].n, 1);
     });
   }
+  // Guess Who in a group chat (20261222000000_group_guess_who.sql).
+  // users[6] makes the group with users[7] and users[8]; users[7] posts; users[2] is not in the group.
+  if (!original) {
+    await check('group Guess Who through real REST: no name anywhere members can read, guessing shows who it was, outsiders see nothing', async () => {
+      const sorted = (list) => [...list].sort();
+      await friend(db, users[6], users[7]);
+      await friend(db, users[6], users[8]);
+      const crew = (await own(6, "select create_peek_group('REST guess crew',$1::uuid[],current_date) as id", [[users[7], users[8]]])).rows[0].id;
+      // The poster uploads to the shared "mystery" folder (no name in the path) and posts, like the app does.
+      // The app can't choose the people to guess from: the server writes down who is in the group.
+      const path = 'mystery/rest-group-guess-who.jpg';
+      const uploaded = await request('objects', { user: 7, method: 'POST', body: { bucket_id: 'media', name: path }, headers: { 'Content-Profile': 'storage' } });
+      assert.equal(uploaded.status, 201, JSON.stringify(uploaded.data));
+      const posted = await request('mystery_posts', { user: 7, method: 'POST', headers: { Prefer: 'return=representation' },
+        body: { user_id: users[7], group_id: crew, media_path: path, group_candidates: [users[2]] } });
+      assert.equal(posted.status, 201, JSON.stringify(posted.data));
+      const id = posted.data[0].id;
+      assert.deepEqual(sorted(posted.data[0].group_candidates), sorted([users[6], users[7], users[8]]));
+      // Nobody else can read the row (or who posted it) over REST.
+      for (const user of [6, 8, 2]) {
+        const row = await request(`mystery_posts?id=eq.${id}`, { user });
+        assert.equal(row.status, 200); assert.deepEqual(row.data, [], `user ${user}`);
+      }
+      // The group chat's list: no poster and no counts before you guess.
+      const feedAs = (user) => request('rpc/group_mystery_feed', { user, method: 'POST', body: { grp: crew } });
+      let feed = await feedAs(8);
+      assert.equal(feed.status, 200, JSON.stringify(feed.data)); assert.equal(feed.data.length, 1);
+      assert.deepEqual({ poster: feed.data[0].poster, guess_count: feed.data[0].guess_count, others_count: feed.data[0].others_count },
+        { poster: null, guess_count: null, others_count: 2 });
+      assert.deepEqual(sorted(feed.data[0].options), sorted([users[6], users[7]]));
+      // Outside the group: nothing. Logged out: refused.
+      assert.deepEqual((await feedAs(2)).data, []);
+      const visitor = await request('rpc/group_mystery_feed', { user: null, method: 'POST', body: { grp: crew } });
+      assert.ok([401, 403, 404].includes(visitor.status), `visitor ${visitor.status}`);
+      // Guessing someone who isn't in the group is refused with a clear message; a real guess shows who it was.
+      let result = await request('rpc/guess_mystery', { user: 8, method: 'POST', body: { post: id, guess: users[2] } });
+      assert.equal(result.status, 400, JSON.stringify(result.data)); assert.equal(result.data.message, 'Pick someone from the group');
+      result = await request('rpc/guess_mystery', { user: 8, method: 'POST', body: { post: id, guess: users[7] } });
+      assert.equal(result.status, 200, JSON.stringify(result.data)); assert.equal(result.data, users[7]);
+      feed = await feedAs(8);
+      assert.deepEqual({ poster: feed.data[0].poster, guess_count: feed.data[0].guess_count, right_count: feed.data[0].right_count },
+        { poster: users[7], guess_count: 1, right_count: 1 });
+      assert.equal((await feedAs(6)).data[0].poster, null, 'someone who has not guessed still sees no name');
+      // Blocking whoever posted it: only after guessing.
+      result = await request('rpc/block_mystery_poster', { user: 6, method: 'POST', body: { post: id } });
+      assert.equal(result.status, 400); assert.equal(result.data.message, 'Make your guess first, then you can block them');
+      // The Guess Who page (older apps too) never shows it.
+      for (const user of [6, 7, 8]) {
+        const page = await request('rpc/mystery_feed', { user, method: 'POST', body: {} });
+        assert.equal(page.status, 200); assert.deepEqual(page.data.filter((r) => r.id === id), [], `user ${user}`);
+      }
+      // The Chat list line has no sender, and the Guess Who counts as unread until you guess.
+      const chats = await request('rpc/my_group_chats', { user: 6, method: 'POST', body: {} });
+      const line = chats.data.find((r) => r.group_id === crew);
+      assert.deepEqual({ last_body: line.last_body, last_sender: line.last_sender, unread: line.unread },
+        { last_body: '🕵️ Guess Who – who sent it?', last_sender: null, unread: 1 });
+      // Live updates: members read the group's ping (only a time), outsiders don't, nobody can write it.
+      const ping = await request(`group_guess_pings?group_id=eq.${crew}`, { user: 6 });
+      assert.equal(ping.status, 200); assert.deepEqual(Object.keys(ping.data[0]).sort(), ['changed_at', 'group_id']);
+      assert.deepEqual((await request(`group_guess_pings?group_id=eq.${crew}`, { user: 2 })).data, []);
+      const forged = await request('group_guess_pings', { user: 6, method: 'POST', body: { group_id: crew } });
+      assert.ok([401, 403].includes(forged.status), `forged ping ${forged.status}`);
+      // The photo: members can read its record, outsiders can't.
+      assert.equal((await request(`objects?name=eq.${path}&select=name`, { user: 8, headers: { 'Accept-Profile': 'storage' } })).data.length, 1);
+      assert.deepEqual((await request(`objects?name=eq.${path}&select=name`, { user: 2, headers: { 'Accept-Profile': 'storage' } })).data, []);
+      // The poster can't change the people or the group later.
+      const patched = await request(`mystery_posts?id=eq.${id}`, { user: 7, method: 'PATCH', body: { group_candidates: [users[7]], group_id: null }, headers: { Prefer: 'return=representation' } });
+      assert.ok([200, 404].includes(patched.status), `PATCH ${patched.status}`); assert.deepEqual(patched.status === 200 ? patched.data : [], []);
+      const stored = (await db.query('select group_id, group_candidates from mystery_posts where id=$1', [id])).rows[0];
+      assert.equal(stored.group_id, crew); assert.equal(stored.group_candidates.length, 3);
+      // Reporting stays anonymous: the reporter can't read the report (or who it is about).
+      result = await request('rpc/report_mystery', { user: 6, method: 'POST', body: { post: id, reason: 'spam' } });
+      assert.ok([200, 204].includes(result.status), `report ${result.status} ${JSON.stringify(result.data)}`);
+      assert.deepEqual((await request(`reports?content_id=eq.${id}`, { user: 6 })).data, []);
+      assert.equal((await db.query('select reported_user_id from reports where content_id=$1', [id])).rows[0].reported_user_id, users[7]);
+    });
+  }
   await check(`${writeRequests} concurrent group writes keep exact counts, authors and unread state`, async () => {
     const groups = [];
     for (let n = 0; n < 6; n++) {

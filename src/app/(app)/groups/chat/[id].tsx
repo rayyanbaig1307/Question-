@@ -27,8 +27,9 @@ import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
 import { GroupFaces } from '@/components/GroupFaces';
+import { GroupGuessCard } from '@/components/groups/GroupGuessCard';
 import { IconButton } from '@/components/IconButton';
-import { useOverlays } from '@/components/Overlays';
+import { useOverlays, type SheetOption } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { SafeEdge } from '@/components/SafeEdge';
 import { ZoomableImage } from '@/components/ZoomableImage';
@@ -66,9 +67,12 @@ import {
   type GroupMessage,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
+import { fetchGroupGuesses, subscribeToGroupGuesses, type GroupGuess, type GroupGuessFeed } from '@/lib/groupGuess';
+import { blockMysteryPoster, deleteMystery, guessMystery, reportMystery } from '@/lib/guess';
 import { usePlus } from '@/lib/plus';
 import { useMediaUrls } from '@/lib/media';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
+import { REPORT_REASONS } from '@/lib/safety';
 import { timeAgo } from '@/lib/time';
 import type { Profile } from '@/lib/types';
 import { useGroupTyping } from '@/lib/typing';
@@ -77,12 +81,28 @@ import { Audio } from '@/lib/voice';
 import { useOpenChat } from '@/lib/notifications';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
-// How often to check who has read the chat (for "Seen by …") while it's open.
+// How often to check who has read the chat (for "Seen by …") while it's open. The group Guess Whos are checked
+// again at the same time (for the guess counts, and to hide ones that have ended).
 const READS_EVERY_MS = 15_000;
+
+// One row of the chat: a message, or a group Guess Who 🕵️. A Guess Who is not a message: it has no sender on
+// it, so it never joins a run of someone's messages and has no reply, pin, reactions or "See profile".
+type ChatItem = { message: GroupMessage; guess?: undefined } | { guess: GroupGuess; message?: undefined };
+// Guess Who ids are a different kind of id, so they get their own prefix (they can never clash with a message).
+const itemKey = (item: ChatItem) => (item.guess ? `guess:${item.guess.id}` : item.message.id);
+const itemTime = (item: ChatItem) => Date.parse(item.guess ? item.guess.created_at : item.message.created_at);
+// What the full-screen viewer needs: just the picture's files.
+type ViewerMedia = {
+  media_path: string | null;
+  media_type: 'photo' | 'video' | null;
+  poster_path: string | null;
+  overlay_path: string | null;
+};
 
 // A group's chat 💬: texts, photos and videos (📷), voice notes (hold 🎤), and group dares (🚩) where everyone
 // posts their proof and the rest of the group votes on it: Legit 🔥 or Cap 🧢. "Typing…" and "Seen by" like a
-// one-on-one chat. 🔎 searches the chat.
+// one-on-one chat. 🔎 searches the chat. 🕵️ Group Guess Whos (a photo with no name on it – the group guesses who
+// sent it) sit in the middle of the chat between the messages.
 // Tap the top to see the group (drops, members). Hold a message: yours → delete for everyone; theirs → report.
 export default function GroupChat() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
@@ -109,12 +129,13 @@ export default function GroupChat() {
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: GroupMessage[] } | null>(null);
   const searchRequest = useRef(0);
-  const listRef = useRef<FlatList<GroupMessage>>(null);
+  const listRef = useRef<FlatList<ChatItem>>(null);
   // Reactions, the message you're holding (its menu), and the message you're replying to.
   const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
   const [menuFor, setMenuFor] = useState<{ message: GroupMessage; actions: MessageAction[] } | null>(null);
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
-  const [viewing, setViewing] = useState<GroupMessage | null>(null);
+  // The photo or video open full screen (`key` is its row in the chat, so it closes if that row goes away).
+  const [viewing, setViewing] = useState<{ key: string; media: ViewerMedia } | null>(null);
   // Your own votes on the proofs in this chat (proof id → true for legit, false for cap), and the proofs whose
   // vote is being sent right now (a second tap waits for the first).
   const [myVotes, setMyVotes] = useState<Map<string, boolean>>(new Map());
@@ -141,9 +162,31 @@ export default function GroupChat() {
   const totalsChanges = useRef(new Map<string, number>());
   const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
 
+  // 🕵️ The group Guess Whos in this chat. null = none yet, or a server that doesn't have them yet (then the chat
+  // works just like before). If loading fails for another reason, the ones on screen stay.
+  const [guesses, setGuesses] = useState<GroupGuessFeed | null>(null);
+  const guessesRequest = useRef(0);
+  const guessingNow = useRef(false);
+  const [guessing, setGuessing] = useState<string | null>(null);
+  // Guess Whos you just guessed, to play the reveal once.
+  const [justRevealed, setJustRevealed] = useState<Set<string>>(new Set());
+  // The time now, to hide Guess Whos that have ended (moved on every 15 seconds).
+  const [now, setNow] = useState(() => Date.now());
+  // Only loads the Guess Whos: it never marks the chat as read (a new Guess Who mustn't move anyone's "Seen").
+  // An answer that set off before a newer one is dropped.
+  const loadGuesses = useCallback(() => {
+    const request = ++guessesRequest.current;
+    fetchGroupGuesses(groupId)
+      .then((found) => {
+        if (request === guessesRequest.current) setGuesses(found);
+      })
+      .catch((error) => console.warn('Could not load the group Guess Whos', error));
+  }, [groupId]);
+
   const load = useCallback(() => {
     const changesBefore = new Map(totalsChanges.current);
     refreshJoin();
+    loadGuesses();
     fetchGroupMessages(groupId)
       .then((list) => {
         // Vote totals that changed on screen while this was loading are newer than the ones it brought back.
@@ -181,7 +224,7 @@ export default function GroupChat() {
     fetchGroupReads(groupId)
       .then(setReads)
       .catch(() => {});
-  }, [groupId, userId, clearTyping, refreshJoin]);
+  }, [groupId, userId, clearTyping, refreshJoin, loadGuesses]);
 
   // Live changes: a vote changed a proof's totals → just those numbers change; anything else → load again.
   const onChatChange = useCallback(
@@ -220,18 +263,24 @@ export default function GroupChat() {
           .then(setGroup)
           .catch(() => {});
       });
+      // A group Guess Who was posted or deleted: load just the Guess Whos again (never the whole chat, which
+      // would mark it as read).
+      const stopGuesses = subscribeToGroupGuesses(groupId, loadGuesses);
       const readsTimer = setInterval(() => {
         fetchGroupReads(groupId)
           .then(setReads)
           .catch(() => {});
+        loadGuesses();
+        setNow(Date.now());
       }, READS_EVERY_MS);
       return () => {
         stop();
         stopReactions();
         stopGroup();
+        stopGuesses();
         clearInterval(readsTimer);
       };
-    }, [groupId, load, onChatChange]),
+    }, [groupId, load, onChatChange, loadGuesses]),
   );
 
   const people = new Map<string, Profile>();
@@ -241,10 +290,21 @@ export default function GroupChat() {
     return person ? person.display_name || person.username : 'Someone';
   };
 
-  // Photos, videos and proofs need their links.
-  const paths = (messages ?? []).flatMap((m) => [m.media_path, m.poster_path, m.overlay_path]).filter(
-    (p): p is string => !!p && !p.includes('/voice/'),
-  );
+  // The group Guess Whos still running, and everything in the chat newest first: the messages and the Guess Whos,
+  // by when they were sent.
+  const shownGuesses = (guesses?.posts ?? []).filter((post) => Date.parse(post.expires_at) > now);
+  const items: ChatItem[] =
+    messages === null
+      ? []
+      : [...messages.map((message) => ({ message })), ...shownGuesses.map((guess) => ({ guess }))].sort(
+          (a, b) => itemTime(b) - itemTime(a),
+        );
+
+  // Photos, videos, proofs and Guess Whos need their links.
+  const paths = [
+    ...(messages ?? []).flatMap((m) => [m.media_path, m.poster_path, m.overlay_path]),
+    ...shownGuesses.flatMap((post) => [post.media_path, post.poster_path, post.overlay_path]),
+  ].filter((p): p is string => !!p && !p.includes('/voice/'));
   const urls = useMediaUrls(paths);
 
   // Group dares: who has a proof that counts for each one (the group voted legit), and your own newest proof.
@@ -432,6 +492,126 @@ export default function GroupChat() {
     }
   }
 
+  // 🕵️ Your one guess on a group Guess Who. The answer (who really sent it) is only shown to you.
+  async function guessWho(post: GroupGuess, choice: string) {
+    if (guessingNow.current) return;
+    guessingNow.current = true;
+    setGuessing(post.id);
+    try {
+      const poster = await guessMystery(post.id, choice);
+      Haptics.notificationAsync(
+        poster === choice ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
+      );
+      setJustRevealed((current) => new Set(current).add(post.id));
+      // A Guess Who list still on its way (from before your guess) mustn't hide the answer again.
+      guessesRequest.current++;
+      setGuesses((current) =>
+        current ? { ...current, posts: current.posts.map((p) => (p.id === post.id ? { ...p, my_guess: choice, poster } : p)) } : current,
+      );
+      // Load them again for the guess counts (only shown once you've guessed).
+      loadGuesses();
+    } catch (error) {
+      Alert.alert('Could not guess', friendlyError(error));
+    } finally {
+      guessingNow.current = false;
+      setGuessing(null);
+    }
+  }
+
+  const removeGuess = (id: string) =>
+    setGuesses((current) => (current ? { ...current, posts: current.posts.filter((post) => post.id !== id) } : current));
+
+  // ⋯ on a group Guess Who (or hold its photo). Yours: delete it. Someone else's: report it (nobody is told it was
+  // you), and once you've guessed, block whoever sent it. No reply, pin, reactions or profile: it isn't a message.
+  function openGuessMenu(post: GroupGuess) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (post.mine) {
+      showOptions({
+        options: [
+          {
+            label: 'Delete',
+            destructive: true,
+            onPress: () =>
+              Alert.alert('Delete this Guess Who?', 'It will be gone for everyone.', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deleteMystery(post);
+                      removeGuess(post.id);
+                      showToast('Deleted 🗑️');
+                    } catch (error) {
+                      Alert.alert('Could not delete', friendlyError(error));
+                    }
+                  },
+                },
+              ]),
+          },
+        ],
+      });
+      return;
+    }
+    const options: SheetOption[] = [
+      {
+        label: 'Report',
+        onPress: () =>
+          // Wait for this menu to close before opening the next one.
+          setTimeout(
+            () =>
+              showOptions({
+                title: 'Why are you reporting this?',
+                message: "Your report is private – whoever posted it won't know it was you. We review every report within 24 hours.",
+                options: REPORT_REASONS.map((reason) => ({
+                  label: reason.label,
+                  onPress: async () => {
+                    try {
+                      await reportMystery(post.id, reason.code);
+                      Alert.alert('Thanks for telling us 💛', 'We will take a look.');
+                    } catch (error) {
+                      Alert.alert('Could not send report', friendlyError(error));
+                    }
+                  },
+                })),
+              }),
+            400,
+          ),
+      },
+    ];
+    // Blocking is only offered after your guess: before it, it would tell you who it was.
+    if (post.poster !== null) {
+      options.push({
+        label: 'Block whoever posted this',
+        destructive: true,
+        onPress: () =>
+          Alert.alert(
+            'Block whoever posted this?',
+            "They won't be able to see your stuff or message you, and you'll stop seeing theirs. We won't tell them. (They'll show up in your Blocked accounts list.)",
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Block',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await blockMysteryPoster(post.id);
+                    removeGuess(post.id);
+                    showToast('Blocked');
+                    // Their messages leave the chat too.
+                    load();
+                  } catch (error) {
+                    Alert.alert('Could not block', friendlyError(error));
+                  }
+                },
+              },
+            ],
+          ),
+      });
+    }
+    showOptions({ options });
+  }
+
   function openMessageMenu(message: GroupMessage) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const sender = people.get(message.sender_id);
@@ -556,7 +736,7 @@ export default function GroupChat() {
 
   // Tap a search result: jump to it in the chat (if it's one of the loaded messages).
   function jumpTo(message: GroupMessage) {
-    const index = messages?.findIndex((m) => m.id === message.id) ?? -1;
+    const index = items.findIndex((item) => item.message?.id === message.id);
     setSearch(null);
     setResults(null);
     if (index < 0) {
@@ -582,7 +762,7 @@ export default function GroupChat() {
     : [];
   const memberCount = group?.members.length ?? 0;
   const pinnedMessage = pinnedId ? (messages?.find((m) => m.id === pinnedId) ?? null) : null;
-  const openedMedia = viewing && messages?.some((m) => m.id === viewing.id) ? viewing : null;
+  const openedMedia = viewing && items.some((item) => itemKey(item) === viewing.key) ? viewing.media : null;
 
   return (
     <View style={styles.fill}>
@@ -680,7 +860,7 @@ export default function GroupChat() {
               />
             ) : messages === null ? (
               <ActivityIndicator color={colors.accent} style={styles.loading} />
-            ) : messages.length === 0 ? (
+            ) : items.length === 0 ? (
               <View style={[styles.fill, background.shown ? styles.clear : null]}>
                 {/* On a chat background the words sit on a soft card, so they're easy to read. */}
                 <View style={background.shown ? styles.emptyCard : null}>
@@ -690,19 +870,40 @@ export default function GroupChat() {
             ) : (
               <FlatList
                 ref={listRef}
-                data={messages}
+                data={items}
                 inverted
-                keyExtractor={(m) => m.id}
+                keyExtractor={itemKey}
                 contentContainerStyle={styles.list}
                 keyboardDismissMode="interactive"
                 onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
-                renderItem={({ item, index }) => {
+                renderItem={({ item: entry, index }) => {
+                  if (entry.guess) {
+                    // 🕵️ A group Guess Who: no name and no picture of who sent it, in the middle of the chat.
+                    const post = entry.guess;
+                    return (
+                      <GroupGuessCard
+                        post={post}
+                        people={guesses?.people ?? new Map()}
+                        now={now}
+                        mediaUrl={urls[post.media_path]}
+                        posterUrl={post.poster_path ? urls[post.poster_path] : undefined}
+                        overlayUrl={post.overlay_path ? urls[post.overlay_path] : undefined}
+                        busy={guessing === post.id}
+                        animate={justRevealed.has(post.id)}
+                        onGuess={(choice) => guessWho(post, choice)}
+                        onOpen={() => setViewing({ key: itemKey(entry), media: post })}
+                        onMenu={() => openGuessMenu(post)}
+                      />
+                    );
+                  }
+                  const item = entry.message;
                   const mine = item.sender_id === userId;
                   const sender = people.get(item.sender_id);
                   const name = nameOf(item.sender_id);
-                  // The list is upside down: the message "after" this one on screen is the one before it in time.
-                  const older = messages[index + 1];
-                  const firstOfRun = !older || older.sender_id !== item.sender_id;
+                  // The list is upside down: the row "after" this one on screen is the one before it in time.
+                  // A Guess Who in between ends a run of someone's messages (so the name shows again).
+                  const older = items[index + 1];
+                  const firstOfRun = !older || !older.message || older.message.sender_id !== item.sender_id;
                   const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
                   const myProof = item.kind === 'dare' ? myProofByDare.get(item.id) : undefined;
                   const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
@@ -720,7 +921,7 @@ export default function GroupChat() {
                         ) : null}
                         <Pressable
                           onLongPress={() => openMessageMenu(item)}
-                          onPress={item.media_path && item.kind !== 'voice' ? () => setViewing(item) : undefined}
+                          onPress={item.media_path && item.kind !== 'voice' ? () => setViewing({ key: item.id, media: item }) : undefined}
                           accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
                           accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
                           style={styles.stretch}>

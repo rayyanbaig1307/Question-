@@ -9,7 +9,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 
 - We collect what you give us (account, profile, photos, videos, messages, location if you turn it on) so the app can work.
 - We do **not** sell your data, show ads, or use advertising trackers.
-- Your content goes to the people you choose (friends, close friends, a group). If your account is public (the default), posts you share with everyone can also appear on Home for other Peekaboo users. Guess Who posts are shown to friends without your name. The app explains this when you post.
+- Your content goes to the people you choose (friends, close friends, a group). If your account is public (the default), posts you share with everyone can also appear on Home for other Peekaboo users. Guess Who posts are shown without your name to your friends, or to the members of the group chat you post one in. The app explains this when you post.
 - **Peekaboo+:** if you subscribe, Apple takes the payment and we never see your card details. A company called RevenueCat tells us whether your subscription is active.
 - **Who saw what:** Peekaboo+ members can see who viewed their profile and who rewatched or screenshotted their stories and posts – so they may see that it was you. Everyone logged in can see who has Peekaboo+ (the ⭐ badge).
 - **Face filters work on your phone only.** We never store or send face data.
@@ -42,7 +42,7 @@ We do **not** collect: contacts/address book, health data, payment card or bank 
 
 - **Posts, stories, drops, dares:** your friends (or only close friends, or one group, when you choose that). If your account is public (the default), posts you share with everyone can also appear on Home for other Peekaboo users. Turn on **Private account** (Settings → Privacy & safety) so only friends see your posts. Home shows posts from friends first, then from public accounts.
 - **Friends:** if your account is public and you are 18 or over, anyone can add you as a friend straight away. If you are under 18 (or haven't saved your birthday), or your account is private, people send a request that you can accept or decline. Friends can chat with you, see your stories and, while your sharing is on, your place on the friend map. You can block anyone at any time.
-- **Guess Who posts:** shown to friends without your name until they guess.
+- **Guess Who posts:** shown without your name to your friends, or to the members of the group chat you post one in. Each person sees who posted it only after they make their guess, and nobody is told who guessed what.
 - **Peeks and messages:** only the person you sent them to, or the members of the group chat.
 - **Profile:** your username, display name, photo, bio, song, friend count and whether you have Peekaboo+ are visible to other users who find you.
 - **Location:** friends only, only while sharing is on.

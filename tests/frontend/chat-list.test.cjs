@@ -182,3 +182,36 @@ test('each friend\'s picture in the Chat list is a story picture: tap = their st
     assert.deepEqual(JSON.parse(JSON.stringify(screen.calls.routes.at(-1))), ['push', { pathname: '/stories/[user]', params: { user: 'bob' } }]);
   } finally { await unmount(tree); }
 });
+
+test('a group Guess Who posted or deleted in any of your groups reloads the group lines, with its own listener', async () => {
+  let loads = 0;
+  const listeners = [], stopped = [], noop = () => {};
+  const screen = loadScreen('src/components/home/ChatPage.tsx', {
+    '@/components/FriendButton': { FriendButton: host('FriendButton') }, '@/components/GroupFaces': { GroupFaces: host('GroupFaces') }, '@/components/PersonRow': { PersonRow: host('PersonRow') },
+    '@/components/Overlays': { useOverlays: () => ({ showOptions: noop, showToast: noop }) },
+    '@/lib/chat': { fetchRecentMessages: async () => [], subscribeToMyMessages: () => noop, clearChat: async () => {} },
+    '@/lib/friends': { fetchFriends: async () => [{ id: 'carol', username: 'carol', display_name: 'Carol' }] },
+    '@/lib/closeFriends': { fetchCloseFriendIds: async () => new Set() },
+    '@/lib/friendSettings': { fetchFriendSettings: async () => new Map() },
+    '@/lib/groupChat': { fetchGroupChats: async () => { loads++; return new Map([['g1', { group_id: 'g1', unread: 1, last_body: '🕵️ Guess Who – who sent it?', last_at: '2026-11-04T12:00:00Z', last_sender: null, muted: false }]]); }, subscribeToGroupChat: () => noop },
+    '@/lib/groupGuess': { subscribeToGroupGuesses: (group, onChange) => { listeners.push({ group, onChange }); return () => stopped.push(group); } },
+    '@/lib/groups': { fetchGroups: async () => [{ id: 'g1', name: 'Gang', members: [{ userId: 'bob', profile: { id: 'bob', username: 'bob', display_name: 'Bob' } }] }], counting: g => g.members, stillToPost: () => [] },
+    '@/lib/invite': { inviteFriends: noop }, '@/lib/time': { timeAgo: () => 'now' },
+    '@/lib/useSafetyActions': { useSafetyActions: () => ({ confirmBlock: noop }) },
+    './HomeTabBar': { useTabBarSpace: () => 60 }, './PageHeader': { PageHeader: host('PageHeader') },
+  });
+  screen.Component = () => React.createElement(screen.exports.ChatPage, { visible: true, inboxCount: 0, onRefreshInbox: noop });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(listeners.length, 1);
+    assert.equal(listeners[0].group, null, 'one listener for all your groups');
+    // The line has no sender in front of it (the server never says who sent a Guess Who).
+    const shown = tree.root.findAllByType('Text').map(textOf);
+    assert.ok(shown.includes('🕵️ Guess Who – who sent it?'), JSON.stringify(shown));
+    assert.ok(!shown.some(text => text.includes(': 🕵️')));
+    const before = loads;
+    await act(() => listeners[0].onChange());
+    assert.equal(loads, before + 1);
+  } finally { await unmount(tree); }
+  assert.deepEqual(stopped, [null]);
+});

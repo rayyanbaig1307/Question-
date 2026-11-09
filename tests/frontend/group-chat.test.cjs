@@ -13,8 +13,11 @@ function realProofRules() {
   return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts, canVoteOnProof: module.exports.canVoteOnProof };
 }
 // joinedAt: when the person on screen (alice) joined the group – by default before every message here.
-function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false } = {}) {
-  const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null };
+// guesses: what fetchGroupGuesses returns (null = a server without group Guess Who); fetchGuesses(n) instead
+// answers the n-th load. card: a GroupGuessCard to use instead of the stand-in (e.g. the real one).
+function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false, guesses = null, fetchGuesses, guessAnswer = async () => 'bob', card } = {}) {
+  const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null,
+    reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [] };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
@@ -34,7 +37,7 @@ function fixture({ messages = [message()], send, search, missing = false, member
     '@/components/Overlays': { useOverlays: () => ({ showToast: value => calls.toasts.push(value), showOptions: value => calls.options.push(value) }) },
     '@/lib/groupChat': {
       ...realProofRules(),
-      fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => {},
+      fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => { calls.reads++; },
       subscribeToGroupChat: (_group, onChange) => { calls.onChange = onChange; return stop; }, subscribeToGroup: () => stop,
       fetchMyProofVotes: async (...args) => { calls.voteFetches.push(args); return fetchVotes ? fetchVotes(...args) : new Map(myVotes); },
       fetchMyGroupJoin: async (...args) => { calls.joinFetches.push(args); return joinedAt(...args); },
@@ -45,6 +48,19 @@ function fixture({ messages = [message()], send, search, missing = false, member
       pinGroupMessage: async (...args) => { calls.pinned.push(args); }, searchGroupMessages: async (_group, query) => search ? search(query) : [],
     },
     '@/lib/groups': { fetchGroup: async () => missing ? null : group },
+    // 🕵️ Group Guess Who: the list, its live listener, and the Guess Who calls the chat uses.
+    '@/lib/groupGuess': {
+      fetchGroupGuesses: async (...args) => { calls.guessFetches.push(args); return fetchGuesses ? fetchGuesses(calls.guessFetches.length) : guesses; },
+      subscribeToGroupGuesses: (group, onChange) => { calls.guessListeners.push({ group, onChange }); return () => { calls.guessStops++; }; },
+    },
+    '@/lib/guess': {
+      guessMystery: async (...args) => { calls.guessed.push(args); return guessAnswer(...args); },
+      reportMystery: async (...args) => { calls.mysteryReports.push(args); },
+      blockMysteryPoster: async id => { calls.blocked.push(id); },
+      deleteMystery: async post => { calls.deletedGuesses.push(post.id); },
+    },
+    '@/lib/safety': { REPORT_REASONS: [{ code: 'spam', label: 'Spam 🗑️' }, { code: 'other', label: 'Something else 🤔' }] },
+    ...(card ? { '@/components/groups/GroupGuessCard': { GroupGuessCard: card } } : {}),
     '@/lib/media': { useMediaUrls: paths => Object.fromEntries(paths.map(path => [path, `file:///qa/${path}`])) },
     '@/lib/reactions': { fetchReactions: async () => new Map(), subscribeToReactions: () => stop, toggleReaction: async (...args) => calls.reacted.push(args) },
     '@/lib/time': { timeAgo: () => 'now' },
@@ -602,3 +618,272 @@ for (const [plus, id, sends] of [[false, 'caught', true], [false, 'plus-bff', fa
     await unmount(tree);
   });
 }
+
+// ---------------------------------------------------------------------------
+// 🕵️ Guess Who in a group chat: a photo with no name on it; the group guesses who sent it. It is not a message,
+// so the chat never shows a sender, avatar, reply, pin or reaction for it.
+// ---------------------------------------------------------------------------
+const { guessPost, guessPeople, loadGuessCard } = require('./group-guess-helpers.cjs');
+const feed = (...posts) => ({ posts, people: guessPeople() });
+const guessCards = tree => tree.root.findAllByType('GroupGuessCard');
+const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+// (The screen runs in its own sandbox, so compare plain copies of its arrays.)
+const plain = value => JSON.parse(JSON.stringify(value));
+const keysOf = tree => { const list = tree.root.findByType('FlatList'); return plain(list.props.data.map(list.props.keyExtractor)); };
+
+test('group Guess Whos sit between the messages by time, with their own keys, and end a run of messages', async () => {
+  // The Guess Who has the same id as a message on purpose: their keys must still differ.
+  const { screen } = fixture({
+    messages: [message({ id: 'm3', body: 'later', created_at: '2026-11-04T13:00:00Z' }), message({ id: 'm1', body: 'earlier', created_at: '2026-11-04T12:00:00Z' })],
+    guesses: feed(guessPost({ id: 'm1', created_at: '2026-11-04T12:30:00Z' })),
+  });
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(keysOf(tree), ['m3', 'guess:m1', 'm1']);
+    // bob's two messages are split by the Guess Who, so his name shows above both of them.
+    assert.equal(texts(tree).filter(text => text === 'bob').length, 2);
+    assert.equal(guessCards(tree).length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('without a Guess Who in between, a run of messages shows the name once (the run rule is unchanged)', async () => {
+  const { screen } = fixture({
+    messages: [message({ id: 'm3', body: 'later', created_at: '2026-11-04T13:00:00Z' }), message({ id: 'm1', body: 'earlier', created_at: '2026-11-04T12:00:00Z' })],
+    guesses: feed(),
+  });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(texts(tree).filter(text => text === 'bob').length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a group Guess Who card is given no sender: no name, no avatar, no profile, never on your side', async () => {
+  const { screen } = fixture({ members: ['alice', 'bob', 'carol', 'dave'], guesses: feed(guessPost()) });
+  const tree = await renderScreen(screen);
+  try {
+    const [card] = guessCards(tree);
+    const props = Object.keys(card.props).filter(key => key !== 'children').sort();
+    assert.deepEqual(props, ['animate', 'busy', 'mediaUrl', 'now', 'onGuess', 'onMenu', 'onOpen', 'overlayUrl', 'people', 'post', 'posterUrl']);
+    assert.equal(card.props.post.poster, null);
+    // The card is not inside a message row, so no avatar or name is drawn next to it.
+    let parent = card.parent;
+    while (parent) { assert.notEqual(parent.type, 'StoryAvatar'); parent = parent.parent; }
+    assert.equal(tree.root.findAllByType('StoryAvatar').length, 1, 'only bob\'s text message has an avatar');
+    // Its photo link comes from the shared Guess Who folder.
+    assert.equal(card.props.mediaUrl, 'file:///qa/mystery/g1.jpg');
+  } finally { await unmount(tree); }
+});
+
+test('with the real card, nothing in the chat names who sent a Guess Who before you guess', async () => {
+  // bob sent it. His profile is loaded (he is one of the people to pick from), but nothing points at him.
+  const { screen } = fixture({ messages: [], members: ['alice', 'bob', 'carol', 'dave'], guesses: feed(guessPost()), card: loadGuessCard() });
+  const tree = await renderScreen(screen);
+  try {
+    const shown = texts(tree);
+    assert.ok(shown.includes('🕵️ Who sent this?'));
+    for (const name of ['BOB', 'CAROL', 'DAVE']) assert.equal(shown.filter(text => text === name).length, 1, `${name} is only a choice`);
+    assert.ok(!shown.some(text => /It was|Your Guess Who|guessed ·/.test(text)));
+    assert.deepEqual(tree.root.findAllByType('Avatar').map(node => node.props.name), ['BOB', 'CAROL', 'DAVE']);
+    assert.equal(tree.root.findAllByType('EmptyState').length, 0, 'a chat with only a Guess Who is not empty');
+  } finally { await unmount(tree); }
+});
+
+test('guessing calls guessMystery with your pick, shows only you who it was, and loads the counts', async () => {
+  let answer = feed(guessPost());
+  const { screen, calls } = fixture({ messages: [], members: ['alice', 'bob', 'carol', 'dave'], card: loadGuessCard(),
+    fetchGuesses: () => answer, guessAnswer: async () => 'bob' });
+  const tree = await renderScreen(screen);
+  try {
+    const before = calls.guessFetches.length;
+    answer = feed(guessPost({ my_guess: 'carol', poster: 'bob', guess_count: 2, right_count: 1 }));
+    const carol = tree.root.findAllByType('Bouncy').find(node => node.props.accessibilityLabel === 'Guess CAROL');
+    await act(async () => { await carol.props.onPress(); await flush(); });
+    assert.deepEqual(calls.guessed, [['g1', 'carol']]);
+    const shown = texts(tree);
+    assert.ok(shown.includes('Nope! It was BOB 🙈'), JSON.stringify(shown));
+    assert.ok(shown.includes('You guessed CAROL'));
+    assert.ok(shown.includes('👀 2 of 3 guessed · 1 got it'));
+    assert.equal(calls.guessFetches.length, before + 1, 'the Guess Whos are loaded again for the counts');
+    assert.equal(tree.root.findAllByType('Bouncy').length, 0, 'one try only');
+  } finally { await unmount(tree); }
+});
+
+test('a refused guess says why and keeps the choices', async () => {
+  const { screen, calls } = fixture({ messages: [], card: loadGuessCard(), guesses: feed(guessPost()),
+    guessAnswer: async () => { throw new Error('Pick someone from the group'); } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => tree.root.findAllByType('Bouncy')[0].props.onPress());
+    assert.equal(calls.guessed.length, 1);
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not guess', 'Pick someone from the group']);
+    assert.equal(tree.root.findAllByType('Bouncy').length, 3);
+  } finally { await unmount(tree); }
+});
+
+test('the Guess Who menu: before guessing only Report; after guessing Report and Block; yours only Delete', async () => {
+  const { screen, calls } = fixture({ messages: [], guesses: feed(
+    guessPost({ id: 'open' }),
+    guessPost({ id: 'done', my_guess: 'carol', poster: 'bob', guess_count: 1, right_count: 0 }),
+    guessPost({ id: 'yours', mine: true, options: null, poster: 'alice', guess_count: 0, right_count: 0 }),
+  ) });
+  const tree = await renderScreen(screen);
+  try {
+    const card = id => guessCards(tree).find(node => node.props.post.id === id);
+    const labels = () => plain(calls.options.at(-1).options.map(option => option.label));
+    await act(() => card('open').props.onMenu());
+    assert.deepEqual(labels(), ['Report']);
+    await act(() => card('done').props.onMenu());
+    assert.deepEqual(labels(), ['Report', 'Block whoever posted this']);
+    await act(() => card('yours').props.onMenu());
+    assert.deepEqual(labels(), ['Delete']);
+    // Never the message menu (reply, pin, reactions, see profile).
+    assert.equal(tree.root.findByType('MessageActions').props.visible, false);
+  } finally { await unmount(tree); }
+});
+
+test('reporting a group Guess Who is anonymous: it uses reportMystery, never a report about a person', async () => {
+  const { screen, calls } = fixture({ messages: [], guesses: feed(guessPost()) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => guessCards(tree)[0].props.onMenu());
+    await act(() => calls.options.at(-1).options.find(option => option.label === 'Report').onPress());
+    // The reasons open once the first menu has closed.
+    await act(() => screen.calls.timers.at(-1)());
+    assert.match(calls.options.at(-1).message, /won't know it was you/);
+    await act(() => calls.options.at(-1).options.find(option => option.label === 'Spam 🗑️').onPress());
+    assert.deepEqual(calls.mysteryReports, [['g1', 'spam']]);
+    assert.deepEqual(calls.reports, [], 'no report naming a person');
+  } finally { await unmount(tree); }
+});
+
+test('after guessing you can block whoever posted it; the card goes and the chat reloads', async () => {
+  let answer = feed(guessPost({ my_guess: 'bob', poster: 'bob', guess_count: 1, right_count: 1 }));
+  const { screen, calls } = fixture({ messages: [], fetchGuesses: () => answer });
+  const tree = await renderScreen(screen);
+  try {
+    const loads = calls.loads;
+    await act(() => guessCards(tree)[0].props.onMenu());
+    await act(() => calls.options.at(-1).options.find(option => option.label === 'Block whoever posted this').onPress());
+    const [title, warning, buttons] = screen.calls.alerts.at(-1);
+    assert.equal(title, 'Block whoever posted this?');
+    assert.match(warning, /Blocked accounts list/);
+    // Once you've blocked them the server doesn't show it to you any more.
+    answer = feed();
+    await act(async () => { await buttons.find(button => button.text === 'Block').onPress(); await flush(); });
+    assert.deepEqual(calls.blocked, ['g1']);
+    assert.equal(guessCards(tree).length, 0);
+    assert.equal(calls.loads, loads + 1);
+  } finally { await unmount(tree); }
+});
+
+test('your own group Guess Who can be deleted for everyone', async () => {
+  const { screen, calls } = fixture({ messages: [], guesses: feed(guessPost({ mine: true, options: null, poster: 'alice', guess_count: 2, right_count: 1 })) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => guessCards(tree)[0].props.onMenu());
+    await act(() => calls.options.at(-1).options.find(option => option.label === 'Delete').onPress());
+    const [title, warning, buttons] = screen.calls.alerts.at(-1);
+    assert.equal(title, 'Delete this Guess Who?');
+    assert.equal(warning, 'It will be gone for everyone.');
+    await act(() => buttons.find(button => button.text === 'Delete').onPress());
+    assert.deepEqual(calls.deletedGuesses, ['g1']);
+    assert.equal(guessCards(tree).length, 0);
+    assert.deepEqual(calls.toasts.at(-1), 'Deleted 🗑️');
+  } finally { await unmount(tree); }
+});
+
+test('a server without group Guess Who (fetch gives null): the chat works exactly as before', async () => {
+  const { screen, calls } = fixture({ messages: [], guesses: null });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(calls.guessFetches.length, 1);
+    assert.equal(guessCards(tree).length, 0);
+    assert.equal(tree.root.findByType('EmptyState').props.title, 'Say hi to the group!');
+  } finally { await unmount(tree); }
+  const withMessages = fixture({ guesses: null });
+  const tree2 = await renderScreen(withMessages.screen);
+  try {
+    assert.deepEqual(keysOf(tree2), ['message1']);
+    assert.ok(texts(tree2).includes('Hello group 👋'));
+  } finally { await unmount(tree2); }
+});
+
+test('a Guess Who ping or the 15-second check loads only the Guess Whos: never the chat, never "read"', async () => {
+  const { screen, calls } = fixture({ guesses: feed() });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(calls.guessListeners.length, 1);
+    assert.equal(calls.guessListeners[0].group, 'squad');
+    const loads = calls.loads, reads = calls.reads, fetches = calls.guessFetches.length;
+    assert.ok(reads >= 1, 'opening the chat marks it read');
+    await act(async () => { calls.guessListeners[0].onChange(); await flush(); });
+    assert.equal(calls.guessFetches.length, fetches + 1);
+    const [poll] = screen.calls.intervals.values();
+    await act(async () => { poll(); await flush(); });
+    assert.equal(calls.guessFetches.length, fetches + 2);
+    assert.equal(calls.loads, loads, 'the messages are not loaded again');
+    assert.equal(calls.reads, reads, 'the chat is not marked as read');
+  } finally { await unmount(tree); }
+});
+
+test('a new Guess Who from the ping shows up; a failed load keeps the ones on screen', async () => {
+  let answer = feed();
+  const { screen, calls } = fixture({ fetchGuesses: () => { if (answer instanceof Error) throw answer; return answer; } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(guessCards(tree).length, 0);
+    answer = feed(guessPost());
+    await act(async () => { calls.guessListeners[0].onChange(); await flush(); });
+    assert.equal(guessCards(tree).length, 1);
+    answer = new Error('Network request failed');
+    const warn = console.warn;
+    console.warn = () => {};
+    try { await act(async () => { calls.guessListeners[0].onChange(); await flush(); }); } finally { console.warn = warn; }
+    assert.equal(guessCards(tree).length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('an older Guess Who answer that arrives after a newer one is dropped', async () => {
+  const answers = [];
+  const { screen, calls } = fixture({ fetchGuesses: () => new Promise(resolve => answers.push(resolve)) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { calls.guessListeners[0].onChange(); await flush(); });
+    assert.equal(answers.length, 2);
+    await act(async () => { answers[1](feed()); await flush(); });
+    await act(async () => { answers[0](feed(guessPost({ id: 'deleted' }))); await flush(); });
+    assert.equal(guessCards(tree).length, 0);
+  } finally { answers.forEach(resolve => resolve(null)); await unmount(tree); }
+});
+
+test('a Guess Who that has ended is hidden, and one that ends while the chat is open goes at the next check', async () => {
+  const { screen } = fixture({ guesses: feed(
+    guessPost({ id: 'over', expires_at: new Date(Date.now() - 1000).toISOString() }),
+    guessPost({ id: 'soon', expires_at: new Date(Date.now() + 1500).toISOString() }),
+  ) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(plain(guessCards(tree).map(card => card.props.post.id)), ['soon']);
+    await new Promise(resolve => setTimeout(resolve, 1600));
+    const [poll] = screen.calls.intervals.values();
+    await act(async () => { poll(); await flush(); });
+    assert.equal(guessCards(tree).length, 0);
+  } finally { await unmount(tree); }
+});
+
+test('tapping a Guess Who photo opens it full screen', async () => {
+  const { screen } = fixture({ guesses: feed(guessPost()) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => guessCards(tree)[0].props.onOpen());
+    assert.equal(tree.root.findByType('ZoomableImage').props.uri, 'file:///qa/mystery/g1.jpg');
+  } finally { await unmount(tree); }
+});
+
+test('leaving the chat also stops the Guess Who listener', async () => {
+  const { screen, calls } = fixture({ guesses: feed() });
+  const tree = await renderScreen(screen);
+  await unmount(tree);
+  assert.equal(calls.guessStops, 1);
+  assert.equal(screen.calls.intervals.size, 0);
+});

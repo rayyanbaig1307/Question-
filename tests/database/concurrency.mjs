@@ -635,6 +635,38 @@ try {
       for(const [label,r] of Object.entries(results))assert.deepEqual(r,{voterDeletion:'ok',other:'ok'},`${label}: ${JSON.stringify(r)}`);
       return results;
     });
+    // Guess Who in a group chat (20261222000000_group_guess_who.sql): one person posts 6 group Guess Whos at
+    // the same moment. Only 3 a day are allowed, so exactly 3 are saved. And a Guess Who posted while the group
+    // is being deleted either goes with the group or is refused with "This group is gone" (never a database error).
+    if(includeFixes)await check('Parallel group Guess Whos by one person stop at 3 a day, and a post racing the group\'s deletion fails cleanly',async()=>{
+      const people=[];
+      for(let i=0;i<4;i++)people.push((await db.query("insert into auth.users(id,email,raw_user_meta_data) values(gen_random_uuid(),$1,$2) returning id",[`guess${i}@example.invalid`,{username:`qa_guess_${i}`,display_name:`Guess ${i}`}])).rows[0].id);
+      const as=(i,sql,params=[])=>asUser(db,people[i],tx=>tx.query(sql,params));
+      for(let i=1;i<4;i++)await friend(db,people[0],people[i]);
+      const grp=(await as(0,"select create_peek_group('QA guess race',$1::uuid[],current_date) as id",[people.slice(1)])).rows[0].id;
+      const post=async(i,group,name)=>{
+        await as(i,"insert into storage.objects(bucket_id,name) values('media',$1)",[name]);
+        return as(i,'insert into mystery_posts(user_id,group_id,media_path) values($1,$2,$3)',[people[i],group,name]);
+      };
+      await pause('mystery_posts',true);
+      const all=await Promise.allSettled(Array.from({length:6},(_,n)=>post(1,grp,`mystery/qa-guess-race-${n}.jpg`)));
+      await pause('mystery_posts',false);
+      const refused=all.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+      assert.deepEqual(refused,Array(3).fill('You can post 3 Guess Whos in this group a day'));
+      const saved=(await db.query('select count(*)::int as n from mystery_posts where group_id=$1 and user_id=$2',[grp,people[1]])).rows[0].n;
+      assert.equal(saved,3);
+      await pause('mystery_posts',true);
+      const racing=post(2,grp,'mystery/qa-guess-race-delete.jpg').then(()=>'saved',e=>e.message);
+      await new Promise(r=>setTimeout(r,30));
+      const deletion=await as(0,'delete from peek_groups where id=$1',[grp]).then(()=>'ok',e=>e.message);
+      const posted=await racing;
+      await pause('mystery_posts',false);
+      assert.equal(deletion,'ok');
+      assert.ok(['saved','This group is gone'].includes(posted),posted);
+      const left=(await db.query('select count(*)::int as n from mystery_posts where group_id=$1',[grp])).rows[0].n;
+      assert.equal(left,0);
+      return {saved,refused:refused.length,racingPost:posted};
+    });
     await pool.end();pools=pools.filter(p=>p!==pool);
   }
   await admin.end();

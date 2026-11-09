@@ -56,13 +56,18 @@ const BUBBLE_ACTIVE = 54;
 // The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat.
 export const LENS_MODES: CameraMode[] = ['googly', 'glow', 'golden'];
 
-export function ModeDial({ mode, onChange, dots, lensesOnly = false }: {
+export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false }: {
   mode: CameraMode;
   onChange: (mode: CameraMode) => void;
   dots?: Partial<Record<CameraMode, boolean>>;
   lensesOnly?: boolean;
+  // The camera inside a group chat: the lenses plus a Guess Who bubble (the photo goes into that group chat with
+  // no name on it). Its Guess Who bubble never opens the Guess Who page – that page is for friends' posts.
+  withGuess?: boolean;
 }) {
-  const modes = lensesOnly ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key)) : CAMERA_MODES;
+  const modes = lensesOnly
+    ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key) || (withGuess && item.key === 'guess'))
+    : CAMERA_MODES;
   const SLOTS: CameraMode[] = ['photo', ...modes.map((item) => item.key)];
   // The row stretches across the whole screen, so "the middle" is the middle of the screen – right over the shutter.
   const { width } = useWindowDimensions();
@@ -79,7 +84,7 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false }: {
     if (next === mode) {
       // No words on the camera: tap the chosen bubble again to see what it's about.
       if (next === 'dare') router.push('/dare');
-      if (next === 'guess') router.push('/guess');
+      if (next === 'guess' && !withGuess) router.push('/guess');
       return;
     }
     Haptics.selectionAsync();
@@ -214,6 +219,17 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   return (
     <View style={[styles.caption, styles.captionQuiet]}>
       <Text style={styles.captionText}>⏰ {late.text} · post anyway, it still counts</Text>
+    </View>
+  );
+}
+
+// The group chat camera in Guess Who mode: says what happens to the photo.
+export function GroupGuessCaption() {
+  return (
+    <View style={[styles.caption, styles.captionQuiet]}>
+      <Text style={styles.captionText} numberOfLines={2}>
+        🕵️ No name on it · the group guesses who sent it
+      </Text>
     </View>
   );
 }

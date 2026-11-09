@@ -20,6 +20,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { fetchFriendSettings, saveFriendSettings, type FriendSettings } from '@/lib/friendSettings';
 import { fetchGroupChats, subscribeToGroupChat, type GroupChatSummary } from '@/lib/groupChat';
+import { subscribeToGroupGuesses } from '@/lib/groupGuess';
 import { counting, fetchGroups, stillToPost, type PeekGroup } from '@/lib/groups';
 import { inviteFriends } from '@/lib/invite';
 import { timeAgo } from '@/lib/time';
@@ -94,6 +95,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     const stopGroupChats = subscribeToGroupChat(null, (change) => {
       if (change.event !== 'UPDATE') loadGroupChats();
     });
+    // A group Guess Who 🕵️ was posted or deleted in one of your groups: its line and unread count change.
+    const stopGroupGuesses = subscribeToGroupGuesses(null, loadGroupChats);
     fetchFriendSettings(userId)
       .then(setSettings)
       .catch(() => {});
@@ -108,6 +111,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
     return () => {
       stopMessages();
       stopGroupChats();
+      stopGroupGuesses();
     };
   }, [visible, userId, refresh]);
 
