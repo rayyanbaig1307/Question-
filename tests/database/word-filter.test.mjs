@@ -148,8 +148,8 @@ test('Group names reject slurs, when made and when renamed', async () => {
 });
 
 test('Private chat stays unfiltered: 1:1 and group chat, text and dares alike', async () => {
-  // The owner's explicit exception: private chat between friends is never word-filtered. A dare card is a chat
-  // message too (sent from inside a chat, from "Dare back" or from "Dare a friend"), so 1:1 dares behave the same
+  // The owner's explicit exception: private chat between friends is never word-filtered. (Dares have their own
+  // safety rules now – tests/database/dare-safety.test.mjs.) A dare card is a chat message too (sent from inside a chat, from "Dare back" or from "Dare a friend"), so 1:1 dares behave the same
   // as group dares. "Dare a friend" keeps its own check in the app (src/app/(app)/dare-friend.tsx).
   await friend(db, users[0], users[1]);
   const send = (kind, body) => rpc(0, 'insert into messages(sender_id,recipient_id,kind,body) values($1,$2,$3,$4) returning id', [users[0], users[1], kind, body]);
@@ -157,7 +157,9 @@ test('Private chat stays unfiltered: 1:1 and group chat, text and dares alike', 
   for (const body of ['Be an errand runner for the day', 'Drag head first into the pool', 'Sing loudly, no bullshit']) {
     assert.equal((await send('dare', body)).rows.length, 1, body);
   }
-  assert.equal((await send('dare', 'Say hi to the chinks next door')).rows.length, 1);
+  // Dares with slurs are refused since the owner's dare safety rule (20261224000000_dare_safety.sql): a dare
+  // is never allowed to be hateful. Plain chat messages stay unfiltered.
+  await assert.rejects(send('dare', 'Say hi to the chinks next door'), /no hate, bullying or slurs/);
   await send('text', 'you absolute faggot lol');
   // Editing a dare's text is not checked either (the same as a chat message).
   const dare = (await send('dare', 'Wear socks on your hands')).rows[0].id;

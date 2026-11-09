@@ -1,0 +1,213 @@
+{
+ "_about": "Dare safety cases: run against the app (tests/unit/dare-safety.test.mjs) and the database (tests/database/dare-safety.test.mjs), so both always agree. null = allowed.",
+ "cases": [
+  [
+   "Sing the chorus of your favourite song in public",
+   null
+  ],
+  [
+   "Call your mum and tell her a joke",
+   null
+  ],
+  [
+   "Do 20 push-ups right now",
+   null
+  ],
+  [
+   "Wear your clothes inside out for an hour",
+   null
+  ],
+  [
+   "Go kill it on the dance floor",
+   null
+  ],
+  [
+   "You're killing it, now do a backflip",
+   null
+  ],
+  [
+   "Show me your best dance move",
+   null
+  ],
+  [
+   "Hit your best pose in the middle of the mall",
+   null
+  ],
+  [
+   "Skill check: juggle 3 oranges",
+   null
+  ],
+  [
+   "Do a sexy dance for 10 seconds",
+   null
+  ],
+  [
+   "Slay a runway walk down the street",
+   null
+  ],
+  [
+   "Touch your toes 10 times",
+   null
+  ],
+  [
+   "Take off your shoes and run around the house",
+   null
+  ],
+  [
+   "Text your crush hi",
+   null
+  ],
+  [
+   "Scream noooooo in a library",
+   null
+  ],
+  [
+   "Say hi hi hi to the cashier",
+   null
+  ],
+  [
+   "Kill a cat",
+   "harm"
+  ],
+  [
+   "k1ll your neighbour",
+   "harm"
+  ],
+  [
+   "K I L L someone",
+   "harm"
+  ],
+  [
+   "go murder someone lol",
+   "harm"
+  ],
+  [
+   "Stab him with a fork",
+   "harm"
+  ],
+  [
+   "punch a stranger in the face",
+   "harm"
+  ],
+  [
+   "Slap your sister really hard",
+   "harm"
+  ],
+  [
+   "beat up a kid at school",
+   "harm"
+  ],
+  [
+   "kys",
+   "harm"
+  ],
+  [
+   "Go cut yourself",
+   "harm"
+  ],
+  [
+   "drink bleach",
+   "harm"
+  ],
+  [
+   "rape someone",
+   "harm"
+  ],
+  [
+   "R.A.P.E",
+   "harm"
+  ],
+  [
+   "Abuse your dog",
+   "harm"
+  ],
+  [
+   "molest a girl",
+   "harm"
+  ],
+  [
+   "Send nudes",
+   "sexual"
+  ],
+  [
+   "Show me ur asshole",
+   "sexual"
+  ],
+  [
+   "show me your butt",
+   "sexual"
+  ],
+  [
+   "Take off your shirt on camera",
+   "sexual"
+  ],
+  [
+   "get naked in the garden",
+   "sexual"
+  ],
+  [
+   "watch porn with your friends",
+   "sexual"
+  ],
+  [
+   "Flash your boobs",
+   "sexual"
+  ],
+  [
+   "Say heil hitler in class",
+   "hate"
+  ],
+  [
+   "Bully the new kid",
+   "hate"
+  ],
+  [
+   "Call your teacher ugly and fat",
+   "hate"
+  ],
+  [
+   "Tell her she's a slut",
+   "hate"
+  ],
+  [
+   "Follow my page www.example.com",
+   "spam"
+  ],
+  [
+   "go to https://bit.ly/abc",
+   "spam"
+  ],
+  [
+   "visit example.xyz now",
+   "spam"
+  ],
+  [
+   "Call 555 123 4567 and say hi",
+   "spam"
+  ],
+  [
+   "aaaaaaaaaaaaaaaaa",
+   "spam"
+  ],
+  [
+   "buy buy buy buy buy now",
+   "spam"
+  ],
+  [
+   "Be an errand runner for the day",
+   null
+  ],
+  [
+   "Drag head first into the pool",
+   null
+  ],
+  [
+   "Say hi to the chinks next door",
+   "hate"
+  ],
+  [
+   "call him f.a.g.g.o.t",
+   "hate"
+  ]
+ ]
+}
