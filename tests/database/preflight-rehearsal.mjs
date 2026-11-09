@@ -828,10 +828,14 @@ try {
       select body from public.group_messages where id=$2`, [[seed.private.dm, seed.private.dare], seed.private.group]);
     sameSet(rows.map((r) => r.body), ['you retard lol', 'Call someone a retard', 'retard party tonight'], 'private chat');
   });
-  await check('5c. New private chat (1:1, dare card, group) with those words is allowed', async () => {
+  await check('5c. New private chat messages (1:1 and group) with those words are allowed', async () => {
     await dm(B, C, { kind: 'text', body: 'still a retard' });
-    await dm(B, C, { kind: 'dare', body: 'Say retard to a friend' });
     await gm(B, seed.group, { body: 'retard party again' });
+  });
+  // Dare cards have their own safety rules since 20261224000000_dare_safety.sql: no slurs in a dare.
+  await check('5c. A new dare card with those words is refused (dare safety)', async () => {
+    const error = await refusal(() => dm(B, C, { kind: 'dare', body: 'Say retard to a friend' }), 'A dare with a slur');
+    assert(error.code === '23514' && /no hate, bullying or slurs/.test(error.message), error.message);
   });
 
   // 5d. The bad keep.
