@@ -17,12 +17,19 @@ function realProofRules() {
 // answers the n-th load. card: a GroupGuessCard to use instead of the stand-in (e.g. the real one).
 function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false, guesses = null, fetchGuesses, guessAnswer = async () => 'bob', card } = {}) {
   const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null,
-    reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [] };
+    reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [], haptics: [], refocus: null };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
   const screen = loadScreen('src/app/(app)/groups/chat/[id].tsx', {
-    'expo-router': { router: { push: to => calls.pushed.push(to) }, useFocusEffect: callback => require('./harness.cjs').React.useEffect(callback, [callback]), useLocalSearchParams: () => ({ id: 'squad' }) },
+    // calls.refocus(): leave the chat and come back to it (the screen stays open underneath, like on a phone).
+    'expo-router': { router: { push: to => calls.pushed.push(to) }, useFocusEffect: callback => require('./harness.cjs').React.useEffect(() => {
+      let cleanup = callback();
+      calls.refocus = () => { cleanup?.(); cleanup = callback(); };
+      return () => cleanup?.();
+    }, [callback]), useLocalSearchParams: () => ({ id: 'squad' }) },
+    // Which "buzz" the phone gives (success or warning after a guess).
+    'expo-haptics': { notificationAsync: async type => { calls.haptics.push(type); }, impactAsync: async () => {}, selectionAsync: async () => {}, NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' }, ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' } },
     '@/lib/plus': { usePlus: () => plus },
     'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: true }) },
     'expo-image': { Image: host('ExpoImage') },
@@ -886,4 +893,121 @@ test('leaving the chat also stops the Guess Who listener', async () => {
   await unmount(tree);
   assert.equal(calls.guessStops, 1);
   assert.equal(screen.calls.intervals.size, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Review fixes: the camera only offers a Guess Who where it can work; a refused guess or an ended Guess Who never
+// leaves a dead card; and the answer on the card is always the guess the server saved – never just the name tapped.
+// ---------------------------------------------------------------------------
+test('the chat camera offers a Guess Who only with 3 or more people and a server that has it (never for a dare proof)', async () => {
+  const cameraParams = async options => {
+    const { screen, calls } = fixture({ messages: [dare()], ...options });
+    const tree = await renderScreen(screen);
+    try {
+      await act(() => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a photo or video').props.onPress());
+      await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Do it and post proof').props.onPress());
+      assert.deepEqual(plain(calls.pushed.map(to => to.pathname)), ['/camera', '/camera']);
+      return plain(calls.pushed.map(to => to.params));
+    } finally { await unmount(tree); }
+  };
+  assert.deepEqual(await cameraParams({ members: ['alice', 'bob', 'carol'], guesses: feed() }),
+    [{ group: 'squad', groupGuessOk: '1' }, { group: 'squad', groupDare: 'dare1' }]);
+  // 2 people: the other person would know who sent it, so the server would refuse it.
+  assert.deepEqual(await cameraParams({ members: ['alice', 'bob'], guesses: feed() }),
+    [{ group: 'squad' }, { group: 'squad', groupDare: 'dare1' }]);
+  // A server without group Guess Who (the list comes back null).
+  assert.deepEqual(await cameraParams({ members: ['alice', 'bob', 'carol', 'dave'], guesses: null }),
+    [{ group: 'squad' }, { group: 'squad', groupDare: 'dare1' }]);
+});
+
+test('a refused guess loads the Guess Whos again at once: one that is gone leaves the chat', async () => {
+  let answer = feed(guessPost());
+  const { screen, calls } = fixture({ messages: [], card: loadGuessCard(), fetchGuesses: () => answer,
+    guessAnswer: async () => { throw new Error('This Guess Who is gone'); } });
+  const tree = await renderScreen(screen);
+  try {
+    const before = calls.guessFetches.length;
+    answer = feed();
+    await act(async () => { await tree.root.findAllByType('Bouncy')[0].props.onPress(); await flush(); });
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not guess', 'This Guess Who is gone']);
+    assert.equal(calls.guessFetches.length, before + 1, 'loaded again straight away');
+    assert.equal(tree.root.findAllByType('Bouncy').length, 0, 'no choices left on a Guess Who that is gone');
+    assert.ok(!texts(tree).includes('🕵️ Who sent this?'));
+    assert.deepEqual(calls.haptics, [], 'no success or warning buzz for a guess that was not saved');
+  } finally { await unmount(tree); }
+});
+
+test('a Guess Who that ended is hidden at once after a refused guess, even if loading again fails', async () => {
+  let answer = feed(guessPost({ expires_at: new Date(Date.now() + 300).toISOString() }));
+  const { screen } = fixture({ messages: [], card: loadGuessCard(), fetchGuesses: () => { if (answer instanceof Error) throw answer; return answer; },
+    guessAnswer: async () => { throw new Error('This Guess Who is gone'); } });
+  const warn = console.warn;
+  console.warn = () => {};
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(tree.root.findAllByType('Bouncy').length, 3);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    answer = new Error('Network request failed');
+    await act(async () => { await tree.root.findAllByType('Bouncy')[0].props.onPress(); await flush(); });
+    assert.equal(tree.root.findAllByType('Bouncy').length, 0, 'the ended card is gone, not left with "1m left"');
+  } finally { console.warn = warn; await unmount(tree); }
+});
+
+test('coming back to the chat hides Guess Whos that ended while you were away, even if loading again fails', async () => {
+  let answer = feed(guessPost({ expires_at: new Date(Date.now() + 300).toISOString() }));
+  const { screen, calls } = fixture({ card: loadGuessCard(), fetchGuesses: () => { if (answer instanceof Error) throw answer; return answer; } });
+  const warn = console.warn;
+  console.warn = () => {};
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('🕵️ Who sent this?'));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    answer = new Error('Network request failed');
+    await act(async () => { calls.refocus(); await flush(); });
+    assert.ok(!texts(tree).includes('🕵️ Who sent this?'), 'ended while you were away');
+    assert.ok(texts(tree).includes('Hello group 👋'), 'the messages are still there');
+  } finally { console.warn = warn; await unmount(tree); }
+});
+
+test('the answer shown is the guess the server saved, not the name tapped (e.g. you already guessed on another phone)', async () => {
+  // The server keeps your first guess (carol). Tapping BOB now is saved as nothing new, but the server still
+  // answers who sent it (bob).
+  let answer = feed(guessPost());
+  const { screen, calls } = fixture({ messages: [], members: ['alice', 'bob', 'carol', 'dave'], card: loadGuessCard(),
+    fetchGuesses: () => answer, guessAnswer: async () => 'bob' });
+  const tree = await renderScreen(screen);
+  let release;
+  try {
+    answer = new Promise(resolve => { release = resolve; }).then(() => feed(guessPost({ my_guess: 'carol', poster: 'bob', guess_count: 1, right_count: 0 })));
+    const bob = tree.root.findAllByType('Bouncy').find(node => node.props.accessibilityLabel === 'Guess BOB');
+    await act(async () => { await Promise.race([bob.props.onPress(), flush()]); await flush(); });
+    // While the saved answer is on its way: no answer from the tap, no buzz, and the choices are busy.
+    assert.ok(!texts(tree).some(text => /It was/.test(text)), JSON.stringify(texts(tree)));
+    assert.deepEqual(calls.haptics, []);
+    assert.ok(tree.root.findAllByType('Bouncy').every(node => node.props.disabled), 'busy: the choices wait');
+    // A second tap while it's busy sends nothing.
+    const carol = tree.root.findAllByType('Bouncy').find(node => node.props.accessibilityLabel === 'Guess CAROL');
+    await act(async () => { await carol.props.onPress(); await flush(); });
+    assert.equal(calls.guessed.length, 1);
+    await act(async () => { release(); await flush(); await flush(); });
+    const shown = texts(tree);
+    assert.ok(shown.includes('Nope! It was BOB 🙈'), JSON.stringify(shown));
+    assert.ok(shown.includes('You guessed CAROL'));
+    assert.ok(!shown.includes('You got it! It was BOB 🎯'));
+    assert.deepEqual(calls.haptics, ['warning'], 'the buzz matches the saved guess');
+  } finally { release?.(); await unmount(tree); }
+});
+
+test('a right guess gets the success buzz once the saved answer is back', async () => {
+  let answer = feed(guessPost());
+  const { screen, calls } = fixture({ messages: [], members: ['alice', 'bob', 'carol', 'dave'], card: loadGuessCard(),
+    fetchGuesses: () => answer, guessAnswer: async () => 'bob' });
+  const tree = await renderScreen(screen);
+  try {
+    answer = feed(guessPost({ my_guess: 'bob', poster: 'bob', guess_count: 1, right_count: 1 }));
+    const bob = tree.root.findAllByType('Bouncy').find(node => node.props.accessibilityLabel === 'Guess BOB');
+    await act(async () => { await bob.props.onPress(); await flush(); });
+    assert.ok(texts(tree).includes('You got it! It was BOB 🎯'));
+    assert.deepEqual(calls.haptics, ['success']);
+  } finally { await unmount(tree); }
 });

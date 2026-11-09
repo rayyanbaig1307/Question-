@@ -8,17 +8,20 @@ import { CameraPage } from '@/components/home/CameraPage';
 //   (&chatDare=<message id>: it's the proof for their dare, so the dare is marked as done for you);
 // - opened from a group chat (?group=<id>): the photo/video goes to that group chat
 //   (&groupDare=<message id>: it's your proof for that group dare;
-//   &groupGuess=1: it starts in Guess Who mode – the photo goes to the group with no name on it);
+//   &groupGuessOk=1: the group can have a Guess Who (at least 3 people, and the server has it), so the dial has a
+//   Guess Who bubble – the photo then goes to the group with no name on it;
+//   &groupGuess=1: it starts in that Guess Who mode);
 // - opened from the Daily Dare (?dare=1): your photo becomes your answer to today's dare;
 // - opened for the Peekaboo drop (?drop=1): your photo becomes today's drop;
 // - opened from Guess Who (?guess=1): your photo is posted anonymously for friends to guess;
 // - opened to pay a forfeit (?forfeit=<id>&ftext=…): your photo pays that forfeit.
 export default function SoloCamera() {
-  const { to, chatDare, group, groupDare, groupGuess, dare, drop, guess, forfeit, ftext } = useLocalSearchParams<{
+  const { to, chatDare, group, groupDare, groupGuess, groupGuessOk, dare, drop, guess, forfeit, ftext } = useLocalSearchParams<{
     to?: string;
     group?: string;
     groupDare?: string;
     groupGuess?: string;
+    groupGuessOk?: string;
     chatDare?: string;
     dare?: string;
     drop?: string;
@@ -37,6 +40,7 @@ export default function SoloCamera() {
         sendToGroup={group}
         groupDare={groupDare}
         groupGuess={groupGuess === '1'}
+        groupGuessOk={groupGuessOk === '1'}
         dare={dare === '1'}
         drop={drop === '1'}
         guess={guess === '1'}

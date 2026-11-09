@@ -113,10 +113,112 @@ test('At most 3 group Guess Whos per person per group in 24 hours', async () => 
   await postGuess(grp, 2);
   await postGuess(other, 1);
   await postGuess(null, 1);
-  // 24 hours after the first one, there is room for one more.
+  // What counts is when each one was posted, written down in a private log. Moving the post itself back changes
+  // nothing; 24 hours after the first one was posted, there is room for one more.
   await db.query("update mystery_posts set created_at = now() - interval '25 hours' where id = $1", [first.id]);
+  assert.equal(await failure(postGuess(grp, 1)), limit);
+  await db.query("update private.group_mystery_log set posted_at = now() - interval '25 hours' where id = (select min(id) from private.group_mystery_log where group_id = $1 and user_id = $2)", [grp, users[1]]);
   await postGuess(grp, 1);
   assert.equal(await failure(postGuess(grp, 1)), limit);
+});
+
+test('Deleting a group Guess Who doesn\'t give the post back: still 3 a day, and only 3 pushes', async () => {
+  const grp = await makeGroup([1, 2, 3]);
+  const token = await pushTo(2);
+  await db.query('truncate net.sent restart identity');
+  const limit = 'You can post 3 Guess Whos in this group a day';
+  // Post, delete, post, delete, post, delete...
+  for (let n = 0; n < 3; n++) {
+    const post = await postGuess(grp, 1);
+    assert.equal((await rpc(1, 'delete from mystery_posts where id = $1 returning id', [post.id])).rows.length, 1);
+  }
+  assert.equal(await count('mystery_posts where group_id = $1', [grp]), 0);
+  // ...the 4th post is still refused, and the others got only 3 pushes.
+  assert.equal(await failure(postGuess(grp, 1)), limit);
+  assert.equal((await pushesTo(token)).length, 3);
+  // Posting 4 in one go is refused as a whole too (nothing is saved).
+  const many = await postGuess(grp, 2);
+  const paths = [await upload(2), await upload(2), await upload(2)];
+  assert.equal(await failure(rpc(2, 'insert into mystery_posts(user_id,group_id,media_path) select $1, $2, p from unnest($3::text[]) p', [users[2], grp, paths])), limit);
+  assert.deepEqual((await db.query('select id from mystery_posts where group_id = $1', [grp])).rows.map((r) => r.id), [many.id]);
+  // A post that is refused for any other reason doesn't use up a turn: users[3] tries with a photo they didn't
+  // upload (refused by the table's own rule), then posts 3 for real.
+  assert.match(await failure(rpc(3, 'insert into mystery_posts(user_id,group_id,media_path) values($1,$2,$3)', [users[3], grp, paths[0]])), /row-level security/);
+  for (let n = 0; n < 3; n++) await postGuess(grp, 3);
+  assert.equal(await failure(postGuess(grp, 3)), limit);
+  // The log keeps only when, never which post. Nobody in the app can read or change it.
+  assert.deepEqual(Object.keys(await one('select * from private.group_mystery_log limit 1')).sort(), ['group_id', 'id', 'posted_at', 'user_id']);
+  for (const role of ['authenticated', 'anon']) {
+    for (const sql of ['select * from private.group_mystery_log', 'delete from private.group_mystery_log']) {
+      assert.match(await failure(asUser(db, users[1], (tx) => tx.query(sql), role)), /permission denied/, `${role}: ${sql}`);
+    }
+  }
+  // Log lines older than 24 hours are cleared out the next time that person posts in that group.
+  await db.query("update private.group_mystery_log set posted_at = now() - interval '25 hours' where group_id = $1 and user_id = $2", [grp, users[1]]);
+  await postGuess(grp, 1);
+  assert.equal(await count('private.group_mystery_log where group_id = $1 and user_id = $2', [grp, users[1]]), 1);
+  // The log goes with the person's account, and with the group.
+  await db.query('delete from auth.users where id = $1', [users[1]]);
+  assert.equal(await count('private.group_mystery_log where user_id = $1', [users[1]]), 0);
+  assert.ok(await count('private.group_mystery_log where group_id = $1', [grp]) > 0);
+  await rpc(0, 'delete from peek_groups where id = $1', [grp]);
+  assert.equal(await count('private.group_mystery_log'), 0);
+});
+
+test('Posting in someone else\'s name always gets the same answer, so it can\'t show who posted, who is in the group or who reached the limit', async () => {
+  const grp = await makeGroup([1, 2, 3, 4]);
+  for (let n = 0; n < 3; n++) await postGuess(grp, 1);   // users[1] has reached today's limit
+  await postGuess(grp, 3);                                 // users[3] posted once
+  // users[2] hasn't guessed, so no card has a name on it.
+  const cards = await feed(2, grp);
+  assert.equal(cards.length, 4);
+  assert.ok(cards.every((r) => r.poster === null && r.my_guess === null));
+  const pushes = await count('net.sent');
+  const refused = 'Only people in this group can post a Guess Who here';
+  const asSomeoneElse = (as, victim, role = 'authenticated', group = grp) => failure(asUser(db, as,
+    (tx) => tx.query('insert into mystery_posts(user_id,group_id,media_path) values($1,$2,$3)', [victim, group, `mystery/${randomUUID()}.jpg`]), role));
+  // The poster at the limit, someone who posted once, people who posted nothing, someone outside the group, and
+  // nobody at all – in this group, or in a group that doesn't exist.
+  const victims = [users[1], users[3], users[0], users[4], users[5], randomUUID()];
+  for (const as of [users[2], users[6]]) {   // a member, and someone outside the group
+    for (const victim of victims) {
+      assert.equal(await asSomeoneElse(as, victim), refused, `as ${as}, in the name of ${victim}`);
+      assert.equal(await asSomeoneElse(as, victim, 'authenticated', randomUUID()), refused, `as ${as}, in the name of ${victim}, unknown group`);
+    }
+  }
+  // Visitors (not logged in) can't post, change or delete Guess Whos at all: the same answer for everyone.
+  for (const victim of victims) assert.equal(await asSomeoneElse(null, victim, 'anon'), 'permission denied for table mystery_posts');
+  for (const sql of ['update mystery_posts set caption = $1', 'delete from mystery_posts where caption = $1']) {
+    assert.match(await failure(asUser(db, null, (tx) => tx.query(sql, ['x']), 'anon')), /permission denied/, sql);
+  }
+  for (const right of ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) {
+    assert.equal((await one("select has_table_privilege('anon', 'public.mystery_posts', $1) as ok", [right])).ok, false, right);
+  }
+  // Even if visitors were ever given the right to post again, the server's own check gives the same answer.
+  for (const victim of victims) {
+    const answer = await failure(db.transaction(async (tx) => {
+      await tx.exec('grant insert on public.mystery_posts to anon; set local role anon');
+      await tx.query("select set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claim.role', 'anon', true)");
+      await tx.query('insert into mystery_posts(user_id,group_id,media_path) values($1,$2,$3)', [victim, grp, `mystery/${randomUUID()}.jpg`]);
+      throw new Error('saved');   // never keep anything from this check
+    }));
+    assert.equal(answer, refused, `visitor, in the name of ${victim}`);
+  }
+  assert.equal((await one("select has_table_privilege('anon', 'public.mystery_posts', 'INSERT') as ok")).ok, false);
+  // Nothing was saved, nobody got a push and nobody's turns were used up.
+  assert.equal(await count('mystery_posts'), 4);
+  assert.equal(await count('net.sent'), pushes);
+  assert.equal(await count('private.group_mystery_log where user_id <> all($1)', [[users[1], users[3]]]), 0);
+  // People in the group can still post as themselves (all 3 of their turns), and the real poster still reaches
+  // their own limit.
+  for (let n = 0; n < 3; n++) await postGuess(grp, 0);
+  await postGuess(grp, 2);
+  await postGuess(grp, 3);
+  assert.equal(await failure(postGuess(grp, 1)), 'You can post 3 Guess Whos in this group a day');
+  // Logged-in people keep what the app needs: post and delete their own.
+  for (const right of ['SELECT', 'INSERT', 'DELETE']) {
+    assert.equal((await one("select has_table_privilege('authenticated', 'public.mystery_posts', $1) as ok", [right])).ok, true, right);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -475,6 +577,48 @@ test('The Chat list: a Guess Who line with no sender, and Guess Whos you haven\'
   assert.equal((await summary(2, grp)).last_body, 'who was it?');
 });
 
+test('Ended Guess Whos are skipped straight from the index, so a long history doesn\'t slow down the Chat list or the Guess Who lists', async () => {
+  const grp = await makeGroup([1, 2, 3]);
+  const others = [];
+  for (let n = 0; n < 9; n++) others.push(await makeGroup([1, 2, 3], `Other ${n}`));
+  const live = await postGuess(grp, 1);
+  const plain = await postGuess(null, 1);
+  // 300 ended Guess Whos in every group and on the Guess Who page, put straight in by the owner (no checks).
+  await db.transaction(async (tx) => {
+    await tx.exec('set local session_replication_role = replica');
+    await tx.query(`insert into mystery_posts(user_id, group_id, group_candidates, media_path, created_at, expires_at)
+      select $1, g.id, case when g.id is not null then $2::uuid[] end,
+             'mystery/ended-' || coalesce(g.id::text, 'friends') || '-' || n || '.jpg',
+             now() - make_interval(hours => 25 + n), now() - make_interval(hours => 1 + n)
+        from unnest($3::uuid[]) as g(id), generate_series(1, 300) n`, [users[2], live.group_candidates, [grp, ...others, null]]);
+  });
+  await db.exec('analyze mystery_posts; discard plans;');
+  // How many Guess Who rows the database read while doing something.
+  const total = async () => {
+    await db.query('select pg_stat_force_next_flush()');
+    await db.query('select pg_stat_clear_snapshot()');
+    return Number((await one("select seq_tup_read + coalesce(idx_tup_fetch, 0) as n from pg_stat_user_tables where relid = 'public.mystery_posts'::regclass")).n);
+  };
+  const rowsRead = async (run) => {
+    const start = await total();
+    const result = await run();
+    return { result, read: (await total()) - start };
+  };
+  // The answers are the same as ever...
+  const chats = await rowsRead(async () => (await rpc(0, 'select * from my_group_chats()')).rows);
+  const lines = Object.fromEntries(chats.result.map((r) => [r.group_id, { unread: r.unread, last_body: r.last_body }]));
+  assert.deepEqual(lines[grp], { unread: 1, last_body: LINE });
+  for (const g of others) assert.deepEqual(lines[g], { unread: 0, last_body: null });
+  const list = await rowsRead(() => feed(0, grp));
+  assert.deepEqual(list.result.map((r) => r.id), [live.id]);
+  const page = await rowsRead(async () => (await rpc(0, 'select id from mystery_feed()')).rows);
+  assert.deepEqual(page.result.map((r) => r.id), [plain.id]);
+  // ...but the 3,300 ended ones are never read.
+  assert.ok(chats.read < 100, `the Chat list read ${chats.read} Guess Who rows`);
+  assert.ok(list.read < 50, `the group chat's list read ${list.read} Guess Who rows`);
+  assert.ok(page.read < 50, `the Guess Who page read ${page.read} Guess Who rows`);
+});
+
 // ---------------------------------------------------------------------------
 // 7. 24 hours, deleting, cleanup, accounts
 // ---------------------------------------------------------------------------
@@ -577,6 +721,7 @@ test('Running the migration again changes nothing', async () => {
     guesses: (await db.query('select * from mystery_guesses order by post_id, user_id')).rows,
     pings: (await db.query('select * from group_guess_pings order by group_id')).rows,
     reads: (await db.query('select user_id, chat_read_at from peek_group_members order by user_id')).rows,
+    log: (await db.query('select id, group_id, user_id, posted_at from private.group_mystery_log order by id')).rows,
   });
   const before = await snapshot();
   await applyMigrationFile(db, MIGRATION);
@@ -588,7 +733,11 @@ test('Running the migration again changes nothing', async () => {
   assert.equal(await count("pg_constraint where conrelid = 'public.mystery_posts'::regclass and contype = 'f' and pg_get_constraintdef(oid) like '%peek_groups%'"), 1);
   assert.equal(await count("pg_policies where tablename = 'group_guess_pings'"), 1);
   assert.equal(await count("pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'group_guess_pings'"), 1);
-  assert.equal(await count("pg_indexes where indexname = 'mystery_posts_group_idx'"), 1);
+  for (const index of ['mystery_posts_group_idx', 'mystery_posts_friends_recent_idx', 'group_mystery_log_idx', 'group_mystery_log_user_idx']) {
+    assert.equal(await count('pg_indexes where indexname = $1', [index]), 1, index);
+  }
+  assert.equal((await one("select has_table_privilege('anon', 'public.mystery_posts', 'INSERT') as ok")).ok, false);
+  assert.equal(await count('private.group_mystery_log'), 1);
   assert.equal(await can('authenticated', 'public.group_mystery_feed(uuid)'), true);
   assert.equal(await can('anon', 'public.group_mystery_feed(uuid)'), false);
   assert.equal(await can('authenticated', 'private.mystery_visible(uuid,uuid[],uuid,timestamptz,uuid)'), false);

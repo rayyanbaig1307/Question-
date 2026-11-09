@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { React, loadScreen, renderScreen, act, unmount, host, textOf } = require('./harness.cjs');
 
 // params: more route params (e.g. groupGuess). groupGuess: what postGroupGuess does (by default it works).
-function fixture({ group = false, chatDare = false, failClaim = false, claimError = 'Simulated dare update failure', send, params = {}, groupGuess } = {}) {
+// overrides: other stand-ins (e.g. gestures that remember their settings).
+function fixture({ group = false, chatDare = false, failClaim = false, claimError = 'Simulated dare update failure', send, params = {}, groupGuess, overrides = {} } = {}) {
   const calls = { snaps: 0, groups: 0, claimed: 0, dismissedTo: [], groupGuesses: [], mysteries: [], pushed: [] };
   const passthrough = Object.fromEntries(['CropTool', 'DraggableItem', 'StickerPicker', 'TextComposer'].map(name => [`@/components/editor/${name}`, { [name]: host(name) }]));
   const shared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
@@ -26,6 +27,7 @@ function fixture({ group = false, chatDare = false, failClaim = false, claimErro
     '@/lib/guess': { postMystery: async (...args) => { calls.mysteries.push(args); } },
     '@/lib/eyeTrack': { CAN_TRACK_EYES: false },
     '@/lib/keeps': { CAN_SAVE_TO_PHOTOS: false, addKeep: async () => {} },
+    ...overrides,
   }, { timers: 'real' }); // the editor waits a moment for moving text to stop before it takes the picture
   return { screen, calls };
 }
@@ -142,5 +144,60 @@ test('a normal group photo still goes to the group as before', async () => {
     assert.equal(calls.groups, 1);
     assert.equal(calls.groupGuesses.length, 0);
     assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 🕵️ What you see is what's posted: a group Guess Who is saved as a 3:4 photo, so in that mode the picture the
+// editor sends is a 3:4 box in the middle of the screen (the test screen is 320 × 568). Anywhere else it is the
+// whole screen, as before.
+// ---------------------------------------------------------------------------
+const flat = style => (Array.isArray(style) ? Object.assign({}, ...style.map(flat)) : style || {});
+const captureView = tree => tree.root.findAll(node => node.type === 'View' && node.props.collapsable === false);
+
+test('in group Guess Who mode the picture that is sent is a 3:4 box in the middle; otherwise it is the whole screen', async () => {
+  const { screen } = fixture({ group: true, params: { groupGuess: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    const views = captureView(tree);
+    assert.equal(views.length, 1, 'one picture is taken');
+    const box = flat(views[0].props.style);
+    assert.equal(box.position, 'absolute');
+    assert.equal(box.width, 320, 'as wide as the screen');
+    assert.ok(Math.abs(box.height - (320 * 4) / 3) < 1e-9, `3:4 (height ${box.height})`);
+    assert.equal(box.left, 0);
+    assert.ok(Math.abs(box.top - (568 - (320 * 4) / 3) / 2) < 1e-9, 'in the middle, black above and below');
+    assert.equal(box.overflow, 'hidden', 'text and stickers dragged outside the box are not shown (and not sent)');
+  } finally { await unmount(tree); }
+
+  for (const params of [{}, { groupDare: 'dare1', groupGuess: '1' }]) {
+    const normal = fixture({ group: true, params });
+    const tree2 = await renderScreen(normal.screen);
+    try {
+      const [view] = captureView(tree2);
+      const style = flat(view.props.style);
+      assert.equal(style.width, undefined, 'no fixed size: it fills the screen');
+      assert.equal(style.height, undefined);
+      assert.ok([view.props.style].flat(Infinity).includes(normal.screen.getBinding('styles').canvas), 'the full-screen canvas');
+    } finally { await unmount(tree2); }
+  }
+});
+
+test('in group Guess Who mode, zooming and moving the photo stay inside the 3:4 box', async () => {
+  let pinch;
+  const { screen } = fixture({ group: true, params: { groupGuess: '1' }, overrides: {
+    'react-native-gesture-handler': { GestureDetector: host('GestureDetector'), usePanGesture: () => ({}), usePinchGesture: config => { pinch = config; return {}; }, useTapGesture: () => ({}), useSimultaneousGestures: () => ({}) },
+  } });
+  const tree = await renderScreen(screen);
+  try {
+    // Pinch all the way in (5×) with your fingers far above the middle: the photo can move at most
+    // (box height × 4) / 2 down – measured with the box, not the whole screen.
+    await act(() => pinch.onUpdate({ scaleChange: 5, focalX: 160, focalY: -100 }));
+    await act(() => tree.update(React.createElement(screen.Component)));
+    const moved = tree.root.findAllByType('AnimatedView').map(node => flat(node.props.style).transform).find(Boolean);
+    const translate = Object.assign({}, ...moved);
+    assert.equal(translate.scale, 5);
+    assert.equal(translate.translateX, 0);
+    assert.ok(Math.abs(translate.translateY - ((320 * 4) / 3) * 2) < 1e-9, `moved ${translate.translateY}`);
   } finally { await unmount(tree); }
 });

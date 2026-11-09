@@ -1,8 +1,9 @@
 import { requireOptionalNativeModule } from 'expo';
 import { randomUUID } from 'expo-crypto';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { TurboModuleRegistry } from 'react-native';
 
 import { supabase } from './supabase';
 import type { MediaFields } from './types';
@@ -81,9 +82,14 @@ export async function resizePhoto(uri: string, maxWidth: number): Promise<string
   return saved.uri;
 }
 
-// Cuts the middle of a photo to the shape width × height and saves it at exactly that size (a fresh JPEG).
-// Used for Guess Who in a group chat: every photo then has the same size and shape, so the file itself can't
-// hint at whose phone took it.
+// Cuts the middle of a photo to the shape width × height and saves it at exactly that size, as a fresh JPEG.
+// Used for Guess Who in a group chat. What this promises:
+// - Always: the file is a JPEG of exactly width × height, so its size and shape say nothing about the phone.
+// - On app downloads that have Skia (a native part of the app): the JPEG is then saved again by Skia, at quality 80,
+//   with no extra details in the file (no camera info, no colour profile). Skia is the same code on iPhone and
+//   Android, so the same picture gives the same kind of file on both.
+// - Without Skia (Expo Go, or an app built before it was added), or if Skia fails: the phone's own JPEG maker
+//   saves it. That's our best effort: an iPhone file and an Android file can still look a bit different inside.
 export async function fixedSizePhoto(uri: string, width: number, height: number): Promise<string> {
   const original = await ImageManipulator.manipulate(uri).renderAsync();
   const shape = width / height;
@@ -100,7 +106,46 @@ export async function fixedSizePhoto(uri: string, width: number, height: number)
     .resize({ width, height })
     .renderAsync();
   const saved = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
-  return saved.uri;
+  return (await sameJpegOnEveryPhone(saved.uri, width, height)) ?? saved.uri;
+}
+
+// Skia, only if this app download has it. Asking first, because the library crashes if it's loaded without its
+// native part (the same check as components/ScratchRevealSafe.ts).
+function loadSkia(): typeof import('@shopify/react-native-skia') | null {
+  try {
+    if (!TurboModuleRegistry.get('RNSkiaModule')) return null;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
+  } catch {
+    return null;
+  }
+}
+
+// Saves the photo again with Skia: drawn onto a plain width × height picture (no colour profile) and saved as a
+// JPEG at quality 80 into a new file. Returns null when Skia isn't there or something goes wrong (then the caller
+// keeps the file it has).
+async function sameJpegOnEveryPhone(uri: string, width: number, height: number): Promise<string | null> {
+  const skia = loadSkia();
+  if (!skia) return null;
+  try {
+    const { ImageFormat, Skia } = skia;
+    const photo = Skia.Image.MakeImageFromEncoded(await Skia.Data.fromURI(uri));
+    // A picture in the phone's memory (not the graphics chip), so every phone draws it the same way.
+    const surface = Skia.Surface.Make(width, height);
+    if (!photo || !surface) return null;
+    surface
+      .getCanvas()
+      .drawImageRect(photo, Skia.XYWHRect(0, 0, photo.width(), photo.height()), Skia.XYWHRect(0, 0, width, height), Skia.Paint());
+    surface.flush();
+    const bytes = surface.makeImageSnapshot().encodeToBytes(ImageFormat.JPEG, 80);
+    if (!bytes || bytes.length === 0) return null;
+    const file = new File(Paths.cache, `same-jpeg-${randomUUID()}.jpg`);
+    await file.write(bytes);
+    return file.uri;
+  } catch (error) {
+    console.warn('Could not save the photo with Skia, so the phone saved it instead', error);
+    return null;
+  }
 }
 
 async function readBytes(uri: string): Promise<ArrayBuffer> {

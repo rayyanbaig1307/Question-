@@ -546,6 +546,31 @@ try {
       assert.ok([200, 204].includes(result.status), `report ${result.status} ${JSON.stringify(result.data)}`);
       assert.deepEqual((await request(`reports?content_id=eq.${id}`, { user: 6 })).data, []);
       assert.equal((await db.query('select reported_user_id from reports where content_id=$1', [id])).rows[0].reported_user_id, users[7]);
+      // users[7] posts 2 more (3 today, the limit). Posting in someone else's name gets exactly the same answer
+      // (status, code and words) for the poster, someone who posted nothing and someone outside the group.
+      for (const n of [2, 3]) {
+        const more = `mystery/rest-group-guess-who-${n}.jpg`;
+        assert.equal((await request('objects', { user: 7, method: 'POST', body: { bucket_id: 'media', name: more }, headers: { 'Content-Profile': 'storage' } })).status, 201);
+        assert.equal((await request('mystery_posts', { user: 7, method: 'POST', body: { user_id: users[7], group_id: crew, media_path: more } })).status, 201);
+      }
+      const answers = [];
+      for (const victim of [users[7], users[6], users[2]]) {
+        const probe = await request('mystery_posts', { user: 8, method: 'POST', body: { user_id: victim, group_id: crew, media_path: 'mystery/rest-someone-else.jpg' } });
+        answers.push(`${probe.status} ${probe.data.code} ${probe.data.message}`);
+      }
+      assert.deepEqual(answers, Array(3).fill('400 P0001 Only people in this group can post a Guess Who here'));
+      // Visitors (not logged in) can't post at all, in anyone's name.
+      for (const victim of [users[7], users[6]]) {
+        const visitor = await request('mystery_posts', { user: null, method: 'POST', body: { user_id: victim, group_id: crew, media_path: 'mystery/rest-visitor.jpg' } });
+        assert.equal(visitor.status, 401, JSON.stringify(visitor.data)); assert.equal(visitor.data.code, '42501');
+      }
+      // The poster themselves: their 4th today is refused; deleting one doesn't give it back.
+      assert.equal((await request(`mystery_posts?id=eq.${id}`, { user: 7, method: 'DELETE' })).status, 204);
+      const again = 'mystery/rest-group-guess-who-4.jpg';
+      assert.equal((await request('objects', { user: 7, method: 'POST', body: { bucket_id: 'media', name: again }, headers: { 'Content-Profile': 'storage' } })).status, 201);
+      const fourth = await request('mystery_posts', { user: 7, method: 'POST', body: { user_id: users[7], group_id: crew, media_path: again } });
+      assert.equal(fourth.status, 400); assert.equal(fourth.data.message, 'You can post 3 Guess Whos in this group a day');
+      assert.equal((await db.query('select count(*)::int as n from mystery_posts where group_id=$1', [crew])).rows[0].n, 2);
     });
   }
   await check(`${writeRequests} concurrent group writes keep exact counts, authors and unread state`, async () => {

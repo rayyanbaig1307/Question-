@@ -170,8 +170,10 @@ export default function GroupChat() {
   const [guessing, setGuessing] = useState<string | null>(null);
   // Guess Whos you just guessed, to play the reveal once.
   const [justRevealed, setJustRevealed] = useState<Set<string>>(new Set());
-  // The time now, to hide Guess Whos that have ended (moved on every 15 seconds).
+  // The time now, to hide Guess Whos that have ended (moved on every 15 seconds, when you come back to the chat,
+  // and after a refused guess).
   const [now, setNow] = useState(() => Date.now());
+  const moveClock = useCallback(() => setNow(Date.now()), []);
   // Only loads the Guess Whos: it never marks the chat as read (a new Guess Who mustn't move anyone's "Seen").
   // An answer that set off before a newer one is dropped.
   const loadGuesses = useCallback(() => {
@@ -249,6 +251,9 @@ export default function GroupChat() {
 
   useFocusEffect(
     useCallback(() => {
+      // Back in the chat: Guess Whos that ended while you were away are hidden straight away (even before the
+      // reload below comes back, or if it can't).
+      moveClock();
       fetchGroup(groupId)
         .then(setGroup)
         .catch(() => setGroup(null));
@@ -280,7 +285,7 @@ export default function GroupChat() {
         stopGuesses();
         clearInterval(readsTimer);
       };
-    }, [groupId, load, onChatChange, loadGuesses]),
+    }, [groupId, load, onChatChange, loadGuesses, moveClock]),
   );
 
   const people = new Map<string, Profile>();
@@ -477,8 +482,15 @@ export default function GroupChat() {
     }
   };
 
+  // 🕵️ The camera only offers a Guess Who when it can work here: the group has at least 3 people (with 2, the other
+  // person would know it was you) and the server has group Guess Who (the list loaded, not null). Never in the
+  // camera for a group dare proof.
+  const guessWhoOk = (group?.members.length ?? 0) >= 3 && guesses !== null;
   const openCamera = (dareId?: string) =>
-    router.push({ pathname: '/camera', params: { group: groupId, ...(dareId ? { groupDare: dareId } : {}) } });
+    router.push({
+      pathname: '/camera',
+      params: { group: groupId, ...(dareId ? { groupDare: dareId } : guessWhoOk ? { groupGuessOk: '1' } : {}) },
+    });
 
   const pinnedId = group?.pinned_message_id ?? null;
 
@@ -493,25 +505,37 @@ export default function GroupChat() {
   }
 
   // 🕵️ Your one guess on a group Guess Who. The answer (who really sent it) is only shown to you.
+  // The answer on the card always comes from the server: the guess it has saved for you and who really sent it –
+  // never just the name you tapped. (If you already guessed on another phone, that first guess is the one that
+  // counts.) Until that answer is back the card stays busy, so a second tap can't send a second guess.
   async function guessWho(post: GroupGuess, choice: string) {
     if (guessingNow.current) return;
     guessingNow.current = true;
     setGuessing(post.id);
     try {
-      const poster = await guessMystery(post.id, choice);
-      Haptics.notificationAsync(
-        poster === choice ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
-      );
-      setJustRevealed((current) => new Set(current).add(post.id));
-      // A Guess Who list still on its way (from before your guess) mustn't hide the answer again.
-      guessesRequest.current++;
-      setGuesses((current) =>
-        current ? { ...current, posts: current.posts.map((p) => (p.id === post.id ? { ...p, my_guess: choice, poster } : p)) } : current,
-      );
-      // Load them again for the guess counts (only shown once you've guessed).
-      loadGuesses();
+      try {
+        await guessMystery(post.id, choice);
+      } catch (error) {
+        Alert.alert('Could not guess', friendlyError(error));
+        // It may have ended or been deleted, or someone may have left: show the Guess Whos as they are now.
+        moveClock();
+        loadGuesses();
+        return;
+      }
+      // A Guess Who list still on its way (from before your guess) is old news, so it's dropped.
+      const request = ++guessesRequest.current;
+      const found = await fetchGroupGuesses(groupId);
+      if (request === guessesRequest.current) setGuesses(found);
+      const saved = found?.posts.find((p) => p.id === post.id);
+      if (saved && !saved.mine && saved.my_guess && saved.poster) {
+        Haptics.notificationAsync(
+          saved.my_guess === saved.poster ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
+        );
+        setJustRevealed((current) => new Set(current).add(post.id));
+      }
     } catch (error) {
-      Alert.alert('Could not guess', friendlyError(error));
+      // Your guess is saved, but the answer couldn't be loaded: it shows at the next check.
+      console.warn('Could not load the group Guess Whos', error);
     } finally {
       guessingNow.current = false;
       setGuessing(null);

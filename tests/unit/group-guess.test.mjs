@@ -164,6 +164,8 @@ it.each([
   [1170, 2532, { originX: 0, originY: 486, width: 1170, height: 1560 }],
   // Already 3:4: all of it is kept.
   [3024, 4032, { originX: 0, originY: 0, width: 3024, height: 4032 }],
+  // What the editor sends in group Guess Who mode (its 3:4 box, made 1080 wide): nothing is cut off at all.
+  [1080, 1440, { originX: 0, originY: 0, width: 1080, height: 1440 }],
 ])('the photo helper cuts the middle of a %i × %i photo to 3:4 and saves it at exactly 1080 × 1440', async (width, height, crop) => {
   const steps = [];
   const image = (w, h) => ({ width: w, height: h, saveAsync: async (options) => { steps.push(['save', options]); return { uri: 'file:///out.jpg', width: w, height: h }; } });
@@ -188,4 +190,119 @@ it.each([
     ['resize', { width: 1080, height: 1440 }],
     ['save', { compress: 0.8, format: 'jpeg' }],
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// The posted file: always a 1080 × 1440 JPEG. On app downloads with Skia it is saved again by Skia (the same JPEG
+// maker on iPhone and Android, quality 80, no extra details in the file). Without Skia, or if Skia fails, the
+// phone's own JPEG is used (best effort) – posting never fails because of this.
+// ---------------------------------------------------------------------------
+const PHONE_JPEG = [0xff, 0xd8, 0x01, 0x02]; // made by the phone's own JPEG maker
+const SKIA_JPEG = [0xff, 0xd8, 0x5a, 0x5a, 0x5a]; // made by Skia
+
+function postWithRealMedia({ skiaHere, skia: skiaChanges = {} }) {
+  const files = new Map([['file:///edited.jpg', new Uint8Array([0xff, 0xd8, 0x00])]]);
+  const steps = { resized: [], saved: [], uploads: [], inserted: [], skiaLoads: 0, skia: [] };
+  // A tiny pretend file store, so the test can see which bytes are uploaded.
+  class File {
+    constructor(...parts) { this.uri = parts.map((part) => (typeof part === 'string' ? part : part.uri)).join('/'); }
+    async arrayBuffer() { return new Uint8Array(files.get(this.uri)).buffer; }
+    async write(bytes) { files.set(this.uri, new Uint8Array(bytes)); }
+  }
+  const manipulate = (source) => {
+    const ctx = {
+      crop: () => ctx,
+      resize: (size) => { steps.resized.push(size); return ctx; },
+      renderAsync: async () => ({
+        width: typeof source === 'string' ? 1170 : 1080,
+        height: typeof source === 'string' ? 1560 : 1440,
+        saveAsync: async (options) => {
+          steps.saved.push(options);
+          files.set('file:///phone.jpg', new Uint8Array(PHONE_JPEG));
+          return { uri: 'file:///phone.jpg' };
+        },
+      }),
+    };
+    return ctx;
+  };
+  const surface = {
+    getCanvas: () => ({ drawImageRect: (image, src, dest) => steps.skia.push(['draw', image.from, src, dest]) }),
+    flush: () => steps.skia.push(['flush']),
+    makeImageSnapshot: () => ({
+      encodeToBytes: (format, quality) => { steps.skia.push(['encode', format, quality]); return new Uint8Array(SKIA_JPEG); },
+    }),
+  };
+  const fakeSkia = {
+    ImageFormat: { JPEG: 3, PNG: 4 },
+    Skia: {
+      Data: { fromURI: async (uri) => { steps.skia.push(['read', uri]); return { uri }; } },
+      Image: { MakeImageFromEncoded: (data) => ({ from: data.uri, width: () => 1080, height: () => 1440 }) },
+      Surface: { Make: (width, height) => { steps.skia.push(['surface', width, height]); return surface; } },
+      XYWHRect: (x, y, width, height) => ({ x, y, width, height }),
+      Paint: () => ({}),
+      ...skiaChanges,
+    },
+  };
+  const chain = query({ error: null });
+  chain.insert = (row) => { steps.inserted.push(row); return chain; };
+  const mocks = {
+    'expo-image-manipulator': { ImageManipulator: { manipulate }, SaveFormat: { JPEG: 'jpeg' } },
+    'expo-file-system': { File, Paths: { cache: { uri: 'file:///cache' } } },
+    'react-native': { TurboModuleRegistry: { get: (name) => (skiaHere && name === 'RNSkiaModule' ? {} : null) } },
+  };
+  // Counts every time the app loads the Skia library (it must not, when the app download doesn't have Skia).
+  Object.defineProperty(mocks, '@shopify/react-native-skia', { enumerable: true, get: () => { steps.skiaLoads++; return fakeSkia; } });
+  const lib = loadLibrary('groupGuess', {
+    supabase: {
+      auth: { onAuthStateChange: () => {} },
+      storage: { from: (bucket) => ({ upload: async (path, body, options) => { steps.uploads.push({ bucket, path, bytes: [...new Uint8Array(body)], options }); return { error: null }; } }) },
+      from: () => chain,
+    },
+    mocks,
+  });
+  return { lib, steps, files };
+}
+
+it('with Skia, the uploaded file is the one Skia saved: 1080 × 1440, JPEG, quality 80', async () => {
+  const { lib, steps, files } = postWithRealMedia({ skiaHere: true });
+  await lib.postGroupGuess('A', 'group-1', { kind: 'photo', uri: 'file:///edited.jpg' });
+  // First the phone cuts and sizes it to 1080 × 1440 …
+  expect(steps.resized).toEqual([{ width: 1080, height: 1440 }]);
+  expect(steps.saved).toEqual([{ compress: 0.8, format: 'jpeg' }]);
+  // … then Skia draws that onto a fresh 1080 × 1440 picture in memory and saves it as a JPEG at quality 80.
+  expect(steps.skia).toEqual([
+    ['read', 'file:///phone.jpg'],
+    ['surface', 1080, 1440],
+    ['draw', 'file:///phone.jpg', { x: 0, y: 0, width: 1080, height: 1440 }, { x: 0, y: 0, width: 1080, height: 1440 }],
+    ['flush'],
+    ['encode', 3, 80],
+  ]);
+  // The bytes that go up are Skia's, never the phone's own file.
+  expect(steps.uploads).toEqual([{ bucket: 'media', path: 'mystery/test-file.jpg', bytes: SKIA_JPEG, options: { contentType: 'image/jpeg' } }]);
+  expect([...files.get('file:///cache/same-jpeg-test-file.jpg')]).toEqual(SKIA_JPEG);
+  expect(steps.inserted).toEqual([{ user_id: 'A', group_id: 'group-1', media_path: 'mystery/test-file.jpg', media_type: 'photo', poster_path: null, overlay_path: null, caption: '' }]);
+});
+
+it('without Skia (Expo Go, older downloads) the phone\'s own 1080 × 1440 JPEG is posted, and Skia is never loaded', async () => {
+  const { lib, steps } = postWithRealMedia({ skiaHere: false });
+  await lib.postGroupGuess('A', 'group-1', { kind: 'photo', uri: 'file:///edited.jpg' });
+  expect(steps.skiaLoads).toBe(0);
+  expect(steps.resized).toEqual([{ width: 1080, height: 1440 }]);
+  expect(steps.saved).toEqual([{ compress: 0.8, format: 'jpeg' }]);
+  expect(steps.uploads).toEqual([{ bucket: 'media', path: 'mystery/test-file.jpg', bytes: PHONE_JPEG, options: { contentType: 'image/jpeg' } }]);
+  expect(steps.inserted).toHaveLength(1);
+});
+
+it.each([
+  ['Skia cannot read the photo', { Image: { MakeImageFromEncoded: () => null } }],
+  ['Skia cannot make a picture', { Surface: { Make: () => null } }],
+  ['Skia throws', { Data: { fromURI: async () => { throw new Error('Synthetic Skia failure'); } } }],
+])('if %s, the phone\'s own JPEG is posted instead (posting still works)', async (_why, skia) => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const { lib, steps } = postWithRealMedia({ skiaHere: true, skia });
+    await lib.postGroupGuess('A', 'group-1', { kind: 'photo', uri: 'file:///edited.jpg' });
+    expect(steps.uploads.map((upload) => upload.bytes)).toEqual([PHONE_JPEG]);
+    expect(steps.inserted).toHaveLength(1);
+  } finally { warn.mockRestore(); }
 });

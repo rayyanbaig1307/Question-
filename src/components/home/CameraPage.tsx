@@ -63,7 +63,7 @@ const MODE_RING: Record<CameraMode, string> = {
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
-export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, groupGuess = false, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
+export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, groupGuess = false, groupGuessOk = false, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
   // You're swiping towards the camera: start it early so it's ready when you get there.
@@ -77,6 +77,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   groupDare?: string;
   // Opened from a group chat straight in Guess Who mode (the photo goes to the group with no name on it).
   groupGuess?: boolean;
+  // The group chat says Guess Who can work there: the group has at least 3 people and the server has group
+  // Guess Who. Without it, there's no Guess Who bubble at all.
+  groupGuessOk?: boolean;
   // Taking a photo for the Daily Dare.
   dare?: boolean;
   // Taking your Peekaboo drop photo (2-minute countdown at the top).
@@ -103,8 +106,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
   const dropDone = useDropDone(userId, active && isHome);
-  // A group chat's camera (not a group dare proof): its dial has a Guess Who bubble too.
-  const groupGuessHere = !!sendToGroup && !groupDare && !sendTo && !dare && !drop && !guess && !forfeit;
+  // A group chat's camera (not a group dare proof), in a group where Guess Who can work: its dial has a Guess Who
+  // bubble too.
+  const groupGuessHere = groupGuessOk && !!sendToGroup && !groupDare && !sendTo && !dare && !drop && !guess && !forfeit;
   // On the home camera you pick what you're posting with the mode dial above the shutter.
   const [homeMode, setHomeMode] = useState<CameraMode>(groupGuess && groupGuessHere ? 'guess' : 'photo');
   const dropStatus = useDropStatus();

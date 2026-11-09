@@ -24,7 +24,9 @@
 --   always sees the counts. Nobody can see who guessed what.
 -- * Group rules: only people in the group can post, the group needs at least 3 people (with 2, the other
 --   person would know), photos only for now (no video, no extra layers), and at most 3 per person per group
---   in 24 hours.
+--   in 24 hours. Deleting one doesn't give it back (a private log keeps when each was posted).
+-- * You can only post as yourself. Posting in someone else's name always gets the same answer, so it can't
+--   show who is in a group or who has already posted 3 today. Visitors who aren't logged in can't post at all.
 -- * No Peekaboo+ hints for group Guess Whos (people in the group could put their hints together).
 -- * Blocking whoever posted it only works after you've guessed (then you know who it was anyway).
 -- * Reports stay anonymous, exactly like every Guess Who (the reporter never learns who posted it).
@@ -58,13 +60,36 @@ set local lock_timeout = '15s';
 alter table public.mystery_posts add column if not exists group_id uuid references public.peek_groups (id) on delete cascade;
 alter table public.mystery_posts add column if not exists group_candidates uuid[];
 create index if not exists mystery_posts_group_idx on public.mystery_posts (group_id, created_at desc) where group_id is not null;
+-- For the friends' Guess Who page: lets it look only at the last 24 hours instead of every Guess Who ever posted.
+create index if not exists mystery_posts_friends_recent_idx on public.mystery_posts (created_at desc) where group_id is null;
 -- (No new rules on the table: you can still only read and delete your own rows. Everyone else gets group
 -- Guess Whos through public.group_mystery_feed below, which never says who posted it before you guess.)
+-- Visitors who aren't logged in never post, change or delete Guess Whos.
+revoke insert, update, delete, truncate on table public.mystery_posts from anon;
+
+-- When each person posted a group Guess Who in each group, for the "3 a day" limit. Deleting a post doesn't
+-- remove its line here, so deleting and posting again doesn't give you more. Only the server reads it; lines
+-- older than 24 hours are cleared out the next time that person posts in that group.
+create table if not exists private.group_mystery_log (
+  id bigint generated always as identity primary key,
+  group_id uuid not null references public.peek_groups (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  posted_at timestamptz not null default now()
+);
+create index if not exists group_mystery_log_idx on private.group_mystery_log (group_id, user_id, posted_at desc);
+create index if not exists group_mystery_log_user_idx on private.group_mystery_log (user_id);
+alter table private.group_mystery_log enable row level security;
+revoke all on table private.group_mystery_log from public, anon, authenticated;
 
 -- The server fills in the group's people and checks the group rules. The app can't change a post's group or
 -- its people later (on a change, they are put back as they were).
 create or replace function private.prepare_group_mystery()
 returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  -- Someone using the app (logged in, or a visitor with the app's key). The same test as
+  -- private.guard_claimed_media_delete. The owner's SQL editor and the server's own tools are neither.
+  app_user boolean := coalesce(nullif(current_setting('role', true), 'none'), '') in ('authenticated', 'anon')
+    or coalesce(auth.role(), '') in ('authenticated', 'anon');
 begin
   if tg_op = 'UPDATE' then
     new.group_id := old.group_id;
@@ -74,6 +99,12 @@ begin
   if new.group_id is null then
     new.group_candidates := null;
     return new;
+  end if;
+  -- You can only post as yourself. This is checked before anything is looked up, and the answer is always the
+  -- same. Otherwise posting in someone else's name could show whether they are in the group, or whether they
+  -- already posted 3 today (which would give away who posted the group's Guess Whos).
+  if app_user and new.user_id is distinct from auth.uid() then
+    raise exception 'Only people in this group can post a Guess Who here';
   end if;
   -- The group first (so people can't be added or removed while we look), then the poster's own place in it
   -- (so two posts by the same person at the same moment take turns for the daily limit).
@@ -90,9 +121,10 @@ begin
   if new.media_type is distinct from 'photo' or new.poster_path is not null or new.overlay_path is not null then
     raise exception 'Guess Who in groups is photos only for now';
   end if;
-  if (select count(*) from public.mystery_posts g
-       where g.group_id = new.group_id and g.user_id = new.user_id
-         and g.created_at > now() - interval '24 hours') >= 3 then
+  -- Counted from the log (a deleted post still counts), while we hold the poster's place in the group.
+  if (select count(*) from private.group_mystery_log l
+       where l.group_id = new.group_id and l.user_id = new.user_id
+         and l.posted_at > now() - interval '24 hours') >= 3 then
     raise exception 'You can post 3 Guess Whos in this group a day';
   end if;
   new.group_candidates := array(
@@ -101,6 +133,11 @@ begin
   if cardinality(new.group_candidates) < 3 then
     raise exception 'Guess Who needs at least 3 people in the group';
   end if;
+  -- Every check passed: write it down. (If the post is still refused after this, for example by the table's own
+  -- rules, this line is taken back with it.)
+  delete from private.group_mystery_log l
+   where l.group_id = new.group_id and l.user_id = new.user_id and l.posted_at <= now() - interval '24 hours';
+  insert into private.group_mystery_log (group_id, user_id) values (new.group_id, new.user_id);
   return new;
 end;
 $$;
@@ -153,6 +190,8 @@ $$;
 -- ---------------------------------------------------------------------
 -- Same as 20261106000000_guess_who.sql, plus "g.group_id is null" (group Guess Whos only show in their group
 -- chat – this also keeps them out of older apps' Guess Who page and its count), using the one rule above.
+-- It also looks only at the last 24 hours ("created_at"), so it skips old Guess Whos straight away. That gives
+-- the same answer: every Guess Who ends exactly 24 hours after it was posted (private.set_story_expiry).
 create or replace function public.mystery_feed()
 returns table (
   id uuid,
@@ -200,6 +239,7 @@ language sql stable security definer set search_path = '' as $$
   cross join me
   left join public.mystery_guesses mg on mg.post_id = g.id and mg.user_id = me.id
   where g.expires_at > now()
+    and g.created_at > now() - interval '24 hours'
     and g.group_id is null
     and private.mystery_visible(g.group_id, g.group_candidates, g.user_id, g.expires_at, me.id)
   order by g.created_at desc
@@ -217,6 +257,8 @@ grant execute on function public.mystery_feed() to authenticated;
 -- * your own: how many guessed, and how many got it right.
 -- others_count: how many people can guess it (everyone on the list who still has an account, minus the poster).
 -- Not in the group: nothing.
+-- (Only the last 24 hours are looked at, so ended Guess Whos are skipped straight away – the same answer, as
+-- every Guess Who ends exactly 24 hours after it was posted.)
 create or replace function public.group_mystery_feed(grp uuid)
 returns table (
   id uuid,
@@ -262,6 +304,7 @@ begin
   left join public.mystery_guesses mg on mg.post_id = g.id and mg.user_id = me
   where g.group_id = grp
     and g.expires_at > now()
+    and g.created_at > now() - interval '24 hours'
     and private.mystery_visible(g.group_id, g.group_candidates, g.user_id, g.expires_at, me)
   order by g.created_at desc
   limit 50;
@@ -727,6 +770,7 @@ create trigger mystery_posts_group_files
 -- * if the newest thing in the chat is a group Guess Who you can see (that hasn't ended), the line is
 --   "🕵️ Guess Who – who sent it?", its time, and no sender.
 -- Same columns as before (older apps call it too, and already handle an empty last_sender).
+-- (Only the last 24 hours of Guess Whos are looked at, so a group's old ones are skipped straight away.)
 create or replace function public.my_group_chats()
 returns table(group_id uuid,unread integer,last_body text,last_at timestamptz,last_sender uuid,muted boolean)
 language sql stable security definer set search_path='' as $$
@@ -734,7 +778,7 @@ language sql stable security definer set search_path='' as $$
     (select count(*)::int from public.group_messages g where g.group_id=m.group_id
       and g.created_at>m.chat_read_at and g.sender_id<>m.user_id and not private.is_blocked(g.sender_id,m.user_id))
     + (select count(*)::int from public.mystery_posts q where q.group_id=m.group_id
-      and q.expires_at>now() and q.user_id<>m.user_id
+      and q.expires_at>now() and q.created_at>now()-interval '24 hours' and q.user_id<>m.user_id
       and not exists(select 1 from public.mystery_guesses x where x.post_id=q.id and x.user_id=m.user_id)
       and private.mystery_visible(q.group_id,q.group_candidates,q.user_id,q.expires_at,m.user_id)),
     case when newest_guess.created_at is not null and (last.created_at is null or newest_guess.created_at>last.created_at)
@@ -749,7 +793,7 @@ language sql stable security definer set search_path='' as $$
     where g.group_id=m.group_id and not private.is_blocked(g.sender_id,m.user_id)
     order by g.created_at desc limit 1) last on true
   left join lateral(select q.created_at from public.mystery_posts q
-    where q.group_id=m.group_id and q.expires_at>now()
+    where q.group_id=m.group_id and q.expires_at>now() and q.created_at>now()-interval '24 hours'
       and private.mystery_visible(q.group_id,q.group_candidates,q.user_id,q.expires_at,m.user_id)
     order by q.created_at desc limit 1) newest_guess on true
   where m.user_id=auth.uid();

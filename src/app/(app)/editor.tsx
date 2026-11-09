@@ -145,6 +145,10 @@ export default function Editor() {
   // Opened from a group chat's camera: it goes straight back to that group chat.
   const straightToGroup = !!group && groupGuess !== '1' && !to && !dare && !drop && !guess && !forfeit;
   const straightAway = straightToChat || straightToGuess || straightToGroupGuess || straightToGroup;
+  // The picture that gets sent is everything inside this box. Normally it's the whole screen. A group Guess Who is
+  // always posted as a 3:4 photo, so then the box is 3:4 (as wide as the screen, in the middle, black above and
+  // below): the photo, text and stickers you see in it are exactly what's posted – nothing is cut off later.
+  const frame = straightToGroupGuess ? guessFrame(width, height) : { left: 0, top: 0, width, height };
   // Which color filter is on (0 = none), and a counter that makes its name flash up each time it changes.
   const [filterIndex, setFilterIndex] = useState(() => Math.max(0, FILTERS.findIndex((f) => f.name === startFilter)));
   const [filterFlash, setFilterFlash] = useState(0);
@@ -172,12 +176,12 @@ export default function Editor() {
       const before = zoom.get();
       const after = Math.min(5, Math.max(1, before * event.scaleChange));
       const factor = after / before;
-      // Zoom towards your fingers.
-      const fx = event.focalX - width / 2;
-      const fy = event.focalY - height / 2;
+      // Zoom towards your fingers (measured from the middle of the picture's box).
+      const fx = event.focalX - frame.width / 2;
+      const fy = event.focalY - frame.height / 2;
       zoom.set(after);
-      panX.set(clampPan(fx - (fx - panX.get()) * factor, width, after));
-      panY.set(clampPan(fy - (fy - panY.get()) * factor, height, after));
+      panX.set(clampPan(fx - (fx - panX.get()) * factor, frame.width, after));
+      panY.set(clampPan(fy - (fy - panY.get()) * factor, frame.height, after));
     },
   });
   // One finger: while zoomed in it moves the photo; otherwise swipe left/right for filters, like Snapchat.
@@ -186,8 +190,8 @@ export default function Editor() {
     onUpdate: (event) => {
       'worklet';
       if (zoom.get() <= 1.02) return;
-      panX.set(clampPan(panX.get() + event.changeX, width, zoom.get()));
-      panY.set(clampPan(panY.get() + event.changeY, height, zoom.get()));
+      panX.set(clampPan(panX.get() + event.changeX, frame.width, zoom.get()));
+      panY.set(clampPan(panY.get() + event.changeY, frame.height, zoom.get()));
     },
     onDeactivate: (event) => {
       'worklet';
@@ -217,7 +221,8 @@ export default function Editor() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setItems((current) => [
       ...current,
-      { ...item, id: randomUUID(), startX: randomOffset(width * 0.4), startY: randomOffset(height * 0.3) },
+      // New text and stickers start somewhere inside the picture's box.
+      { ...item, id: randomUUID(), startX: randomOffset(frame.width * 0.4), startY: randomOffset(frame.height * 0.3) },
     ]);
   }
 
@@ -395,7 +400,10 @@ export default function Editor() {
       {isVideo ? (
         <VideoClip uri={uri} playing loop eyeTrack={track} onDuration={startTracking} style={StyleSheet.absoluteFill} />
       ) : null}
-      <View ref={canvasRef} collapsable={false} style={[styles.canvas, isVideo && styles.seeThrough]}>
+      <View
+        ref={canvasRef}
+        collapsable={false}
+        style={[straightToGroupGuess ? [styles.frame, frame] : styles.canvas, isVideo && styles.seeThrough]}>
         {isVideo ? null : (
           <GestureDetector gesture={photoGestures}>
             <View style={styles.photo}>
@@ -562,6 +570,14 @@ export default function Editor() {
   );
 }
 
+// The 3:4 box of a group Guess Who: as wide as the screen, in the middle. (On a screen too wide for that, as tall as
+// the screen instead.) Its picture is later saved at 1080 × 1440 – the same shape, so nothing is cut off.
+function guessFrame(screenWidth: number, screenHeight: number) {
+  const width = Math.min(screenWidth, (screenHeight * 3) / 4);
+  const height = (width * 4) / 3;
+  return { left: (screenWidth - width) / 2, top: (screenHeight - height) / 2, width, height };
+}
+
 // A face lens's drawings (screen points) → stickers placed from the middle of the photo.
 // (Googly eyes from older copies of the app come without a `sticker`.)
 function lensItems(json: string | undefined, width: number, height: number): OverlayItem[] {
@@ -639,6 +655,12 @@ const styles = StyleSheet.create({
   },
   canvas: {
     ...StyleSheet.absoluteFill,
+    backgroundColor: colors.black,
+    overflow: 'hidden',
+  },
+  // The 3:4 box of a group Guess Who (its place and size come from guessFrame).
+  frame: {
+    position: 'absolute',
     backgroundColor: colors.black,
     overflow: 'hidden',
   },

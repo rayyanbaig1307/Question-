@@ -13,7 +13,9 @@ import type { Profile } from './types';
 // blocking and deleting use the same calls as Guess Who with friends (lib/guess.ts).
 // ---------------------------------------------------------------------------
 
-// Every group Guess Who photo is cut to this size, so the picture can't hint at whose phone took it.
+// Every group Guess Who photo is a JPEG of exactly this size, so its size and shape can't hint at whose phone took
+// it. On app downloads with Skia it is also saved by the same JPEG maker on every phone (see fixedSizePhoto in
+// lib/media.ts for exactly what is promised, and what happens without Skia).
 export const GROUP_GUESS_WIDTH = 1080;
 export const GROUP_GUESS_HEIGHT = 1440;
 export const GROUP_GUESS_PHOTOS_ONLY = 'Guess Who in groups is photos only for now';
@@ -55,9 +57,9 @@ export async function fetchGroupGuesses(groupId: string): Promise<GroupGuessFeed
   return { posts, people };
 }
 
-// Posts a photo into a group chat as a Guess Who. The photo is cut to the same size every time and saved in the
-// shared Guess Who folder (the file name has no user id in it). The server checks the rest: you're in the group,
-// the group has at least 3 people, and you haven't posted 3 today.
+// Posts a photo into a group chat as a Guess Who. The photo is made the same size every time (1080 × 1440 JPEG)
+// and saved in the shared Guess Who folder (the file name has no user id in it). The server checks the rest:
+// you're in the group, the group has at least 3 people, and you haven't posted 3 today.
 export async function postGroupGuess(userId: string, groupId: string, capture: Capture): Promise<void> {
   if (capture.kind !== 'photo') throw new Error(GROUP_GUESS_PHOTOS_ONLY);
   const uri = await fixedSizePhoto(capture.uri, GROUP_GUESS_WIDTH, GROUP_GUESS_HEIGHT);
