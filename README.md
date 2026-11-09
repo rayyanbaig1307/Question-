@@ -29,6 +29,9 @@ npm start
 Open <http://localhost:8080>, allow camera access, and pick a filter from the
 strip below the viewfinder.
 
+- Filters are **always on**: every effect runs at full strength as soon as a
+  face is found, and the listed expression boosts it further. Toggle **Always
+  on** in the UI (or open with `?mode=trigger`) to require the expression.
 - `←` / `→` or `1`–`9` switch filters, `space` takes a photo (downloads a PNG).
 - **Mirror** flips the preview; **Debug** overlays landmarks and the top blendshapes.
 - Query options: `?filter=heart-eyes` opens a filter directly,

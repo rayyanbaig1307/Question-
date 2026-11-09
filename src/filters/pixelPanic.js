@@ -17,7 +17,7 @@ export default {
 
   draw(f) {
     const { ctx, video, pts, m, smooth, state, dt, t, W, H } = f;
-    const panic = smooth.get('panic', this.trigger(f), 0.35);
+    const panic = smooth.get('panic', f.level, 0.35);
     state.level ??= 0;
     state.level = clamp(state.level + (panic > 0.3 ? dt * 3 : -dt * 1.5));
     const lv = Math.max(panic, state.level);

@@ -19,7 +19,7 @@ export default {
 
   draw(f) {
     const { ctx, pts, m, smooth, state, dt, t } = f;
-    const cry = smooth.get('cry', this.trigger(f), 0.18);
+    const cry = smooth.get('cry', f.level, 0.18);
     state.parts ??= new Particles(500);
     state.streams ??= [];
 

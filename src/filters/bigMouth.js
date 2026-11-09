@@ -15,7 +15,7 @@ export default {
 
   draw(f) {
     const { ctx, video, pts, m, smooth, state, dt } = f;
-    const open = smooth.get('open', this.trigger(f), 0.3);
+    const open = smooth.get('open', f.level, 0.3);
 
     // Spring for a bouncy inflate.
     state.s ??= 1; state.v ??= 0;

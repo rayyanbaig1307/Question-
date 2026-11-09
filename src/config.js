@@ -19,3 +19,7 @@ export const FACE_MODEL =
 export const DELEGATE = (params.get('delegate') || 'GPU').toUpperCase();
 export const DEBUG = params.get('debug') === '1';
 export const INITIAL_FILTER = params.get('filter');
+// Filters are fully active all the time by default; expressions only boost
+// them. Use `?mode=trigger` to require the expression before anything happens.
+export const ALWAYS_ON = params.get('mode') !== 'trigger';
+export const BASE_LEVEL = 0.8;

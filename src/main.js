@@ -1,4 +1,4 @@
-import { VISION_BUNDLE, VISION_WASM, FACE_MODEL, DELEGATE, DEBUG, INITIAL_FILTER } from './config.js';
+import { VISION_BUNDLE, VISION_WASM, FACE_MODEL, DELEGATE, DEBUG, INITIAL_FILTER, ALWAYS_ON, BASE_LEVEL } from './config.js';
 import { FILTERS, byId } from './filters/index.js';
 import { toPixels, faceMetrics, blendMap, Smoother, FACE_OVAL } from './landmarks.js';
 import { label } from './fx.js';
@@ -25,6 +25,7 @@ const app = {
   current: null,
   mirrored: true,
   debug: DEBUG,
+  alwaysOn: ALWAYS_ON,
   running: false,
   lastVideoTime: -1,
   lastResult: null,
@@ -62,7 +63,7 @@ function selectFilter(id) {
   if (!app.states.has(filt.id)) app.states.set(filt.id, {});
   if (!app.smoothers.has(filt.id)) app.smoothers.set(filt.id, new Smoother());
   ui.filterName.textContent = filt.name;
-  ui.hint.textContent = filt.hint;
+  ui.hint.textContent = app.alwaysOn ? `${filt.hint} to boost` : filt.hint;
   for (const chip of ui.filters.children) {
     const active = chip.dataset.id === filt.id;
     chip.classList.toggle('active', active);
@@ -169,10 +170,13 @@ function loop() {
       state: app.states.get(filt.id),
     };
     try {
+      // `level` is what filters animate from: the raw expression score, or in
+      // always-on mode a strong baseline that the expression pushes higher.
+      meter = filt.trigger(frame);
+      frame.level = app.alwaysOn ? Math.max(BASE_LEVEL, meter) : meter;
       ctx.save();
       filt.draw(frame);
       ctx.restore();
-      meter = filt.trigger(frame);
     } catch (err) {
       ctx.restore();
       app.errors.push(`${filt.id}: ${err?.stack || err}`);
@@ -242,6 +246,11 @@ async function boot() {
   $('mirror-btn').onclick = (e) => {
     app.mirrored = !app.mirrored;
     e.currentTarget.textContent = `Mirror: ${app.mirrored ? 'on' : 'off'}`;
+  };
+  $('auto-btn').onclick = (e) => {
+    app.alwaysOn = !app.alwaysOn;
+    e.currentTarget.textContent = `Always on: ${app.alwaysOn ? 'yes' : 'no'}`;
+    selectFilter(app.current.id);
   };
   $('debug-btn').onclick = (e) => {
     app.debug = !app.debug;

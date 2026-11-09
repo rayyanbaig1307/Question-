@@ -28,18 +28,15 @@ export default {
 
     const still = state.motion < 0.12;
     if (state.progress < 1) {
-      if (still) {
-        // Buffering gets slower the closer you are, like a real progress bar.
-        const rate = 0.12 * (1.4 - state.progress);
-        state.progress = clamp(state.progress + rate * dt);
-        if (state.progress >= 1) state.flash = 1;
-      } else {
-        state.progress = clamp(state.progress - dt * 0.6 * Math.min(state.motion, 2));
-      }
+      // Always buffers; holding still speeds it up. Slows near the end like a
+      // real progress bar.
+      const rate = (still ? 0.14 : 0.04) * (1.4 - state.progress);
+      state.progress = clamp(state.progress + rate * dt);
+      if (state.progress >= 1) state.flash = 1;
       state.spin += dt * (still ? 3.5 : 1.2);
     } else {
       // Loaded. Any big move reboots.
-      if (state.motion > 0.6) { state.progress = 0; state.flash = 0; }
+      if (state.motion > 1.2) { state.progress = 0; state.flash = 0; }
     }
     state.flash = Math.max(0, state.flash - dt * 1.2);
 
@@ -98,10 +95,10 @@ export default {
 
     const msg = loaded
       ? (state.flash > 0 ? 'BRAIN LOADED' : 'thought.exe running')
-      : still ? 'buffering…' : 'MOVED! buffering stalled';
+      : still ? 'buffering…' : 'buffering slowly… hold still';
     label(f, msg, cx, cy + r * 1.35, {
       size: Math.max(11, r * 0.26),
-      color: loaded ? '#7dffb0' : still ? '#e8d6ff' : '#ffb3b3',
+      color: loaded ? '#7dffb0' : still ? '#e8d6ff' : '#ffd9b3',
       bg: 'rgba(0,0,0,0.5)',
       radius: 8,
     });

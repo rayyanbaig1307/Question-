@@ -15,7 +15,7 @@ export default {
 
   draw(f) {
     const { ctx, video, pts, m, smooth, state, t, dt } = f;
-    const talk = smooth.get('talk', this.trigger(f), 0.4);
+    const talk = smooth.get('talk', f.level, 0.4);
     state.energy ??= 0;
     state.energy = Math.max(talk, state.energy - dt * 0.8); // decays after you stop talking
 

@@ -15,7 +15,7 @@ export default {
 
   draw(f) {
     const { ctx, pts, m, smooth, state, dt, t, W, H } = f;
-    const open = smooth.get('open', this.trigger(f), 0.25);
+    const open = smooth.get('open', f.level, 0.25);
     state.charge ??= 0;
     // Charge builds while the mouth is open, lingers briefly after.
     state.charge = clamp(open > 0.15 ? state.charge + dt * 2.2 : state.charge - dt * 1.6);

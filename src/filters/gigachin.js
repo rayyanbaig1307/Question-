@@ -16,25 +16,27 @@ export default {
 
   draw(f) {
     const { ctx, video, pts, m, smooth, state, dt, t } = f;
-    const pout = smooth.get('pout', this.trigger(f), 0.25);
+    const pout = smooth.get('pout', f.level, 0.25);
 
     // "Power" charges while pouting and drains when you relax.
     state.power ??= 0;
     state.power = clamp(state.power + (pout > 0.35 ? dt * 0.9 : -dt * 1.4));
-    const grow = 0.1 + state.power * 1.15; // extra chin length, as a fraction of region height
+    const grow = 0.15 + state.power * 0.6; // extra chin length, as a fraction of region height
 
+    // Region starts just under the lower lip so the mouth itself is untouched.
     const lipY = pts[LM.lowerLipBottom].y;
     const chinY = pts[LM.chin].y;
-    const regionH = (chinY - lipY) * 1.25;
-    const regionW = m.width * 0.85;
-    const region = { x: m.chin.x - regionW / 2, y: lipY - regionH * 0.2, w: regionW, h: regionH };
+    const gap = chinY - lipY;
+    const regionH = gap * 1.15;
+    const regionW = m.width * 0.8;
+    const region = { x: m.chin.x - regionW / 2, y: lipY + gap * 0.08, w: regionW, h: regionH };
 
     // Jaw also widens slightly for that chiselled look.
     warpRegion(ctx, video, region, {
-      sx: 1 + state.power * 0.18,
+      sx: 1 + state.power * 0.15,
       sy: 1 + grow,
       anchor: { x: region.x + region.w / 2, y: region.y },
-      feather: 0.45,
+      feather: 0.3,
       slot: 0,
     });
 

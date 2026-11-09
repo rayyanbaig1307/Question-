@@ -17,7 +17,7 @@ export default {
 
   draw(f) {
     const { ctx, pts, m, smooth, state, dt } = f;
-    const t = smooth.get('brow', this.trigger(f), 0.3);
+    const t = smooth.get('brow', f.level, 0.3);
 
     // Spring the size so it "pops".
     state.size ??= 0;

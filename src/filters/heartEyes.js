@@ -16,7 +16,7 @@ export default {
 
   draw(f) {
     const { ctx, pts, m, smooth, state, dt, t } = f;
-    const kiss = smooth.get('kiss', this.trigger(f), 0.3);
+    const kiss = smooth.get('kiss', f.level, 0.3);
     state.parts ??= new Particles(200);
     state.beat ??= 0;
     state.cool ??= 0;
