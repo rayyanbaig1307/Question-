@@ -37,6 +37,39 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who and invite links
+
+- **Live:** Peekaboo 1.0 (build 10) is "Ready for Distribution" and Peekaboo+ Monthly is APPROVED (owner's screenshot
+  8 Nov; the Plus session confirmed via the ASC API). App Store link: https://apps.apple.com/app/id6829561855
+  (Apple id 6829561855; 6761857728 is FitVault+, not ours). Production OTAs are allowed again – only from a commit
+  already tried on `testing`, and only on the owner's explicit "publish".
+- **Stickers in chats** (other session, `fb07a97`, migration `20261221000000_chat_stickers.sql`, live; OTA `97c9a584`
+  on `testing`).
+- **Group Guess Who** (owner, 9 Nov: "a person can send a guess who picture to the group … and people can guess who out
+  of all the people"). Commits `3de9e25`, `697e9c8`, `b71dc4b`. Migration `20261222000000_group_guess_who.sql`
+  (sha256 starts `592eebd9c7e2`) – copy page https://claude.ai/artifact/GL1ZfTtpymrduDQyD6QSxd. Status: waiting for
+  the owner to paste it (or for the Plus session to apply it on the owner's say-so); then OTA to `testing` from
+  `b71dc4b` (a clean worktree – later commits hold unfinished invite work).
+  - How it works: a group Guess Who is a `mystery_posts` row with `group_id` + a server-made people list
+    (`group_candidates`), never a `group_messages` row, so the sender never appears in messages, file paths, pushes,
+    the chat list or old apps. Photos only (1080×1440, Skia re-encode where available), 3 per person per group per
+    24 h (private log), groups of 3+, 24 h like every Guess Who. Everyone else in the group guesses from all the people
+    on the list; you see who it was only after guessing; counts only after guessing. A block with ANYONE in the group
+    hides all of that group's Guess Whos (no oracle). Block-the-poster only after guessing; no Peekaboo+ hints in
+    groups. `mark_group_chat_read` now stores "read up to the newest message", not "now" (so Seen can't time a post).
+  - Known and accepted: if the poster deletes their account, their group Guess Whos vanish at the same moment they
+    leave the member list. Old app versions get the push/chat-list line but can't open the card until they update.
+    Storage `owner_id` on mystery files is the uploader (same as today's Guess Who). Without Skia (Expo Go / very old
+    builds) the phone's own JPEG encoder is used, so a very technical person could tell iPhone from Android.
+- **Invite links** (owner, 9 Nov: "people can invite their friends on with a link that they created"). Commits
+  `aab85e1`, `7788495` (work-in-progress snapshots), `c58a347` (built), fixes in progress. Migration
+  `20261223000000_invite_links.sql` – NOT final, NOT live. Link format `https://peekaboo-4gz.pages.dev/invite?c=CODE`
+  (10 chars from `23456789BCDFGHJKLMNPQRSTVWXZ`). The website page shows no names and makes no server calls; the owner
+  must re-upload `website/` to Cloudflare Pages after it ships. Rules: instant friends only with a public adult and no
+  history; otherwise a request; 20 a day per person and per link; once 3 under-18s used an adult's link in 24 h,
+  further under-18s get "busy" and the owner's alert people are pushed; removed friendships are remembered
+  (`private.past_links`) so a link can't undo a decline/unfriend/block; ban and block checks.
+
 ## Now: App Store launch (6 Nov) – build 10 ready, owner's checklist in progress
 
 **Owner's ask (6 Nov):** "work on the subscription and getting it onto the App Store and submitting it". This session

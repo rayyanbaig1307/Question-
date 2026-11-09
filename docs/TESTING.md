@@ -1116,3 +1116,40 @@ the buy screen.
    want to delete this test account.
 8. With an account that has no Peekaboo+, the same warning has no billing line and no **Manage subscription**.
 9. Deleting an account does **not** cancel the subscription. Cancel it in Settings → your name → Subscriptions.
+
+## Step 65 – Guess Who in a group chat 🕵️
+
+You need a group chat with **at least 3 people** (you + 2 test accounts or friends).
+
+1. Open the group chat → tap the **📷** button. The camera shows a **🕵️ Guess Who** bubble next to the lenses (not in
+   a "post proof" camera, and not in a group of 2). Tap it: the ring turns yellow and it says "No name on it · the
+   group guesses who sent it". Holding the shutter takes a photo (no video in this mode).
+2. Take a photo → the editor shows a **3:4 box** in the middle: what's inside the box is exactly what gets sent. Add
+   text or a sticker if you like (drag one to the bin at the bottom of the box to remove it) → **Send Guess Who**.
+   You're back in the chat with "Guess Who sent 🕵️ No name on it – let the group guess!".
+3. Your own card says **🕵️ Your Guess Who**, with no counts yet. Hold it or tap **⋯** → **Delete** is there.
+4. On the other phones: a push **"🕵️ Someone posted a Guess Who – who was it?"** (never a name), and in the chat a
+   card **🕵️ Who sent this?** in the middle (no avatar, no name), "N people can guess", and a name button for every
+   person in the group except themselves. The Chat list line says "🕵️ Guess Who – who sent it?" with no name.
+5. Tap a name → "You got it! It was X 🎯" or "Nope! It was X 🙈" plus "You guessed Y", and now the counts
+   "N guessed · R got it". Only that phone sees the answer. ⋯ now offers **Report** and **Block whoever posted this**
+   (before guessing: only Report).
+6. Post 3 Guess Whos in the same group in a day → the 4th says "You can post 3 Guess Whos in this group a day"
+   (deleting one doesn't give it back).
+7. After 24 hours the card is gone from the chat.
+
+## Step 66 – Invite links 🔗
+
+1. Settings → **Invite friends** (or the **Invite friends** button at the top of Friends) → "Invite friends" screen:
+   your link `peekaboo-4gz.pages.dev/invite?c=XXXXX-XXXXX`, **Share my link**, **Get a new link** (asks first; the old
+   link stops working), and **Got a code from a friend?**. Public adults see "Anyone with this link can add you…";
+   private or under-18 accounts see "People who use your link send you a friend request."
+2. Share the link to a second phone that already has Peekaboo (with this update). Open it → the website says "You're
+   invited to Peekaboo 👀" with the code and buttons → **Open in Peekaboo** → the invite screen: avatar, name,
+   @username, "Only add people you know in real life.", **Add <name>**, **Not now**, ⋯ (Report / Block).
+3. Tap **Add** → "You and @x are friends! 🎉" (public adult inviter) or "Friend request sent 💌" (private or under-18
+   inviter). The inviter gets the usual "You have a new friend 🎉" or "New friend request 👋" push.
+4. Your own link → "That's your own invite 😄". An old link after **Get a new link** → "This invite link doesn't work
+   any more".
+5. Logged out on the second phone: open the link → Open in Peekaboo → log in → the invite screen opens by itself.
+6. Type the code instead: Settings → Invite friends → Got a code from a friend? → enter it → the same invite screen.
