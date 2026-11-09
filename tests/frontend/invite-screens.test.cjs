@@ -68,6 +68,7 @@ function openInvite({ code = 'BCDFGHJKLM', preview = async () => BOB, accept = a
     '@/lib/invite': {
       INVITE_GONE: GONE,
       isInviteGone: realInvite.isInviteGone,
+      isInviteBusy: realInvite.isInviteBusy,
       normalizeInviteCode: inviteCode.normalizeInviteCode,
       previewInvite: async (...args) => { state.previews.push(args); return preview(...args); },
       acceptInvite: async (...args) => { state.accepts.push(args); return accept(...args); },
@@ -221,7 +222,7 @@ test('Add errors: a dead link turns into the "doesn\'t work" message; the server
     assert.deepEqual(fixture.calls.routes, []);
   } finally { await unmount(tree); }
 
-  for (const message of ["You've used a lot of invites today – try again tomorrow", 'This invite link is busy – try again tomorrow', 'Your login has changed - please try again']) {
+  for (const message of ["You've used a lot of invites today – try again tomorrow", 'Your login has changed - please try again']) {
     fixture = openInvite({ accept: async () => { throw new Error(message); } });
     tree = await renderScreen(fixture.screen);
     try {
@@ -231,6 +232,22 @@ test('Add errors: a dead link turns into the "doesn\'t work" message; the server
       assert.deepEqual(fixture.state.toasts, []);
     } finally { await unmount(tree); }
   }
+});
+
+test('a "busy" error looks exactly like a "busy" answer: the same toast, the saved invite cleared, and back out', async () => {
+  const outcome = async accept => {
+    const fixture = openInvite({ accept });
+    const tree = await renderScreen(fixture.screen);
+    try {
+      await act(() => button(tree, 'Add Bob').props.onPress());
+      return { toasts: fixture.state.toasts, cleared: fixture.state.cleared.length > 0, routes: fixture.calls.routes, alerts: fixture.screen.calls.alerts.length };
+    } finally { await unmount(tree); }
+  };
+  const answer = await outcome(async () => 'busy');
+  const thrown = await outcome(async () => { throw new Error('This invite link is busy – try again tomorrow'); });
+  assert.deepEqual(answer.toasts, ['This invite link is busy – try again tomorrow']);
+  assert.deepEqual(thrown, answer);
+  assert.equal(thrown.alerts, 0, 'no "Oops" alert');
 });
 
 test('a second tap on Add while it is working does nothing', async () => {

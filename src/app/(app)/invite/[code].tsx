@@ -13,6 +13,7 @@ import {
   acceptInvite,
   clearPendingInvite,
   INVITE_GONE,
+  isInviteBusy,
   isInviteGone,
   normalizeInviteCode,
   previewInvite,
@@ -122,6 +123,11 @@ export default function OpenInvite() {
       if (isInviteGone(error)) {
         done();
         setShown({ kind: 'gone' });
+      } else if (isInviteBusy(error)) {
+        // Exactly what a "busy" answer does (see resultText), so the two can't be told apart.
+        done();
+        showToast(resultText('busy', person));
+        leave();
       } else {
         Alert.alert('Oops', friendlyError(error));
       }

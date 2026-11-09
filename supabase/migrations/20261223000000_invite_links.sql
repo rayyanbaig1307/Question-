@@ -112,6 +112,11 @@ create table if not exists private.invite_accepts (
   friendship_id uuid,
   used_at timestamptz not null default now()
 );
+-- An earlier copy of this file had no 'held' outcome and a held_for_safety column: bring it up to date.
+alter table private.invite_accepts drop constraint if exists invite_accepts_outcome_check;
+alter table private.invite_accepts add constraint invite_accepts_outcome_check
+  check (outcome in ('friends', 'requested', 'accepted_request', 'held'));
+alter table private.invite_accepts drop column if exists held_for_safety;
 create index if not exists invite_accepts_accepter_idx on private.invite_accepts (accepter, used_at desc);
 create index if not exists invite_accepts_inviter_idx on private.invite_accepts (inviter, used_at desc);
 
@@ -411,13 +416,14 @@ begin
     end if;
     perform private.check_invite_limits(me, them);
     i_am_adult := coalesce(private.age_group(me) = 'adult', false);
-    -- Child safety: 3 people under 18 (or with no birthday) already used this adult's link in 24 hours →
+    -- Child safety: 3 people under 18 (or with no birthday) already used this link in 24 hours, and its owner is
+    -- an adult or never saved a birthday (so skipping the birthday can't dodge this) →
     -- more of them can't use it for now. Nothing is saved that the adult could see or accept (no friend
     -- request, no notification to them), so they can't collect under-18s through a link. The try is written
     -- down (it counts towards the daily limits), and the people who get report alerts are told (once a day
     -- per link). The answer is "busy" and not an error, because an error would undo the note and the alert.
     if not i_am_adult
-       and coalesce(private.age_group(them) = 'adult', false)
+       and private.age_group(them) is distinct from 'teen'
        and (select count(distinct a.accepter) from private.invite_accepts a
              where a.inviter = them and not a.accepter_adult
                and a.used_at > now() - interval '24 hours') >= 3 then
@@ -429,7 +435,8 @@ begin
         for person in select r.user_id from private.report_alert_people r loop
           begin
             perform private.send_push(person, 'reports', '🚩 Invite link check',
-              'Lots of under-18s used one adult''s invite link today, so more under-18s can''t use it for now. '
+              'Lots of under-18s used one invite link today (its owner is an adult or has no birthday saved), '
+                || 'so more under-18s can''t use it for now. '
                 || 'Check private.invite_accepts in Supabase.',
               jsonb_build_object('type', 'invite_check', 'inviter', them));
           exception when others then

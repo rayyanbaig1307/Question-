@@ -145,6 +145,15 @@ export function isInviteGone(error: unknown): boolean {
   return message.includes(INVITE_GONE);
 }
 
+// The server's words for a link that can't be used right now (too busy today). A "busy" answer and a "busy" error
+// must look exactly the same in the app, so nobody can tell which rule stopped them.
+export const INVITE_BUSY = 'This invite link is busy – try again tomorrow';
+
+export function isInviteBusy(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? '');
+  return message.includes(INVITE_BUSY);
+}
+
 // Are you a grown-up (18 or over) on this birthday ('YYYY-MM-DD')? Worked out like the server does (UTC date).
 export function isAdultBirthday(birthday: string | null | undefined, now: Date = new Date()): boolean {
   if (!birthday || !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return false;

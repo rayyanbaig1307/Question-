@@ -467,8 +467,8 @@ test('Child safety: after 3 under-18s use one adult\'s link in a day, more under
   const told = (await pushes()).filter((p) => p.to === alerts);
   assert.equal(told.length, 1);
   assert.equal(told[0].title, '🚩 Invite link check');
-  assert.equal(told[0].body, "Lots of under-18s used one adult's invite link today, so more under-18s can't use it for now. "
-    + 'Check private.invite_accepts in Supabase.');
+  assert.equal(told[0].body, 'Lots of under-18s used one invite link today (its owner is an adult or has no birthday saved), '
+    + "so more under-18s can't use it for now. Check private.invite_accepts in Supabase.");
   assert.deepEqual(told[0].data, { type: 'invite_check', inviter: users[0] });
   assert.equal(await count("private.invite_alerts where inviter = $1 and kind = 'under_18'", [users[0]]), 1);
   // The 5th: "busy" too, but no second alert that day. Tapping again is "busy" again.
@@ -521,6 +521,27 @@ test('Child safety: after 3 under-18s use one adult\'s link in a day, more under
 // ---------------------------------------------------------------------------
 // 5. Accounts and the migration itself
 // ---------------------------------------------------------------------------
+
+test('Child safety also covers a link whose owner never saved a birthday (skipping the birthday can\'t dodge it); a teen\'s own link is not held', async () => {
+  // users[0] never saved a birthday: their link sends requests, and after 3 under-18s the 4th gets "busy".
+  const code = await codeOf(users[0]);
+  for (const i of [1, 2, 3]) {
+    await birthday(users[i], 15);
+    assert.equal(await accept(users[i], code), 'requested', `teen ${i}`);
+  }
+  await birthday(users[4], 14);
+  assert.equal(await accept(users[4], code), 'busy');
+  assert.deepEqual(await links(users[0], users[4]), []);
+  assert.equal(await count("private.invite_accepts where inviter = $1 and outcome = 'held'", [users[0]]), 1);
+  // A 15-year-old's own link, used by 4 classmates: never held (they all just send requests).
+  await birthday(users[5], 15);
+  const teenCode = await codeOf(users[5]);
+  for (const id of await morePeople(4)) {
+    await birthday(id, 15);
+    assert.equal(await accept(id, teenCode), 'requested');
+  }
+  assert.equal(await count("private.invite_accepts where inviter = $1 and outcome = 'held'", [users[5]]), 0);
+});
 
 test('Deleting an account still works and takes its code and invite history with it', async () => {
   await birthday(users[0], 30);
@@ -598,9 +619,16 @@ test('Running the migration again changes nothing', async () => {
   await db.exec(`alter table private.past_links
     add constraint past_links_person_a_fkey foreign key (person_a) references public.profiles (id) on delete cascade,
     add constraint past_links_person_b_fkey foreign key (person_b) references public.profiles (id) on delete cascade`);
+  // An earlier copy had no 'held' outcome and a held_for_safety column: running the file again fixes both.
+  await db.exec(`alter table private.invite_accepts drop constraint invite_accepts_outcome_check;
+    alter table private.invite_accepts add constraint invite_accepts_outcome_check
+      check (outcome in ('friends', 'requested', 'accepted_request'));
+    alter table private.invite_accepts add column held_for_safety boolean not null default false`);
   await applyMigrationFile(db, MIGRATION);
   await applyMigrationFile(db, MIGRATION);
   assert.deepEqual(await snapshot(), before);
+  assert.equal(await count("information_schema.columns where table_schema = 'private' and table_name = 'invite_accepts' and column_name = 'held_for_safety'"), 0);
+  assert.match((await one("select pg_get_constraintdef(oid) as d from pg_constraint where conname = 'invite_accepts_outcome_check'")).d, /held/);
   assert.equal(await count("pg_trigger where tgname = 'friendships_remember_past_link'"), 1);
   assert.equal(await count("pg_trigger where tgname = 'zz_profiles_forget_past_links'"), 1);
   assert.equal(await count("pg_constraint where conrelid = 'private.past_links'::regclass and contype = 'f'"), 0);
