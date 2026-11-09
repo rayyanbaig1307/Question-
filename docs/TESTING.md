@@ -566,7 +566,7 @@ Works in Expo Go now. The Android download needs the next new version (voice not
 1. Camera → **🎯 Dare** chip → the dare screen. Today's dare is one of **365** new ones – bold, messy and silly
    (cannonball in your clothes, crack an egg on a friend's head, ice bucket, eat a whole lemon, sing in a shop…).
    A new one every day at the usual time; the same dare only comes round again after a year.
-2. Under the dare: the house rules – nobody gets hurt · no fire · clothes stay on · friends must be in on it.
+2. Under the dare: the house rules – nobody gets hurt · no fire · no nudity · friends must be in on it.
 3. Old dare posts still show a 🎯 tag; because the list changed, the text on posts from before this update
    now shows the new dare for that day (only test posts are affected).
 

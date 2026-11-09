@@ -91,7 +91,7 @@ export default function DareIdeas() {
       Alert.alert(
         'Could not add your idea',
         /row-level security|policy/i.test(message)
-          ? "Keep it silly, not dangerous – and it's one idea a day. (House rules: nobody gets hurt, no fire, clothes stay on.)"
+          ? "Keep it silly, not dangerous – and it's one idea a day. (House rules: nobody gets hurt, no fire, no nudity.)"
           : message,
       );
     } finally {

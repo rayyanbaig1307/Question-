@@ -2,7 +2,7 @@
 
 One per day, the same for everyone, in this order; the list repeats every 20 days. Community dares (the top-voted idea) replace the day's dare when there is one.
 
-House rules: nobody gets hurt · no fire · clothes stay on · friends must be in on it. Full rules: [Dare Safety Rules](../legal/DARE_SAFETY_RULES.md). History of changes: [legal/DARE_REVIEW_2026-10-31.md](../legal/DARE_REVIEW_2026-10-31.md).
+House rules: nobody gets hurt · no fire · no nudity · friends must be in on it. Full rules: [Dare Safety Rules](../legal/DARE_SAFETY_RULES.md). History of changes: [legal/DARE_REVIEW_2026-10-31.md](../legal/DARE_REVIEW_2026-10-31.md).
 
 1. Text your crush "I had a dream about you last night" and screenshot what they say
 2. Let a friend send one message from your phone to anyone they pick (you get one veto)

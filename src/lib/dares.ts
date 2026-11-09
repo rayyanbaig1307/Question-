@@ -23,9 +23,9 @@ export function allDareOverrides(): Record<string, { text: string; author: strin
 
 // One dare per day, the same for everyone. Bold, messy and funny – but never actually dangerous.
 // The list is a year long, so a dare only comes round again after 365 days.
-// House rules (shown on the Dare screen): nothing that can hurt anyone, no fire, clothes stay on,
+// House rules (shown on the Dare screen): nothing that can hurt anyone, no fire, no nudity,
 // friends have to be in on it, and nothing that'll get you in trouble.
-export const DARE_RULES = 'House rules: nobody gets hurt · no fire · clothes stay on · friends must be in on it';
+export const DARE_RULES = 'House rules: nobody gets hurt · no fire · no nudity · friends must be in on it';
 
 export const DARES = [
   'Text your crush "I had a dream about you last night" and screenshot what they say',

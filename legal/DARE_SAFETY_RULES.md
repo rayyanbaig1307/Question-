@@ -13,10 +13,13 @@ These rules apply to every dare, forfeit, drop, dare chain, community dare and f
 7. **No eating or drinking challenges that could harm you.** No eating things that aren't food, nothing you're allergic to, no very hot peppers or sauces if you have health conditions, no speed-eating or drinking large amounts of anything, and stop the moment you feel unwell.
 8. **Only people who agree.** Everyone who takes part or appears on camera must know what's happening and say yes. No pranks on sleeping people, strangers, children or anyone who can't consent. No touching anyone without their clear consent.
 9. **Nothing illegal and no damage.** No trespassing, theft, vandalism, disturbing businesses or traffic, or breaking rules of the place you're in (shops, pools, schools, workplaces). If staff ask you to stop, stop.
-10. **Nothing humiliating or hateful.** Dares must be fun for everyone, including the people watching. No dares that target someone's body, identity or beliefs.
-11. **Under 18?** Only do physical dares with a parent or adult present, and never do a dare a parent wouldn't be okay with.
-12. **Film safely.** Don't film while doing something that needs both hands or your full attention. Have a friend film.
-13. **Community dares** are written by other users. The same rules apply to them, and you can report any dare idea that breaks these rules. A dare idea only becomes everyone's daily dare after the Peekaboo team has read it and approved it. Ideas that break the rules are removed and their authors can be banned.
+10. **Nothing humiliating or hateful.** Dares must be fun for everyone, including the people watching. No dares that target someone's body, identity or beliefs. No bullying, no slurs and no abuse.
+11. **Nothing sexual.** No nudity, no sexual dares, and underwear stays on. Taking off a shirt or pants for a fun dare is okay.
+12. **Under 18?** Only do physical dares with a parent or adult present, and never do a dare a parent wouldn't be okay with.
+13. **Film safely.** Don't film while doing something that needs both hands or your full attention. Have a friend film.
+14. **Community dares** are written by other users. The same rules apply to them, and you can report any dare idea that breaks these rules. A dare idea only becomes everyone's daily dare after the Peekaboo team has read it and approved it. Ideas that break the rules are removed and their authors can be banned.
+
+Peekaboo checks every dare automatically. Dares about hurting someone (or yourself), rape, abuse, sexual stuff, hate or spam can't be sent. Sending lots of dares very fast is blocked too.
 
 If you see a dare in Peekaboo that breaks these rules, report it.
 
@@ -51,9 +54,10 @@ Keep doing this whenever dares change:
 - Pool dares say "only if you can swim – with someone watching".
 - Pranks only on friends who are in on it, and never while they're asleep.
 - No speed-eating, eating non-food, or stuffing the mouth (choking).
-- Clothes stay on (the app is 13+).
-- Community dare ideas are checked automatically for dangerous words by the database, can be reported, and are
-  hidden after 3 reports.
+- No nudity: underwear stays on (the app is 13+). Taking off a shirt or pants is okay (the owner's call, 9 Nov 2026).
+- Every dare people write (chat dares, group dares, dare ideas) is checked automatically, in the app and by the
+  database (`src/lib/dareSafety.ts` and `supabase/migrations/20261224000000_dare_safety.sql`). Dare ideas can also
+  be reported, and are hidden after 3 reports.
 - A community dare idea only becomes everyone's daily dare after you approve it (the `approved_at` column of
   `dare_ideas`, from `supabase/migrations/20261220000000_launch_safety.sql`; the steps are at the top of that
   file). Only approve an idea that follows every rule above and that you'd be happy for a 13-year-old to do.
