@@ -9,7 +9,7 @@
 
 // Slurs and the like. Checked as whole words, and also with all gaps removed for the ones that can't be
 // part of an innocent word.
-const HATEFUL = [
+export const HATEFUL = [
   'nigger', 'nigga', 'niggers', 'niggas', 'faggot', 'faggots', 'fag', 'fags', 'retard', 'retarded', 'retards',
   'tranny', 'trannies', 'chink', 'chinks', 'spic', 'spics', 'kike', 'kikes', 'wetback', 'wetbacks', 'beaner',
   'beaners', 'raghead', 'towelhead', 'dyke', 'dykes', 'coon', 'coons', 'gook', 'gooks', 'paki', 'pakis',
@@ -54,7 +54,7 @@ const LOOK_ALIKE_TO =
   'aacdeehiijkklooppqstuwxxy' +
   'AABBCEEHHIIJKKMMNOOPPSTTXXYYZ';
 const LOOK_ALIKE = new Map([...LOOK_ALIKE_FROM].map((letter, i) => [letter, LOOK_ALIKE_TO[i]]));
-function plainLetters(text: string): string {
+export function plainLetters(text: string): string {
   let plain = text;
   try {
     plain = text.normalize('NFKC').normalize('NFD');
@@ -89,7 +89,7 @@ const CRUDE_WORDS = wholeWord(CRUDE);
 const HATEFUL_ANYWHERE = new RegExp(HATEFUL_SQUASHED.join('|'));
 
 // "f u c k" → "fuck": single letters in a row are joined, so spaced-out words are caught as whole words.
-function joinSingles(clean: string): string {
+export function joinSingles(clean: string): string {
   const merged: string[] = [];
   let run = '';
   for (const token of clean.split(/\s+/)) {

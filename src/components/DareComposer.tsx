@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { Button } from '@/components/Button';
 import { KeyboardSafeView } from '@/components/KeyboardSafeView';
+import { checkDare } from '@/lib/dareSafety';
 import { colors, font, keyboardAppearance, radius, space } from '@/theme';
 
 const MAX_LENGTH = 200;
@@ -25,10 +26,18 @@ export function DareComposer({ visible, friendName, onClose, onSend }: {
 }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  // Why the dare can't be sent (no hurting, nothing sexual, no hate, no spam), shown under the box.
+  const [problem, setProblem] = useState<string | null>(null);
   const dare = text.trim();
 
   async function send() {
     if (!dare || busy) return;
+    // The server checks again, so an old or changed app can't skip this.
+    const notAllowed = checkDare(dare);
+    if (notAllowed) {
+      setProblem(notAllowed);
+      return;
+    }
     setBusy(true);
     const ok = await onSend(dare);
     setBusy(false);
@@ -44,10 +53,13 @@ export function DareComposer({ visible, friendName, onClose, onSend }: {
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={styles.sheet}>
           <Text style={styles.title}>🎯 Dare {friendName || 'them'}</Text>
-          <Text style={styles.hint}>Keep it fun and safe – nothing dangerous, illegal or mean.</Text>
+          <Text style={styles.hint}>Keep it fun and safe – no hurting anyone, nothing sexual, no hate and no spam.</Text>
           <TextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={(value) => {
+              setText(value);
+              setProblem(null);
+            }}
             placeholder="I dare you to…"
             placeholderTextColor={colors.textFaint}
             keyboardAppearance={keyboardAppearance}
@@ -57,12 +69,17 @@ export function DareComposer({ visible, friendName, onClose, onSend }: {
             autoFocus
             style={styles.input}
           />
+          {problem ? (
+            <Text style={styles.problem} accessibilityRole="alert">
+              {problem}
+            </Text>
+          ) : null}
           <Text style={styles.count}>
             {dare.length}/{MAX_LENGTH}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ideas} keyboardShouldPersistTaps="handled">
             {IDEAS.map((idea) => (
-              <Pressable key={idea} onPress={() => setText(idea)} style={styles.idea} accessibilityLabel={`Use idea: ${idea}`}>
+              <Pressable key={idea} onPress={() => { setText(idea); setProblem(null); }} style={styles.idea} accessibilityLabel={`Use idea: ${idea}`}>
                 <Text style={styles.ideaText} numberOfLines={1}>
                   💡 {idea}
                 </Text>
@@ -109,6 +126,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     padding: space.md,
     textAlignVertical: 'top',
+  },
+  problem: {
+    ...font.small,
+    color: colors.red,
+    fontWeight: '700',
   },
   count: {
     ...font.small,

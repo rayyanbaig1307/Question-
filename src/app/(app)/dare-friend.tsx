@@ -22,6 +22,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { useMe } from '@/lib/auth';
 import { sendDareTo } from '@/lib/chat';
 import { checkClean } from '@/lib/cleanWords';
+import { checkDare } from '@/lib/dareSafety';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
 import { inviteFriends } from '@/lib/invite';
@@ -66,7 +67,7 @@ export default function DareFriend() {
 
   async function send() {
     if (!dare || picked.length === 0 || busy) return;
-    const notAllowed = checkClean(dare, 'content');
+    const notAllowed = checkClean(dare, 'content') ?? checkDare(dare);
     if (notAllowed) {
       Alert.alert('Dare not sent', notAllowed);
       return;

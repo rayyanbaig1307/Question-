@@ -24,6 +24,7 @@ import {
   type DareIdea,
 } from '@/lib/communityDares';
 import { checkClean } from '@/lib/cleanWords';
+import { checkDare } from '@/lib/dareSafety';
 import { friendlyError } from '@/lib/errors';
 import { useDareRulesAccepted } from '@/lib/legal';
 import { REPORT_REASONS } from '@/lib/safety';
@@ -71,7 +72,8 @@ export default function DareIdeas() {
       setRulesOpen(true);
       return;
     }
-    const notAllowed = checkClean(clean, 'content');
+    // Slurs, then the dare safety rules (no hurting, nothing sexual, no hate, no spam). The server checks both too.
+    const notAllowed = checkClean(clean, 'content') ?? checkDare(clean);
     if (notAllowed) {
       Alert.alert('Idea not sent', notAllowed);
       return;
