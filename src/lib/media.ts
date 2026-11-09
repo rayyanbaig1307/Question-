@@ -129,7 +129,8 @@ async function sameJpegOnEveryPhone(uri: string, width: number, height: number):
   if (!skia) return null;
   try {
     const { ImageFormat, Skia } = skia;
-    const photo = Skia.Image.MakeImageFromEncoded(await Skia.Data.fromURI(uri));
+    // Read the bytes ourselves: on Android, Skia's own file reader can wait forever if it can't read the file.
+    const photo = Skia.Image.MakeImageFromEncoded(Skia.Data.fromBytes(new Uint8Array(await readBytes(uri))));
     // A picture in the phone's memory (not the graphics chip), so every phone draws it the same way.
     const surface = Skia.Surface.Make(width, height);
     if (!photo || !surface) return null;

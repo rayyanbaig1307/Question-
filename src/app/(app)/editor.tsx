@@ -215,7 +215,13 @@ export default function Editor() {
     transform: [{ translateX: panX.get() }, { translateY: panY.get() }, { scale: zoom.get() }],
   }));
 
-  const trash: TrashZone = { top: height - 150, left: width / 2 - 70, right: width / 2 + 70 };
+  // The bin sits at the bottom of the picture (in group Guess Who mode that's the 3:4 box, so a sticker never
+  // disappears off the box's edge on its way there). In every other mode the box is the whole screen.
+  const trash: TrashZone = {
+    top: frame.top + frame.height - 150,
+    left: frame.left + frame.width / 2 - 70,
+    right: frame.left + frame.width / 2 + 70,
+  };
 
   function addItem(item: Omit<OverlayItem, 'id' | 'startX' | 'startY'>) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -542,7 +548,7 @@ export default function Editor() {
       ) : null}
 
       {dragging ? (
-        <View style={[styles.trash, { top: trash.top + 20, left: width / 2 - 36 }]} pointerEvents="none">
+        <View style={[styles.trash, { top: trash.top + 20, left: frame.left + frame.width / 2 - 36 }]} pointerEvents="none">
           <Ionicons name="trash" size={30} color={colors.white} />
         </View>
       ) : null}

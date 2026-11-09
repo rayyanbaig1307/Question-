@@ -201,3 +201,29 @@ test('in group Guess Who mode, zooming and moving the photo stay inside the 3:4 
     assert.ok(Math.abs(translate.translateY - ((320 * 4) / 3) * 2) < 1e-9, `moved ${translate.translateY}`);
   } finally { await unmount(tree); }
 });
+
+test('in group Guess Who mode the bin sits at the bottom of the 3:4 box (a sticker never vanishes off the box on its way there); elsewhere it stays at the bottom of the screen', async () => {
+  const binOf = async params => {
+    const { screen } = fixture({ group: true, params });
+    const tree = await renderScreen(screen);
+    try {
+      // Add a sticker, then start dragging it so the bin shows.
+      await act(() => tree.root.findByType('StickerPicker').props.onPickEmoji('🔥'));
+      const sticker = tree.root.findAllByType('DraggableItem')[0];
+      await act(() => sticker.props.onDragChange(true));
+      const icon = tree.root.findAll(node => node.type === 'View' && node.props.pointerEvents === 'none' && flat(node.props.style).top !== undefined && tree.root.findAllByType('Ionicons').some(i => i.props.name === 'trash'));
+      return { zone: sticker.props.trash, iconTop: flat(icon[icon.length - 1].props.style).top };
+    } finally { await unmount(tree); }
+  };
+  // The test screen is 320 × 568: the 3:4 box is 320 × 426.67, from y = 70.67 to y = 497.33.
+  const boxTop = (568 - (320 * 4) / 3) / 2;
+  const boxBottom = boxTop + (320 * 4) / 3;
+  const guess = await binOf({ groupGuess: '1' });
+  assert.ok(Math.abs(guess.zone.top - (boxBottom - 150)) < 1e-9, `bin starts 150 above the box's bottom (got ${guess.zone.top})`);
+  assert.equal(guess.zone.left, 160 - 70);
+  assert.equal(guess.zone.right, 160 + 70);
+  assert.ok(Math.abs(guess.iconTop - (boxBottom - 130)) < 1e-9, 'the bin icon is drawn inside the box');
+  // Any other mode: the whole screen, exactly as before.
+  const normal = await binOf({});
+  assert.deepEqual({ ...normal.zone }, { top: 568 - 150, left: 160 - 70, right: 160 + 70 });
+});

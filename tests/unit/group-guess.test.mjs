@@ -235,8 +235,8 @@ function postWithRealMedia({ skiaHere, skia: skiaChanges = {} }) {
   const fakeSkia = {
     ImageFormat: { JPEG: 3, PNG: 4 },
     Skia: {
-      Data: { fromURI: async (uri) => { steps.skia.push(['read', uri]); return { uri }; } },
-      Image: { MakeImageFromEncoded: (data) => ({ from: data.uri, width: () => 1080, height: () => 1440 }) },
+      Data: { fromBytes: (bytes) => { steps.skia.push(['read', [...bytes]]); return { bytes: [...bytes] }; } },
+      Image: { MakeImageFromEncoded: (data) => ({ from: data.bytes, width: () => 1080, height: () => 1440 }) },
       Surface: { Make: (width, height) => { steps.skia.push(['surface', width, height]); return surface; } },
       XYWHRect: (x, y, width, height) => ({ x, y, width, height }),
       Paint: () => ({}),
@@ -271,9 +271,9 @@ it('with Skia, the uploaded file is the one Skia saved: 1080 × 1440, JPEG, qual
   expect(steps.saved).toEqual([{ compress: 0.8, format: 'jpeg' }]);
   // … then Skia draws that onto a fresh 1080 × 1440 picture in memory and saves it as a JPEG at quality 80.
   expect(steps.skia).toEqual([
-    ['read', 'file:///phone.jpg'],
+    ['read', PHONE_JPEG],
     ['surface', 1080, 1440],
-    ['draw', 'file:///phone.jpg', { x: 0, y: 0, width: 1080, height: 1440 }, { x: 0, y: 0, width: 1080, height: 1440 }],
+    ['draw', PHONE_JPEG, { x: 0, y: 0, width: 1080, height: 1440 }, { x: 0, y: 0, width: 1080, height: 1440 }],
     ['flush'],
     ['encode', 3, 80],
   ]);
@@ -296,7 +296,7 @@ it('without Skia (Expo Go, older downloads) the phone\'s own 1080 × 1440 JPEG i
 it.each([
   ['Skia cannot read the photo', { Image: { MakeImageFromEncoded: () => null } }],
   ['Skia cannot make a picture', { Surface: { Make: () => null } }],
-  ['Skia throws', { Data: { fromURI: async () => { throw new Error('Synthetic Skia failure'); } } }],
+  ['Skia throws', { Data: { fromBytes: () => { throw new Error('Synthetic Skia failure'); } } }],
 ])('if %s, the phone\'s own JPEG is posted instead (posting still works)', async (_why, skia) => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   try {

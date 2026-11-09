@@ -165,6 +165,8 @@ export default function GroupChat() {
   // 🕵️ The group Guess Whos in this chat. null = none yet, or a server that doesn't have them yet (then the chat
   // works just like before). If loading fails for another reason, the ones on screen stay.
   const [guesses, setGuesses] = useState<GroupGuessFeed | null>(null);
+  // True only when the server said it doesn't have group Guess Who yet (not while the list is still loading).
+  const [guessesMissing, setGuessesMissing] = useState(false);
   const guessesRequest = useRef(0);
   const guessingNow = useRef(false);
   const [guessing, setGuessing] = useState<string | null>(null);
@@ -180,7 +182,9 @@ export default function GroupChat() {
     const request = ++guessesRequest.current;
     fetchGroupGuesses(groupId)
       .then((found) => {
-        if (request === guessesRequest.current) setGuesses(found);
+        if (request !== guessesRequest.current) return;
+        setGuesses(found);
+        setGuessesMissing(found === null);
       })
       .catch((error) => console.warn('Could not load the group Guess Whos', error));
   }, [groupId]);
@@ -485,7 +489,7 @@ export default function GroupChat() {
   // 🕵️ The camera only offers a Guess Who when it can work here: the group has at least 3 people (with 2, the other
   // person would know it was you) and the server has group Guess Who (the list loaded, not null). Never in the
   // camera for a group dare proof.
-  const guessWhoOk = (group?.members.length ?? 0) >= 3 && guesses !== null;
+  const guessWhoOk = (group?.members.length ?? 0) >= 3 && !guessesMissing;
   const openCamera = (dareId?: string) =>
     router.push({
       pathname: '/camera',

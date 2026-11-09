@@ -1011,3 +1011,13 @@ test('a right guess gets the success buzz once the saved answer is back', async 
     assert.deepEqual(calls.haptics, ['success']);
   } finally { await unmount(tree); }
 });
+
+test('the Guess Who bubble is offered even while the Guess Whos are still loading (only a server that says it has no group Guess Who hides it)', async () => {
+  // The list never arrives (slow network): the camera still gets the Guess Who bubble in a group of 3.
+  const { screen, calls } = fixture({ messages: [], members: ['alice', 'bob', 'carol'], fetchGuesses: () => new Promise(() => {}) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a photo or video').props.onPress());
+    assert.deepEqual(plain(calls.pushed.map(to => to.params)), [{ group: 'squad', groupGuessOk: '1' }]);
+  } finally { await unmount(tree); }
+});
