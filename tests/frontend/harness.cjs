@@ -17,6 +17,22 @@ function readSource(relative) {
   return fs.readFileSync(path.join(root, relative), 'utf8');
 }
 
+// A small app file with no imports of its own (e.g. src/lib/lensLooks.ts, the list of face filters), loaded for real
+// so the screens use the same list as the app. Any import inside it fails on purpose: these files must stay free
+// of Skia, the camera and the rest. A file that isn't there (QA_ORIGINAL=1 runs against an older commit) gives {}.
+function loadPure(relative) {
+  let source;
+  try { source = readSource(relative); } catch { return {}; }
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  const module = { exports: {} };
+  const context = vm.createContext({
+    module, exports: module.exports,
+    require: id => { throw new Error(`pure module must not import ${id}`); },
+  });
+  vm.runInContext(compiled, context, { filename: relative });
+  return module.exports;
+}
+
 function host(name) {
   return function Host(props) {
     if (name === 'Modal' && !props.visible) return null;
@@ -25,9 +41,10 @@ function host(name) {
 }
 
 // `timers: 'real'` lets setTimeout really run (after its delay); the default only records the callbacks so a
-// test can run them by hand.
+// test can run them by hand (timer number n is calls.timers[n - 1]; a timer the screen stopped again is in
+// calls.clearedTimers).
 function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
-  const calls = { alerts: [], toasts: [], routes: [], timers: [], intervals: new Map() };
+  const calls = { alerts: [], toasts: [], routes: [], timers: [], clearedTimers: new Set(), intervals: new Map() };
   const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText', 'KeyboardSafeView', 'StoryAvatar'];
   const modules = {
     react: React,
@@ -68,7 +85,7 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
     '@/lib/plus': {
-      CAN_BUY_PLUS: false, usePlus: () => false, hasPlus: () => false, usePersonPlus: () => false,
+      CAN_BUY_PLUS: false, usePlus: () => false, usePlusAnswer: () => 'no', hasPlus: () => false, usePersonPlus: () => false,
       useStorePlus: () => false, useServerPlus: () => false, refreshServerPlus: async () => {},
       configurePurchases: async () => {}, logOutPurchases: async () => {},
       getPlusPrice: async () => null, buyPlus: async () => 'cancelled', restorePurchases: async () => 'not-found',
@@ -119,6 +136,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
       isPlusSticker: id => id.startsWith('plus-'),
       stickerName: id => id, stickerText: id => `Sticker: ${id}`,
     },
+    // The list of face filters (no imports, so the real file is used).
+    '@/lib/lensLooks': loadPure('src/lib/lensLooks.ts'),
     // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
     '@/lib/appIcons': {
       CAN_CHANGE_APP_ICON: false,
@@ -140,7 +159,7 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     setTimeout: timers === 'real'
       ? (callback, ms, ...args) => { calls.timers.push(callback); return setTimeout(callback, ms, ...args); }
       : callback => { calls.timers.push(callback); return calls.timers.length; },
-    clearTimeout: timers === 'real' ? id => clearTimeout(id) : () => {},
+    clearTimeout: timers === 'real' ? id => clearTimeout(id) : id => { calls.clearedTimers.add(id); },
     setInterval: callback => { const id = Symbol('interval'); calls.intervals.set(id, callback); return id; }, clearInterval: id => calls.intervals.delete(id),
     require: id => {
       if (!(id in modules)) throw new Error(`Missing isolated test mock for ${id}`);
@@ -162,5 +181,5 @@ function button(tree, title) { return tree.root.findAllByType('Button').find(nod
 function option(tree, title) { return tree.root.findAllByType('Pressable').find(node => textOf(node).startsWith(title) || node.findAllByType('Text').some(child => textOf(child) === title)); }
 async function unmount(tree) { await act(() => tree.unmount()); }
 
-module.exports = { React, renderer, loadScreen, renderScreen, act, textOf, button, option, unmount, readSource, host };
+module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host };
 

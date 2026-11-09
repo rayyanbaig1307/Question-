@@ -279,6 +279,20 @@ export function usePlus(): boolean {
   return hasPlus(userId);
 }
 
+// 'yes' = you have Peekaboo+, 'no' = we're sure you don't, 'checking' = not sure yet.
+export type PlusAnswer = 'yes' | 'no' | 'checking';
+
+// Like usePlus(), but also says "not sure yet" (just after the app starts, or no internet), so a Plus
+// filter isn't refused to someone whose Plus simply hasn't loaded yet.
+export function usePlusAnswer(): PlusAnswer {
+  // 'use no memo': same reason as usePlus() above (the answer changes without React seeing it).
+  'use no memo';
+  const { userId } = useMe();
+  useSyncExternalStore(watchMine, () => mine);
+  if (hasPlus(userId)) return 'yes';
+  return plusSurelyOff() ? 'no' : 'checking';
+}
+
 // True when the App Store says you're paying for Peekaboo+ right now (so Apple keeps billing you until you
 // cancel – Delete account warns about that).
 export function useStorePlus(): boolean {

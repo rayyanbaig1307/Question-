@@ -20,27 +20,33 @@ import { todayDareDay, useDare } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
+import { isLensLook, LENS_LOOKS, type LensLook } from '@/lib/lensLooks';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
 // The lens: 'googly' puts googly eyes on every face the camera sees.
-// 'glow' (Soft Glow) and 'golden' (Golden Hour) are the Peekaboo+ face filters (MediaPipe face tracking) –
-// only on downloads that have it.
-export type CameraMode = 'photo' | 'googly' | 'glow' | 'golden' | 'dare' | 'drop' | 'guess';
+// The face filters (Soft Glow, Golden Hour, Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes –
+// the list is in lib/lensLooks.ts) are Peekaboo+ and use MediaPipe face tracking – only on downloads that have it.
+export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | LensLook;
+
+type ModeItem = {
+  key: Exclude<CameraMode, 'photo'>;
+  emoji: string;
+  // Never shown on the camera (no words there) – only read out by VoiceOver.
+  label: string;
+  hint?: string;
+  // A Peekaboo+ filter.
+  plus?: boolean;
+};
 
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 // Dare and Guess Who come first, and the Peekaboo+ filters last (the owner, 6 Nov): stopping on a Plus filter
 // without Plus opens the Peekaboo+ screen, so they mustn't sit between you and the everyday modes.
-export const CAMERA_MODES: { key: Exclude<CameraMode, 'photo'>; emoji: string; label: string }[] = [
+export const CAMERA_MODES: ModeItem[] = [
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
   { key: 'googly', emoji: '🤪', label: 'Googly' },
-  ...(FACE_MESH_AVAILABLE
-    ? [
-        { key: 'glow' as const, emoji: '✨', label: 'Soft Glow' },
-        { key: 'golden' as const, emoji: '🌅', label: 'Golden Hour' },
-      ]
-    : []),
+  ...(FACE_MESH_AVAILABLE ? LENS_LOOKS.map(({ key, emoji, label, hint, plus }): ModeItem => ({ key, emoji, label, hint, plus })) : []),
 ];
 
 // Everything on the row, including the empty spot for the plain camera at the start.
@@ -53,17 +59,21 @@ const BUBBLE_ACTIVE = 54;
 // The row of round mode bubbles right above the shutter, like lenses on other camera apps.
 // Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
 // A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
-// The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat.
-export const LENS_MODES: CameraMode[] = ['googly', 'glow', 'golden'];
+// The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat. Every face filter is there too.
+export const LENS_MODES: CameraMode[] = ['googly', ...LENS_LOOKS.map((look) => look.key)];
 
-export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false }: {
+export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false, locked = false }: {
   mode: CameraMode;
-  onChange: (mode: CameraMode) => void;
+  // Return false to say "not allowed" (e.g. a Peekaboo+ filter without Plus): the row then glides back to the
+  // mode you're still in, so it never stays parked on a bubble that isn't on.
+  onChange: (mode: CameraMode) => boolean | void;
   dots?: Partial<Record<CameraMode, boolean>>;
   lensesOnly?: boolean;
   // The camera inside a group chat: the lenses plus a Guess Who bubble (the photo goes into that group chat with
   // no name on it). Its Guess Who bubble never opens the Guess Who page – that page is for friends' posts.
   withGuess?: boolean;
+  // We're sure you don't have Peekaboo+: the Plus bubbles get a small ⭐ so you know before you pick one.
+  locked?: boolean;
 }) {
   const modes = lensesOnly
     ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key) || (withGuess && item.key === 'guess'))
@@ -80,6 +90,11 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
     scroll.current?.scrollTo({ x: index * SLOT_WIDTH, animated: true });
   }, [index]);
 
+  // The mode you picked wasn't allowed: glide the row back to the mode you're still in.
+  function recentre() {
+    scroll.current?.scrollTo({ x: index * SLOT_WIDTH, animated: true });
+  }
+
   function pick(next: CameraMode) {
     if (next === mode) {
       // No words on the camera: tap the chosen bubble again to see what it's about.
@@ -88,7 +103,7 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
       return;
     }
     Haptics.selectionAsync();
-    onChange(next);
+    if (onChange(next) === false) recentre();
   }
 
   // When the row stops moving, whichever spot is closest to the middle wins.
@@ -99,7 +114,7 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
     const next = SLOTS[Math.max(0, Math.min(SLOTS.length - 1, at))];
     if (next === mode) return;
     Haptics.selectionAsync();
-    onChange(next);
+    if (onChange(next) === false) recentre();
   }
 
   return (
@@ -119,6 +134,7 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
       <Pressable style={styles.slot} onPress={() => pick('photo')} accessibilityRole="tab" accessibilityLabel="Plain camera" />
       {modes.map((item) => {
         const active = item.key === mode;
+        const needsPlus = locked && !!item.plus;
         return (
           <Pressable
             key={item.key}
@@ -126,10 +142,18 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
             onPress={() => pick(item.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={`${item.label} mode`}>
+            accessibilityLabel={`${item.label} mode${needsPlus ? ', needs Peekaboo+' : ''}`}
+            accessibilityHint={item.hint}>
             <View style={[styles.bubble, active && styles.bubbleActive]}>
               <Text style={[styles.bubbleEmoji, active && styles.bubbleEmojiActive]}>{item.emoji}</Text>
               {dots?.[item.key] ? <View style={styles.dot} /> : null}
+              {/* A Peekaboo+ filter and you don't have Plus: a small gold star (where Dare's dot sits – Dare is
+                  never Plus, so they never meet). */}
+              {needsPlus ? (
+                <View style={styles.plusBadge} testID="plus-badge">
+                  <Text style={styles.plusBadgeStar}>⭐</Text>
+                </View>
+              ) : null}
             </View>
           </Pressable>
         );
@@ -150,7 +174,8 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
 
-  if (mode === 'glow' || mode === 'golden') return null;
+  // The face filters explain themselves (no words on the camera).
+  if (isLensLook(mode)) return null;
 
   if (mode === 'googly') {
     // The lens explains itself (eyes on faces). Without face tracking, say how to get it.
@@ -303,6 +328,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pink,
     borderWidth: 2,
     borderColor: colors.white,
+  },
+  // The ⭐ on a Peekaboo+ filter when you don't have Plus.
+  plusBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FFD84D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusBadgeStar: {
+    fontSize: 9,
+    lineHeight: 12,
   },
   caption: {
     alignSelf: 'center',

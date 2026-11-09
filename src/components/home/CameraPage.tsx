@@ -33,8 +33,9 @@ import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
 import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
+import { isLensLook, isPlusMode, type LensLook } from '@/lib/lensLooks';
 import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
-import { usePlus } from '@/lib/plus';
+import { usePlus, usePlusAnswer } from '@/lib/plus';
 import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
 import { GroupGuessCaption, ModeDial, type CameraMode } from './ModeDial';
 
@@ -44,22 +45,33 @@ const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_L
     require('./FaceLensCamera').FaceLensCamera
   : null;
 
-// The Soft Glow and Golden Hour filters (MediaPipe face tracking), only on downloads that have it. Peekaboo+.
+// The face-tracking camera for the face filters (Soft Glow, Golden Hour, Heart Eyes, …; MediaPipe face tracking),
+// only on downloads that have it. Peekaboo+.
 const SoftGlow: typeof import('@/components/lens/SoftGlowCamera').SoftGlowCamera | null = FACE_MESH_AVAILABLE
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('@/components/lens/SoftGlowCamera').SoftGlowCamera
   : null;
 
 // The shutter ring takes the colour of the mode you're in, so you always know what you're about to post.
+// (Red is kept for recording, so two filters use their own colour.)
 const MODE_RING: Record<CameraMode, string> = {
   photo: colors.white,
   googly: colors.blue,
   glow: colors.yellow,
   golden: colors.orange,
+  peekabooEyes: colors.purple,
+  brainBuffering: colors.green,
+  crybaby: colors.blue,
+  auraOverload: '#E11DFF',
+  heartEyes: '#FF3FA4',
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
 };
+
+// How long a Plus filter may stay on while we still can't tell whether you have Peekaboo+ (just after the app
+// starts, or no internet). After that it switches off and the Peekaboo+ screen opens.
+const PLUS_CHECK_MS = 8000;
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
@@ -161,25 +173,43 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const faceLook: FaceLook | null = lensesHere && homeMode === 'googly' ? 'googly' : null;
   const lensOn = faceLook !== null && FaceLens !== null;
   const lensRef = useRef<FaceLensHandle>(null);
-  // Soft Glow / Golden Hour (Peekaboo+): the face-tracking camera with the look drawn on top.
+  // The face filters (Peekaboo+): the face-tracking camera with the chosen look drawn on top.
+  // Only for the length of videos (30 or 60 seconds).
   const plus = usePlus();
-  const glowLook = homeMode === 'golden' ? 'golden' : 'glow';
-  const glowOn = lensesHere && (homeMode === 'glow' || homeMode === 'golden') && SoftGlow !== null;
+  // 'yes', 'no', or 'checking' (not sure yet) – decides whether a Plus filter may be switched on.
+  const plusAnswer = usePlusAnswer();
+  const meshLook: LensLook | null = lensesHere && SoftGlow !== null && isLensLook(homeMode) ? homeMode : null;
+  const glowOn = meshLook !== null;
   const glowRef = useRef<SoftGlowHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
   const [lensRecording, setLensRecording] = useState(false);
   const lensVideoItems = useRef<LensItem[]>([]);
 
   // Lenses are for faces – picking one turns to the selfie camera.
-  function changeMode(next: CameraMode) {
-    // Soft Glow and Golden Hour are Peekaboo+ filters: without Plus, show what Peekaboo+ is instead.
-    if ((next === 'glow' || next === 'golden') && !plus) {
+  // Returns false when the mode isn't allowed (the mode row then glides back).
+  function changeMode(next: CameraMode): boolean {
+    // The face filters are Peekaboo+: when we're sure you don't have Plus, show what Peekaboo+ is instead.
+    // (While we're still checking, the filter goes on – see just below.)
+    if (isPlusMode(next) && plusAnswer === 'no') {
       router.push('/plus');
-      return;
+      return false;
     }
     setHomeMode(next);
-    if ((next === 'googly' || next === 'glow' || next === 'golden') && facing === 'back') setFacing('front');
+    if ((next === 'googly' || isLensLook(next)) && facing === 'back') setFacing('front');
+    return true;
   }
+
+  // A Plus filter is on, but Plus isn't (or is no longer) confirmed: back to the plain camera. Right away when
+  // we're sure you don't have Plus (e.g. it ran out), or after PLUS_CHECK_MS when we still can't tell.
+  // The Peekaboo+ screen only opens if this camera is on screen.
+  useEffect(() => {
+    if (!isPlusMode(homeMode) || plusAnswer === 'yes') return;
+    const timer = setTimeout(() => {
+      setHomeMode('photo');
+      if (active) router.push('/plus');
+    }, plusAnswer === 'no' ? 0 : PLUS_CHECK_MS);
+    return () => clearTimeout(timer);
+  }, [homeMode, plusAnswer, active]);
 
   const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
     router.push({
@@ -270,7 +300,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     // With a lens: the normal camera takes over while you record (the lens camera can't record video reliably
     // yet). The googly eyes go on the video as stickers where they were when you started.
     if (glowOn) {
-      // Soft Glow / Golden Hour: the normal camera records the video (the look isn't in videos yet).
+      // A face filter: the normal camera records a plain video (the filters aren't in videos yet).
       setLensRecording(true);
       await new Promise((resolve) => setTimeout(resolve, 900));
     } else if (lensOn && lensRef.current) {
@@ -390,8 +420,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        glowOn && !lensRecording && SoftGlow ? (
-          <SoftGlow ref={glowRef} look={glowLook} active={active} facing={facing} flash={flash} zoom={camZoom} />
+        // Switching between face filters keeps this same camera (only `look` changes), so it never restarts.
+        meshLook !== null && !lensRecording && SoftGlow ? (
+          <SoftGlow ref={glowRef} look={meshLook} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : active || warm ? (
@@ -486,12 +517,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             mode={homeMode}
             onChange={changeMode}
             dots={{ dare: dareDone === false }}
+            locked={plusAnswer === 'no'}
           />
         ) : lensesHere ? (
           // In a chat: just the lenses. In a group chat (not a dare proof), Guess Who too.
           <>
             {groupGuessOn ? <GroupGuessCaption /> : null}
-            <ModeDial mode={homeMode} onChange={changeMode} lensesOnly withGuess={groupGuessHere} />
+            <ModeDial mode={homeMode} onChange={changeMode} lensesOnly withGuess={groupGuessHere} locked={plusAnswer === 'no'} />
           </>
         ) : null}
         {recording ? (
