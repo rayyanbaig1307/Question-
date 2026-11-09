@@ -30,12 +30,16 @@ function loadDial(faceMesh) {
 // Every face filter, in the order it sits on the row (the new ones follow the owner's concept sheet).
 const FILTERS = ['glow', 'golden', 'peekabooEyes', 'brainBuffering', 'crybaby', 'auraOverload', 'heartEyes'];
 const FILTER_LABELS = ['Soft Glow mode', 'Golden Hour mode', 'Peekaboo Eyes mode', 'Brain Buffering mode', 'Crybaby mode', 'Aura Overload mode', 'Heart Eyes mode'];
+// Soft Glow and Golden Hour are free for everyone (owner, 9 Nov); the new ones are Peekaboo+.
+const FREE_FILTERS = ['glow', 'golden'];
+const PLUS_FILTERS = FILTERS.filter((key) => !FREE_FILTERS.includes(key));
 
 test('Dare and Guess Who are the first bubbles, and the Peekaboo+ filters are last', () => {
   const { CAMERA_MODES } = loadDial(true);
   assert.deepEqual(plain(CAMERA_MODES.map((m) => m.key)), ['dare', 'guess', 'googly', ...FILTERS]);
-  // Every face filter is Peekaboo+, and nothing before them is.
-  assert.deepEqual(plain(CAMERA_MODES.filter((m) => m.plus).map((m) => m.key)), FILTERS);
+  // The new face filters are Peekaboo+ and sit at the end; Soft Glow and Golden Hour are free.
+  assert.deepEqual(plain(CAMERA_MODES.filter((m) => m.plus).map((m) => m.key)), PLUS_FILTERS);
+  assert.deepEqual(plain(CAMERA_MODES.slice(-PLUS_FILTERS.length).map((m) => m.key)), PLUS_FILTERS);
 });
 
 test('without the face filters on this download, the row is Dare, Guess Who, Googly', () => {
@@ -174,8 +178,8 @@ test('without Plus, only the Plus filters get the ⭐ and say "needs Peekaboo+";
   const locked = await renderDial({ mode: 'photo', locked: true });
   try {
     const badged = locked.tree.root.findAllByType('Pressable').filter((node) => node.findAll((child) => child.props.testID === 'plus-badge' && typeof child.type === 'string').length > 0);
-    assert.deepEqual(badged.map(locked.keyOf), FILTERS);
-    assert.deepEqual(locked.bubbles(), ['Plain camera', 'Dare mode', 'Guess Who mode', 'Googly mode', ...FILTER_LABELS.map((label) => `${label}, needs Peekaboo+`)]);
+    assert.deepEqual(badged.map(locked.keyOf), PLUS_FILTERS);
+    assert.deepEqual(locked.bubbles(), ['Plain camera', 'Dare mode', 'Guess Who mode', 'Googly mode', ...FILTER_LABELS.map((label, i) => (PLUS_FILTERS.includes(FILTERS[i]) ? `${label}, needs Peekaboo+` : label))]);
     for (const node of badged) assert.ok(node.findAllByType('Text').some((child) => child.props.children === '⭐'));
   } finally { await unmount(locked.tree); }
   const open = await renderDial({ mode: 'photo' });

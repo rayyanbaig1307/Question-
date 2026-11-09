@@ -84,14 +84,16 @@ and the owner's standing preferences.
   stronger (raise your brows, hold still, squint, open your mouth, blow a kiss).
   - Where: the list is `src/lib/lensLooks.ts` (no imports – the camera and mode row read it); drawing in
     `src/components/lens/filters/`; each face's springs/progress/charge in `src/components/lens/faceTrack.ts`
-    (details and rules in `docs/FACE_MESH.md`). Soft Glow and Golden Hour are unchanged.
+    (details and rules in `docs/FACE_MESH.md`). Soft Glow and Golden Hour look unchanged, and are now **free for
+    everyone** (owner, 9 Nov: "make the soft glow and golden hour free, make the rest behind the pay wall") –
+    `plus: false` in `lensLooks.ts`.
   - Plus gate (`CameraPage` + `usePlusAnswer()` in `lib/plus.ts`): when we're sure you don't have Plus, the Plus
     bubbles show a small ⭐, and a tap or swipe onto one opens Peekaboo+ and the row glides back. "Not sure yet"
     (cold start, no internet) lets the filter on and switches it off after 8 s if Plus never shows up. The 8 s
     count from the first filter you pick: swapping filters, or off and on again, doesn't start them again, and
     once they're used up a Plus filter is refused until Plus is confirmed. When Plus ends, a filter that's on
     switches off. Chat cameras have the filters too. Videos stay plain (as before).
-  - Peekaboo+ screen: "7 live face filters (Heart Eyes, Crybaby, Aura & more)". Privacy Policy now 9 Nov (the
+  - Peekaboo+ screen: "5 live face filters (Heart Eyes, Crybaby, Aura & more)". Privacy Policy now 9 Nov (the
     filters read simple expressions too; still on the phone only) – the owner must **re-upload `website/`**
     (one upload together with the invite page). App Store screenshots or subscription text that show a filter
     must say it's Plus. Phone checks: TESTING Step 67.

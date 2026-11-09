@@ -86,7 +86,7 @@ Apple's new questionnaire is required for new apps (an Unrated app can't be publ
 - **Screenshots** (JPG or PNG, **no transparency**, up to 10 per size, iPhone only because `supportsTablet` is false):
   - **1206 × 2622** (iPhone with Dynamic Island, medium display) – **required**.
   - **1320 × 2868** (large display) – upload it too. Without it, Apple asks for the older 6.5" large set instead.
-  - Pad, don't stretch, if your phone's shape differs. Screenshots that show Peekaboo+ extras (themes, moving chat backgrounds, any face filter except googly eyes – Soft Glow, Golden Hour, Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes – the ⭐ badge) must say they're part of Peekaboo+, or use the free look. If the subscription's description in App Store Connect lists the filters, keep it in step with the app.
+  - Pad, don't stretch, if your phone's shape differs. Screenshots that show Peekaboo+ extras (themes, moving chat backgrounds, the Peekaboo+ face filters – Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes – the ⭐ badge; googly eyes, Soft Glow and Golden Hour are free) must say they're part of Peekaboo+, or use the free look. If the subscription's description in App Store Connect lists the filters, keep it in step with the app.
   - 6 screenshots are uploaded; check they are in both sizes.
 - **Content Rights:** "Yes, it contains third-party content" (iTunes song previews and user uploads) and confirm you have the rights.
 - **Pricing:** the app itself is **Free**.

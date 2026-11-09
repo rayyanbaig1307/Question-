@@ -59,7 +59,7 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '🕵️', title: 'Guess Who hint' },
   { emoji: '📌', title: 'Pin your top 3 chats' },
   { emoji: '🎬', title: '60-second videos' },
-  { emoji: '🎭', title: '7 live face filters (Heart Eyes, Crybaby, Aura & more)' },
+  { emoji: '🎭', title: '5 live face filters (Heart Eyes, Crybaby, Aura & more)' },
   { emoji: '⭐', title: 'Plus badge next to your name' },
 ];
 

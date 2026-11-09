@@ -19,8 +19,8 @@ export type LensLookInfo = {
 // In the order they sit on the mode row, after Dare, Guess Who and Googly. The new ones follow the
 // owner's concept sheet.
 export const LENS_LOOKS: readonly LensLookInfo[] = [
-  { key: 'glow', emoji: '✨', label: 'Soft Glow', hint: 'Golden light on your face', plus: true },
-  { key: 'golden', emoji: '🌅', label: 'Golden Hour', hint: 'Your face shines like gold in the evening sun', plus: true },
+  { key: 'glow', emoji: '✨', label: 'Soft Glow', hint: 'Golden light on your face', plus: false },
+  { key: 'golden', emoji: '🌅', label: 'Golden Hour', hint: 'Your face shines like gold in the evening sun', plus: false },
   { key: 'peekabooEyes', emoji: '👀', label: 'Peekaboo Eyes', hint: 'Raise your brows to make them pop', plus: true },
   { key: 'brainBuffering', emoji: '🧠', label: 'Brain Buffering', hint: 'Hold still to load your brain, shake your head to restart', plus: true },
   { key: 'crybaby', emoji: '😭', label: 'Crybaby', hint: 'Squint for more tears', plus: true },

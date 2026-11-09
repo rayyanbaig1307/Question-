@@ -101,14 +101,20 @@ test('sure you have no Plus: a face filter is refused, the Peekaboo+ screen open
   const camera = await renderCamera('no');
   try {
     assert.equal(camera.dial().props.locked, true, 'the Plus bubbles show their ⭐');
-    for (const mode of [...NEW_FILTERS, 'glow', 'golden']) {
+    for (const mode of NEW_FILTERS) {
       assert.equal(await camera.pick(mode), false, `${mode} is refused`);
       assert.equal(camera.dial().props.mode, 'photo');
       assert.equal(camera.softGlow().length, 0);
     }
-    assert.equal(camera.calls.pushed.length, 7);
+    assert.equal(camera.calls.pushed.length, 5);
     assert.ok(camera.calls.pushed.every(to => to === '/plus'));
-    // The free modes still work.
+    // The free modes still work – Soft Glow and Golden Hour are free for everyone (owner, 9 Nov).
+    for (const mode of ['glow', 'golden']) {
+      assert.notEqual(await camera.pick(mode), false, `${mode} is free`);
+      assert.equal(camera.dial().props.mode, mode);
+      assert.equal(camera.softGlow()[0].props.look, mode);
+    }
+    assert.equal(camera.calls.pushed.length, 5, 'no Peekaboo+ screen for the free filters');
     assert.notEqual(await camera.pick('dare'), false);
     assert.equal(camera.dial().props.mode, 'dare');
   } finally { await unmount(camera.tree); }

@@ -1099,7 +1099,7 @@ the buy screen.
    the Peekaboo+ screen may say "A few extras, like who viewed your profile, can take a few seconds to switch on."
    - Wait a few seconds, then pull down (or tap it) → the names show.
    - Still "Unlocking…" after a minute → the server never heard about the purchase. Stop and tell Claude.
-4. The extras that live only in the app work at once: a Plus theme, the Golden Hour filter, 60-second videos.
+4. The extras that live only in the app work at once: a Plus theme, the Heart Eyes filter, 60-second videos.
 
 **Restore**
 5. Delete Peekaboo, install it again from TestFlight and log in to the **same** test account → Settings →
@@ -1170,9 +1170,9 @@ or a TestFlight build), after the update.
 3. Take a photo with each filter → the photo in the editor looks like the screen did (the tears, hearts, sparks and
    the brain's number are in the same places).
 4. Two people in the picture → each face gets its own filter.
-5. **Without Peekaboo+** (a test account without Plus): the filter bubbles have a small gold ⭐. Tap one, or swipe
-   onto one → the Peekaboo+ screen opens, and when you come back the row has slid back to where you were (the
-   camera stays plain).
+5. **Without Peekaboo+** (a test account without Plus): the five new filter bubbles have a small gold ⭐. Tap one,
+   or swipe onto one → the Peekaboo+ screen opens, and when you come back the row has slid back to where you were
+   (the camera stays plain). ✨ Soft Glow and 🌅 Golden Hour have no ⭐ and just work: they're free for everyone.
 6. Open a chat → 📷 → the filters are in that camera's bubble row too (same ⭐ rule). Send a peek with a filter.
 7. With a filter on, **hold** the shutter → it records a normal video without the filter (expected for now).
 8. Plus ends while a filter is on (or log in to an account without Plus) → the filter switches off and the camera is
