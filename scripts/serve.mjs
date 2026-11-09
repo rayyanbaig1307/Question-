@@ -2,9 +2,11 @@
 // Usage: npm start  (then open http://localhost:8080)
 import http from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(new URL('..', import.meta.url).pathname);
+// fileURLToPath handles Windows drive letters correctly (URL.pathname does not).
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
 
 const TYPES = {
@@ -24,10 +26,10 @@ const TYPES = {
 http
   .createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
-    let path = normalize(decodeURIComponent(url.pathname));
+    let path = decodeURIComponent(url.pathname);
     if (path.endsWith('/')) path += 'index.html';
-    const file = join(ROOT, path);
-    if (!file.startsWith(ROOT)) {
+    const file = normalize(join(ROOT, path));
+    if (!file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep)) {
       res.writeHead(403).end();
       return;
     }
