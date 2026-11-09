@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Peekaboo – Face Filters</title>
+  <meta name="description" content="Peekaboo: real-time webcam face filters. Raise your brows, pout, open wide." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👀</text></svg>" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="logo"><span class="logo-word">peekaboo</span><span class="logo-eyes" aria-hidden="true">👀</span></h1>
+    <p class="tagline">FACE FILTER CONCEPTS</p>
+  </header>
+
+  <main class="stage">
+    <div class="viewport" id="viewport">
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="canvas"></canvas>
+
+      <div class="overlay" id="status">
+        <div class="spinner"></div>
+        <p id="status-text">Loading face model…</p>
+        <button id="start-btn" class="btn primary" hidden>Start camera</button>
+      </div>
+
+      <div class="hud">
+        <div class="hud-top">
+          <span class="pill" id="filter-name">Peekaboo Eyes</span>
+          <span class="pill subtle" id="fps">– fps</span>
+        </div>
+        <div class="hud-bottom">
+          <div class="hint" id="hint">Raise your brows</div>
+          <div class="meter"><div class="meter-fill" id="meter"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="filters" id="filters" aria-label="Filters"></nav>
+
+    <div class="controls">
+      <button id="prev-btn" class="btn icon" title="Previous filter (←)">‹</button>
+      <button id="snap-btn" class="btn shutter" title="Take photo (space)"><span></span></button>
+      <button id="next-btn" class="btn icon" title="Next filter (→)">›</button>
+      <button id="mirror-btn" class="btn ghost" title="Toggle mirror">Mirror: on</button>
+      <button id="debug-btn" class="btn ghost" title="Show landmarks">Debug: off</button>
+    </div>
+  </main>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
