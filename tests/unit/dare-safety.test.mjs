@@ -12,6 +12,6 @@ it.each(cases)('%s → %s', (dare, problem) => {
 });
 
 it('a blocked dare gets a friendly sentence, an allowed one gets nothing', () => {
-  expect(lib.checkDare('Send nudes')).toMatch(/clothes stay on/);
+  expect(lib.checkDare('Send nudes')).toMatch(/no nudity/);
   expect(lib.checkDare('Do 20 push-ups')).toBe(null);
 });

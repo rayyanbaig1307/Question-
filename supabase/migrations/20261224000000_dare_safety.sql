@@ -33,7 +33,7 @@ declare
     ' beat (up|the shit out of|the crap out of) '];
   sexual text[] := array[' (nude|nudes|naked|nudity|sex|sexting|porn|porno|pornhub|blowjob|handjob|masturbate|masturbating|jerk off|jerking off|jerkoff|cum|horny|onlyfans|strip|stripping|striptease|boob|boobs|tits|titties|dickpic|dick pic|nipple|nipples|pussy|vagina|penis|asshole|condom|panties) ',
     ' (show|send|flash|pic of|picture of|photo of|video of|touch|lick|grab) ([a-z]+ ){0,2}(ass|butt|bum|dick|cock|crotch|privates|private parts|chest|body|boobs|tits|penis|vagina) ',
-    ' (take off|remove) ([a-z]+ ){0,2}(clothes|shirt|top|pants|trousers|underwear|bra|boxers|panties|skirt) '];
+    ' (take off|remove) ([a-z]+ ){0,2}(clothes|underwear|bra|boxers|panties) '];
   hate text[] := array[' (nazi|nazis|hitler|heil|kkk|white power|hate crime|n word|nword|terrorist|terrorists) ',
     ' (bully|bullies|bullied|bullying|cyberbully|harass|harassing|harassment|stalk|stalking|dox|doxx|doxxing) ',
     ' (call|tell) ([a-z]+ ){0,3}(ugly|fat|fatty|stupid|loser|worthless|disgusting|slut|whore|bitch) '];
@@ -87,7 +87,7 @@ create or replace function private.dare_problem_message(problem text)
 returns text language sql immutable strict parallel safe set search_path = '' as $$
   select case problem
     when 'harm' then 'That dare isn''t allowed – no hurting anyone (or yourself), no violence and no abuse. 🙏'
-    when 'sexual' then 'That dare isn''t allowed – nothing sexual, and clothes stay on. 🙏'
+    when 'sexual' then 'That dare isn''t allowed – nothing sexual and no nudity. 🙏'
     when 'hate' then 'That dare isn''t allowed – no hate, bullying or slurs. 🙏'
     else 'That dare looks like spam – no links, phone numbers or the same thing over and over. 🙏'
   end;

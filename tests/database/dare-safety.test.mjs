@@ -31,7 +31,7 @@ test('Bad dares are refused in friend chats, group chats and dare ideas; fine on
   for (const i of [1, 2]) await friend(db, users[0], users[i]);
   const chatDare = (body) => rpc(0, "insert into messages(sender_id,recipient_id,kind,body) values($1,$2,'dare',$3)", [users[0], users[1], body]);
   assert.equal(await outcome(chatDare('Do 20 push-ups right now')), 'ok');
-  assert.equal(await outcome(chatDare('Show me ur asshole')), "23514: That dare isn't allowed – nothing sexual, and clothes stay on. 🙏");
+  assert.equal(await outcome(chatDare('Show me ur asshole')), "23514: That dare isn't allowed – nothing sexual and no nudity. 🙏");
   assert.match(await outcome(chatDare('kill a cat')), /no hurting anyone/);
   // Normal chat messages aren't dares, so they aren't checked (private chats stay unfiltered).
   assert.equal(await outcome(rpc(0, "insert into messages(sender_id,recipient_id,kind,body) values($1,$2,'text','I could kill for pizza')", [users[0], users[1]])), 'ok');
