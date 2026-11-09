@@ -50,7 +50,7 @@ export function inviteCodeFromUrl(url: string | null | undefined): string | null
   const text = url.trim();
   const inApp =
     text.match(/^peekaboo:\/\/\/?invite\/([^/?#]+)\/?(?:[?#].*)?$/i) ??
-    text.match(/^exps?:\/\/[^/?#]*\/--\/invite\/([^/?#]+)\/?(?:[?#].*)?$/i) ??
+    text.match(/^exps?:\/\/[^?#]*?\/--\/invite\/([^/?#]+)\/?(?:[?#].*)?$/i) ??
     text.match(/^\/invite\/([^/?#]+)\/?(?:[?#].*)?$/);
   if (inApp) return normalizeInviteCode(decodePart(inApp[1]));
 

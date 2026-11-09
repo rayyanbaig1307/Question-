@@ -6,16 +6,17 @@ function settingsHarness({ delayWrite = false, delayLocation = false, signOut = 
   let release;
   const pending = new Promise(resolve => { release = resolve; });
   // `signedIn` is who the phone is logged in as right now (it can change while a request is still running).
-  const state = { profile: { id: 'alice', username: 'alice', display_name: 'Alice', is_private: true, location_sharing: false, hit_ups_from: 'everyone' }, options: [], writes: 0, deleted: [], signedIn: 'alice', refreshes: 0 };
+  const state = { profile: { id: 'alice', username: 'alice', display_name: 'Alice', is_private: true, location_sharing: false, hit_ups_from: 'everyone' }, options: [], writes: 0, deleted: [], signedIn: 'alice', refreshes: 0, routes: [], prefetched: [] };
   const saved = { ...state.profile };
   const screen = loadScreen('src/app/(app)/settings.tsx', {
     expo: { reloadAppAsync: async () => {} }, 'expo-constants': { expoConfig: {} },
-    'expo-router': { router: { push() {} }, useFocusEffect: callback => React.useEffect(callback, [callback]) },
+    'expo-router': { router: { push(route) { state.routes.push(route); } }, useFocusEffect: callback => React.useEffect(callback, [callback]) },
     '@/components/BirthdayForm': { formatBirthday: value => value },
     '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => state.options.push(value) }) },
     '@/lib/auth': { useMe: () => { const [profile, set] = React.useState(state.profile); return { userId: 'alice', profile, setProfile: value => { state.profile = value; set(value); }, signOut, currentUserId: () => state.signedIn, refreshProfile: refreshProfile ? () => refreshProfile(state, saved) : async () => { state.refreshes++; return { ...saved }; } }; } },
     '@/lib/birthday': { fetchMyBirthday: async () => null },
-    '@/lib/invite': { inviteFriends() {} },
+    // Your invite link: Settings loads it early and "Invite friends" opens the invite screen.
+    '@/lib/invite': { prefetchInviteCode: me => state.prefetched.push(me) },
     '@/lib/legal': { contactEmail: () => null }, '@/lib/legalDocs': { LEGAL_DOCS: { terms: '' } },
     '@/lib/location': { setLocationSharing: async (_id, share) => { if (share && delayLocation) await pending; return { ...saved, location_sharing: share }; } },
     '@/lib/notificationPrefs': { ALL_ON: {}, fetchNotificationPrefs: async () => ({ messages: true, drops: true }), saveNotificationPrefs: async () => {} },
@@ -36,6 +37,16 @@ function settingsHarness({ delayWrite = false, delayLocation = false, signOut = 
   screen.modules['react-native'].Linking = { openURL: async url => { state.opened.push(url); } };
   return { screen, state, saved, release };
 }
+
+test('"Invite friends" opens your invite link screen, and Settings loads your link early', async () => {
+  const fixture = settingsHarness();
+  const tree = await renderScreen(fixture.screen);
+  try {
+    assert.deepEqual(fixture.state.prefetched, ['alice']);
+    await act(() => option(tree, 'Invite friends').props.onPress());
+    assert.deepEqual(fixture.state.routes, ['/invite']);
+  } finally { await unmount(tree); }
+});
 
 test('the last private-account choice wins even if the first save is delayed', async () => {
   const fixture = settingsHarness({ delayWrite: true });

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const pages = ['index.html', 'support.html', 'privacy.html', 'terms.html', 'guidelines.html', 'dare-safety.html', '404.html'];
+const pages = ['index.html', 'support.html', 'privacy.html', 'terms.html', 'guidelines.html', 'dare-safety.html', 'invite.html?c=BCDFGHJKLM', '404.html'];
 test.beforeEach(async ({ page }) => {
   await page.route('**/*', async route => {
     if (new URL(route.request().url()).hostname === '127.0.0.1') await route.continue();
@@ -41,4 +41,25 @@ test('unknown website page shows a real 404 and a working home link', async ({ p
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.getByRole('link', { name: 'Go to the home page' }).click();
   await expect(page.getByRole('heading', { name: 'peekaboo', exact: true })).toBeVisible();
+});
+
+// Personal invite links (…/invite?c=<code>): the page shows the code and an "Open in Peekaboo" button, and asks
+// no server anything (every outside request is blocked in these tests, so one would show up here).
+test('invite page shows the code and opens the app, without contacting any server', async ({ page }) => {
+  const outside: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).hostname !== '127.0.0.1') outside.push(request.url()); });
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/site/invite.html?c=bcdfg-hjklm');
+  await expect(page.getByRole('heading', { name: "You're invited to Peekaboo 👀" })).toBeVisible();
+  await expect(page.locator('#code')).toHaveText('BCDFG-HJKLM');
+  await expect(page.getByRole('link', { name: 'Open in Peekaboo' })).toHaveAttribute('href', 'peekaboo://invite/BCDFGHJKLM');
+  await expect(page.getByRole('link', { name: 'Get Peekaboo on the App Store' })).toHaveAttribute('href', /^https:\/\/apps\.apple\.com\//);
+  await page.goto('/site/invite.html#NPQRSTVWXZ');
+  await expect(page.locator('#code')).toHaveText('NPQRS-TVWXZ');
+  await page.goto('/site/invite.html?c=%3Cb%3Ehi%3C%2Fb%3E');
+  await expect(page.getByText('This link is missing its invite code.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open in Peekaboo' })).toHaveCount(0);
+  expect(outside).toEqual([]);
+  expect(errors).toEqual([]);
 });

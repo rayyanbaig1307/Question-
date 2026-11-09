@@ -199,6 +199,8 @@ function appLayout(setup, profile = { id: 'alice', username: 'alice' }) {
     'expo-router': { Stack: Object.assign(host('Stack'), { Screen: host('StackScreen') }) },
     '@/components/ProfileSetup': { useNeedsSetup: () => setup, ProfileSetup: host('ProfileSetup') },
     '@/components/TermsGate': { TermsGate: host('TermsGate'), CouldNotCheck: host('CouldNotCheck') },
+    // An invite opened before you were in the app: opened only once the app itself is shown.
+    '@/components/PendingInvite': { PendingInvite: host('PendingInvite') },
     '@/lib/auth': { useAuth: () => ({ userId: 'alice', profile }) },
     '@/lib/communityDares': { syncCommunityDares: async () => {} },
     '@/lib/location': { useShareLocationWhileOpen() {} },
@@ -207,7 +209,7 @@ function appLayout(setup, profile = { id: 'alice', username: 'alice' }) {
   });
   return screen;
 }
-const shown = tree => ['CouldNotCheck', 'ProfileSetup', 'Stack', 'TermsGate'].filter(name => tree.root.findAllByType(name).length > 0);
+const shown = tree => ['CouldNotCheck', 'PendingInvite', 'ProfileSetup', 'Stack', 'TermsGate'].filter(name => tree.root.findAllByType(name).length > 0);
 
 test('the app shows "Could not check" (not the setup form or the app) after a failed setup check', async () => {
   const retry = () => {};
@@ -227,7 +229,7 @@ test('the app shows the setup form when setup is needed, and the app itself when
   const setupTree = await renderScreen(appLayout([true, () => {}, { failed: false, checking: false, retry() {} }]));
   try { assert.deepEqual(shown(setupTree), ['ProfileSetup']); } finally { await unmount(setupTree); }
   const appTree = await renderScreen(appLayout([false, () => {}, { failed: false, checking: false, retry() {} }]));
-  try { assert.deepEqual(shown(appTree), ['Stack', 'TermsGate']); } finally { await unmount(appTree); }
+  try { assert.deepEqual(shown(appTree), ['PendingInvite', 'Stack', 'TermsGate']); } finally { await unmount(appTree); }
 });
 
 // Review of the fixes: a check that never answers (a stalled request) must not leave a blank screen forever.

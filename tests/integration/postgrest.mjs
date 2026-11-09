@@ -573,6 +573,71 @@ try {
       assert.equal((await db.query('select count(*)::int as n from mystery_posts where group_id=$1', [crew])).rows[0].n, 2);
     });
   }
+  // Personal invite links (20261223000000_invite_links.sql). Three new, invented people: an adult with a public
+  // account who shares a link (owner), a friend who uses it (guest), and someone who tries the old link (late).
+  if (!original) {
+    await check('invite links through real REST: visitors can run nothing new, using a link needs a login, the owner is the one notified, a new link kills the old one', async () => {
+      const [owner, guest, late] = [1, 2, 3].map((n) => `00000000-0000-4000-8007-${String(n).padStart(12, '0')}`);
+      for (const [n, id] of [owner, guest, late].entries()) {
+        await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [id, `invite${n}@example.invalid`, { username: `qa_invite_${n}`, display_name: `Invite ${n}` }]);
+        await asUser(db, id, (tx) => tx.query("select set_birthday((current_date - interval '30 years')::date)"));
+      }
+      for (const [name, id] of [['owner', owner], ['guest', guest]]) {
+        await db.query("insert into push_tokens(token,user_id,platform) values($1,$2,'ios')", [`ExponentPushToken[qa-rest-invite-${name}]`, id]);
+      }
+      const as = (id) => ({ jwt: token(0, { sub: id }) });
+      const call = (fn, body, who) => request(`rpc/${fn}`, { method: 'POST', body, ...(who === null ? { user: null } : as(who)) });
+      const NOT_WORKING = "This invite link doesn't work any more";
+      // Visitors who aren't logged in can't run any of the new functions (or any new function at all).
+      for (const [fn, body] of [['my_invite_code', {}], ['reset_invite_code', {}], ['invite_preview', { invite_code: 'BCDFGHJKLM' }],
+        ['accept_invite', { invite_code: 'BCDFGHJKLM', expected_user_id: guest }]]) {
+        const result = await call(fn, body, null);
+        assert.ok([401, 403, 404].includes(result.status), `visitor ${fn}: ${result.status} ${JSON.stringify(result.data)}`);
+      }
+      const visitorCan = (await db.query(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute') and has_schema_privilege('anon', n.oid, 'usage')`)).rows.map((r) => r.proname);
+      assert.deepEqual(visitorCan, ['username_available']);
+      // The owner's code.
+      const mine = await call('my_invite_code', {}, owner);
+      assert.equal(mine.status, 200, JSON.stringify(mine.data)); assert.match(mine.data, /^[23456789BCDFGHJKLMNPQRSTVWXZ]{10}$/);
+      const typed = `${mine.data.slice(0, 5).toLowerCase()}-${mine.data.slice(5)}`;
+      // The guest sees who sent it.
+      const seen = await call('invite_preview', { invite_code: typed }, guest);
+      assert.equal(seen.status, 200, JSON.stringify(seen.data));
+      assert.deepEqual(seen.data, [{ id: owner, username: 'qa_invite_0', display_name: 'Invite 0', avatar_path: null }]);
+      // Using it needs a real login of the account on screen.
+      const noLogin = await request('rpc/accept_invite', { method: 'POST', body: { invite_code: typed, expected_user_id: guest }, jwt: token(0, { sub: undefined }) });
+      assert.equal(noLogin.status, 400, JSON.stringify(noLogin.data)); assert.equal(noLogin.data.message, 'Please log in again');
+      const switched = await call('accept_invite', { invite_code: typed, expected_user_id: owner }, guest);
+      assert.equal(switched.status, 400); assert.equal(switched.data.message, 'Your login has changed - please try again');
+      assert.equal((await db.query('select count(*)::int as n from friendships where requester_id=$1', [guest])).rows[0].n, 0);
+      // Now for real: friends at once, and only the owner gets a notification.
+      await db.query('truncate net.sent restart identity');
+      const added = await call('accept_invite', { invite_code: typed, expected_user_id: guest }, guest);
+      assert.equal(added.status, 200, JSON.stringify(added.data)); assert.equal(added.data, 'friends');
+      assert.deepEqual((await db.query('select requester_id, addressee_id, status from friendships where requester_id=$1', [guest])).rows,
+        [{ requester_id: guest, addressee_id: owner, status: 'accepted' }]);
+      const sent = (await db.query("select body->0->>'to' as to, body->0->>'title' as title from net.sent order by id")).rows;
+      assert.deepEqual(sent, [{ to: 'ExponentPushToken[qa-rest-invite-owner]', title: 'You have a new friend 🎉' }]);
+      assert.equal((await call('accept_invite', { invite_code: typed, expected_user_id: guest }, guest)).data, 'already');
+      // Nobody can read someone else's code or write codes around the functions.
+      assert.deepEqual((await request('invite_codes?select=user_id', as(guest))).data, []);
+      assert.deepEqual((await request('invite_codes?select=user_id', as(owner))).data, [{ user_id: owner }]);
+      const forged = await request('invite_codes', { method: 'POST', body: { user_id: guest, code: 'BCDFGHJKLM' }, ...as(guest) });
+      assert.ok([401, 403].includes(forged.status), `forged code ${forged.status}`);
+      // A new link: the old one stops working for everyone.
+      const fresh = await call('reset_invite_code', {}, owner);
+      assert.equal(fresh.status, 200, JSON.stringify(fresh.data)); assert.notEqual(fresh.data, mine.data);
+      assert.deepEqual((await call('invite_preview', { invite_code: mine.data }, late)).data, []);
+      const dead = await call('accept_invite', { invite_code: mine.data, expected_user_id: late }, late);
+      assert.equal(dead.status, 400); assert.equal(dead.data.message, NOT_WORKING);
+      assert.equal((await call('accept_invite', { invite_code: fresh.data, expected_user_id: late }, late)).data, 'friends');
+      // A login of a deleted account can't use links.
+      await db.query('delete from auth.users where id=$1', [late]);
+      const gone = await call('accept_invite', { invite_code: fresh.data, expected_user_id: late }, late);
+      assert.equal(gone.status, 400); assert.equal(gone.data.message, 'Please log in again');
+    });
+  }
   await check(`${writeRequests} concurrent group writes keep exact counts, authors and unread state`, async () => {
     const groups = [];
     for (let n = 0; n < 6; n++) {

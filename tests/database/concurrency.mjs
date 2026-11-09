@@ -667,6 +667,83 @@ try {
       assert.equal(left,0);
       return {saved,refused:refused.length,racingPost:posted};
     });
+    // Personal invite links (20261223000000_invite_links.sql). Everyone here is a new, invented person.
+    const invitePeople=async(label,n,{adult=true}={})=>{
+      const ids=[];
+      for(let i=0;i<n;i++){
+        const id=(await db.query("insert into auth.users(id,email,raw_user_meta_data) values(gen_random_uuid(),$1,$2) returning id",[`${label}${i}@example.invalid`,{username:`qa_${label}_${i}`,display_name:`${label} ${i}`}])).rows[0].id;
+        if(adult)await asUser(db,id,tx=>tx.query("select set_birthday((current_date-interval '25 years')::date)"));
+        ids.push(id);
+      }
+      return ids;
+    };
+    const inviteCode=async id=>(await asUser(db,id,tx=>tx.query('select my_invite_code() as c'))).rows[0].c;
+    const acceptInvite=(id,code)=>asUser(db,id,tx=>tx.query('select accept_invite($1,$2) as r',[code,id])).then(r=>r.rows[0].r,e=>e.message);
+    const tally=list=>list.reduce((all,x)=>({...all,[x]:(all[x]??0)+1}),{});
+    // One person uses 25 different links at the same moment: only 20 a day are allowed.
+    if(includeFixes)await check('25 invite links used at once by one person stop at exactly 20 a day',async()=>{
+      const [me,...owners]=await invitePeople('invme',26);
+      const codes=[];for(const id of owners)codes.push(await inviteCode(id));
+      await pause('friendships',true);
+      const results=await Promise.all(codes.map(code=>acceptInvite(me,code)));
+      await pause('friendships',false);
+      const made=(await db.query('select count(*)::int as n from friendships where requester_id=$1',[me])).rows[0].n;
+      const logged=(await db.query('select count(*)::int as n from private.invite_accepts where accepter=$1',[me])).rows[0].n;
+      assert.deepEqual(tally(results),{friends:20,"You've used a lot of invites today – try again tomorrow":5});
+      assert.equal(made,20);assert.equal(logged,20);
+      return {friendships:made,results:tally(results)};
+    });
+    // 25 people use one link at the same moment: 20 a day, and its owner is told exactly once.
+    if(includeFixes)await check('25 people using one invite link at once stop at exactly 20, and its owner gets one "busy" notification',async()=>{
+      const [owner]=await invitePeople('invowner',1);
+      await db.query("insert into push_tokens(token,user_id,platform) values('ExponentPushToken[qa-invite-owner]',$1,'ios')",[owner]);
+      const guests=await invitePeople('invguest',25);
+      const code=await inviteCode(owner);
+      await pause('friendships',true);
+      const results=await Promise.all(guests.map(id=>acceptInvite(id,code)));
+      await pause('friendships',false);
+      const made=(await db.query("select count(*)::int as n from friendships where addressee_id=$1 and status='accepted'",[owner])).rows[0].n;
+      const busy=(await db.query("select count(*)::int as n from net.sent where body->0->>'to'='ExponentPushToken[qa-invite-owner]' and body->0->>'body' like 'Lots of people used your invite link today%'")).rows[0].n;
+      assert.deepEqual(tally(results),{friends:20,'This invite link is busy – try again tomorrow':5});
+      assert.equal(made,20);assert.equal(busy,1);
+      return {friendships:made,busyNotifications:busy};
+    });
+    // Two people use each other's links at the same moment: one friendship, never two rows or an error.
+    if(includeFixes)await check("Two people using each other's invite links at once make exactly one friendship",async()=>{
+      const [a,b]=await invitePeople('invpair',2);
+      const [codeA,codeB]=[await inviteCode(a),await inviteCode(b)];
+      await pause('friendships',true);
+      const results=await Promise.all([acceptInvite(a,codeB),acceptInvite(b,codeA)]);
+      await pause('friendships',false);
+      const rows=(await db.query("select status from friendships where least(requester_id,addressee_id)=least($1::uuid,$2::uuid) and greatest(requester_id,addressee_id)=greatest($1::uuid,$2::uuid)",[a,b])).rows;
+      assert.deepEqual(rows,[{status:'accepted'}]);assert.deepEqual([...results].sort(),['already','friends']);
+      return {results};
+    });
+    // "Get a new link" while people are using the old one: whatever finished first is removed again,
+    // and nobody gets in afterwards with the old link.
+    if(includeFixes)await check('Getting a new invite link while 10 people use the old one leaves no request from the old link',async()=>{
+      const [teen]=await invitePeople('invteen',1,{adult:false});
+      await asUser(db,teen,tx=>tx.query("select set_birthday((current_date-interval '15 years')::date)"));
+      const guests=await invitePeople('invrace',10);
+      const old=await inviteCode(teen);
+      await pause('friendships',true);
+      // Five start first; the new link is asked for while they are still saving; five more start just after.
+      const accepts=guests.slice(0,5).map(id=>acceptInvite(id,old));
+      await new Promise(r=>setTimeout(r,250));
+      const reset=asUser(db,teen,tx=>tx.query('select reset_invite_code() as c')).then(r=>r.rows[0].c,e=>`error: ${e.message}`);
+      await new Promise(r=>setTimeout(r,50));
+      accepts.push(...guests.slice(5).map(id=>acceptInvite(id,old)));
+      const results=await Promise.all(accepts);const fresh=await reset;
+      await pause('friendships',false);
+      const left=(await db.query('select count(*)::int as n from friendships where addressee_id=$1',[teen])).rows[0].n;
+      assert.match(fresh,/^[23456789BCDFGHJKLMNPQRSTVWXZ]{10}$/);assert.notEqual(fresh,old);
+      for(const r of results)assert.ok(['requested',"This invite link doesn't work any more"].includes(r),r);
+      assert.ok(results.includes('requested'),'some used the old link before the reset');
+      assert.ok(results.slice(5).every(r=>r==="This invite link doesn't work any more"),`after the reset the old link must not work: ${results.slice(5)}`);
+      assert.equal(left,0);
+      assert.equal(await acceptInvite(guests[0],old),"This invite link doesn't work any more");
+      return {results:tally(results),requestsLeft:left};
+    });
     await pool.end();pools=pools.filter(p=>p!==pool);
   }
   await admin.end();
