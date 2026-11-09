@@ -444,6 +444,14 @@ session's real `20261215`, `20261217` and `20261218` files applied before `20261
 group proof the group says is legit still counts in it. Browser, the HTTP stress run and `QA_ORIGINAL=1` were not
 repeated (they don't reach the group chat).
 
+Re-run on 2026-11-09, after the five Peekaboo+ face filters (👀 Peekaboo Eyes, 🧠 Brain Buffering, 😭 Crybaby,
+⚡ Aura Overload, 😘 Heart Eyes) and the review fix to their Plus check (while Plus is still "not sure", the wait
+is counted once from the first filter, so swapping filters can't keep one on for ever): `npm test` node part 665
+passed, 0 failed, 0 skipped (frontend 356, database 309), and the Vitest part 45 files, 665 passed. Type check and
+lint: no errors. As the owner asked, nobody has looked at the new filters drawn in a picture or on a phone yet
+(TESTING Step 67); the REST, rehearsal, concurrency and browser runs were not repeated (no database or server
+change).
+
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,
 lint, the HTTP check and one browser run were repeated after it.
