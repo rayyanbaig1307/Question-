@@ -27,6 +27,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatBackground, ChatInkProvider, chatInk, useChatInk } from '@/components/chat/ChatBackground';
 import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
+import { ChatSticker } from '@/components/chat/ChatSticker';
+import { StickerPicker } from '@/components/editor/StickerPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
@@ -53,14 +55,17 @@ import {
   type Message,
   searchConversation,
   sendDare,
+  sendSticker,
   sendText,
   setSnapSaved,
   subscribeToMyMessages,
 } from '@/lib/chat';
+import { canSendSticker, isKnownSticker, stickerText, wordStickerId } from '@/lib/chatStickers';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
 import { fetchRelation } from '@/lib/friends';
 import { fetchPeekASaves, type BrokenStreak, type PlusAllowances } from '@/lib/plusExtras';
+import { usePlus } from '@/lib/plus';
 import { fetchProfile } from '@/lib/profiles';
 import { useScreenshotNotice } from '@/lib/screenshots';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
@@ -230,6 +235,38 @@ export default function ChatScreen() {
     }
   }
 
+  // 🏷️ Stickers. Peekaboo+ ones are locked in the picker without Peekaboo+ (and the server says no too).
+  const plus = usePlus();
+  const [stickersOpen, setStickersOpen] = useState(false);
+  async function sendStickerMessage(sticker: string) {
+    setStickersOpen(false);
+    if (!canSendSticker(sticker, plus)) {
+      router.push('/plus');
+      return;
+    }
+    const replyId = replyTo?.id;
+    try {
+      const sent = await sendSticker(userId, friendId, sticker, stickerText(sticker), replyId);
+      Haptics.selectionAsync();
+      setReplyTo((current) => (current?.id === replyId ? null : current));
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Sticker not sent', friendlyError(error));
+    }
+  }
+  // An emoji from the sticker picker goes as a normal chat message.
+  async function sendEmoji(emoji: string) {
+    setStickersOpen(false);
+    const replyId = replyTo?.id;
+    try {
+      const sent = await sendText(userId, friendId, emoji, replyId);
+      setReplyTo((current) => (current?.id === replyId ? null : current));
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Message not sent', friendlyError(error));
+    }
+  }
+
   async function sendVoiceNote(recording: Recording) {
     if (sendingNow.current) return;
     sendingNow.current = true;
@@ -349,7 +386,9 @@ export default function ChatScreen() {
           ? '🎤 Voice note'
           : m.kind === 'reaction'
             ? `${m.body} story reaction`
-            : 'Message';
+            : m.kind === 'sticker'
+              ? '🏷️ Sticker'
+              : 'Message';
 
   async function runSearch(query: string) {
     const request = ++searchRequest.current;
@@ -579,6 +618,7 @@ export default function ChatScreen() {
                   onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
                 />
                 <IconButton icon="flag" label="Write a dare" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
+                <IconButton icon="happy" label="Send a sticker" background={colors.card} color={colors.yellow} onPress={() => setStickersOpen(true)} />
                 <TextInput
                   value={text}
                   onChangeText={(value) => {
@@ -619,6 +659,13 @@ export default function ChatScreen() {
         plus={background.plus}
         onPick={background.choose}
         onClose={() => setBackgroundOpen(false)}
+      />
+      <StickerPicker
+        visible={stickersOpen}
+        onClose={() => setStickersOpen(false)}
+        onPickEmoji={sendEmoji}
+        onPickWord={(word) => sendStickerMessage(wordStickerId(word))}
+        onPickSpecial={sendStickerMessage}
       />
       <DareComposer visible={dareOpen} friendName={name} onClose={() => setDareOpen(false)} onSend={sendMyDare} />
       <MessageActions
@@ -748,6 +795,22 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
           ) : null}
           {mine && state === 'nope' ? <Text style={styles.dareNote}>You said it didn&apos;t count. They can try again.</Text> : null}
           {mine && state === 'done' ? <Text style={styles.dareNote}>Nice! Now it&apos;s {friendName || 'their'}&apos;s turn to dare you 😈</Text> : null}
+        </Pressable>
+        <View style={styles.metaRow}>
+          <Text style={[styles.time, ink]}>{time}</Text>
+          {statusLine(showStatus)}
+        </View>
+      </View>
+    );
+  }
+
+  // A sticker: big, with no bubble. One this app version doesn't know falls through to a normal bubble
+  // showing its text version ("Sticker: SLAY").
+  if (message.kind === 'sticker' && message.sticker && isKnownSticker(message.sticker)) {
+    return (
+      <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
+        <Pressable onLongPress={onLongPress}>
+          <ChatSticker id={message.sticker} />
         </Pressable>
         <View style={styles.metaRow}>
           <Text style={[styles.time, ink]}>{time}</Text>

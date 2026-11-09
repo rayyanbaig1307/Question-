@@ -104,6 +104,16 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/chatBackgrounds': { friendChatKey: id => `friend:${id}`, groupChatKey: id => `group:${id}`, useChatBackground: () => ({ plus: false, picked: null, shown: null, choose: async () => {} }) },
     '@/components/chat/ChatBackground': { ChatBackground: host('ChatBackground'), ChatInkProvider: host('ChatInkProvider'), chatInk: () => null, useChatInk: () => null },
     '@/components/chat/ChatBackgroundPicker': { ChatBackgroundPicker: host('ChatBackgroundPicker') },
+    // Stickers in chat: the picker and the drawn sticker are stand-ins; Peekaboo+ stickers are the 'plus-…' ones.
+    '@/components/chat/ChatSticker': { ChatSticker: host('ChatSticker') },
+    '@/components/editor/StickerPicker': { StickerPicker: host('StickerPicker') },
+    '@/lib/chatStickers': {
+      wordStickerId: word => `word-${word.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      isKnownSticker: id => /^(plus-|word-)/.test(id) || ['googly-eyes', 'googly-eye', 'peekaboo', 'peek-bubble', 'i-see-you', 'caught'].includes(id),
+      canSendSticker: (id, plus) => plus || !id.startsWith('plus-'),
+      isPlusSticker: id => id.startsWith('plus-'),
+      stickerName: id => id, stickerText: id => `Sticker: ${id}`,
+    },
     // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
     '@/lib/appIcons': {
       CAN_CHANGE_APP_ICON: false,

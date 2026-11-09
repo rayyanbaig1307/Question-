@@ -13,13 +13,14 @@ function realProofRules() {
   return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts, canVoteOnProof: module.exports.canVoteOnProof };
 }
 // joinedAt: when the person on screen (alice) joined the group – by default before every message here.
-function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z' } = {}) {
-  const calls = { sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null };
+function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false } = {}) {
+  const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
   const screen = loadScreen('src/app/(app)/groups/chat/[id].tsx', {
-    'expo-router': { router: { push() {} }, useFocusEffect: callback => require('./harness.cjs').React.useEffect(callback, [callback]), useLocalSearchParams: () => ({ id: 'squad' }) },
+    'expo-router': { router: { push: to => calls.pushed.push(to) }, useFocusEffect: callback => require('./harness.cjs').React.useEffect(callback, [callback]), useLocalSearchParams: () => ({ id: 'squad' }) },
+    '@/lib/plus': { usePlus: () => plus },
     'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: true }) },
     'expo-image': { Image: host('ExpoImage') },
     '@/components/ScreenHeader': { ScreenHeader: host('ScreenHeader'), RoundIconButton: host('RoundIconButton') },
@@ -38,6 +39,7 @@ function fixture({ messages = [message()], send, search, missing = false, member
       fetchMyProofVotes: async (...args) => { calls.voteFetches.push(args); return fetchVotes ? fetchVotes(...args) : new Map(myVotes); },
       fetchMyGroupJoin: async (...args) => { calls.joinFetches.push(args); return joinedAt(...args); },
       voteGroupProof: async (...args) => { calls.votes.push(args); if (vote) return vote(...args); return { legit: 1, cap: 0, mine: args[2] }; },
+      sendGroupSticker: async (...args) => { calls.stickers.push(args); return message({ id: 'sticker1', sender_id: 'alice', kind: 'sticker', sticker: args[1], body: `Sticker: ${args[1]}` }); },
       sendGroupMessage: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[1] }); },
       deleteGroupMessage: async value => { calls.deleted.push(value.id); },
       pinGroupMessage: async (...args) => { calls.pinned.push(args); }, searchGroupMessages: async (_group, query) => search ? search(query) : [],
@@ -586,3 +588,17 @@ test('a chat reload that set off before your vote was answered does not put the 
     assert.equal(voteButton(tree, 'You said legit. Tap to take your vote back').length, 1);
   } finally { release?.(first); await unmount(tree); }
 });
+
+// 🏷️ Stickers in group chats: free ones send, Peekaboo+ ones only with Peekaboo+.
+for (const [plus, id, sends] of [[false, 'caught', true], [false, 'plus-bff', false], [true, 'plus-bff', true]]) {
+  test(`group sticker ${id} ${plus ? 'with' : 'without'} Peekaboo+: ${sends ? 'sent' : 'not sent, Peekaboo+ opens'}`, async () => {
+    const { screen, calls } = fixture({ plus });
+    const tree = await renderScreen(screen);
+    await act(async () => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a sticker').props.onPress());
+    await act(async () => tree.root.findByType('StickerPicker').props.onPickSpecial(id));
+    assert.deepEqual(calls.stickers.map(args => args.slice(0, 2)), sends ? [['squad', id]] : []);
+    assert.deepEqual(calls.pushed, sends ? [] : ['/plus']);
+    if (sends) assert.deepEqual(tree.root.findAllByType('ChatSticker').map(node => node.props.id), [id]);
+    await unmount(tree);
+  });
+}

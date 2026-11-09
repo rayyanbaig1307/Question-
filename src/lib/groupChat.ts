@@ -7,13 +7,15 @@ import { supabase } from './supabase';
 // ---------------------------------------------------------------------------
 
 // 'text' · 'photo' / 'video' (stay in the chat) · 'voice' · 'dare' (a dare for the whole group) ·
-// 'proof' (someone's photo/video for a group dare – dare_id says which).
+// 'sticker' (body is a short text version) · 'proof' (someone's photo/video for a group dare – dare_id says which).
 export type GroupMessage = {
   id: string;
   group_id: string;
   sender_id: string;
-  kind: 'text' | 'photo' | 'video' | 'voice' | 'dare' | 'proof';
+  kind: 'text' | 'photo' | 'video' | 'voice' | 'dare' | 'proof' | 'sticker';
   body: string | null;
+  // Stickers: which one (see lib/chatStickers.ts).
+  sticker?: string | null;
   media_path: string | null;
   media_type: 'photo' | 'video' | null;
   poster_path: string | null;
@@ -91,6 +93,18 @@ export async function sendGroupMessage(groupId: string, body: string, replyTo?: 
   const { data, error } = await supabase
     .from('group_messages')
     .insert({ group_id: groupId, body: body.trim(), ...(replyTo ? { reply_to: replyTo } : {}) })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as GroupMessage;
+}
+
+// A sticker 🏷️ for the group (`text` is its short text version, from stickerText in
+// lib/chatStickers.ts). Peekaboo+ stickers only go through while you have Peekaboo+ (the server checks).
+export async function sendGroupSticker(groupId: string, sticker: string, text: string, replyTo?: string | null): Promise<GroupMessage> {
+  const { data, error } = await supabase
+    .from('group_messages')
+    .insert({ group_id: groupId, kind: 'sticker', sticker, body: text, ...(replyTo ? { reply_to: replyTo } : {}) })
     .select('*')
     .single();
   if (error) throw error;

@@ -540,6 +540,15 @@ function describe(row: ChatRow, me: string): {
       bold: theyDidIt && !last.opened_at,
     };
   }
+  if (last.kind === 'sticker') {
+    const theyDidIt = last.sender_id !== me;
+    return {
+      icon: 'happy',
+      color: colors.yellow,
+      label: theyDidIt ? 'Sent you a sticker ✨' : 'You sent a sticker',
+      bold: theyDidIt && !last.opened_at,
+    };
+  }
   if (last.kind === 'voice') {
     return { icon: 'mic', color: colors.pink, label: last.sender_id === me ? 'You sent a voice note' : 'Voice note 🎤', bold: false };
   }

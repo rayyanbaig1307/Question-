@@ -21,6 +21,8 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { ChatBackground, ChatInkProvider, chatInk } from '@/components/chat/ChatBackground';
 import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
+import { ChatSticker } from '@/components/chat/ChatSticker';
+import { StickerPicker } from '@/components/editor/StickerPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
 import { EmptyState } from '@/components/EmptyState';
@@ -36,6 +38,7 @@ import { KeyboardSafeView } from '@/components/KeyboardSafeView';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { groupChatKey, useChatBackground } from '@/lib/chatBackgrounds';
+import { canSendSticker, isKnownSticker, stickerText, wordStickerId } from '@/lib/chatStickers';
 import { friendlyError } from '@/lib/errors';
 import {
   canVoteOnProof,
@@ -52,6 +55,7 @@ import {
   searchGroupMessages,
   sendGroupDare,
   sendGroupMessage,
+  sendGroupSticker,
   sendGroupVoice,
   setGroupChatMuted,
   setGroupPhoto,
@@ -62,6 +66,7 @@ import {
   type GroupMessage,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
+import { usePlus } from '@/lib/plus';
 import { useMediaUrls } from '@/lib/media';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
 import { timeAgo } from '@/lib/time';
@@ -297,6 +302,38 @@ export default function GroupChat() {
     }
   }
 
+  // 🏷️ Stickers. Peekaboo+ ones are locked in the picker without Peekaboo+ (and the server says no too).
+  const plus = usePlus();
+  const [stickersOpen, setStickersOpen] = useState(false);
+  async function sendStickerMessage(sticker: string) {
+    setStickersOpen(false);
+    if (!canSendSticker(sticker, plus)) {
+      router.push('/plus');
+      return;
+    }
+    const replyId = replyTo?.id;
+    try {
+      const sent = await sendGroupSticker(groupId, sticker, stickerText(sticker), replyId);
+      Haptics.selectionAsync();
+      setReplyTo((current) => (current?.id === replyId ? null : current));
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Sticker not sent', friendlyError(error));
+    }
+  }
+  // An emoji from the sticker picker goes as a normal chat message.
+  async function sendEmoji(emoji: string) {
+    setStickersOpen(false);
+    const replyId = replyTo?.id;
+    try {
+      const sent = await sendGroupMessage(groupId, emoji, replyId);
+      setReplyTo((current) => (current?.id === replyId ? null : current));
+      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
+    } catch (error) {
+      Alert.alert('Message not sent', friendlyError(error));
+    }
+  }
+
   async function sendDare(dare: string): Promise<boolean> {
     try {
       const sent = await sendGroupDare(groupId, dare);
@@ -472,7 +509,9 @@ export default function GroupChat() {
             ? '🎤 Voice note'
             : m.kind === 'dare'
               ? `🎯 ${m.body ?? ''}`
-              : '📸 Dare proof';
+              : m.kind === 'sticker'
+                ? '🏷️ Sticker'
+                : '📸 Dare proof';
 
   function openGroupMenu() {
     showOptions({
@@ -685,7 +724,9 @@ export default function GroupChat() {
                           accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
                           accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
                           style={styles.stretch}>
-                          {item.kind === 'text' ? (
+                          {item.kind === 'sticker' && item.sticker && isKnownSticker(item.sticker) ? (
+                            <ChatSticker id={item.sticker} />
+                          ) : item.kind === 'text' || item.kind === 'sticker' ? (
                             <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                               <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
                             </View>
@@ -808,6 +849,7 @@ export default function GroupChat() {
             <View style={[styles.inputBar, { paddingBottom: insets.bottom + space.sm }]}>
               <IconButton icon="camera" label="Send a photo or video" background={colors.accent} color={colors.onAccent} onPress={() => openCamera()} />
               <IconButton icon="flag" label="Dare the group" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
+              <IconButton icon="happy" label="Send a sticker" background={colors.card} color={colors.yellow} onPress={() => setStickersOpen(true)} />
               <TextInput
                 value={text}
                 onChangeText={(value) => {
@@ -838,6 +880,13 @@ export default function GroupChat() {
         plus={background.plus}
         onPick={background.choose}
         onClose={() => setBackgroundOpen(false)}
+      />
+      <StickerPicker
+        visible={stickersOpen}
+        onClose={() => setStickersOpen(false)}
+        onPickEmoji={sendEmoji}
+        onPickWord={(word) => sendStickerMessage(wordStickerId(word))}
+        onPickSpecial={sendStickerMessage}
       />
       <DareComposer visible={dareOpen} friendName="the group" onClose={() => setDareOpen(false)} onSend={sendDare} />
       <MessageActions

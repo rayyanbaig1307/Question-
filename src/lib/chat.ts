@@ -13,7 +13,9 @@ export type Message = {
   // 'screenshot' = a notice that someone took a screenshot; body is 'chat' or 'peek'.
   // 'voice' = a voice note (media_path is the recording); 'reaction' = an emoji sent from your story.
   // 'dare' = a dare you wrote yourself (body is the dare).
-  kind: 'text' | 'snap' | 'screenshot' | 'voice' | 'reaction' | 'dare';
+  // 'sticker' = a sticker (`sticker` is its name, body a short text version – see lib/chatStickers.ts).
+  kind: 'text' | 'snap' | 'screenshot' | 'voice' | 'reaction' | 'dare' | 'sticker';
+  sticker?: string | null;
   body: string | null;
   // Peeks: the photo or video (see MediaFields).
   media_path: string | null;
@@ -158,6 +160,18 @@ export async function sendText(me: string, friend: string, body: string, replyTo
   const { data, error } = await supabase
     .from('messages')
     .insert({ sender_id: me, recipient_id: friend, kind: 'text', body: body.trim(), ...(replyTo ? { reply_to: replyTo } : {}) })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as Message;
+}
+
+// A sticker 🏷️ (`text` is its short text version, from stickerText in
+// lib/chatStickers.ts). Peekaboo+ stickers only go through while you have Peekaboo+ (the server checks).
+export async function sendSticker(me: string, friend: string, sticker: string, text: string, replyTo?: string | null): Promise<Message> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ sender_id: me, recipient_id: friend, kind: 'sticker', sticker, body: text, ...(replyTo ? { reply_to: replyTo } : {}) })
     .select('*')
     .single();
   if (error) throw error;

@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const { React, loadScreen, renderScreen, act, unmount, host } = require('./harness.cjs');
 const message = changes => ({ id: 'message1', sender_id: 'bob', recipient_id: 'alice', kind: 'text', body: 'Hello 👋', opened_at: null, saved_at: null, media_path: null, created_at: '2026-11-04T12:00:00Z', ...changes });
 
-function fixture({ send, search, mine = false } = {}) {
-  const calls = { sent: [], hidden: [], deleted: [], reacted: [], options: [] };
+function fixture({ send, search, mine = false, plus = false } = {}) {
+  const calls = { sent: [], hidden: [], deleted: [], reacted: [], options: [], stickers: [], pushed: [] };
   const noop = () => {};
   const screen = loadScreen('src/app/(app)/chat/[id].tsx', {
-    'expo-router': { router: { push() {} }, useFocusEffect: callback => React.useEffect(callback, [callback]), useIsFocused: () => true, useLocalSearchParams: () => ({ id: 'bob' }) },
+    'expo-router': { router: { push: to => calls.pushed.push(to) }, useFocusEffect: callback => React.useEffect(callback, [callback]), useIsFocused: () => true, useLocalSearchParams: () => ({ id: 'bob' }) },
     'expo-image': { Image: host('ExpoImage') },
     'react-native-reanimated': { default: { View: host('AnimatedView') } },
     '@/components/ScreenHeader': { ScreenHeader: host('ScreenHeader'), RoundIconButton: host('RoundIconButton') },
@@ -19,6 +19,7 @@ function fixture({ send, search, mine = false } = {}) {
     '@/lib/chat': {
       fetchConversation: async () => [message(mine ? { sender_id: 'alice', recipient_id: 'bob' } : {})], fetchDareStreak: async () => 0, markChatRead: async () => {}, cleanUpOpenedSnaps() {}, subscribeToMyMessages: () => noop,
       sendText: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[2] }); },
+      sendSticker: async (...args) => { calls.stickers.push(args); return message({ id: 'sticker1', sender_id: 'alice', kind: 'sticker', sticker: args[2], body: `Sticker: ${args[2]}` }); },
       hideMessage: async id => calls.hidden.push(id), deleteMessage: async value => calls.deleted.push(value.id),
       searchConversation: async (_me, _friend, query) => search ? search(query) : [],
     },
@@ -31,6 +32,7 @@ function fixture({ send, search, mine = false } = {}) {
     '@/lib/typing': { useTyping: () => ({ friendTyping: false, onTextChange: noop, clearFriendTyping: noop }) },
     '@/lib/voice': { Audio: null },
     '@/lib/useSafetyActions': { useSafetyActions: () => ({ report() {} }) },
+    '@/lib/plus': { usePlus: () => plus },
   });
   return { screen, calls };
 }
@@ -120,4 +122,47 @@ test('a disabled icon button cannot run its action', async () => {
     assert.equal(actions, 0);
     assert.equal(tree.root.findByType('Bouncy').props.disabled, true);
   } finally { await unmount(tree); }
+});
+
+// 🏷️ Stickers in chat: free ones send, Peekaboo+ ones only with Peekaboo+ (otherwise the Peekaboo+ screen opens).
+const stickerFlow = async ({ plus, pick }) => {
+  const { screen, calls } = fixture({ plus });
+  const tree = await renderScreen(screen);
+  await act(async () => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a sticker').props.onPress());
+  const picker = tree.root.findByType('StickerPicker');
+  assert.equal(picker.props.visible, true);
+  await act(async () => pick(picker.props));
+  const stickers = tree.root.findAllByType('ChatSticker').map(node => node.props.id);
+  await unmount(tree);
+  return { calls, stickers };
+};
+
+test('a free sticker is sent and shows up in the chat', async () => {
+  const { calls, stickers } = await stickerFlow({ plus: false, pick: picker => picker.onPickSpecial('googly-eyes') });
+  assert.deepEqual(calls.stickers.map(args => args.slice(1, 3)), [['bob', 'googly-eyes']]);
+  assert.deepEqual(stickers, ['googly-eyes']);
+  assert.deepEqual(calls.pushed, []);
+});
+
+test('word stickers are sent by their sticker name', async () => {
+  const { calls } = await stickerFlow({ plus: false, pick: picker => picker.onPickWord('NO WAY') });
+  assert.deepEqual(calls.stickers.map(args => args[2]), ['word-no-way']);
+});
+
+test('without Peekaboo+ a Plus sticker is not sent; the Peekaboo+ screen opens instead', async () => {
+  const { calls } = await stickerFlow({ plus: false, pick: picker => picker.onPickSpecial('plus-slay') });
+  assert.deepEqual(calls.stickers, []);
+  assert.deepEqual(calls.pushed, ['/plus']);
+});
+
+test('with Peekaboo+ a Plus sticker is sent', async () => {
+  const { calls, stickers } = await stickerFlow({ plus: true, pick: picker => picker.onPickSpecial('plus-slay') });
+  assert.deepEqual(calls.stickers.map(args => args[2]), ['plus-slay']);
+  assert.deepEqual(stickers, ['plus-slay']);
+});
+
+test('an emoji from the sticker picker goes as a normal message', async () => {
+  const { calls } = await stickerFlow({ plus: false, pick: picker => picker.onPickEmoji('🔥') });
+  assert.deepEqual(calls.sent.map(args => args[2]), ['🔥']);
+  assert.deepEqual(calls.stickers, []);
 });
