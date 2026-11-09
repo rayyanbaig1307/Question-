@@ -47,9 +47,9 @@ and the owner's standing preferences.
   on `testing`).
 - **Group Guess Who** (owner, 9 Nov: "a person can send a guess who picture to the group … and people can guess who out
   of all the people"). Commits `3de9e25`, `697e9c8`, `b71dc4b`. Migration `20261222000000_group_guess_who.sql`
-  (sha256 starts `592eebd9c7e2`) – copy page https://claude.ai/artifact/GL1ZfTtpymrduDQyD6QSxd. Status: waiting for
-  the owner to paste it (or for the Plus session to apply it on the owner's say-so); then OTA to `testing` from
-  `b71dc4b` (a clean worktree – later commits hold unfinished invite work).
+  (sha256 starts `592eebd9c7e2`) – copy page https://claude.ai/artifact/GL1ZfTtpymrduDQyD6QSxd. **Live** on the database
+  (owner pasted it 9 Nov; all function bodies checked against local). On `testing` since update `7cbb8560`; the
+  newest `testing` update is `98d4c0de` (from `6eed150`, see invite links). Not on `production` yet (owner's "publish").
   - How it works: a group Guess Who is a `mystery_posts` row with `group_id` + a server-made people list
     (`group_candidates`), never a `group_messages` row, so the sender never appears in messages, file paths, pushes,
     the chat list or old apps. Photos only (1080×1440, Skia re-encode where available), 3 per person per group per
@@ -62,12 +62,19 @@ and the owner's standing preferences.
     Storage `owner_id` on mystery files is the uploader (same as today's Guess Who). Without Skia (Expo Go / very old
     builds) the phone's own JPEG encoder is used, so a very technical person could tell iPhone from Android.
 - **Invite links** (owner, 9 Nov: "people can invite their friends on with a link that they created"). Commits
-  `aab85e1`, `7788495` (work-in-progress snapshots), `c58a347` (built), fixes in progress. Migration
-  `20261223000000_invite_links.sql` – NOT final, NOT live. Link format `https://peekaboo-4gz.pages.dev/invite?c=CODE`
+  `aab85e1`, `7788495` (work-in-progress snapshots), `c58a347` (built), `013109a`, `48311c6` (review fixes). Migration
+  `20261223000000_invite_links.sql` (sha256 starts `851f5638ffad`) – copy page
+  https://claude.ai/artifact/8d56ggog3oH3jki11KWBe4. **Live** (owner pasted it 9 Nov; the 11 functions, grants, RLS,
+  triggers and the outcome check all match local). OTA `testing` update `98d4c0de-13a2-4a14-925a-7d2967ac9e41` from
+  `6eed150` (also has the other session's dare safety). Not on `production` yet. **Still to do:** the owner re-uploads
+  `website/` (it now has `invite.html`) to Cloudflare Pages – planned together with the face-filter Privacy change so
+  it's one upload. Link format `https://peekaboo-4gz.pages.dev/invite?c=CODE`
   (10 chars from `23456789BCDFGHJKLMNPQRSTVWXZ`). The website page shows no names and makes no server calls; the owner
   must re-upload `website/` to Cloudflare Pages after it ships. Rules: instant friends only with a public adult and no
   history; otherwise a request; 20 a day per person and per link; once 3 under-18s used an adult's link in 24 h,
-  further under-18s get "busy" and the owner's alert people are pushed; removed friendships are remembered
+  further under-18s get "busy" and the owner's alert people are pushed (this hold applies when the link's owner is an
+  adult or has no birthday saved – `private.age_group(owner) is distinct from 'teen'`; the app treats the server's
+  "This invite link is busy" error the same as a `busy` result); removed friendships are remembered
   (`private.past_links`) so a link can't undo a decline/unfriend/block; ban and block checks.
 
 ## Now: App Store launch (6 Nov) – build 10 ready, owner's checklist in progress
