@@ -15,7 +15,7 @@ These are the documents Peekaboo needs on the App Store and Google Play. Peekabo
 ## Who, when and contact
 
 - **Operator:** 2865113 Ontario Inc. (Ontario, Canada). **Contact:** rbaig18@z2automation.net. Both are filled in everywhere – there are no placeholders left.
-- **Effective date:** 6 November 2026 (Terms and Privacy Policy). Change it whenever you change what a document says.
+- **Effective date:** 6 November 2026 (Terms) and 9 November 2026 (Privacy Policy: the new face filters and the expressions they react to). Change it whenever you change what a document says.
 - **Mailing address:** left out on purpose – that's the owner's choice. The company's registered office is public in the Ontario Business Registry anyway. Selling Peekaboo+ in the EU would make Apple show the company's address there (see section F of the checklist). Add an address here and in the Contact sections if that ever changes.
 
 ## Honest note on liability (please read)
