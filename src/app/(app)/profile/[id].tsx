@@ -9,6 +9,7 @@ import { HitUpButton } from '@/components/HitUpButton';
 import { useOverlays } from '@/components/Overlays';
 import { PlusBadge } from '@/components/PlusBadge';
 import { PostGrid } from '@/components/PostGrid';
+import { ProfilePhotoZoom, zoomBuzz } from '@/components/ProfilePhotoZoom';
 import { BrandIconButton, RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { SongCard } from '@/components/SongCard';
 import { StoryAvatar } from '@/components/StoryAvatar';
@@ -42,6 +43,12 @@ export default function ProfileScreen() {
 
   const [data, setData] = useState<Loaded | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // 🔍 The profile picture shown big (tap or press and hold it).
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const openPhoto = () => {
+    zoomBuzz();
+    setPhotoOpen(true);
+  };
 
   // 👀 Profile views: opening someone else's profile counts as a visit (the server keeps at most one an hour).
   useEffect(() => {
@@ -141,8 +148,16 @@ export default function ProfileScreen() {
   const profileHeader = (
     <View style={styles.header}>
       <View style={styles.topRow}>
-        {/* A glowing ring = they have a story up: tap to watch it (on your own, you can delete from there). */}
-        <StoryAvatar person={profile} size={92} badge={data.story} />
+        {/* A glowing ring = they have a story up: tap to watch it (on your own, you can delete from there).
+            No story: tap the picture to see it big. Press and hold always shows it big. */}
+        <StoryAvatar
+          person={profile}
+          size={92}
+          badge={data.story}
+          onPress={openPhoto}
+          onLongPress={openPhoto}
+          label={`See ${isMe ? 'your' : `${profile.username}'s`} profile picture`}
+        />
         <View style={styles.stats}>
           <Stat number={data.stats.posts} label={data.stats.posts === 1 ? 'Post' : 'Posts'} />
           <Pressable
@@ -236,6 +251,7 @@ export default function ProfileScreen() {
         refreshing={refreshing}
         onRefresh={refresh}
       />
+      <ProfilePhotoZoom person={profile} visible={photoOpen} onClose={() => setPhotoOpen(false)} />
     </View>
   );
 }
