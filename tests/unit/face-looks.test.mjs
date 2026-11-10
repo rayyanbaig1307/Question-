@@ -209,7 +209,10 @@ function numbersIn(value, out = []) {
 
 it('every look in the list draws without errors at many moments, with 0, 1 and 2 faces', () => {
   const { draw } = load();
-  expect(LOOKS).toEqual(['glow', 'golden', ...NEW_LOOKS]);
+  // The 4 stretchy filters (🫥 🗿 😃 👾) sit among them; they are checked in warp-looks.test.mjs (here they get no
+  // camera picture, so they draw nothing, which must not fail either).
+  expect(LOOKS).toEqual(['glow', 'golden', 'peekabooEyes', 'tinyFace', 'gigachin', 'brainBuffering', 'crybaby', 'bigMouth', 'auraOverload', 'heartEyes', 'pixelPanic']);
+  expect(LENS_LOOKS.filter((look) => !look.needsFrames).map((look) => look.key)).toEqual(['glow', 'golden', ...NEW_LOOKS]);
   for (const look of LOOKS) {
     for (let t = 0; t < 12; t += 0.37) for (const faces of [0, 1, 2]) expect(() => draw(look, t, faces)).not.toThrow();
     for (const t of [0, 599.9, 1e6]) expect(() => draw(look, t, 2)).not.toThrow();

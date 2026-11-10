@@ -33,6 +33,27 @@ function loadPure(relative) {
   return module.exports;
 }
 
+// A stand-in for src/lib/frameAccess.ts. `available`: this download has the 4 stretchy filters. `broken`: they
+// already switched themselves off on this phone. `framesBroken()` and `markFramesBroken()` work like the real ones
+// (the screens re-render when the filters switch themselves off).
+function frameAccessMock(available, { broken = false } = {}) {
+  let isBroken = broken;
+  const listeners = new Set();
+  const subscribeFramesBroken = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
+  const framesBroken = () => isBroken;
+  return {
+    WARPS_ENABLED: true, WARPS_ON_ANDROID: false, FRAME_PATH: 'share', FRAME_DELAY: 1, STALE_MS: 300,
+    FRAME_ACCESS_AVAILABLE: available,
+    framesBroken,
+    markFramesBroken() { if (isBroken) return; isBroken = true; listeners.forEach((listener) => listener()); },
+    subscribeFramesBroken,
+    useWarpLooksOn() {
+      const nowBroken = React.useSyncExternalStore(subscribeFramesBroken, framesBroken, framesBroken);
+      return available && !nowBroken;
+    },
+  };
+}
+
 function host(name) {
   return function Host(props) {
     if (name === 'Modal' && !props.visible) return null;
@@ -138,6 +159,10 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     },
     // The list of face filters (no imports, so the real file is used).
     '@/lib/lensLooks': loadPure('src/lib/lensLooks.ts'),
+    // The camera's own pixels for the 4 stretchy face filters: not on this download by default (like App Store
+    // build 10, TestFlight 7–9, old APKs and Expo Go), so every screen looks the way it does there. Tests for the
+    // new build pass their own frameAccessMock(true).
+    '@/lib/frameAccess': frameAccessMock(false),
     // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
     '@/lib/appIcons': {
       CAN_CHANGE_APP_ICON: false,
@@ -181,5 +206,5 @@ function button(tree, title) { return tree.root.findAllByType('Button').find(nod
 function option(tree, title) { return tree.root.findAllByType('Pressable').find(node => textOf(node).startsWith(title) || node.findAllByType('Text').some(child => textOf(child) === title)); }
 async function unmount(tree) { await act(() => tree.unmount()); }
 
-module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host };
+module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host, frameAccessMock };
 

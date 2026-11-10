@@ -1,15 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { React, loadScreen, renderScreen, act, option, unmount } = require('./harness.cjs');
+const { React, loadScreen, renderScreen, act, option, unmount, textOf } = require('./harness.cjs');
 
-function settingsHarness({ delayWrite = false, delayLocation = false, signOut = async () => {}, deleteAccount, refreshProfile, storePlus = false, plus = storePlus } = {}) {
+// `app`: what the app download itself says about its version (expo-application's native part), or null when it
+// isn't there; `environment`: 'storeClient' in Expo Go, 'standalone' in a real download; `configVersion`: the
+// version in the app settings an update carries.
+function settingsHarness({ delayWrite = false, delayLocation = false, signOut = async () => {}, deleteAccount, refreshProfile, storePlus = false, plus = storePlus, app = null, environment = 'standalone', configVersion } = {}) {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
   // `signedIn` is who the phone is logged in as right now (it can change while a request is still running).
   const state = { profile: { id: 'alice', username: 'alice', display_name: 'Alice', is_private: true, location_sharing: false, hit_ups_from: 'everyone' }, options: [], writes: 0, deleted: [], signedIn: 'alice', refreshes: 0, routes: [], prefetched: [] };
   const saved = { ...state.profile };
   const screen = loadScreen('src/app/(app)/settings.tsx', {
-    expo: { reloadAppAsync: async () => {} }, 'expo-constants': { expoConfig: {} },
+    expo: { reloadAppAsync: async () => {}, requireOptionalNativeModule: name => (name === 'ExpoApplication' ? app : null) },
+    'expo-constants': { __esModule: true, default: { expoConfig: { version: configVersion }, executionEnvironment: environment }, ExecutionEnvironment: { Bare: 'bare', Standalone: 'standalone', StoreClient: 'storeClient' } },
     'expo-router': { router: { push(route) { state.routes.push(route); } }, useFocusEffect: callback => React.useEffect(callback, [callback]) },
     '@/components/BirthdayForm': { formatBirthday: value => value },
     '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => state.options.push(value) }) },
@@ -305,4 +309,27 @@ test('Delete account says nothing about billing without Peekaboo+', async () => 
     assert.doesNotMatch(message, /billing/);
     assert.deepEqual(Array.from(buttons, item => item.text), ['Cancel', 'Delete']);
   } finally { await unmount(tree); }
+});
+
+// The version at the bottom of Settings. An update sent over the air carries the newest app settings (1.1.0), and
+// it also reaches older downloads (App Store build 10 is 1.0.0): Settings must show the download's own version
+// and build number, so the owner can tell an old download from the new one.
+test('Settings shows the version of the download itself, not the one an update carries', async () => {
+  const footer = tree => tree.root.findAllByType('Text').map(textOf).find(text => text.includes('made with'));
+  const cases = [
+    [{ app: { nativeApplicationVersion: '1.0.0', nativeBuildVersion: '10' }, configVersion: '1.1.0' }, 'Peekaboo 1.0.0 (10) · made with 💛'],
+    [{ app: { nativeApplicationVersion: '1.1.0', nativeBuildVersion: '11' }, configVersion: '1.1.0' }, 'Peekaboo 1.1.0 (11) · made with 💛'],
+    [{ app: { nativeApplicationVersion: '1.0.0', nativeBuildVersion: null }, configVersion: '1.1.0' }, 'Peekaboo 1.0.0 · made with 💛'],
+    // No native part to ask (very old download): the update's version, as before.
+    [{ app: null, configVersion: '1.1.0' }, 'Peekaboo 1.1.0 · made with 💛'],
+    // Expo Go answers with its own version, not Peekaboo's: the update's version.
+    [{ app: { nativeApplicationVersion: '58.0.2', nativeBuildVersion: '400' }, environment: 'storeClient', configVersion: '1.1.0' }, 'Peekaboo 1.1.0 · made with 💛'],
+  ];
+  for (const [options, expected] of cases) {
+    const fixture = settingsHarness(options);
+    const tree = await renderScreen(fixture.screen);
+    try {
+      assert.equal(footer(tree), expected);
+    } finally { await unmount(tree); }
+  }
 });

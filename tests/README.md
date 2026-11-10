@@ -139,6 +139,27 @@ API and library (Vitest, part of `npm test`):
   checked against the screens). Support answers cancel, restore and refund. The legal README has no old
   placeholders. Run `node scripts/sync-legal.mjs` and `node scripts/build-website.mjs` if it fails after a
   change in `legal/`.
+- 🫥🗿😃👾 The 4 stretchy face filters (10 Nov; `src/components/lens/warp/`, `src/lib/frameAccess.ts`):
+  - `warp-shaders.test.mjs`: the four GPU programs compiled and run with CanvasKit (Skia's web version, the
+    devDependency `canvaskit-wasm` 0.41.0) on a test pattern. Outside each warp nothing changes, inside it really
+    changes, and with two faces close together the second face's Pixel Panic or (tilted) Gigachin pass keeps the
+    first face's warp: each pass is see-through wherever it changes nothing. Those two checks fail with the
+    older programs that painted the plain picture there.
+  - `frame-matrix.test.mjs`: where a camera picture and the saved photo go on the screen (turns, mirror, cover).
+  - `warp-track.test.mjs`: each face's memory (the bouncy mouth stays calm, the chin meter fills in about 1.1 s).
+  - `warp-looks.test.mjs`: the four drawn on a pretend canvas with 0, 1 and 2 faces; nothing without a camera
+    picture; each GPU program gets exactly its numbers; the same moment gives the same picture; cheap enough.
+    Everything made from the camera picture (shaders, paints, the blur) goes on the frame's trash list as soon as
+    it is made, also when a frame fails halfway (that check fails if the drawing puts things on the list after
+    drawing with them).
+  - `frame-guard.test.mjs`: nothing loads `react-native-vision-camera-worklets` in any way (TypeScript's own
+    import finder: import, side-effect import, export … from, require, import(), files inside the package); only
+    `warp/FrameFeed.tsx` uses `useFrameOutput`, `useDepthOutput` or `useAsyncRunner`; the camera's `zoom` and
+    `exposure` are only plain numbers on every `<Camera>` and `useCamera` call (TypeScript types, tried first on
+    a made-up file that passes a SharedValue, a spread and an `any`); `FRAME_ACCESS_AVAILABLE` only on iOS 17+
+    with the new native part; and `markFramesBroken` remembers a failure only when it says so ('remember'), not
+    for a camera error ('thisRun'), and after strikes in two different app starts ('strike').
+  - `lens-ui-thread.test.mjs` (added to): the four drawn the drawing-thread way, with their trash list.
 - Changed: `edge-security.test.mjs` (word filter in username sign-up: a display name may swear, a slur in it
   or swearing in the username is refused before any account is made, with the same message as the app),
   `apple-deletion.test.mjs` (a password-only account that sends an Apple code is now deleted, still without
@@ -190,6 +211,39 @@ Frontend (rendered screens, part of `npm test`):
     shutter photo comes from the face camera; holding the shutter records a plain video.
   - `harness.cjs`: `@/lib/lensLooks` is the real file, loaded with a `require` that throws (that file must stay
     free of imports); `usePlusAnswer` defaults to 'no'; `calls.clearedTimers` lists the timers a screen stopped.
+- 🫥🗿😃👾 The 4 stretchy face filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic; 10 Nov), on the camera side.
+  They need the camera's own pixels, so they show only on the new download (`src/lib/frameAccess.ts`):
+  - `harness.cjs`: `@/lib/frameAccess` is mocked as **not available** by default (like App Store build 10,
+    TestFlight 7–9, old APKs and Expo Go), so every existing screen test still checks today's exact lists.
+    `frameAccessMock(available, { broken })` is the stand-in for the new download; its `markFramesBroken()` makes
+    the screens re-render like the real one.
+  - `mode-dial.test.cjs` (added to): on the new download the row has 15 spots (the plain camera, Dare, Guess Who,
+    Googly, then the 11 filters in the order of `lensLooks.ts`); no filter bubbles without face tracking; the 4 are
+    gone when they broke before, and go away at once when they break while the row is on screen (home and chat
+    rows); chat and group chat cameras get them; without Plus all 4 get the ⭐; they have VoiceOver hints and no
+    caption.
+  - `camera-plus-filters.test.cjs` (added to): on the new download the 4 are Peekaboo+ (refused and Peekaboo+ opens
+    without Plus; with Plus each shows on the selfie camera with its own ring colour and the same face camera, and
+    the shutter photo comes from it); on an older download they never switch on and never open Peekaboo+ (Plus
+    yes, no or not sure); when they break while one is on, the camera goes back to plain with no Peekaboo+ screen
+    and they stay off; chat cameras; holding the shutter records a plain video.
+  - `plus-screen.test.cjs` (added to): the face filters line says "5 live face filters (Heart Eyes, Crybaby, Aura &
+    more)" on older downloads (unchanged) and "9 live face filters (Big Mouth, Heart Eyes & more)" on the new one,
+    and goes back to 5 if the stretchy filters broke on that phone (Soft Glow and Golden Hour are free, so they
+    aren't counted).
+  - `lens-overlay.test.cjs` (added to): a stretchy filter draws the camera picture under it, mirrored when the
+    picture says so; and right after each frame everything made from the picture is let go of (newest first, the
+    picture's shader last), also when the filter fails halfway and when one thing can't be let go of.
+  - `frame-feed.test.cjs`: `SoftGlowCamera` with a pretend FrameFeed: a camera error long after the stretchy
+    pictures switched on only switches them off until the app closes ('thisRun'), one just after is a 'strike', a
+    camera error with another filter on changes nothing; flipping the camera throws the old FrameFeed away and
+    starts a new one for the other camera (`key={facing}`). And `FrameFeed` itself with a pretend camera and
+    drawing thread: each picture says whether it is drawn mirrored, the camera's buffers go straight back, and
+    going away lets go of every picture it kept or still had waiting. The camera-error and flip checks fail with
+    the code before the review fixes.
+- `settings.test.cjs` (added to): the version at the bottom of Settings is the download's own ("1.0.0 (10)" on
+  App Store build 10 even after an update that says 1.1.0), the update's version in Expo Go or without the native
+  part.
 
 ## Real PostgreSQL and HTTP tests (Windows and Linux)
 
@@ -451,6 +505,17 @@ passed, 0 failed, 0 skipped (frontend 356, database 309), and the Vitest part 45
 lint: no errors. As the owner asked, nobody has looked at the new filters drawn in a picture or on a phone yet
 (TESTING Step 67); the REST, rehearsal, concurrency and browser runs were not repeated (no database or server
 change).
+
+Re-run on 2026-11-10, after the 4 stretchy Peekaboo+ face filters (🫥 Tiny Face, 🗿 Gigachin, 😃 Big Mouth,
+👾 Pixel Panic; new native package `react-native-vision-camera-worklets` 5.2.4, version 1.1.0) and the review fixes
+(see-through warps for two faces, letting go of camera-picture objects after every frame, camera errors only hiding
+the filters until the app closes unless they come just after switching on, a new FrameFeed per camera, the type
+check on the camera's zoom and exposure, and the download's own version in Settings): `npm test` node part 694
+passed, 0 failed, 0 skipped (frontend 385, database 309), and the Vitest part 50 files, 721 passed. Type check,
+lint and `npx expo install --check`: no problems. The new checks for the review fixes were also run against the
+code before the fixes and failed there (two-face shaders, trash list on a failing frame, camera errors, camera
+flip). Nobody has seen the 4 on a phone yet (TESTING Step 68 needs the new build); the REST, rehearsal,
+concurrency and browser runs were not repeated (no database or server change).
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

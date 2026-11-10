@@ -1179,3 +1179,48 @@ or a TestFlight build), after the update.
    plain again.
 9. An older download or an Android phone → no filter bubbles at all (only Dare, Guess Who and Googly).
 10. On the oldest iPhone you have: does the camera still feel smooth with each filter on? Tell us if one stutters.
+
+## Step 68 – The 4 stretchy face filters 🫥🗿😃👾 (new TestFlight build, version 1.1)
+
+Four new Peekaboo+ filters that stretch and squash the camera picture itself: 🫥 **Tiny Face**, 🗿 **Gigachin**,
+😃 **Big Mouth** and 👾 **Pixel Panic**. They need the **new iPhone build** (TestFlight build 11, then the App Store
+build 1.1) on **iOS 17 or newer**. On every older download their bubbles are simply not there. Android: not yet
+(the code is in the next APK, but it stays switched off until an Android phone has passed these checks).
+
+**A. On the new TestFlight build (do the same again on the App Store 1.1 build before it goes to Apple):**
+
+1. The app opens normally (wait 10 seconds on the first screen, then go to the camera).
+2. **With Peekaboo+**, swipe the bubble row: the 4 new bubbles sit between the other filters
+   (👀 🫥 🗿 🧠 😭 😃 ⚡ 😘 👾, after ✨ Soft Glow and 🌅 Golden Hour). The row has 14 bubbles in all.
+3. **Selfie camera → 😃 Big Mouth:** your mouth is big and bouncy, sits right on your mouth and follows your head the
+   right way when you move left, right and tilt (not the opposite way). Open wide → it gets bigger. Then flip to the
+   **back camera** and point it at someone (or a photo of a face) → it still sits on the mouth.
+4. Try each one: 🫥 **Tiny Face** (a tiny face inside a soft blurred head – talk and it shrinks more), 🗿 **Gigachin**
+   (a long chin – pout and the "CHIN POWER" meter climbs to "GIGACHIN" at 100 %), 👾 **Pixel Panic** (your face turns
+   to big pixels with torn stripes and an ERROR tag – raise your brows for more). No black screen, no frozen picture,
+   no line or edge around the stretched part.
+5. The older filters still look the same as before: ✨ Soft Glow, 🌅 Golden Hour, 👀, 🧠, 😭, ⚡, 😘.
+6. **Take a photo** with each of the 4 → the photo in the editor looks like the screen did, and it isn't narrower,
+   wider or more zoomed in than a photo without a filter.
+7. With a stretchy filter on, **hold** the shutter → a normal video without the filter (expected – videos stay plain).
+8. **Chat camera:** open a chat → 📷 → the 4 new bubbles are there too. Send a peek with Big Mouth.
+9. **Without Peekaboo+** (a test account without Plus): the 4 new bubbles have the small gold ⭐; tapping one opens
+   the Peekaboo+ screen and the row slides back. The Peekaboo+ screen says **"9 live face filters (Big Mouth,
+   Heart Eyes & more)"**.
+10. **3 minutes of 🗿 Gigachin** on the selfie camera: the phone doesn't get hot and the camera doesn't stutter or
+    slow down. Tell us if it does (it can be made lighter by an update, no new build needed).
+11. With 😃 Big Mouth on, **double-tap to flip the camera** a few times: no flash of a frozen or back-to-front
+    picture; after a moment the filter is back on the other camera.
+12. **Two faces side by side** (you and a friend, cheek to cheek) with 👾 Pixel Panic, then 🗿 Gigachin: both faces get
+    the filter, and there is no straight cut line through one face where the other face's filter starts.
+13. **Settings** → at the very bottom it says **Peekaboo 1.1.0 (11)** (or the new build's number).
+
+**B. On an older iPhone build (App Store build 10, or TestFlight 7–9) after the update:**
+
+1. The app opens normally.
+2. The camera row is the same as before: no 🫥 🗿 😃 👾 bubbles. The 7 filters from Step 67 still work.
+3. The Peekaboo+ screen still says "5 live face filters (Heart Eyes, Crybaby, Aura & more)".
+4. **Settings** → at the very bottom it still says **Peekaboo 1.0.0** with the old build number, e.g. "1.0.0 (10)" –
+   not 1.1.0. That is how you tell an old download from the new one.
+
+If anything in A goes wrong, say which step and which camera (front or back). Most fixes can go out by update.

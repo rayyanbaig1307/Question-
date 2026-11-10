@@ -8,8 +8,11 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 // The round mode bubbles above the shutter. The owner (6 Nov): Dare and Guess Who must come first, before the
 // Peekaboo+ filters – stopping on a Plus filter without Plus opens the Peekaboo+ screen, which kept popping up
 // on the way to Dare and Guess Who.
-function loadDial(faceMesh) {
+// `frames`: a stand-in for lib/frameAccess.ts (the harness default is an older download without the camera's own
+// pixels, so the 4 stretchy filters are not there).
+function loadDial(faceMesh, frames) {
   return loadScreen('src/components/home/ModeDial.tsx', {
+    ...(frames ? { '@/lib/frameAccess': frames } : {}),
     'expo-linear-gradient': { LinearGradient: host('LinearGradient') },
     '@/components/Bouncy': { Bouncy: host('Bouncy') },
     '@/lib/drop': { formatClock: () => '', lateLabel: () => '' },
@@ -27,7 +30,8 @@ function loadDial(faceMesh) {
   }).exports;
 }
 
-// Every face filter, in the order it sits on the row (the new ones follow the owner's concept sheet).
+// Every face filter on an older download (no stretchy ones), in the order it sits on the row (the new ones follow
+// the owner's concept sheet).
 const FILTERS = ['glow', 'golden', 'peekabooEyes', 'brainBuffering', 'crybaby', 'auraOverload', 'heartEyes'];
 const FILTER_LABELS = ['Soft Glow mode', 'Golden Hour mode', 'Peekaboo Eyes mode', 'Brain Buffering mode', 'Crybaby mode', 'Aura Overload mode', 'Heart Eyes mode'];
 // Soft Glow and Golden Hour are free for everyone (owner, 9 Nov); the new ones are Peekaboo+.
@@ -207,6 +211,107 @@ test('no caption on the camera for any face filter', async () => {
       let tree;
       await act(async () => { tree = renderer.create(React.createElement(dial.screen.exports.ModeCaption, { mode, drop: { kind: 'waiting' } })); });
       try { assert.equal(tree.toJSON(), null, mode); } finally { await unmount(tree); }
+    }
+  } finally { await unmount(dial.tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 🫥 🗿 😃 👾 The 4 stretchy filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic) change the camera picture itself,
+// so they need the camera's own pixels (lib/frameAccess.ts). Only the new download has them: everywhere else (App
+// Store build 10, TestFlight 7–9, old APKs, Expo Go) the row must stay exactly as it is above.
+// ---------------------------------------------------------------------------
+const { frameAccessMock } = require('./harness.cjs');
+
+// The whole row on the new download: the plain camera spot, then 14 bubbles (15 spots).
+const ALL_FILTERS = ['glow', 'golden', 'peekabooEyes', 'tinyFace', 'gigachin', 'brainBuffering', 'crybaby', 'bigMouth', 'auraOverload', 'heartEyes', 'pixelPanic'];
+const ALL_LABELS = ['Soft Glow mode', 'Golden Hour mode', 'Peekaboo Eyes mode', 'Tiny Face mode', 'Gigachin mode', 'Brain Buffering mode', 'Crybaby mode', 'Big Mouth mode', 'Aura Overload mode', 'Heart Eyes mode', 'Pixel Panic mode'];
+const STRETCHY = ['tinyFace', 'gigachin', 'bigMouth', 'pixelPanic'];
+const ALL_PLUS = ALL_FILTERS.filter((key) => !FREE_FILTERS.includes(key));
+
+test('the new download: the 4 stretchy filters sit between the others, and the row has 15 spots', async () => {
+  const { CAMERA_MODES, LENS_MODES } = loadDial(true, frameAccessMock(true));
+  assert.deepEqual(plain(CAMERA_MODES.map((m) => m.key)), ['dare', 'guess', 'googly', ...ALL_FILTERS]);
+  assert.deepEqual(plain(LENS_MODES), ['googly', ...ALL_FILTERS]);
+  // All 4 are Peekaboo+; Soft Glow and Golden Hour stay free.
+  assert.deepEqual(plain(CAMERA_MODES.filter((m) => m.plus).map((m) => m.key)), ALL_PLUS);
+  for (const key of STRETCHY) assert.equal(CAMERA_MODES.find((m) => m.key === key).plus, true, key);
+
+  const dial = await renderDial({ mode: 'photo' }, { '@/lib/frameAccess': frameAccessMock(true) });
+  try {
+    assert.deepEqual(dial.bubbles(), ['Plain camera', 'Dare mode', 'Guess Who mode', 'Googly mode', ...ALL_LABELS]);
+    assert.equal(dial.bubbles().length, 15);
+  } finally { await unmount(dial.tree); }
+});
+
+test('without face tracking there are no filter bubbles at all, even on a download with the camera pixels', () => {
+  const { CAMERA_MODES } = loadDial(false, frameAccessMock(true));
+  assert.deepEqual(plain(CAMERA_MODES.map((m) => m.key)), ['dare', 'guess', 'googly']);
+});
+
+test('the stretchy filters broke on this phone before: their bubbles are not there', async () => {
+  const frames = frameAccessMock(true, { broken: true });
+  const { CAMERA_MODES, LENS_MODES } = loadDial(true, frames);
+  assert.deepEqual(plain(CAMERA_MODES.map((m) => m.key)), ['dare', 'guess', 'googly', ...FILTERS]);
+  assert.deepEqual(plain(LENS_MODES), ['googly', ...FILTERS]);
+  const dial = await renderDial({ mode: 'photo' }, { '@/lib/frameAccess': frameAccessMock(true, { broken: true }) });
+  try {
+    assert.deepEqual(dial.bubbles(), ['Plain camera', 'Dare mode', 'Guess Who mode', 'Googly mode', ...FILTER_LABELS]);
+  } finally { await unmount(dial.tree); }
+});
+
+test('the stretchy filters break while the row is on screen: their 4 bubbles go away at once', async () => {
+  const frames = frameAccessMock(true);
+  const dial = await renderDial({ mode: 'photo' }, { '@/lib/frameAccess': frames });
+  try {
+    assert.equal(dial.bubbles().length, 15);
+    await act(() => frames.markFramesBroken(new Error('no camera pictures')));
+    assert.deepEqual(dial.bubbles(), ['Plain camera', 'Dare mode', 'Guess Who mode', 'Googly mode', ...FILTER_LABELS]);
+  } finally { await unmount(dial.tree); }
+  // The chat camera's row too.
+  const chatFrames = frameAccessMock(true);
+  const chat = await renderDial({ mode: 'photo', lensesOnly: true }, { '@/lib/frameAccess': chatFrames });
+  try {
+    assert.deepEqual(chat.bubbles(), ['Plain camera', 'Googly mode', ...ALL_LABELS]);
+    await act(() => chatFrames.markFramesBroken());
+    assert.deepEqual(chat.bubbles(), ['Plain camera', 'Googly mode', ...FILTER_LABELS]);
+  } finally { await unmount(chat.tree); }
+});
+
+test('the new download: chat cameras get the stretchy filters too (the group one with its Guess Who bubble)', async () => {
+  const chat = await renderDial({ mode: 'photo', lensesOnly: true }, { '@/lib/frameAccess': frameAccessMock(true) });
+  try {
+    assert.deepEqual(chat.bubbles(), ['Plain camera', 'Googly mode', ...ALL_LABELS]);
+    await act(() => chat.bubble('Big Mouth mode').props.onPress());
+    assert.deepEqual(chat.changes, ['bigMouth']);
+  } finally { await unmount(chat.tree); }
+  const group = await renderDial({ mode: 'photo', lensesOnly: true, withGuess: true }, { '@/lib/frameAccess': frameAccessMock(true) });
+  try {
+    assert.deepEqual(group.bubbles(), ['Plain camera', 'Guess Who mode', 'Googly mode', ...ALL_LABELS]);
+  } finally { await unmount(group.tree); }
+});
+
+test('the new download without Plus: all 4 stretchy filters get the ⭐ like the other Plus filters', async () => {
+  const locked = await renderDial({ mode: 'photo', locked: true }, { '@/lib/frameAccess': frameAccessMock(true) });
+  try {
+    const badged = locked.tree.root.findAllByType('Pressable').filter((node) => node.findAll((child) => child.props.testID === 'plus-badge' && typeof child.type === 'string').length > 0);
+    assert.deepEqual(badged.map(locked.keyOf), ALL_PLUS);
+    for (const label of ['Tiny Face', 'Gigachin', 'Big Mouth', 'Pixel Panic']) {
+      assert.ok(locked.bubble(`${label} mode, needs Peekaboo+`), label);
+    }
+  } finally { await unmount(locked.tree); }
+});
+
+test('the stretchy filters have VoiceOver hints and no caption on the camera', async () => {
+  const dial = await renderDial({ mode: 'photo' }, { '@/lib/frameAccess': frameAccessMock(true) });
+  try {
+    for (const key of STRETCHY) {
+      const node = dial.tree.root.findAllByType('Pressable').find((child) => dial.keyOf(child) === key);
+      assert.ok(node, key);
+      assert.equal(typeof node.props.accessibilityHint, 'string', key);
+      assert.ok(node.props.accessibilityHint.length > 0, key);
+      let tree;
+      await act(async () => { tree = renderer.create(React.createElement(dial.screen.exports.ModeCaption, { mode: key, drop: { kind: 'waiting' } })); });
+      try { assert.equal(tree.toJSON(), null, key); } finally { await unmount(tree); }
     }
   } finally { await unmount(dial.tree); }
 });

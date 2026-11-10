@@ -102,6 +102,31 @@ and the owner's standing preferences.
   - **Not in this update:** the 4 stretchy filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic) change the camera
     picture itself, so they need **a new native build** (task "Face filters B"). **Android has no face mesh yet**,
     so Android shows no filter bubbles until a new APK.
+- **Face filters B 🫥🗿😃👾** (10 Nov; not built or shipped yet): the 4 stretchy Peekaboo+ filters – 🫥 Tiny Face,
+  🗿 Gigachin, 😃 Big Mouth, 👾 Pixel Panic – stretch the camera picture itself, live and on the photo. Code in
+  `src/components/lens/warp/` and `src/lib/frameAccess.ts`; `needsFrames: true` in `src/lib/lensLooks.ts`. Videos stay
+  plain (owner: "dont do video leave it"); Soft Glow and Golden Hour stay free.
+  - **Native package:** one new one, `react-native-vision-camera-worklets` pinned to exactly **5.2.4**, with
+    `react-native-vision-camera` pinned to exactly `5.2.4` too (outside `npx expo install --check`, see CLAUDE.md).
+    No config plugin, no other native change. Nothing may import the new package (its top level throws on old builds).
+  - **Old builds keep working as now:** the 4 bubbles show only when `FRAME_ACCESS_AVAILABLE` (iOS 17+ on a build
+    with the package). Build 10, TestFlight 7–9, old APKs and Expo Go get the JS by OTA but no new bubbles, and the
+    Peekaboo+ screen still says "5 live face filters …" there ("9 live face filters (Big Mouth, Heart Eyes & more)"
+    on the new build). `markFramesBroken()` hides the 4 at once if something goes wrong; the phone only remembers
+    that (for its build) when the new code itself failed, or when the camera failed just after they switched on in
+    two different app starts – any other camera error hides them only until the app is closed. OTA switches in
+    `frameAccess.ts`: `WARPS_ENABLED`, `WARPS_ON_ANDROID`, `FRAME_DELAY`, `FRAME_PATH`.
+  - **Settings now shows the download's own version and build number** (e.g. "Peekaboo 1.0.0 (10)" on App Store
+    build 10, "1.1.0 (11)" on the new TestFlight build). Before, an update from this commit would have made old
+    downloads say 1.1.0 too. Expo Go still shows the update's version.
+  - **Version 1.1.0** in `app.json` (runtime stays `exposdk:58.0.0`). Build numbers are remote: TestFlight build
+    **11**, App Store build **12**.
+  - **Build plan:** iOS `testflight-testing` (build 11, channel `testing`) → owner checks TESTING **Step 68** there
+    and on one old build → fix by OTA on `testing` until both pass → iOS `production` (build 12) → two-minute launch
+    check → App Store Connect version 1.1 → Submit for Review. No production OTAs during review.
+  - **Android:** the code is in the next APK (`preview`, v17, also the first with face tracking), but
+    `WARPS_ON_ANDROID = false` – no stretchy bubbles until an Android phone passes Step 68 (then switch it on by
+    OTA). After that APK: update `ANDROID_LINK` and re-upload `website/`.
 
 ## Now: App Store launch (6 Nov) – build 10 ready, owner's checklist in progress
 

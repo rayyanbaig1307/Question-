@@ -1,8 +1,10 @@
 # Face mesh (MediaPipe): the face filters
 
 Status: **switched on** in the iPhone builds that have face tracking (App Store build 10, and TestFlight builds
-7–9). Seven filters use it, all Peekaboo+: ✨ Soft Glow, 🌅 Golden Hour, and (9 Nov, by OTA) 👀 Peekaboo Eyes,
-🧠 Brain Buffering, 😭 Crybaby, ⚡ Aura Overload and 😘 Heart Eyes. **Android has no face mesh yet** (no APK
+7–9). Seven filters use it: ✨ Soft Glow and 🌅 Golden Hour (free), and (9 Nov, by OTA) the Peekaboo+ ones 👀 Peekaboo
+Eyes, 🧠 Brain Buffering, 😭 Crybaby, ⚡ Aura Overload and 😘 Heart Eyes. Four more Peekaboo+ ones, the stretchy
+🫥 Tiny Face, 🗿 Gigachin, 😃 Big Mouth and 👾 Pixel Panic, need a new native build (version 1.1, see "The stretchy
+filters" below); on every older download they don't show at all. **Android has no face mesh yet** (no APK
 has been built with it), so Android shows none of these bubbles. Whether the live drawing lines up with the
 face on a phone is checked by the owner (docs/TESTING.md, Step 67).
 
@@ -119,8 +121,8 @@ Each of these broke the live camera once, or would have:
   case); if the look sits a bit off in saved photos only, check that first. If baking fails, the plain photo
   is used, so a photo is never lost. Videos still have no look (the normal camera records them).
 - **Live overlay can't truly blur skin.** The overlay is drawn on top of the camera view, so it can soften,
-  brighten and tint, but not blur the pixels below. Real live smoothing needs the camera frames drawn inside
-  Skia (`react-native-vision-camera-skia` + `react-native-vision-camera-worklets`, both 5.2.4, more native code).
+  brighten and tint, but not blur the pixels below. Only the stretchy filters (below) get the camera's own
+  pixels, and only while one of them is on; the other filters still draw over the normal camera view.
 - Coordinates: native code turns MediaPipe's points into VisionCamera camera coordinates
   (iOS: `metadataOutputRectConverted`; Android: CameraX's sensor-to-buffer matrix, turned around). JS then
   uses the Camera's `convertCameraPointToViewPoint`. If the glow is offset or mirrored on a phone, this is the
@@ -130,3 +132,107 @@ Each of these broke the live camera once, or would have:
   list). MediaPipe's "left"/"right" names may be mirrored compared with the person; every filter uses both
   sides together (the average or the bigger one), so it doesn't matter.
 - Videos have no filter: holding the shutter swaps in the normal camera, which records a plain video.
+
+## The stretchy filters (Phase B): 🫥 Tiny Face, 🗿 Gigachin, 😃 Big Mouth, 👾 Pixel Panic
+
+These four (all Peekaboo+, from the web version) change the camera picture itself: they stretch and squash
+your face. So they need the camera's own pixels, live, which only downloads built with one more native package
+have: `react-native-vision-camera-worklets` (exactly **5.2.4**, the same as `react-native-vision-camera`). That
+is version 1.1 (TestFlight build 11, App Store build 12) and Android APK v17. Videos stay plain.
+
+- 😃 **Big Mouth**: your mouth blown up like a balloon, about 1.9× with a still face and 2× wide open, bouncing
+  when it changes size. **Open wide.**
+- 🫥 **Tiny Face**: your face shrunk to about a third, in the middle of a smooth blurred "egg" head with soft
+  shading. **Talk** and it gets even tinier and bobs.
+- 🗿 **Gigachin**: everything under your lower lip stretched down and a bit wider. **Pout** to charge the chin: a
+  "CHIN POWER 87%" meter above your head fills in about 1.1 s and turns into a gold "GIGACHIN" at 100 %.
+- 👾 **Pixel Panic**: your face in big pixels with torn slices shoved sideways (magenta and cyan ghosts), data
+  bars, a flickering ERROR tag and now and then a glitch line across the whole picture. **Raise your brows.**
+
+Like the web version they are already on with a still face; the expression turns them up.
+
+### Where the code is
+
+- `src/lib/frameAccess.ts`: the guard. `FRAME_ACCESS_AVAILABLE` is true only on iOS 17+ when Nitro has the
+  `WorkletQueueFactory` (the new package) and `CameraFactory`; on Android only once `WARPS_ON_ANDROID` is turned
+  on. Switches that an app update can change: `WARPS_ENABLED` (all off), `WARPS_ON_ANDROID`, `FRAME_PATH`
+  ('share' on iPhone: no copy; 'copy' on Android), `FRAME_DELAY` (camera pictures held back so the picture
+  matches the face points; set 0 if the camera starts dropping pictures) and `STALE_MS`. `markFramesBroken(why,
+  how)` switches the four off on this phone at once (bubbles gone, plain camera). How long for:
+  - `'remember'` (for this download's build number): only for failures the new code alone can cause – FrameFeed
+    can't load or crashes, the GPU programs can't be made, or three camera pictures fail;
+  - `'thisRun'` (until the app is closed): a camera error while they are on. Lots of things cause camera errors
+    (a zoom the camera can't do, the phone's media system restarting), so one of them must not hide the paid
+    filters for good;
+  - `'strike'`: a camera error within `FRAME_SETUP_MS` (4 s) of their camera pictures being switched on, which is
+    what it looks like when adding them breaks the camera on that phone. Off until the app is closed; the second
+    app start with a strike makes the phone remember it.
+
+  `RETRY_ROUND` lets every phone try again after a fix by OTA. `useWarpLooksOn()` is the hook for screens.
+- `src/lib/lensLooks.ts`: the four have `needsFrames: true`; `isWarpLook()` tells them apart. The mode row
+  (`ModeDial`) and the chat cameras only list them when `FRAME_ACCESS_AVAILABLE` and not broken.
+- `src/components/lens/warp/`:
+  - `FrameFeed.tsx`: the **only** file that uses the camera's `useFrameOutput`. `SoftGlowCamera` loads it with
+    `require` only when `FRAME_ACCESS_AVAILABLE`, and shows it only while a stretchy filter is on (so the other
+    filters cost nothing). The camera thread puts each picture's GPU buffer in a one-picture "mailbox" (no copy
+    on iPhone); every screen frame the drawing thread takes it out, makes it a Skia image and keeps the last
+    `FRAME_DELAY + 1`; the oldest is shown. No picture for `STALE_MS` → nothing is shown, so the normal camera
+    view shows through. Three failed pictures (or shaders that can't be made) → `markFramesBroken()`.
+    `SoftGlowCamera` gives it `key={facing}`: flipping the camera throws the old FrameFeed away with every picture
+    it kept, and the new one only ever gets the new camera's pictures. Each picture (`FrameShot`) says itself
+    whether it is drawn mirrored, so a picture is never drawn the wrong way round.
+  - `frameMatrix.ts`: where a camera picture goes on the screen (stood up, mirrored for selfies, "cover" like the
+    camera view) and where the saved photo goes (`photoToView`, exactly like `bakeLook`). `MIRROR_FRONT` is the
+    one thing only a phone can confirm: if the stretched picture moves the wrong way on the selfie camera, flip it.
+  - `shaders.ts`: the four GPU programs (SkSL): BALLOON (Big Mouth), SHRINK (Tiny Face), STRETCH (Gigachin) and
+    PIXEL (Pixel Panic). Each one is exactly the plain picture at its edge, so there is no seam, and each one is
+    **see-through wherever it changes nothing** (it returns nothing, never the plain picture): with two faces close
+    together, the second face's box would otherwise paint the plain picture back over the first face's warp.
+    `warpEffects.ts` makes them once, on the main thread, the first time one is used.
+  - `paintWarp.ts`: the drawing (worklets, same rules as the other filters). `lensPaint.ts` `paintLook` sends the
+    four looks here with `src` (the camera picture as a shader in screen points, plus the GPU programs); without
+    `src` they draw nothing at all. Every Skia object it makes from the camera picture (a GPU program's shader,
+    the paint that draws it, the blur) goes on `src.trash` as soon as it is made, before drawing with it.
+  - `pixelText.ts`: words made of little squares (5 × 7), since the drawing thread has no fonts.
+  - `warpTrack.ts`: the memory on each face (`mouth`, `mouthSpeed`, `tiny`, `chin`, `glitch`, `warpLevel`),
+    stepped from `faceTrack.ts` (one call in `stepFace`), in real seconds.
+- `LensOverlay.tsx`: for a stretchy filter it first draws the whole camera picture (from FrameFeed) over the
+  normal camera view, placed exactly like it, then the filter stretches that. Right after each frame it lets go
+  (`dispose`) of everything on `src.trash`, the paint under the filter and the picture's shader, newest first,
+  also when the drawing failed. The camera picture lives on the graphics chip and belongs to the drawing thread:
+  left to the garbage collector, these would hold camera pictures too long (the camera runs out of them) and
+  could let go of them on another thread, which can crash the app. For every other filter nothing changed.
+- `bakeLook.ts`: the photo gets the same filter, with the photo itself as the picture to stretch (blur and pixel
+  sizes are in screen points, so the photo matches the screen).
+
+### Rules (on top of "Rules for filter code")
+
+- **Never import `react-native-vision-camera-worklets`** anywhere: on older downloads just loading it closes the
+  app. The camera's `useFrameOutput` loads it itself, and that only happens in `warp/FrameFeed.tsx`.
+- **Never import `FrameFeed` for real**: only the guarded `require` in `SoftGlowCamera.tsx` (and types).
+- Anything worked out from `lensLooks.ts` (like `isWarpLook`) is worked out on the main thread and handed to the
+  drawing as a plain true/false: those functions aren't worklets.
+- **Never give the camera a moving `zoom` or `exposure`** (a Reanimated SharedValue), on VisionCamera's
+  `<Camera>`, the face detector's `<Camera>` or `useCamera`: VisionCamera then loads the worklets package too, and
+  the camera crashes on every older download. Plain numbers only.
+- The other camera hooks that load the package (`useDepthOutput`, `useAsyncRunner`) follow the same rule as
+  `useFrameOutput`: only in `warp/FrameFeed.tsx`.
+- `tests/unit/frame-guard.test.mjs` checks these (with TypeScript's own import finder and types, tried on a
+  made-up file that gets each one wrong), and that `FRAME_ACCESS_AVAILABLE` is false without Nitro, without the
+  new native part, on iOS 16 and on Android with the switch off.
+
+### Tests
+
+`tests/unit/warp-shaders.test.mjs` (compiles and runs the four GPU programs with CanvasKit on a test pattern:
+nothing changes outside each warp, the inside really changes, and with two faces close together the second
+face's Pixel Panic or Gigachin pass keeps the first face's warp), `frame-matrix.test.mjs`, `warp-track.test.mjs`
+(the bouncy mouth stays calm, the chin meter fills in about 1.1 s), `warp-looks.test.mjs` (draws with 0, 1 and 2
+faces, nothing without a camera picture, the right number of numbers for each GPU program, the same moment gives
+the same picture, cheap enough, and everything made from the camera picture goes on `src.trash`, also when a
+frame fails halfway), `frame-guard.test.mjs` (the rules above, and how long `markFramesBroken` keeps them off),
+and `lens-ui-thread.test.mjs` (the four drawn the way the phone's drawing thread does).
+`tests/frontend/lens-overlay.test.cjs` checks the camera picture under the filter, its mirror, and that everything
+made from it is let go of after each frame; `tests/frontend/frame-feed.test.cjs` checks camera errors (this app
+start only, or a strike), the camera flip (a new FrameFeed for the other camera) and that each picture carries
+its mirror. Only a phone can check the rest (docs/TESTING.md): that the picture lines up and moves the right
+way, heat over a few minutes, and Android.

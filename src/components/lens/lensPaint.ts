@@ -18,6 +18,8 @@ import { paintBrainBuffering } from './filters/brainBuffering';
 import { paintCrybaby } from './filters/crybaby';
 import { paintHeartEyes } from './filters/heartEyes';
 import { paintPeekabooEyes } from './filters/peekabooEyes';
+import { paintWarpLook } from './warp/paintWarp';
+import type { WarpSource } from './warp/warpEffects';
 
 // ---------------------------------------------------------------------------
 // The drawing for the face filters, in one place. The same code draws the live camera (LensOverlay.tsx)
@@ -54,6 +56,8 @@ import { paintPeekabooEyes } from './filters/peekabooEyes';
 // The five Peekaboo+ face filters have a file each in ./filters (👀 Peekaboo Eyes, 🧠 Brain Buffering,
 // 😭 Crybaby, ⚡ Aura Overload, 😘 Heart Eyes); paintLook below picks the right one. Their bouncy springs,
 // the brain's loading and the aura's charge are worked out in faceTrack.ts and kept on each face.
+// The 4 stretchy Peekaboo+ filters (🫥 Tiny Face, 🗿 Gigachin, 😃 Big Mouth, 👾 Pixel Panic) are in
+// ./warp/paintWarp.ts: they move the camera's own pixels, so they also need the camera picture (`src`).
 //
 // The light is soft on purpose: it should look like real light, not like a sticker.
 // These run on the drawing thread too, hence 'worklet'.
@@ -99,6 +103,15 @@ export type LensFace = {
   flash: number;
   // ⚡ The aura's charge (0–1).
   charge: number;
+  // The stretchy filters' memory (warp/warpTrack.ts): 😃 the mouth's size (1 = normal) and its speed (a
+  // spring), 🫥 how much you're talking (0–1), 🗿 the chin's power (0–1), 👾 the glitch (0–1), and the
+  // smoothed expression level of the stretchy filter that is on (0–1).
+  mouth: number;
+  mouthSpeed: number;
+  tiny: number;
+  chin: number;
+  glitch: number;
+  warpLevel: number;
 };
 
 export const MAX_LENS_FACES = 2;
@@ -1205,11 +1218,22 @@ function paintGoldenHour(canvas: SkCanvas, faces: LensFace[], width: number, hei
 
 // Draws `look` for these faces. `width`/`height` is the camera view. `fill` is the area the whole-picture
 // parts (warm tint, corners, sun, sunbeams, streak and orbs, the aura's purple corners, the brain's green
-// flash) must cover – the view itself live, the whole photo when saving. `time` is in seconds (for the
-// twinkle, the gleam, a slow shimmer, the spinner, the heartbeat, and where each tear and heart is).
+// flash, the glitch line) must cover – the view itself live, the whole photo when saving. `time` is in
+// seconds (for the twinkle, the gleam, a slow shimmer, the spinner, the heartbeat, and where each tear and
+// heart is). `src` is only for the 4 stretchy filters: the camera picture (or the photo) they move around;
+// without it they draw nothing. The other looks never use it.
 // A look it doesn't know is an error (never a quiet stand-in): the live camera then switches only that look
 // off, and the saved photo comes without it.
-export function paintLook(canvas: SkCanvas, look: LensLook, faces: LensFace[], width: number, height: number, time: number, fill?: SkRect) {
+export function paintLook(
+  canvas: SkCanvas,
+  look: LensLook,
+  faces: LensFace[],
+  width: number,
+  height: number,
+  time: number,
+  fill?: SkRect,
+  src?: WarpSource | null,
+) {
   'worklet';
   if (width <= 0 || height <= 0) return;
   const now = Number.isFinite(time) ? time : 0;
@@ -1235,6 +1259,12 @@ export function paintLook(canvas: SkCanvas, look: LensLook, faces: LensFace[], w
       return;
     case 'heartEyes':
       paintHeartEyes(canvas, faces, now);
+      return;
+    case 'tinyFace':
+    case 'gigachin':
+    case 'bigMouth':
+    case 'pixelPanic':
+      paintWarpLook(canvas, look, faces, now, area, src);
       return;
     default: {
       const unknown: never = look;

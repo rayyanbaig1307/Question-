@@ -11,6 +11,9 @@ import { beforeAll, expect, it } from 'vitest';
 // drawing thread does in a release build (babel-preset-expo, Hermes, not dev), with a do-nothing Skia that
 // only counts calls, for every look, with 0, 1 and 2 faces, at several moments. The same faces drawn the normal
 // way (as on the photo, bakeLook.ts) must give exactly the same calls.
+// The 4 stretchy filters (warp/paintWarp.ts) are drawn with a pretend camera picture and GPU programs, and the
+// camera-picture placing (warp/frameMatrix.ts, used by LensOverlay and FrameFeed on the drawing thread) must
+// give the same numbers there too.
 
 const require = createRequire(import.meta.url);
 const babel = require('@babel/core');
@@ -95,11 +98,15 @@ function toUI(value) {
 let paintJS;
 let paintUI;
 let looks;
+let warpLooks;
 let face;
+let frameMatrix;
 
 beforeAll(() => {
   const lens = load(join(root, 'src/components/lens/lensPaint.ts'));
   looks = load(join(root, 'src/lib/lensLooks.ts')).LENS_LOOKS.map((look) => look.key);
+  warpLooks = load(join(root, 'src/lib/lensLooks.ts')).LENS_LOOKS.filter((look) => look.needsFrames).map((look) => look.key);
+  frameMatrix = load(join(root, 'src/components/lens/warp/frameMatrix.ts'));
   paintJS = lens.paintLook;
   paintUI = toUI(paintJS);
   const { MESH } = load(join(root, 'src/lib/faceMesh.ts'));
@@ -114,16 +121,26 @@ beforeAll(() => {
     ['upperLipInner', 195, 520], ['lowerLipInner', 195, 532], ['mouthRightCorner', 150, 525], ['mouthLeftCorner', 240, 525],
     ['rightBlush', 110, 470], ['leftBlush', 280, 470],
   ]) set(MESH[key], x, y);
+  // The bottom of the lower lip (the stretchy chin starts under it).
+  set(17, 195, 545);
   face = {
     pts, blinkLeft: 0, blinkRight: 0, smile: 0.3, light: [], rim: 0,
     browUp: 0.4, squint: 0.5, jawOpen: 0.6, pucker: 0.7, seed: 3, pop: 1.47, popSpeed: 0.2, wobbleX: 0.05, wobbleY: -0.03,
     wobbleSpeedX: 0, wobbleSpeedY: 0, motion: 0.05, still: 1, progress: 0.62, flash: 0.5, charge: 1,
+    mouth: 1.9, mouthSpeed: 0.1, tiny: 0.8, chin: 1, glitch: 1, warpLevel: 0.9,
   };
 }, 60_000);
 
+// The stretchy filters' camera picture and GPU programs, as the drawing thread has them (native objects).
+const warpSource = () => ({
+  image: hostProxy('camera'),
+  fx: { balloon: hostProxy('fx.balloon'), shrink: hostProxy('fx.shrink'), stretch: hostProxy('fx.stretch'), pixel: hostProxy('fx.pixel') },
+  trash: [],
+});
+
 function drawCalls(paint, look, faces, time) {
   calls.length = 0;
-  paint(hostProxy('canvas'), look, faces, 390, 844, time);
+  paint(hostProxy('canvas'), look, faces, 390, 844, time, undefined, warpLooks.includes(look) ? warpSource() : undefined);
   return calls.filter((c) => c.startsWith('canvas.')).length;
 }
 
@@ -142,6 +159,34 @@ it('every face filter draws on the drawing thread exactly as it does for the pho
       }
     }
   }
+});
+
+it('the stretchy filters are among the looks checked above, and use their GPU programs on the drawing thread', () => {
+  expect(warpLooks).toEqual(['tinyFace', 'gigachin', 'bigMouth', 'pixelPanic']);
+  for (const look of warpLooks) {
+    calls.length = 0;
+    const src = warpSource();
+    paintUI(hostProxy('canvas'), look, [face], 390, 844, 1.3, undefined, src);
+    expect(calls.some((c) => c.startsWith('fx.') && c.endsWith('makeShaderWithChildren')), look).toBe(true);
+    // What it made from the camera picture is on the frame's trash list there too (LensOverlay lets go of it).
+    expect(src.trash.length, look).toBeGreaterThanOrEqual(2);
+    // Without a camera picture: nothing at all.
+    calls.length = 0;
+    paintUI(hostProxy('canvas'), look, [face], 390, 844, 1.3, undefined, null);
+    expect(calls.filter((c) => c.startsWith('canvas.') || c.startsWith('fx.'))).toEqual([]);
+  }
+});
+
+it('placing the camera picture gives the same numbers on the drawing thread', () => {
+  const ui = toUI(frameMatrix);
+  for (const turn of [0, 90, 180, 270]) {
+    for (const mirror of [false, true]) {
+      expect(ui.frameToView(1920, 1440, turn, mirror, 390, 844)).toEqual(frameMatrix.frameToView(1920, 1440, turn, mirror, 390, 844));
+    }
+  }
+  expect(ui.screenTurn('right', 'left')).toBe(frameMatrix.screenTurn('right', 'left'));
+  expect(ui.photoToView(3024, 4032, 0.6, 390, 844)).toEqual(frameMatrix.photoToView(3024, 4032, 0.6, 390, 844));
+  expect(ui.toMatrix9([1, 2, 3, 4, 5, 6])).toEqual([1, 2, 3, 4, 5, 6, 0, 0, 1]);
 });
 
 it('an unknown look stops with a clear error on the drawing thread too (not a quiet stand-in)', () => {

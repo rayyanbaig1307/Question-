@@ -3,13 +3,15 @@
 // tests/unit/plus-purchases.test.mjs.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScreen, renderScreen, act, textOf, unmount, host } = require('./harness.cjs');
+const { loadScreen, renderScreen, act, textOf, unmount, host, frameAccessMock } = require('./harness.cjs');
 
 const WAITING = "Waiting for a parent to approve. You'll get Peekaboo+ as soon as it's approved.";
 
-function plusScreen({ buy = async () => 'bought', restore = async () => 'restored', price = async () => '$6.99', plus = false, store = false, server = false } = {}) {
+// `frames`: a stand-in for lib/frameAccess.ts (left out: an older download without the 4 stretchy filters).
+function plusScreen({ buy = async () => 'bought', restore = async () => 'restored', price = async () => '$6.99', plus = false, store = false, server = false, frames } = {}) {
   const state = { plus, store, server, priceCalls: 0, opened: [], managed: 0 };
   const screen = loadScreen('src/app/(app)/plus.tsx', {
+    ...(frames ? { '@/lib/frameAccess': frames } : {}),
     'expo-image': { Image: host('Image') },
     'expo-linear-gradient': { LinearGradient: host('LinearGradient') },
     'react-native-reanimated': {
@@ -148,5 +150,35 @@ test('the small print names the Apple Account and where to cancel', async () => 
     assert.ok(print, 'the price is in the small print');
     assert.match(print, /charged to your Apple Account/);
     assert.match(print, /Settings → your name → Subscriptions, at least 24 hours before it renews/);
+  } finally { await unmount(tree); }
+});
+
+// 🎭 The face filters line counts only the Peekaboo+ filters this phone really has. Soft Glow and Golden Hour are free,
+// so they don't count; the 4 stretchy ones (Big Mouth, Tiny Face, Gigachin, Pixel Panic) are only on the new download.
+test('the face filters line: 5 on older downloads, 9 on the new one, and 5 again if the stretchy ones broke', async () => {
+  const OLD = '5 live face filters (Heart Eyes, Crybaby, Aura & more)';
+  const NEW = '9 live face filters (Big Mouth, Heart Eyes & more)';
+  const older = plusScreen();
+  let tree = await renderScreen(older.screen);
+  try {
+    assert.ok(texts(tree).includes(OLD), 'the same words as before on older downloads');
+    assert.ok(!texts(tree).includes(NEW));
+  } finally { await unmount(tree); }
+
+  const frames = frameAccessMock(true);
+  const newer = plusScreen({ frames });
+  tree = await renderScreen(newer.screen);
+  try {
+    assert.ok(texts(tree).includes(NEW));
+    assert.ok(!texts(tree).includes(OLD));
+    // They switch themselves off on this phone: the line counts them out again.
+    await act(() => frames.markFramesBroken());
+    assert.ok(texts(tree).includes(OLD));
+  } finally { await unmount(tree); }
+
+  const broken = plusScreen({ frames: frameAccessMock(true, { broken: true }), plus: true });
+  tree = await renderScreen(broken.screen);
+  try {
+    assert.ok(texts(tree).includes(OLD));
   } finally { await unmount(tree); }
 });

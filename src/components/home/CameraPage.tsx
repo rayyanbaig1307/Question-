@@ -33,7 +33,8 @@ import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
 import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
-import { isLensLook, isPlusMode, type LensLook } from '@/lib/lensLooks';
+import { subscribeFramesBroken, useWarpLooksOn } from '@/lib/frameAccess';
+import { isLensLook, isPlusMode, isWarpLook, type LensLook } from '@/lib/lensLooks';
 import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
 import { usePlus, usePlusAnswer } from '@/lib/plus';
 import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
@@ -64,6 +65,11 @@ const MODE_RING: Record<CameraMode, string> = {
   crybaby: colors.blue,
   auraOverload: '#E11DFF',
   heartEyes: '#FF3FA4',
+  // The 4 stretchy filters (only on the newest downloads).
+  tinyFace: '#9DB4FF',
+  gigachin: '#FFE36B',
+  bigMouth: '#FF7A59',
+  pixelPanic: '#00E5FF',
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
@@ -177,8 +183,14 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const plus = usePlus();
   // 'yes', 'no', or 'checking' (not sure yet) – decides whether a Plus filter may be switched on.
   const plusAnswer = usePlusAnswer();
+  // The 4 stretchy filters need the camera's own pixels: only the newest downloads have them, and they switch
+  // themselves off if they ever break on this phone (lib/frameAccess.ts). A mode this phone can't show isn't one
+  // you can be in.
+  const warpsOn = useWarpLooksOn();
+  const modeHere = (m: CameraMode) => warpsOn || !isWarpLook(m);
   // The face filters (Peekaboo+): the face-tracking camera with the chosen look drawn on top.
-  const meshLook: LensLook | null = lensesHere && SoftGlow !== null && isLensLook(homeMode) ? homeMode : null;
+  const meshLook: LensLook | null =
+    lensesHere && SoftGlow !== null && isLensLook(homeMode) && modeHere(homeMode) ? homeMode : null;
   const glowOn = meshLook !== null;
   const glowRef = useRef<SoftGlowHandle>(null);
   // Recording a video with a lens on: the normal camera is shown while you hold the shutter.
@@ -195,6 +207,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // Lenses are for faces – picking one turns to the selfie camera.
   // Returns false when the mode isn't allowed (the mode row then glides back).
   function changeMode(next: CameraMode): boolean {
+    // A stretchy filter this phone can't show (it just switched itself off): the row glides back.
+    if (!modeHere(next)) return false;
     // The face filters are Peekaboo+: when we're sure you don't have Plus, show what Peekaboo+ is instead.
     // The same once the wait for an answer is used up. (While we're still checking, the filter goes on – see
     // just below.)
@@ -208,6 +222,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     if ((next === 'googly' || isLensLook(next)) && facing === 'back') setFacing('front');
     return true;
   }
+
+  // A stretchy filter is on and it just switched itself off (it broke on this phone): back to the plain camera.
+  useEffect(() => subscribeFramesBroken(() => setHomeMode((now) => (isWarpLook(now) ? 'photo' : now))), []);
 
   // A Plus filter is on, but Plus isn't (or is no longer) confirmed: back to the plain camera. Right away when
   // we're sure you don't have Plus (e.g. it ran out), or once the PLUS_CHECK_MS wait is used up when we still

@@ -19,7 +19,9 @@ import { Bouncy } from '@/components/Bouncy';
 import { useOverlays } from '@/components/Overlays';
 import { Wordmark } from '@/components/Wordmark';
 import { friendlyError } from '@/lib/errors';
+import { useWarpLooksOn } from '@/lib/frameAccess';
 import type { LegalPage } from '@/lib/legal';
+import { LENS_LOOKS } from '@/lib/lensLooks';
 import {
   buyPlus,
   CAN_BUY_PLUS,
@@ -46,7 +48,18 @@ const NAVY = '#2A1458';
 // The pinned bottom part grows only a little with big phone text sizes, so it never covers the list.
 const MAX_GROW = 1.1;
 
-const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
+// The face filters line counts only the Peekaboo+ filters this phone really has (Soft Glow and Golden Hour are
+// free for everyone, so they don't count). The 4 stretchy ones (Big Mouth, Tiny Face, Gigachin, Pixel Panic) are
+// only on the newest downloads (lib/frameAccess.ts).
+function faceFiltersLine(warpsOn: boolean): string {
+  const count = LENS_LOOKS.filter((look) => look.plus && (warpsOn || !look.needsFrames)).length;
+  return warpsOn
+    ? `${count} live face filters (Big Mouth, Heart Eyes & more)`
+    : `${count} live face filters (Heart Eyes, Crybaby, Aura & more)`;
+}
+
+// Everything you get with Peekaboo+.
+const features = (warpsOn: boolean): { emoji: string; title: string; soon?: boolean }[] => [
   { emoji: '👀', title: 'Who viewed your profile' },
   { emoji: '🔁', title: 'Who rewatched your story' },
   { emoji: '📸', title: 'Who screenshotted your story & posts' },
@@ -59,7 +72,7 @@ const FEATURES: { emoji: string; title: string; soon?: boolean }[] = [
   { emoji: '🕵️', title: 'Guess Who hint' },
   { emoji: '📌', title: 'Pin your top 3 chats' },
   { emoji: '🎬', title: '60-second videos' },
-  { emoji: '🎭', title: '5 live face filters (Heart Eyes, Crybaby, Aura & more)' },
+  { emoji: '🎭', title: faceFiltersLine(warpsOn) },
   { emoji: '⭐', title: 'Plus badge next to your name' },
 ];
 
@@ -71,6 +84,8 @@ export default function PlusScreen() {
   // The App Store says you're paying, but the server hasn't heard yet (it usually takes a few seconds).
   const storePlus = useStorePlus();
   const serverPlus = useServerPlus();
+  // True on downloads that have the 4 stretchy face filters.
+  const warpsOn = useWarpLooksOn();
   const insets = useSafeAreaInsets();
   const { showToast } = useOverlays();
   // undefined = still loading; null = couldn't get it.
@@ -167,7 +182,7 @@ export default function PlusScreen() {
 
         {/* What you get. */}
         <View style={styles.card}>
-          {FEATURES.map((feature) => (
+          {features(warpsOn).map((feature) => (
             <View key={feature.title} style={styles.feature}>
               <Text style={styles.featureEmoji}>{feature.emoji}</Text>
               <Text style={styles.featureText}>{feature.title}</Text>

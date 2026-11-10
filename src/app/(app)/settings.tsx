@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { reloadAppAsync } from 'expo';
-import Constants from 'expo-constants';
+import { reloadAppAsync, requireOptionalNativeModule } from 'expo';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -23,6 +23,24 @@ import { useScratchToReveal } from '@/lib/preferences';
 import { deleteMyAccount, updateMyProfile } from '@/lib/profiles';
 import type { HitUpsFrom, Profile } from '@/lib/types';
 import { colors, font, radius, saveThemeChoice, space, themeChoice, type ThemeChoice } from '@/theme';
+
+// The version of the app download itself, with its build number, e.g. "1.0.0 (10)". An app update sent over
+// the air carries the newest version number in its settings, so that one would make an older download say
+// "1.1.0" too; the download's own numbers can't be changed by an update. Expo Go reports its own version
+// (not Peekaboo's), so there, and if the numbers can't be read, the update's version is shown as before.
+function appVersion(): string {
+  try {
+    if (Constants.executionEnvironment !== ExecutionEnvironment.StoreClient) {
+      const app = requireOptionalNativeModule<{ nativeApplicationVersion?: string | null; nativeBuildVersion?: string | null }>('ExpoApplication');
+      if (app?.nativeApplicationVersion) {
+        return app.nativeBuildVersion ? `${app.nativeApplicationVersion} (${app.nativeBuildVersion})` : app.nativeApplicationVersion;
+      }
+    }
+  } catch {
+    // Show the update's version below.
+  }
+  return Constants.expoConfig?.version ?? '';
+}
 
 export default function Settings() {
   const { userId, profile, setProfile, signOut, currentUserId, refreshProfile } = useMe();
@@ -456,7 +474,7 @@ export default function Settings() {
         </Section>
 
         <Text style={styles.footer}>
-          Peekaboo {Constants.expoConfig?.version ?? ''} · made with 💛
+          Peekaboo {appVersion()} · made with 💛
         </Text>
       </ScrollView>
     </View>

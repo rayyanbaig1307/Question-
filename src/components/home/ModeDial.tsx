@@ -20,13 +20,16 @@ import { todayDareDay, useDare } from '@/lib/dares';
 import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
-import { isLensLook, LENS_LOOKS, type LensLook } from '@/lib/lensLooks';
+import { FRAME_ACCESS_AVAILABLE, framesBroken, useWarpLooksOn } from '@/lib/frameAccess';
+import { isLensLook, isWarpLook, LENS_LOOKS, type LensLook, type LensLookInfo } from '@/lib/lensLooks';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
 // The lens: 'googly' puts googly eyes on every face the camera sees.
-// The face filters (Soft Glow, Golden Hour, Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes –
-// the list is in lib/lensLooks.ts) are Peekaboo+ and use MediaPipe face tracking – only on downloads that have it.
+// The face filters (Soft Glow, Golden Hour, Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes, …
+// the list is in lib/lensLooks.ts) use MediaPipe face tracking – only on downloads that have it. Soft Glow and
+// Golden Hour are free, the rest are Peekaboo+. The 4 stretchy ones (Tiny Face, Gigachin, Big Mouth, Pixel Panic)
+// also need the camera's own pixels, so they're only on the newest downloads (lib/frameAccess.ts).
 export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | LensLook;
 
 type ModeItem = {
@@ -39,14 +42,25 @@ type ModeItem = {
   plus?: boolean;
 };
 
+// Can this phone show this face filter? The 4 stretchy ones (`needsFrames`) need a download built for them, and
+// they hide again if they ever broke on this phone (lib/frameAccess.ts). Everything else: yes.
+function lookHere(look: LensLookInfo, warpsOn: boolean): boolean {
+  return !look.needsFrames || warpsOn;
+}
+
 // The round mode bubbles, in the order they sit on the row. The plain camera is the empty spot before them.
 // Dare and Guess Who come first, and the Peekaboo+ filters last (the owner, 6 Nov): stopping on a Plus filter
 // without Plus opens the Peekaboo+ screen, so they mustn't sit between you and the everyday modes.
+// (Worked out when the app starts. If the stretchy filters break later, the row below leaves them out too.)
 export const CAMERA_MODES: ModeItem[] = [
   { key: 'dare', emoji: '🎯', label: 'Dare' },
   { key: 'guess', emoji: '🕵️', label: 'Guess Who' },
   { key: 'googly', emoji: '🤪', label: 'Googly' },
-  ...(FACE_MESH_AVAILABLE ? LENS_LOOKS.map(({ key, emoji, label, hint, plus }): ModeItem => ({ key, emoji, label, hint, plus })) : []),
+  ...(FACE_MESH_AVAILABLE
+    ? LENS_LOOKS.filter((look) => lookHere(look, FRAME_ACCESS_AVAILABLE && !framesBroken())).map(
+        ({ key, emoji, label, hint, plus }): ModeItem => ({ key, emoji, label, hint, plus }),
+      )
+    : []),
 ];
 
 // Everything on the row, including the empty spot for the plain camera at the start.
@@ -59,8 +73,12 @@ const BUBBLE_ACTIVE = 54;
 // The row of round mode bubbles right above the shutter, like lenses on other camera apps.
 // Swipe it sideways (or tap a bubble) to bring a mode over the shutter. Swipe back and the camera is plain again.
 // A pink dot on a bubble means there's something waiting for you there (today's dare not done, a drop to post).
-// The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat. Every face filter is there too.
-export const LENS_MODES: CameraMode[] = ['googly', ...LENS_LOOKS.map((look) => look.key)];
+// The lens bubbles only (no Dare or Guess Who) – for the camera inside a chat. Every face filter this phone has
+// is there too.
+export const LENS_MODES: CameraMode[] = [
+  'googly',
+  ...LENS_LOOKS.filter((look) => lookHere(look, FRAME_ACCESS_AVAILABLE && !framesBroken())).map((look) => look.key),
+];
 
 export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false, locked = false }: {
   mode: CameraMode;
@@ -75,9 +93,13 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
   // We're sure you don't have Peekaboo+: the Plus bubbles get a small ⭐ so you know before you pick one.
   locked?: boolean;
 }) {
-  const modes = lensesOnly
-    ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key) || (withGuess && item.key === 'guess'))
-    : CAMERA_MODES;
+  // False once the stretchy filters broke on this phone: their bubbles go away at once.
+  const warpsOn = useWarpLooksOn();
+  const modes = (
+    lensesOnly
+      ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key) || (withGuess && item.key === 'guess'))
+      : CAMERA_MODES
+  ).filter((item) => warpsOn || !isWarpLook(item.key));
   const SLOTS: CameraMode[] = ['photo', ...modes.map((item) => item.key)];
   // The row stretches across the whole screen, so "the middle" is the middle of the screen – right over the shutter.
   const { width } = useWindowDimensions();

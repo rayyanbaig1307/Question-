@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { React, renderer, loadScreen, act, unmount, host } = require('./harness.cjs');
+const { React, renderer, loadScreen, act, unmount, host, frameAccessMock } = require('./harness.cjs');
 
 // 🎭 The Peekaboo+ face filters on the camera (src/components/home/CameraPage.tsx): Soft Glow, Golden Hour, and the
 // five new ones (Peekaboo Eyes, Brain Buffering, Crybaby, Aura Overload, Heart Eyes).
@@ -18,7 +18,8 @@ const COLORS = {
   pink: '#FF4F9A', purple: '#9B5CFF', green: '#3DDC97', accent: '#FF4F9A', surface: '#111111', textMuted: '#999999',
 };
 
-function loadCamera(firstAnswer) {
+// `frames`: a stand-in for lib/frameAccess.ts (left out: an older download without the 4 stretchy filters).
+function loadCamera(firstAnswer, frames) {
   const calls = { pushed: [], shots: 0, captures: 0, glowMounts: 0, recordings: 0 };
   const noop = () => {};
   // Peekaboo+: 'yes', 'no' or 'checking', changed by the test with setAnswer().
@@ -69,12 +70,13 @@ function loadCamera(firstAnswer) {
     '@/lib/videoLimits': { checkPickedVideo: () => 'ok', FREE_VIDEO_SECONDS: 30, PLUS_VIDEO_SECONDS: 60, maxVideoSeconds: () => 30, TOO_BIG_VIDEO: 'Too big' },
     './HomeTabBar': { TAB_BAR_HEIGHT: 60 },
     './ModeDial': { ModeDial: host('ModeDial'), GroupGuessCaption: host('GroupGuessCaption') },
+    ...(frames ? { '@/lib/frameAccess': frames } : {}),
   });
   return { screen, calls, setAnswer };
 }
 
-async function renderCamera(answer, props = {}) {
-  const { screen, calls, setAnswer } = loadCamera(answer);
+async function renderCamera(answer, props = {}, frames) {
+  const { screen, calls, setAnswer } = loadCamera(answer, frames);
   let tree;
   await act(async () => { tree = renderer.create(React.createElement(screen.exports.CameraPage, { active: true, ...props })); });
   const dial = () => tree.root.findByType('ModeDial');
@@ -292,5 +294,123 @@ test('holding the shutter with a filter on records a plain video with the normal
     assert.deepEqual(plain(camera.calls.pushed), [{ pathname: '/editor', params: { uri: 'file:///qa-video.mov', fit: 'cover', video: '1' } }]);
     // Afterwards the filter is back.
     assert.equal(camera.softGlow()[0].props.look, 'crybaby');
+  } finally { await unmount(camera.tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 🫥 🗿 😃 👾 The 4 stretchy filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic): Peekaboo+ like the others, and
+// only on the new download (lib/frameAccess.ts). On every older download they must never switch on.
+// ---------------------------------------------------------------------------
+const STRETCHY = ['tinyFace', 'gigachin', 'bigMouth', 'pixelPanic'];
+// Their shutter ring colours.
+const STRETCHY_RINGS = { tinyFace: '#9DB4FF', gigachin: '#FFE36B', bigMouth: '#FF7A59', pixelPanic: '#00E5FF' };
+
+test('new download, sure you have no Plus: the stretchy filters are refused and open the Peekaboo+ screen', async () => {
+  const camera = await renderCamera('no', {}, frameAccessMock(true));
+  try {
+    for (const mode of STRETCHY) {
+      assert.equal(await camera.pick(mode), false, `${mode} is refused`);
+      assert.equal(camera.dial().props.mode, 'photo');
+      assert.equal(camera.softGlow().length, 0);
+    }
+    assert.deepEqual(camera.calls.pushed, ['/plus', '/plus', '/plus', '/plus']);
+    // The free filters still work.
+    assert.notEqual(await camera.pick('glow'), false);
+    assert.equal(camera.softGlow()[0].props.look, 'glow');
+  } finally { await unmount(camera.tree); }
+});
+
+test('new download with Plus: each stretchy filter shows on the selfie camera with its own ring colour, same camera', async () => {
+  const camera = await renderCamera('yes', {}, frameAccessMock(true));
+  try {
+    const ring = camera.screen.getBinding('MODE_RING');
+    for (const mode of STRETCHY) {
+      assert.equal(await camera.pick(mode), true, mode);
+      assert.equal(camera.dial().props.mode, mode);
+      const [glow] = camera.softGlow();
+      assert.equal(glow.props.look, mode);
+      assert.equal(glow.props.facing, 'front');
+      assert.equal(ring[mode], STRETCHY_RINGS[mode], mode);
+      assert.equal(camera.shutter().props.style[1].borderColor, STRETCHY_RINGS[mode], mode);
+    }
+    // Back and forth with the other filters: still the same face camera.
+    assert.equal(await camera.pick('heartEyes'), true);
+    assert.equal(await camera.pick('bigMouth'), true);
+    assert.equal(camera.calls.glowMounts, 1, 'the face camera never restarted');
+    assert.deepEqual(camera.calls.pushed, []);
+    // The shutter takes the photo from the face camera.
+    await act(() => camera.shutter().props.onPress());
+    assert.equal(camera.calls.captures, 1);
+    assert.deepEqual(plain(camera.calls.pushed), [{ pathname: '/editor', params: { uri: 'file:///qa-filter.jpg', fit: 'cover' } }]);
+  } finally { await unmount(camera.tree); }
+});
+
+test('an older download: a stretchy filter never switches on, and no Peekaboo+ screen opens for it', async () => {
+  for (const answer of ['yes', 'no', 'checking']) {
+    const camera = await renderCamera(answer);
+    try {
+      for (const mode of STRETCHY) {
+        assert.equal(await camera.pick(mode), false, `${answer}: ${mode} is not on this download`);
+        assert.equal(camera.dial().props.mode, 'photo');
+        assert.equal(camera.softGlow().length, 0);
+      }
+      assert.deepEqual(camera.calls.pushed, [], answer);
+    } finally { await unmount(camera.tree); }
+  }
+  // The other filters work as before.
+  const camera = await renderCamera('yes');
+  try {
+    assert.equal(await camera.pick('crybaby'), true);
+    assert.equal(camera.softGlow()[0].props.look, 'crybaby');
+  } finally { await unmount(camera.tree); }
+});
+
+test('the stretchy filters break while one is on: back to the plain camera, and they stay off', async () => {
+  const frames = frameAccessMock(true);
+  const camera = await renderCamera('yes', {}, frames);
+  try {
+    assert.equal(await camera.pick('gigachin'), true);
+    assert.equal(camera.softGlow()[0].props.look, 'gigachin');
+    await act(() => frames.markFramesBroken(new Error('camera error')));
+    assert.equal(camera.dial().props.mode, 'photo');
+    assert.equal(camera.softGlow().length, 0);
+    assert.equal(camera.tree.root.findAllByType('CameraView').length, 1, 'the normal camera');
+    assert.deepEqual(camera.calls.pushed, [], 'no Peekaboo+ screen: it is not about Plus');
+    assert.equal(await camera.pick('pixelPanic'), false);
+    assert.equal(camera.dial().props.mode, 'photo');
+    // The other filters still work.
+    assert.equal(await camera.pick('heartEyes'), true);
+    assert.equal(camera.softGlow()[0].props.look, 'heartEyes');
+  } finally { await unmount(camera.tree); }
+});
+
+test('new download: the chat camera has the stretchy filters too, with the same Plus check', async () => {
+  const camera = await renderCamera('yes', { sendTo: 'bob' }, frameAccessMock(true));
+  try {
+    assert.equal(await camera.pick('bigMouth'), true);
+    assert.equal(camera.softGlow()[0].props.look, 'bigMouth');
+    await act(() => camera.shutter().props.onPress());
+    assert.deepEqual(plain(camera.calls.pushed), [{ pathname: '/editor', params: { uri: 'file:///qa-filter.jpg', fit: 'cover', to: 'bob' } }]);
+  } finally { await unmount(camera.tree); }
+  const refused = await renderCamera('no', { sendTo: 'bob' }, frameAccessMock(true));
+  try {
+    assert.equal(await refused.pick('tinyFace'), false);
+    assert.deepEqual(refused.calls.pushed, ['/plus']);
+  } finally { await unmount(refused.tree); }
+});
+
+test('holding the shutter with a stretchy filter on records a plain video (videos stay plain)', async () => {
+  const camera = await renderCamera('yes', {}, frameAccessMock(true));
+  try {
+    await camera.pick('pixelPanic');
+    let recording;
+    await act(() => { recording = camera.shutter().props.onLongPress(); });
+    assert.equal(camera.softGlow().length, 0);
+    assert.equal(camera.tree.root.findAllByType('CameraView').length, 1);
+    for (let round = 0; round < 3; round++) await camera.runTimers();
+    await act(() => recording);
+    assert.equal(camera.calls.recordings, 1);
+    assert.deepEqual(plain(camera.calls.pushed), [{ pathname: '/editor', params: { uri: 'file:///qa-video.mov', fit: 'cover', video: '1' } }]);
+    assert.equal(camera.softGlow()[0].props.look, 'pixelPanic');
   } finally { await unmount(camera.tree); }
 });

@@ -3,6 +3,7 @@ import type { LensLook } from '@/lib/lensLooks';
 
 import { auraTrigger, eyesTrigger, levelOf } from './filters/triggers';
 import type { LensFace } from './lensPaint';
+import { stepWarp, WARP_REST } from './warp/warpTrack';
 
 // ---------------------------------------------------------------------------
 // Following faces from one camera frame to the next (this runs on the app's main thread, not the drawing
@@ -10,7 +11,8 @@ import type { LensFace } from './lensPaint';
 //
 // For each face it: finds the same face in the frames before (by the nose), smooths the face points so they
 // don't shiver, reads the expressions (raised brows, squint, open mouth, kiss), and steps the face filters'
-// "memory": the bouncy googly eyes (👀), how far the brain has loaded (🧠) and the aura's charge (⚡).
+// "memory": the bouncy googly eyes (👀), how far the brain has loaded (🧠) and the aura's charge (⚡). The
+// stretchy filters' memory (😃 🫥 🗿 👾) is stepped in warp/warpTrack.ts, called from stepFace.
 //
 // That memory is kept ON each face (LensFace), so the drawing only reads it, and the saved photo gets the very
 // same numbers as the screen. Everything uses real seconds, so it behaves the same whether the camera tracks
@@ -110,6 +112,7 @@ export function readFace(raw: RawFace): LensFace {
     progress: 0,
     flash: 0,
     charge: 0,
+    ...WARP_REST,
   };
 }
 
@@ -251,7 +254,8 @@ export function stepFace(face: LensFace, before: LensFace | undefined, dt: numbe
     const charge = before ? clamp01(before.charge) : 0;
     out.charge = clamp01(charge + (auraTrigger(face) > MOUTH_OPEN ? CHARGE_UP : -CHARGE_DOWN) * time);
   }
-  return out;
+  // 😃 🫥 🗿 👾 The stretchy filters' memory (at rest for every other look).
+  return stepWarp(out, before, time, look);
 }
 
 // One camera frame: finds each face's earlier self, smooths it and steps its filter memory. `now` is in
