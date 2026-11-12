@@ -42,7 +42,9 @@ function frameAccessMock(available, { broken = false } = {}) {
   const subscribeFramesBroken = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
   const framesBroken = () => isBroken;
   return {
-    WARPS_ENABLED: true, WARPS_ON_ANDROID: false, FRAME_PATH: 'share', FRAME_DELAY: 1, STALE_MS: 300,
+    WARPS_ENABLED: true, WARPS_ON_ANDROID: false, FRAME_PATH: 'share', FRAME_DELAY: 1, STALE_MS: 1000,
+    FRAME_PIXEL_FORMAT: 'yuv', FRAME_PLACEMENT: 'rule', FRAME_SETUP_MS: 4000,
+    FRAME_ERROR_WINDOW_MS: 2000, FRAME_ERROR_MIN: 10, FRAME_ERROR_RATE: 0.5, LOOK_COOL_DOWN_MS: 1500, LOOK_MAX_FAILS: 5,
     FRAME_ACCESS_AVAILABLE: available,
     framesBroken,
     markFramesBroken() { if (isBroken) return; isBroken = true; listeners.forEach((listener) => listener()); },

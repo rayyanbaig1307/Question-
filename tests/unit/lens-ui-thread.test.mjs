@@ -185,8 +185,47 @@ it('placing the camera picture gives the same numbers on the drawing thread', ()
     }
   }
   expect(ui.screenTurn('right', 'left')).toBe(frameMatrix.screenTurn('right', 'left'));
+  expect(ui.connectionTurn('right', 'up')).toBe(90);
   expect(ui.photoToView(3024, 4032, 0.6, 390, 844)).toEqual(frameMatrix.photoToView(3024, 4032, 0.6, 390, 844));
   expect(ui.toMatrix9([1, 2, 3, 4, 5, 6])).toEqual([1, 2, 3, 4, 5, 6, 0, 0, 1]);
+  // The iPhone rule, the converter's second opinion, the placing and the comparing (LensOverlay and FrameFeed run
+  // these on the drawing thread).
+  for (const [label, front] of [[90, true], [270, false], [270, true], [0, false]]) {
+    expect(ui.iosShotTurn(label, front, 1920, 1440)).toBe(frameMatrix.iosShotTurn(label, front, 1920, 1440));
+  }
+  expect(ui.iosShotTurn(90, true, 1920, 1440)).toBe(270);
+  expect(ui.turnFromAxes(0, 0.44, 0.44, 0)).toEqual({ turn: 270, mirror: true });
+  expect(ui.turnFromAxes(1, 0.5, 0, 1)).toBeNull();
+  const axes = { ox: -121.5, oy: 0, ax: 0, ay: 844, bx: 633, by: 0, front: true };
+  for (const shot of [{ w: 1920, h: 1440, turn: 270, mirror: true, front: true }, { w: 1920, h: 1440, turn: -1, mirror: false, front: true }]) {
+    for (const placement of ['rule', 'converter']) {
+      for (const given of [axes, null]) {
+        expect(ui.placeShot(shot, 390, 844, given, placement)).toEqual(frameMatrix.placeShot(shot, 390, 844, given, placement));
+      }
+    }
+  }
+  const m = frameMatrix.frameToView(1920, 1440, 270, true, 390, 844);
+  const mc = frameMatrix.axesMatrix(axes, 1920, 1440);
+  expect(ui.axesMatrix(axes, 1920, 1440)).toEqual(mc);
+  expect(ui.compareMatrices(m, mc, 1920, 1440)).toBe('same');
+  expect(ui.compareMatrices(frameMatrix.frameToView(1920, 1440, 90, true, 390, 844), mc, 1920, 1440)).toBe('differ');
+});
+
+it('FrameFeed\'s small sums give the same answers on the drawing thread', () => {
+  const feed = load(join(root, 'src/components/lens/warp/feedLogic.ts'));
+  const ui = toUI(feed);
+  let votes = ui.newTurnVotes();
+  for (const angle of [90, 90, 270, 90]) votes = ui.voteTurn(votes, angle);
+  expect(votes.latched).toBe(90);
+  let rate = ui.newFrameRate();
+  for (let i = 0; i < 100; i++) rate = ui.nextFrameRate(rate, 1000 + i * (1000 / 30));
+  expect(ui.framesPerSecondX10(rate)).toBe(300);
+  expect(ui.isStale(2001, 1000, 1000)).toBe(true);
+  expect(ui.errorVerdict(12, 10, 10, 0.5)).toBe(true);
+  for (const [now, last, soon] of [[500, 0, false], [10_999, 1000, false], [11_000, 1000, false], [2999, 1000, true], [3000, 1000, true]]) {
+    expect(ui.probeDue(now, last, soon)).toBe(feed.probeDue(now, last, soon));
+  }
+  expect(ui.probeDue(3000, 1000, true)).toBe(true);
 });
 
 it('an unknown look stops with a clear error on the drawing thread too (not a quiet stand-in)', () => {

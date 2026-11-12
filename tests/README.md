@@ -236,8 +236,9 @@ Frontend (rendered screens, part of `npm test`):
     picture's shader last), also when the filter fails halfway and when one thing can't be let go of.
   - `frame-feed.test.cjs`: `SoftGlowCamera` with a pretend FrameFeed: a camera error long after the stretchy
     pictures switched on only switches them off until the app closes ('thisRun'), one just after is a 'strike', a
-    camera error with another filter on changes nothing; flipping the camera throws the old FrameFeed away and
-    starts a new one for the other camera (`key={facing}`). And `FrameFeed` itself with a pretend camera and
+    camera error with another filter on changes nothing; flipping the camera with a stretchy filter on throws the
+    old FrameFeed away and starts a new one for the other camera (`key`), while flipping with another filter on
+    keeps the same FrameFeed and camera output (one camera set-up). And `FrameFeed` itself with a pretend camera and
     drawing thread: each picture says whether it is drawn mirrored, the camera's buffers go straight back, and
     going away lets go of every picture it kept or still had waiting. The camera-error and flip checks fail with
     the code before the review fixes.

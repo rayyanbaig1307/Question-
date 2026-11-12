@@ -23,16 +23,39 @@ export const WARPS_ON_ANDROID = false;
 // 'copy' makes a copy first (Android, where the camera takes its picture back too soon).
 export const FRAME_PATH: 'share' | 'copy' = Platform.OS === 'ios' ? 'share' : 'copy';
 // How many camera pictures are held back, so the picture matches the face points (they come a moment later).
-// 0–2. If the phone starts dropping camera pictures, set this to 0.
+// 0–2. If the testing readout shows "oob" (the camera ran out of pictures), set this to 0 (one picture fewer).
 export const FRAME_DELAY = 1;
-// A camera picture older than this (milliseconds) is not shown: the normal camera view shows instead.
-export const STALE_MS = 300;
+// When no new camera picture comes, the last good one stays on screen (still stretched with the live face
+// points) for up to this long (milliseconds). After that nothing is drawn and the normal camera view shows.
+// 1 s is at least 15 pictures even in a dark room, where the camera slows down.
+export const STALE_MS = 1000;
+// The kind of camera picture asked for on iPhone: 'yuv' (the camera's own kind, no conversion, Skia reads it
+// directly) or 'rgb' (converted by the camera first: about 2.7 × the memory). Use 'rgb' only if the testing
+// readout shows "err" going up or the stretched picture has wrong colours. Never 'native' on iPhone: it can give
+// kinds of picture Skia can't read.
+export const FRAME_PIXEL_FORMAT: 'yuv' | 'rgb' = 'yuv';
+// How the camera picture is stood up on the screen (warp/frameMatrix.ts placeShot): 'rule' (the turn worked out
+// from the camera's label, proven on the owner's phone) or 'converter' (the turn the camera view's own converter
+// gives, the one the face points use). If the readout ever shows a phone where the picture is the wrong way up
+// but "✓", switch to 'converter'.
+export const FRAME_PLACEMENT: 'rule' | 'converter' = 'rule';
+// Failed camera pictures are skipped (the last good one stays). The stretchy filters only switch off (until the
+// app is closed) when, within one FRAME_ERROR_WINDOW_MS, at least FRAME_ERROR_MIN pictures failed and more than
+// FRAME_ERROR_RATE (a share) of the pictures tried failed.
+export const FRAME_ERROR_WINDOW_MS = 2000;
+export const FRAME_ERROR_MIN = 10;
+export const FRAME_ERROR_RATE = 0.5;
+// A filter whose drawing fails pauses for this long (milliseconds) and then tries again; the camera picture
+// stays on screen meanwhile. After LOOK_MAX_FAILS failures it stays off until the camera closes.
+export const LOOK_COOL_DOWN_MS = 1500;
+export const LOOK_MAX_FAILS = 5;
 // A camera error this soon (milliseconds) after the stretchy filters' camera pictures were switched on counts
 // as "switching them on broke the camera" (see markFramesBroken 'strike').
 export const FRAME_SETUP_MS = 4000;
 // Raise this by one to let every phone that turned the stretchy filters off (markFramesBroken) try again,
-// after a fix that came by app update.
-const RETRY_ROUND = 1;
+// after a fix that came by app update. 2: the upright / full screen / no flashing fix (12 Nov) – build 11 could
+// switch them off for good after just 3 failed camera pictures.
+const RETRY_ROUND = 2;
 // How many different app starts with a 'strike' it takes before the phone remembers it for good.
 const STRIKES_TO_REMEMBER = 2;
 
@@ -60,12 +83,11 @@ export const FRAME_ACCESS_AVAILABLE = check();
 // ---------------------------------------------------------------------------
 // If the stretchy filters ever break on a phone, they switch themselves off: their 4 bubbles disappear and the
 // camera goes back to normal. How long for depends on what went wrong (markFramesBroken below):
-// - 'remember': something only the new code can cause (it couldn't load, its GPU programs couldn't be made, or
-//   the camera pictures kept failing). The phone remembers it for this download (its build number), so it
-//   doesn't keep failing.
-// - 'thisRun': the camera reported an error while they were on. Lots of things the filters have nothing to do
-//   with cause camera errors too (a zoom it can't do, the phone's media system restarting), so they only stay
-//   off until the app is closed.
+// - 'remember': something only the new code can cause (it couldn't load, or its GPU programs couldn't be made).
+//   The phone remembers it for this download (its build number), so it doesn't keep failing.
+// - 'thisRun': the camera reported an error while they were on, or most camera pictures failed for a while
+//   (FRAME_ERROR_* above). Lots of things the filters have nothing to do with cause these too (a zoom the camera
+//   can't do, the phone's media system restarting), so they only stay off until the app is closed.
 // - 'strike': the camera reported an error just after their camera pictures were switched on, which is what it
 //   looks like when adding them breaks the camera on this phone. Off until the app is closed; if it happens in
 //   STRIKES_TO_REMEMBER different app starts, the phone remembers it for this download.

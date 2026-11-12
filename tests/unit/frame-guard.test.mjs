@@ -17,7 +17,10 @@ import { expect, it } from 'vitest';
 //   tried on a made-up file that does it wrong, to prove it catches it;
 // - FRAME_ACCESS_AVAILABLE (src/lib/frameAccess.ts) is false wherever the pixels can't be had;
 // - markFramesBroken remembers a failure for this download only when the stretchy filters themselves must be
-//   the cause (or a camera error came just after they switched on, in two different app starts).
+//   the cause (or a camera error came just after they switched on, in two different app starts) – never for
+//   failed camera pictures (they are skipped, and only switch the filters off until the app closes);
+// - the stretchy filters' fix of 12 Nov stays in: no Canvas onSize (it included the pager's shrink: 92 % size),
+//   YUV pictures on iPhone (never 'native'), and the readout's parts load nothing from the camera packages.
 
 const root = resolve(import.meta.dirname, '../..');
 const WORKLETS = 'react-native-vision-camera-worklets';
@@ -213,7 +216,8 @@ function loadWith(file, mods, required = []) {
   return module.exports;
 }
 
-function softGlowMods(available, broken) {
+// `channel`: what lensDiagnosticsOn asks (it must not even be asked on a download without the camera's pixels).
+function softGlowMods(available, broken, asked = []) {
   const reactStub = { Component: class {}, useCallback: (f) => f, useImperativeHandle() {}, useRef: (v) => ({ current: v }), useState: (v) => [v, () => {}] };
   return {
     'expo-image-manipulator': { FlipType: {}, ImageManipulator: {}, SaveFormat: {} },
@@ -222,23 +226,78 @@ function softGlowMods(available, broken) {
     'react-native': { StyleSheet: { absoluteFill: {} }, View: 'View' },
     'react-native-reanimated': { useSharedValue: (v) => ({ value: v }) },
     'react-native-vision-camera': { Camera: 'Camera', usePhotoOutput() {} },
-    '@/lib/faceMesh': { toScreenPoints() {}, useFaceMeshOutput() {} },
+    '@/lib/faceMesh': { cameraAxes() {}, toScreenPointsFrom() {}, useFaceMeshOutput() {} },
     '@/lib/frameAccess': { FRAME_ACCESS_AVAILABLE: available, FRAME_SETUP_MS: 4000, markFramesBroken: (why) => broken.push(why), useWarpLooksOn: () => available },
+    '@/lib/lensDiagnostics': { lensDiagnosticsOn: () => { asked.push('channel'); return false; } },
     '@/lib/lensLooks': { isWarpLook: () => false },
     './bakeLook': { bakeLook() {} },
     './faceTrack': { newTrackMemory() {}, trackFaces() {} },
     './LensOverlay': { LensOverlay: 'LensOverlay' },
     './lensPaint': { MAX_LENS_FACES: 2 },
     './warp/FrameFeed': new Error('FrameFeed must not load here'),
+    './warp/WarpDiagnostics': { WarpDiagnostics: 'WarpDiagnostics' },
   };
 }
 
 it('SoftGlowCamera never loads FrameFeed on a download without the camera\'s pixels', () => {
   const required = [];
   const broken = [];
-  expect(() => loadWith('src/components/lens/SoftGlowCamera.tsx', softGlowMods(false, broken), required)).not.toThrow();
+  const asked = [];
+  expect(() => loadWith('src/components/lens/SoftGlowCamera.tsx', softGlowMods(false, broken, asked), required)).not.toThrow();
   expect(required).not.toContain('./warp/FrameFeed');
   expect(broken).toEqual([]);
+  // The readout's channel isn't even asked for there.
+  expect(asked).toEqual([]);
+});
+
+it('the readout (WarpDiagnostics) and its pure parts load nothing from the camera packages', () => {
+  // Loaded on its own with only what it is allowed: anything else would throw.
+  const required = [];
+  const mods = {
+    react: { useEffect() {}, useState: (v) => [v, () => {}] },
+    'react/jsx-runtime': { jsx() {}, jsxs() {}, Fragment: 'Fragment' },
+    'react-native': { Platform: { OS: 'ios' }, StyleSheet: { create: (v) => v }, Text: 'Text', View: 'View' },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
+    '@/lib/frameAccess': { FRAME_PLACEMENT: 'rule' },
+    '@/lib/lensDiagnostics': { formatWarpLine: () => '' },
+    './frameMatrix': {},
+  };
+  expect(() => loadWith('src/components/lens/warp/WarpDiagnostics.tsx', mods, required)).not.toThrow();
+  const camera = (spec) => /react-native-vision-camera|react-native-worklets|FrameFeed/.test(spec);
+  expect(required.filter(camera)).toEqual([]);
+  for (const file of ['src/components/lens/warp/feedLogic.ts', 'src/lib/lensDiagnostics.ts', 'src/components/lens/warp/WarpDiagnostics.tsx', 'src/components/lens/warp/frameMatrix.ts']) {
+    expect(loadedBy(readFileSync(join(root, file), 'utf8')).filter(camera), file).toEqual([]);
+  }
+  // feedLogic.ts loads nothing at all; lensDiagnostics.ts only expo-updates (and only when asked).
+  expect(loadedBy(readFileSync(join(root, 'src/components/lens/warp/feedLogic.ts'), 'utf8'))).toEqual([]);
+  expect(loadedBy(readFileSync(join(root, 'src/lib/lensDiagnostics.ts'), 'utf8'))).toEqual(['expo-updates']);
+});
+
+it('only FrameFeed makes the shared counters (so downloads without the camera\'s pixels never make them)', () => {
+  const users = files.filter((file) => /\bcreateSynchronizable\b/.test(codeOf(file))).map((file) => relative(root, file));
+  expect(users).toEqual(['src/components/lens/warp/FrameFeed.tsx']);
+});
+
+it('no Canvas takes its size from onSize (it includes the pager\'s shrink animation: the picture was 92 % big)', () => {
+  for (const file of files) {
+    expect(codeOf(file), relative(root, file)).not.toMatch(/\bonSize\b/);
+  }
+});
+
+it('FrameFeed asks for YUV (or RGB) pictures on iPhone, never \'native\', and never remembers failed pictures for good', () => {
+  const code = codeOf(join(root, 'src/components/lens/warp/FrameFeed.tsx'));
+  expect(code).toMatch(/pixelFormat:\s*IOS\s*\?\s*FRAME_PIXEL_FORMAT\s*:\s*'native'/);
+  expect(code).toMatch(/const IOS\s*=\s*Platform\.OS\s*===\s*'ios'/);
+  const access = codeOf(join(root, 'src/lib/frameAccess.ts'));
+  expect(access).toMatch(/export const FRAME_PIXEL_FORMAT:\s*'yuv'\s*\|\s*'rgb'\s*=\s*'yuv'/);
+  // Every switch-off in FrameFeed says how long for; only the shaders failing is remembered for this download.
+  const calls = [...code.matchAll(/markFramesBroken\(([^;]*)\);/g)].map((m) => m[1]);
+  expect(calls.length).toBe(2);
+  for (const args of calls) {
+    if (args.includes("'remember'")) expect(args).toMatch(/shaders/);
+    else expect(args).toMatch(/'thisRun'\s*$/);
+  }
+  expect(calls.some((args) => /Camera pictures keep failing/.test(args) && /'thisRun'/.test(args))).toBe(true);
 });
 
 it('on a new download it loads FrameFeed, and if that fails the stretchy filters switch off instead of crashing', () => {
@@ -305,6 +364,15 @@ it('FRAME_ACCESS_AVAILABLE is true only on iOS 17+ with the new native part (and
   expect(yes.FRAME_PATH).toBe('share');
   expect(yes.FRAME_DELAY).toBeGreaterThanOrEqual(0);
   expect(yes.FRAME_DELAY).toBeLessThanOrEqual(2);
+  // The fix of 12 Nov: the last good picture stays 1 s, YUV pictures, the rule places the picture, and a few
+  // failed pictures never switch the filters off.
+  expect(yes.STALE_MS).toBe(1000);
+  expect(yes.FRAME_PIXEL_FORMAT).toBe('yuv');
+  expect(yes.FRAME_PLACEMENT).toBe('rule');
+  expect(yes.FRAME_ERROR_MIN).toBe(10);
+  expect(yes.FRAME_ERROR_RATE).toBe(0.5);
+  expect(yes.FRAME_ERROR_WINDOW_MS).toBe(2000);
+  expect(yes.LOOK_COOL_DOWN_MS).toBe(1500);
 });
 
 it('markFramesBroken switches the stretchy filters off, tells the screens, and remembers it for this download', async () => {
@@ -368,7 +436,7 @@ it('a camera error just after they switch on is a strike: remembered only after 
   // …and it happens again: now the phone remembers it for this download.
   second.markFramesBroken(new Error('could not add the output'), 'strike');
   await settle();
-  expect(second.writes.filter(([, value]) => value === '1').map(([key]) => key)).toEqual(['peekaboo.framesBroken.11.1']);
+  expect(second.writes.filter(([, value]) => value === '1').map(([key]) => key)).toEqual(['peekaboo.framesBroken.11.2']);
   const third = frameAccess({ build: '11', store });
   await settle();
   expect(third.framesBroken()).toBe(true);
@@ -387,8 +455,21 @@ it('a strike after it was already switched off for this app start still counts',
   const second = frameAccess({ build: '11', store });
   second.markFramesBroken('could not add the output', 'strike');
   await settle();
-  expect(store.get('peekaboo.framesBroken.11.1')).toBe('1');
+  expect(store.get('peekaboo.framesBroken.11.2')).toBe('1');
   const third = frameAccess({ build: '11', store });
   await settle();
   expect(third.framesBroken()).toBe(true);
+});
+
+it('retry round 2: a phone that switched the stretchy filters off for good on build 11 tries them again', async () => {
+  // What build 11 wrote after 3 failed camera pictures (retry round 1).
+  const store = new Map([['peekaboo.framesBroken.11.1', '1']]);
+  const fa = frameAccess({ build: '11', store });
+  await settle();
+  expect(fa.framesBroken()).toBe(false);
+  expect(fa.useWarpLooksOn()).toBe(true);
+  // New switch-offs are remembered under the new round.
+  fa.markFramesBroken(new Error('shaders'), 'remember');
+  await settle();
+  expect(fa.writes.map(([key]) => key)).toEqual(['peekaboo.framesBroken.11.2']);
 });

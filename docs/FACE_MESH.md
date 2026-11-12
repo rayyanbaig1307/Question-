@@ -157,33 +157,51 @@ Like the web version they are already on with a still face; the expression turns
   `WorkletQueueFactory` (the new package) and `CameraFactory`; on Android only once `WARPS_ON_ANDROID` is turned
   on. Switches that an app update can change: `WARPS_ENABLED` (all off), `WARPS_ON_ANDROID`, `FRAME_PATH`
   ('share' on iPhone: no copy; 'copy' on Android), `FRAME_DELAY` (camera pictures held back so the picture
-  matches the face points; set 0 if the camera starts dropping pictures) and `STALE_MS`. `markFramesBroken(why,
-  how)` switches the four off on this phone at once (bubbles gone, plain camera). How long for:
+  matches the face points; set 0 if the readout shows `oob`), `STALE_MS` (1 s: how long the last good picture
+  stays when no new one comes), `FRAME_PIXEL_FORMAT` ('yuv'; 'rgb' only if the readout shows `err` or wrong
+  colours; never 'native' on iPhone), `FRAME_PLACEMENT` ('rule' or 'converter', see "Which way up" below),
+  `FRAME_ERROR_*` (when failed pictures switch them off) and `LOOK_COOL_DOWN_MS` (a look whose drawing fails
+  pauses 1.5 s, then tries again; off after `LOOK_MAX_FAILS`). `markFramesBroken(why, how)` switches the four off
+  on this phone at once (bubbles gone, plain camera). How long for:
   - `'remember'` (for this download's build number): only for failures the new code alone can cause – FrameFeed
-    can't load or crashes, the GPU programs can't be made, or three camera pictures fail;
-  - `'thisRun'` (until the app is closed): a camera error while they are on. Lots of things cause camera errors
-    (a zoom the camera can't do, the phone's media system restarting), so one of them must not hide the paid
-    filters for good;
+    can't load or crashes, or the GPU programs can't be made;
+  - `'thisRun'` (until the app is closed): a camera error while their pictures are switched on, or more than half
+    of the camera pictures failing in 2 s (at least 10). Lots of things cause camera errors (a zoom the camera
+    can't do, the phone's media system restarting), so one of them must not hide the paid filters for good. A
+    few failed pictures are just skipped (the last good one stays on screen);
   - `'strike'`: a camera error within `FRAME_SETUP_MS` (4 s) of their camera pictures being switched on, which is
     what it looks like when adding them breaks the camera on that phone. Off until the app is closed; the second
     app start with a strike makes the phone remember it.
 
-  `RETRY_ROUND` lets every phone try again after a fix by OTA. `useWarpLooksOn()` is the hook for screens.
+  `RETRY_ROUND` lets every phone try again after a fix by OTA (2 since the 12 Nov fix: build 11 switched them off
+  for good after just 3 failed pictures). `useWarpLooksOn()` is the hook for screens.
 - `src/lib/lensLooks.ts`: the four have `needsFrames: true`; `isWarpLook()` tells them apart. The mode row
   (`ModeDial`) and the chat cameras only list them when `FRAME_ACCESS_AVAILABLE` and not broken.
 - `src/components/lens/warp/`:
   - `FrameFeed.tsx`: the **only** file that uses the camera's `useFrameOutput`. `SoftGlowCamera` loads it with
-    `require` only when `FRAME_ACCESS_AVAILABLE`, and shows it only while a stretchy filter is on (so the other
-    filters cost nothing). The camera thread puts each picture's GPU buffer in a one-picture "mailbox" (no copy
-    on iPhone); every screen frame the drawing thread takes it out, makes it a Skia image and keeps the last
-    `FRAME_DELAY + 1`; the oldest is shown. No picture for `STALE_MS` → nothing is shown, so the normal camera
-    view shows through. Three failed pictures (or shaders that can't be made) → `markFramesBroken()`.
-    `SoftGlowCamera` gives it `key={facing}`: flipping the camera throws the old FrameFeed away with every picture
-    it kept, and the new one only ever gets the new camera's pictures. Each picture (`FrameShot`) says itself
-    whether it is drawn mirrored, so a picture is never drawn the wrong way round.
+    `require` only when `FRAME_ACCESS_AVAILABLE`. It is added the first time a stretchy filter is picked and then
+    **stays until the camera closes**: adding or removing a camera output restarts the camera's set-up (a black
+    flash), and the bubble row has other filters between the stretchy ones. While another filter is on (or the
+    camera page is away) it gets `inUse={false}`: the camera thread hands every picture straight back, nothing is
+    kept (let go of at once) and its every-screen-frame check is paused (`useFrameCallback(…, false)` +
+    `setActive(inUse)`), so it doesn't wake the phone 60–120 times a second for nothing. People who never
+    pick a stretchy filter pay nothing. The camera thread puts each picture's GPU buffer in a one-picture
+    "mailbox" (no copy on iPhone); every screen frame the drawing thread takes it out, makes it a Skia image
+    (checking its size) and keeps the last `FRAME_DELAY + 1`; the oldest is shown. A picture that fails is
+    skipped (the last good one stays). No new picture for `STALE_MS` (1 s) → nothing is shown, so the normal
+    camera view shows through. A FrameFeed is for **one camera for its whole life** (`key` in `SoftGlowCamera`):
+    flipping with a stretchy filter on throws the old one away with every picture it kept and starts one for the
+    other camera (two quick camera set-ups, as on build 11). Flipping with another filter on keeps the same one
+    and its camera output, so the camera is set up once (its pictures aren't wanted then); it is swapped for the
+    other camera's only when a stretchy filter is picked again. Not one FrameFeed for both cameras: a picture
+    can't say which camera it came from (VisionCamera's `isMirrored` is always false with `mirrorMode` 'auto'),
+    the old camera's pictures still come for a moment after a flip, and the iPhone rule needs to know the camera
+    (the wrong one turns the picture upside down). Each picture (`FrameShot`) says itself how it is turned and
+    whether it is mirrored. It also counts what goes wrong (dropped pictures by reason, failed pictures, gaps,
+    late pictures, frame rate) for the readout below. `feedLogic.ts` has its small sums (no imports).
   - `frameMatrix.ts`: where a camera picture goes on the screen (stood up, mirrored for selfies, "cover" like the
-    camera view) and where the saved photo goes (`photoToView`, exactly like `bakeLook`). `MIRROR_FRONT` is the
-    one thing only a phone can confirm: if the stretched picture moves the wrong way on the selfie camera, flip it.
+    camera view) and where the saved photo goes (`photoToView`, exactly like `bakeLook`). `MIRROR_FRONT`: if the
+    stretched picture ever moves the wrong way on the selfie camera, flip it.
   - `shaders.ts`: the four GPU programs (SkSL): BALLOON (Big Mouth), SHRINK (Tiny Face), STRETCH (Gigachin) and
     PIXEL (Pixel Panic). Each one is exactly the plain picture at its edge, so there is no seam, and each one is
     **see-through wherever it changes nothing** (it returns nothing, never the plain picture): with two faces close
@@ -197,13 +215,63 @@ Like the web version they are already on with a still face; the expression turns
   - `warpTrack.ts`: the memory on each face (`mouth`, `mouthSpeed`, `tiny`, `chin`, `glitch`, `warpLevel`),
     stepped from `faceTrack.ts` (one call in `stepFace`), in real seconds.
 - `LensOverlay.tsx`: for a stretchy filter it first draws the whole camera picture (from FrameFeed) over the
-  normal camera view, placed exactly like it, then the filter stretches that. Right after each frame it lets go
-  (`dispose`) of everything on `src.trash`, the paint under the filter and the picture's shader, newest first,
-  also when the drawing failed. The camera picture lives on the graphics chip and belongs to the drawing thread:
-  left to the garbage collector, these would hold camera pictures too long (the camera runs out of them) and
-  could let go of them on another thread, which can crash the app. For every other filter nothing changed.
+  normal camera view, placed exactly like it (`placeShot`), then the filter stretches that. Its size is
+  `viewSize` from SoftGlowCamera's `onLayout` – the same size `bakeLook` uses – **never Canvas `onSize`**: that
+  comes from Reanimated `measure()`, which includes the camera page's 0.92 shrink animation (the pager animates
+  on the native side, so the shrink stays in the layout tree), and made the picture 8 % too small (TestFlight
+  build 11). Right after each frame it lets go (`dispose`) of everything on `src.trash`, the paint under the
+  filter and the picture's shader, newest first, also when the drawing failed. Each finished drawing (the
+  `SkPicture`) holds its camera picture, and so the camera's buffer, until it is let go of: the overlay lets go
+  of each drawing **two drawings later** (never the newest or the one before: the main thread may still read
+  it), and of the last two when it closes (swiping to Chat; by then Reanimated has stopped its updaters, and the
+  screen keeps its own copy until it is torn down). Left to the garbage collector, the camera ran out of buffers, no picture came, the overlay fell back to
+  the plain camera and then snapped back (build 11's "snapping and freezing"). The Canvas children are made once
+  (switching looks never re-builds the canvas on the JS thread), and the very first drawing (which runs on the
+  JS thread) never uses the camera picture. A look whose drawing fails pauses for `LOOK_COOL_DOWN_MS` with the
+  camera picture still shown, then tries again. For every other filter nothing changed.
+- `warp/WarpDiagnostics.tsx` + `lib/lensDiagnostics.ts`: the readout line (below).
 - `bakeLook.ts`: the photo gets the same filter, with the photo itself as the picture to stretch (blur and pixel
   sizes are in screen points, so the photo matches the screen).
+
+### Which way up (the 12 Nov fix)
+
+The camera never turns its pictures (`enablePhysicalBufferRotation: false`); `frameMatrix.ts` stands them up while
+drawing. On iPhone the pictures are sideways (e.g. 1920 × 1440). VisionCamera 5.2.4 labels each picture with the
+camera connection's angle C, but it reads the **selfie** camera's label (AVFoundation "landscape left") with the
+same table as the back camera's, so it says 90°. The selfie camera faces you, so its label counts the other way
+round: its pictures need the same 270° turn as the back camera's. Following the label drew the selfie picture
+upside down (the owner's screenshots). The rule (`iosShotTurn`): back camera turn = C, selfie camera turn =
+360° − C, plus the mirror. On every iPhone today both are 270°. FrameFeed keeps C as the most common label it has
+seen (one odd picture never turns the picture). On the owner's phone (1920 × 1440 into 390 × 844) the selfie
+matrix is `[0, 0.4396, −121.5, 0.4396, 0, 0]` and the back one `[0, −0.4396, 511.5, 0.4396, 0, 0]`.
+
+As a second opinion, the camera view's own converter (`convertCameraPointToViewPoint`, the one the face points
+use; `lib/faceMesh.ts` `cameraAxes`) gives a turn too (`turnFromAxes`). It is used only where the rule can't
+decide (an odd label or an upright picture), and only for the turn and mirror: the size and place always come
+from the view (cover), so pinch zoom can't move the picture. `FRAME_PLACEMENT = 'converter'` (by OTA) asks it
+first. Never combine VisionCamera's `Frame.convertFramePointToCameraPoint` with the view converter: they use
+different coordinate spaces. Android keeps the label as it is (not checked on a phone; it's switched off).
+
+### The readout (testing channel only)
+
+On the `testing` update channel (`Updates.channel`), with a stretchy filter on, one small line shows just under the
+top buttons (never on `production` or `preview`, in Expo Go or in development; it's not in the photo). For example
+`1920×1440 90→270m R✓ 30fps 390×844 ok`: the camera picture's size, the camera's label → the turn drawn ("m" =
+mirrored), how the turn was decided (R rule, C converter, F fixed 270) and whether the converter agrees (✓ yes,
+≈ same turn but another size – normal while zoomed in, ✗ no, ? not yet), pictures per second, the view's size,
+then `ok` or the problem counts: `late` (a picture over 0.1 s late), `gap` (no picture for 1 s: the plain camera
+showed), `drop` (pictures the camera dropped), `oob` (dropped because it ran out of buffers), `err` (failed
+pictures), `dark` (the middle of the camera picture on screen was black; the check makes the drawing thread wait
+for the graphics chip, so it runs only in a screen frame with no new picture, soon after the pictures (re)start –
+never twice within 2 s – and otherwise every 10 s) and `cfg` (camera set-ups
+since it opened, shown above 1). Expected: selfie `… 90→270m R✓ … ok`, back `… 270→270 R✓ … ok`. What to do:
+- picture right but `✗`: harmless (the converter's assumption is wrong for that camera; the rule is in charge);
+- picture wrong but `✓`: set `FRAME_PLACEMENT = 'converter'` by OTA;
+- `oob` above 0: set `FRAME_DELAY = 0` by OTA; if it stays, the next suspect is Skia's camera texture cache,
+  which is never flushed (native: a patch to Skia and a new build);
+- `gap` or `cfg` climbing while switching looks: the "stays until the camera closes" part isn't working;
+- `dark` above 0: the camera itself delivered black pictures (native);
+- the view size isn't the screen size in points: the size fix didn't land.
 
 ### Rules (on top of "Rules for filter code")
 
@@ -217,6 +285,9 @@ Like the web version they are already on with a still face; the expression turns
   the camera crashes on every older download. Plain numbers only.
 - The other camera hooks that load the package (`useDepthOutput`, `useAsyncRunner`) follow the same rule as
   `useFrameOutput`: only in `warp/FrameFeed.tsx`.
+- **Never use Canvas `onSize`** for the overlay's size (it includes the pager's shrink animation): use the
+  `viewSize` from SoftGlowCamera's `onLayout`.
+- **Never `pixelFormat: 'native'` on iPhone** (it can deliver kinds of picture Skia can't read).
 - `tests/unit/frame-guard.test.mjs` checks these (with TypeScript's own import finder and types, tried on a
   made-up file that gets each one wrong), and that `FRAME_ACCESS_AVAILABLE` is false without Nitro, without the
   new native part, on iOS 16 and on Android with the switch off.
@@ -225,14 +296,22 @@ Like the web version they are already on with a still face; the expression turns
 
 `tests/unit/warp-shaders.test.mjs` (compiles and runs the four GPU programs with CanvasKit on a test pattern:
 nothing changes outside each warp, the inside really changes, and with two faces close together the second
-face's Pixel Panic or Gigachin pass keeps the first face's warp), `frame-matrix.test.mjs`, `warp-track.test.mjs`
+face's Pixel Panic or Gigachin pass keeps the first face's warp), `frame-matrix.test.mjs` (also the iPhone rule,
+the owner's numbers and a regression test for the upside-down screenshot), `feed-logic.test.mjs` (the label vote,
+frame rate, 1 s stale, the error rule), `lens-diagnostics.test.mjs` (the readout), `warp-track.test.mjs`
 (the bouncy mouth stays calm, the chin meter fills in about 1.1 s), `warp-looks.test.mjs` (draws with 0, 1 and 2
 faces, nothing without a camera picture, the right number of numbers for each GPU program, the same moment gives
 the same picture, cheap enough, and everything made from the camera picture goes on `src.trash`, also when a
 frame fails halfway), `frame-guard.test.mjs` (the rules above, and how long `markFramesBroken` keeps them off),
 and `lens-ui-thread.test.mjs` (the four drawn the way the phone's drawing thread does).
-`tests/frontend/lens-overlay.test.cjs` checks the camera picture under the filter, its mirror, and that everything
-made from it is let go of after each frame; `tests/frontend/frame-feed.test.cjs` checks camera errors (this app
-start only, or a strike), the camera flip (a new FrameFeed for the other camera) and that each picture carries
-its mirror. Only a phone can check the rest (docs/TESTING.md): that the picture lines up and moves the right
+`tests/frontend/lens-overlay.test.cjs` checks the camera picture under the filter (full view size from
+`viewSize`, no `onSize`), its mirror, that everything made from it is let go of after each frame, that each
+drawing is let go of two drawings later and the last two when it closes, the JS-thread first drawing and the
+look pause;
+`tests/frontend/frame-feed.test.cjs` checks camera errors (this app start only, or a strike), the camera flip (a
+new FrameFeed for the other camera with a stretchy filter on; the same one and output with another filter on),
+that switching looks keeps the camera's outputs, that the overlay and the
+photo get the same size, the readout only on `testing`, and in FrameFeed the turn and mirror of each camera, the
+held label, skipped pictures, the 1 s stale rule, `inUse` (paused, everything let go of at once, nothing left in
+the mailbox), the black-picture check's timing, the drop counts and the error rule. Only a phone can check the rest (docs/TESTING.md): that the picture lines up and moves the right
 way, heat over a few minutes, and Android.

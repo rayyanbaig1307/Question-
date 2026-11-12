@@ -1215,6 +1215,27 @@ build 1.1) on **iOS 17 or newer**. On every older download their bubbles are sim
     the filter, and there is no straight cut line through one face where the other face's filter starts.
 13. **Settings** → at the very bottom it says **Peekaboo 1.1.0 (11)** (or the new build's number).
 
+**A2. After the "upright, full screen, no flashing" update (12 Nov, TestFlight build 11, testing channel):**
+
+Close the app fully and open it twice, so the update is in. Then:
+
+1. **Selfie camera, each of the 4** (🫥 🗿 😃 👾): the picture is **the right way up** and **fills the whole
+   screen** – no strip of plain camera on the right or at the bottom. Your face moves the same way as in the
+   normal camera. 👾 Pixel Panic's blocks sit on your own face.
+2. **Back camera**, the same checks, pointed at a face (a friend, or a photo of a face).
+3. Swipe the bubbles from 🫥 Tiny Face to 😃 Big Mouth to 👾 Pixel Panic and back, through the other filters
+   between them: **no black flash, no snapping** back and forth.
+4. **One minute on 🗿 Gigachin**: no freezing, no switching back to the plain camera.
+5. ✨ Soft Glow and 🌅 Golden Hour now reach the right and bottom edges too.
+6. **Take a photo** with each of the 4: it matches the screen (the stretched part sits where it was).
+7. **The small line at the top** (only on these testing builds, only with a stretchy filter on): send one
+   screenshot with the selfie camera and one with the back camera. Expected: `… 90→270m R✓ … ok` (selfie) and
+   `… 270→270 R✓ … ok` (back). Words at the end like `oob2` or `gap1` instead of `ok` are fine to send too – they
+   tell us what to fix next.
+8. After using a stretchy filter, pick 😘 Heart Eyes and **flip the camera** a few times: just one short flash
+   each time, like before. Then pick 😃 Big Mouth on that camera: it works straight away, the right way up.
+9. Swipe from the camera to Chat and back a few times with 🗿 Gigachin on: it comes back every time, no freezing.
+
 **B. On an older iPhone build (App Store build 10, or TestFlight 7–9) after the update:**
 
 1. The app opens normally.

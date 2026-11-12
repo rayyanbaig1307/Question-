@@ -88,24 +88,47 @@ export function useFaceMeshOutput({ maxFaces = 2, blendshapes = true, onFaces, o
 
 type Converter = Pick<CameraRef, 'convertCameraPointToViewPoint'>;
 
-// Screen points of one face, packed as x0, y0, x1, y1, … (478 points → 956 numbers).
-export function toScreenPoints(face: FaceMeshFace, camera: Converter): number[] {
+// The camera → screen mapping from three points: where the camera's point (0,0) lands on the screen (ox, oy), and
+// how far the screen point moves for the camera's x going 0 → 1 (ax, ay) and its y going 0 → 1 (bx, by).
+export type CameraAxes = { ox: number; oy: number; ax: number; ay: number; bx: number; by: number };
+
+// Asks the camera view (3 native calls). Throws if the view isn't ready yet.
+function readAxes(camera: Converter): CameraAxes {
   const origin = camera.convertCameraPointToViewPoint({ x: 0, y: 0 });
   const xAxis = camera.convertCameraPointToViewPoint({ x: 1, y: 0 });
   const yAxis = camera.convertCameraPointToViewPoint({ x: 0, y: 1 });
-  const ax = xAxis.x - origin.x;
-  const ay = xAxis.y - origin.y;
-  const bx = yAxis.x - origin.x;
-  const by = yAxis.y - origin.y;
+  return { ox: origin.x, oy: origin.y, ax: xAxis.x - origin.x, ay: xAxis.y - origin.y, bx: yAxis.x - origin.x, by: yAxis.y - origin.y };
+}
+
+// The camera → screen mapping, or null while the camera view isn't ready (or the numbers make no sense).
+// The stretchy filters also use it as a second opinion on which way up the camera picture goes
+// (components/lens/warp/frameMatrix.ts placeShot).
+export function cameraAxes(camera: Converter): CameraAxes | null {
+  try {
+    const axes = readAxes(camera);
+    return Object.values(axes).every(Number.isFinite) ? axes : null;
+  } catch {
+    return null;
+  }
+}
+
+// Screen points of one face, packed as x0, y0, x1, y1, … (478 points → 956 numbers), from cameraAxes.
+export function toScreenPointsFrom(face: FaceMeshFace, axes: CameraAxes): number[] {
+  const { ox, oy, ax, ay, bx, by } = axes;
   const count = Math.floor(face.points.length / 3);
   const out = new Array<number>(count * 2);
   for (let i = 0; i < count; i++) {
     const x = face.points[i * 3];
     const y = face.points[i * 3 + 1];
-    out[i * 2] = origin.x + ax * x + bx * y;
-    out[i * 2 + 1] = origin.y + ay * x + by * y;
+    out[i * 2] = ox + ax * x + bx * y;
+    out[i * 2 + 1] = oy + ay * x + by * y;
   }
   return out;
+}
+
+// The same, asking the camera view itself (throws if it isn't ready yet).
+export function toScreenPoints(face: FaceMeshFace, camera: Converter): number[] {
+  return toScreenPointsFrom(face, readAxes(camera));
 }
 
 // ---------------------------------------------------------------------------
