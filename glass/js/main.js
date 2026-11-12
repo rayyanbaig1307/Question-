@@ -223,8 +223,8 @@ function roundedPlane(w, h, r) {
   return g;
 }
 const screenCanvas = document.createElement('canvas');
-screenCanvas.width = 516;
-screenCanvas.height = 1140;
+screenCanvas.width = 1032;
+screenCanvas.height = 2280;
 const screenTex = new THREE.CanvasTexture(screenCanvas);
 screenTex.colorSpace = THREE.SRGBColorSpace;
 screenTex.anisotropy = 8;
@@ -257,103 +257,298 @@ scene.add(key);
 // the phone's screen: the Peekaboo feed with one blurred post and a finger holding to reveal it
 const sharp = document.createElement('canvas');
 const blurred = document.createElement('canvas');
+const scratchLayer = document.createElement('canvas');
 function prepScreenArt() {
-  const w = 480, h = 600 * 1.1;
-  sharp.width = blurred.width = w;
-  sharp.height = blurred.height = h;
+  const w = 476, h = 595;
+  sharp.width = blurred.width = scratchLayer.width = w;
+  sharp.height = blurred.height = scratchLayer.height = h;
   drawPhoto(sharp.getContext('2d'), w, h, 0);
   const b = blurred.getContext('2d');
-  b.filter = 'blur(22px) saturate(1.15)';
+  b.filter = 'blur(24px) saturate(1.1)';
   b.drawImage(sharp, -30, -30, w + 60, h + 60);
   b.filter = 'none';
-  b.fillStyle = 'rgba(255,255,255,0.10)';
+  b.fillStyle = 'rgba(11,11,16,0.18)';
   b.fillRect(0, 0, w, h);
 }
-function drawScreen(t) {
-  const c = screenCanvas.getContext('2d');
-  const W = screenCanvas.width, H = screenCanvas.height;
-  // the post fills the screen, blurred: you haven't posted yet
-  c.drawImage(blurred, -W * 0.25, 0, H * 0.8, H);
-  // where the finger holds, the blur is wiped away
-  const fx = W * (0.5 + 0.22 * Math.sin(t * 0.55)), fy = H * (0.5 + 0.16 * Math.sin(t * 0.37 + 1.2));
-  const rr = 92 + 7 * Math.sin(t * 2.0);
-  c.save();
+
+// The app's own colours (src/theme.ts, the dark theme) so the phone looks like the real Home screen.
+const APP = { bg: '#0B0B10', card: '#1E1E2A', border: '#2E2E40', text: '#FFFFFF', muted: '#A6A6BD', faint: '#6E6E86', pink: '#FF4F9A', purple: '#9B5CFF', green: '#3DDC97' };
+const UI = '"Inter Tight", system-ui, sans-serif';
+
+function ring(c, x, y, r, on) {
+  if (on) {
+    const g = c.createLinearGradient(x - r, y - r, x + r, y + r);
+    g.addColorStop(0, APP.pink);
+    g.addColorStop(1, APP.purple);
+    c.strokeStyle = g;
+  } else c.strokeStyle = APP.border;
+  c.lineWidth = 4;
   c.beginPath();
-  c.arc(fx, fy, rr, 0, Math.PI * 2);
-  c.clip();
-  c.drawImage(sharp, -W * 0.25, 0, H * 0.8, H);
-  c.restore();
-  c.strokeStyle = 'rgba(255,255,255,0.9)';
-  c.lineWidth = 3;
-  c.beginPath();
-  c.arc(fx, fy, rr, 0, Math.PI * 2);
+  c.arc(x, y, r, 0, Math.PI * 2);
   c.stroke();
-  const g = c.createRadialGradient(fx + 16, fy + 22, 4, fx + 16, fy + 22, 56);
-  g.addColorStop(0, 'rgba(255,255,255,0.6)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
+}
+function face(c, x, y, r, a, b2, letter) {
+  const g = c.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0, a);
+  g.addColorStop(1, b2);
   c.fillStyle = g;
   c.beginPath();
-  c.arc(fx + 16, fy + 22, 56, 0, Math.PI * 2);
+  c.arc(x, y, r, 0, Math.PI * 2);
   c.fill();
-  // soft shade top and bottom so the app's words read
-  const top = c.createLinearGradient(0, 0, 0, 220);
-  top.addColorStop(0, 'rgba(10,6,20,0.55)');
-  top.addColorStop(1, 'rgba(10,6,20,0)');
-  c.fillStyle = top;
-  c.fillRect(0, 0, W, 220);
-  const bot = c.createLinearGradient(0, H - 300, 0, H);
-  bot.addColorStop(0, 'rgba(10,6,20,0)');
-  bot.addColorStop(1, 'rgba(10,6,20,0.6)');
-  c.fillStyle = bot;
-  c.fillRect(0, H - 300, W, 300);
-  // the top: camera notch and the wordmark with its two eyes
-  c.fillStyle = '#000';
-  roundRect(c, W / 2 - 66, 20, 132, 36, 18);
-  c.fill();
+  c.fillStyle = '#fff';
+  c.font = `800 ${Math.round(r * 0.9)}px ${UI}`;
+  c.textAlign = 'center';
   c.textBaseline = 'middle';
-  for (const ex of [66, 92]) {
+  c.fillText(letter, x, y + r * 0.06);
+  c.textAlign = 'left';
+}
+// Little line icons, drawn like the app's (heart, comment, bell, chat, camera, home).
+function icon(c, name, x, y, s, color, filled) {
+  c.save();
+  c.translate(x, y);
+  c.scale(s / 24, s / 24);
+  c.strokeStyle = c.fillStyle = color;
+  c.lineWidth = 2;
+  c.lineJoin = c.lineCap = 'round';
+  c.beginPath();
+  if (name === 'heart') {
+    c.moveTo(12, 20.5);
+    c.bezierCurveTo(4, 14.5, 2, 10.5, 2, 7.5);
+    c.bezierCurveTo(2, 4.5, 4.4, 2.5, 7, 2.5);
+    c.bezierCurveTo(9, 2.5, 11, 3.7, 12, 5.6);
+    c.bezierCurveTo(13, 3.7, 15, 2.5, 17, 2.5);
+    c.bezierCurveTo(19.6, 2.5, 22, 4.5, 22, 7.5);
+    c.bezierCurveTo(22, 10.5, 20, 14.5, 12, 20.5);
+  } else if (name === 'comment' || name === 'chat') {
+    c.moveTo(12, 3);
+    c.bezierCurveTo(6.5, 3, 2.5, 6.8, 2.5, 11.5);
+    c.bezierCurveTo(2.5, 13.6, 3.3, 15.5, 4.6, 17);
+    c.lineTo(3.4, 21);
+    c.lineTo(7.8, 19.3);
+    c.bezierCurveTo(9.1, 19.8, 10.5, 20, 12, 20);
+    c.bezierCurveTo(17.5, 20, 21.5, 16.2, 21.5, 11.5);
+    c.bezierCurveTo(21.5, 6.8, 17.5, 3, 12, 3);
+  } else if (name === 'bell') {
+    c.moveTo(5, 17);
+    c.lineTo(19, 17);
+    c.bezierCurveTo(17.5, 15.5, 17.5, 13, 17.5, 10.5);
+    c.bezierCurveTo(17.5, 7, 15, 4.5, 12, 4.5);
+    c.bezierCurveTo(9, 4.5, 6.5, 7, 6.5, 10.5);
+    c.bezierCurveTo(6.5, 13, 6.5, 15.5, 5, 17);
+    c.moveTo(10, 20);
+    c.lineTo(14, 20);
+  } else if (name === 'camera') {
+    c.moveTo(4, 7.5);
+    c.lineTo(7.5, 7.5);
+    c.lineTo(9, 5);
+    c.lineTo(15, 5);
+    c.lineTo(16.5, 7.5);
+    c.lineTo(20, 7.5);
+    c.quadraticCurveTo(21.5, 7.5, 21.5, 9);
+    c.lineTo(21.5, 18);
+    c.quadraticCurveTo(21.5, 19.5, 20, 19.5);
+    c.lineTo(4, 19.5);
+    c.quadraticCurveTo(2.5, 19.5, 2.5, 18);
+    c.lineTo(2.5, 9);
+    c.quadraticCurveTo(2.5, 7.5, 4, 7.5);
+    c.moveTo(15.6, 13.3);
+    c.arc(12, 13.3, 3.6, 0, Math.PI * 2);
+  } else if (name === 'home') {
+    c.moveTo(3, 11);
+    c.lineTo(12, 3);
+    c.lineTo(21, 11);
+    c.lineTo(21, 20.5);
+    c.lineTo(14.5, 20.5);
+    c.lineTo(14.5, 14.5);
+    c.lineTo(9.5, 14.5);
+    c.lineTo(9.5, 20.5);
+    c.lineTo(3, 20.5);
+    c.closePath();
+  }
+  if (filled) c.fill();
+  c.stroke();
+  c.restore();
+}
+
+// Where the scratching finger is at a moment in time (a loose figure of eight over the photo).
+function fingerAt(s, w, h) {
+  return [w * (0.5 + 0.33 * Math.sin(s * 1.9) * Math.cos(s * 0.45)), h * (0.5 + 0.3 * Math.sin(s * 1.25 + 0.7))];
+}
+
+function drawScreen(t) {
+  const c = screenCanvas.getContext('2d');
+  // drawn at twice the size so the small words stay sharp
+  c.setTransform(2, 0, 0, 2, 0, 0);
+  const W = screenCanvas.width / 2, H = screenCanvas.height / 2;
+  c.textBaseline = 'middle';
+  c.textAlign = 'left';
+  c.fillStyle = APP.bg;
+  c.fillRect(0, 0, W, H);
+
+  // camera notch
+  c.fillStyle = '#000';
+  roundRect(c, W / 2 - 62, 18, 124, 34, 17);
+  c.fill();
+
+  // header: the wordmark (two eyes + the name), and the bell
+  for (const ex of [36, 62]) {
     c.beginPath();
-    c.arc(ex, 108, 11, 0, Math.PI * 2);
+    c.arc(ex, 100, 11, 0, Math.PI * 2);
     c.fillStyle = '#fff';
     c.fill();
     c.beginPath();
-    c.arc(ex + 3, 109, 5, 0, Math.PI * 2);
-    c.fillStyle = '#140c22';
+    c.arc(ex + 3, 101, 5, 0, Math.PI * 2);
+    c.fillStyle = APP.bg;
     c.fill();
   }
-  c.fillStyle = '#fff';
-  c.font = '800 42px "Bricolage Grotesque", system-ui, sans-serif';
-  c.fillText('peekaboo', 114, 108);
-  // the chip
-  c.fillStyle = 'rgba(255,255,255,0.22)';
-  roundRect(c, W / 2 - 124, H - 238, 248, 54, 27);
+  c.fillStyle = APP.text;
+  c.font = '800 38px "Bricolage Grotesque", system-ui, sans-serif';
+  c.fillText('peekaboo', 84, 100);
+  icon(c, 'bell', W - 64, 84, 32, APP.text, false);
+
+  // story row: My Story (+), Guess Who, then friends with a glowing ring when they have a new story
+  const sy = 190, sr = 37;
+  const stories = [
+    { name: 'My Story', a: '#38B6FF', b: '#9B5CFF', l: 'Y', on: false, plus: true },
+    { name: 'Guess Who', guess: true, on: true },
+    { name: 'maya', a: '#FF4F9A', b: '#9B5CFF', l: 'M', on: true },
+    { name: 'jay', a: '#FF8A3D', b: '#FF4F9A', l: 'J', on: true },
+    { name: 'sam', a: '#3DDC97', b: '#38B6FF', l: 'S', on: false },
+  ];
+  stories.forEach((st, i) => {
+    const x = 58 + i * 100;
+    ring(c, x, sy, sr + 6, st.on);
+    if (st.guess) {
+      c.fillStyle = APP.card;
+      c.beginPath();
+      c.arc(x, sy, sr, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = APP.text;
+      c.font = `800 40px ${UI}`;
+      c.textAlign = 'center';
+      c.fillText('?', x, sy + 2);
+      c.textAlign = 'left';
+    } else face(c, x, sy, sr, st.a, st.b, st.l);
+    if (st.plus) {
+      c.fillStyle = APP.pink;
+      c.beginPath();
+      c.arc(x + 28, sy + 28, 13, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = APP.bg;
+      c.lineWidth = 3;
+      c.stroke();
+      c.strokeStyle = '#fff';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(x + 22, sy + 28);
+      c.lineTo(x + 34, sy + 28);
+      c.moveTo(x + 28, sy + 22);
+      c.lineTo(x + 28, sy + 34);
+      c.stroke();
+    }
+    c.fillStyle = st.on || st.plus ? APP.text : APP.faint;
+    c.font = `600 17px ${UI}`;
+    c.textAlign = 'center';
+    c.fillText(st.name, x, sy + sr + 28);
+    c.textAlign = 'left';
+  });
+
+  // the post card: who posted, when, and the "On time" drop badge
+  const hy = 318;
+  ring(c, 44, hy, 24, true);
+  face(c, 44, hy, 19, '#FF4F9A', '#9B5CFF', 'M');
+  c.fillStyle = APP.text;
+  c.font = `700 23px ${UI}`;
+  c.fillText('maya', 80, hy - 12);
+  c.fillStyle = APP.muted;
+  c.font = `500 17px ${UI}`;
+  c.fillText('2m', 80, hy + 14);
+  c.fillStyle = 'rgba(61,220,151,0.16)';
+  roundRect(c, 112, hy + 2, 86, 25, 12.5);
   c.fill();
-  c.strokeStyle = 'rgba(255,255,255,0.45)';
-  c.lineWidth = 1.5;
-  c.stroke();
+  c.fillStyle = APP.green;
+  c.font = `700 15px ${UI}`;
+  c.fillText('On time', 127, hy + 15);
+  c.fillStyle = APP.muted;
+  for (const dx of [0, 10, 20]) {
+    c.beginPath();
+    c.arc(W - 58 + dx, hy, 2.6, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // the photo: blurred, and wiped clear where the finger has scratched
+  const px = 20, py = 360, pw = W - 40, ph = pw * 1.25;
+  c.save();
+  roundRect(c, px, py, pw, ph, 26);
+  c.clip();
+  c.drawImage(blurred, px, py, pw, ph);
+  const sc = scratchLayer.getContext('2d');
+  sc.globalCompositeOperation = 'source-over';
+  sc.clearRect(0, 0, scratchLayer.width, scratchLayer.height);
+  // the last few seconds of scratching; the hand lifts every so often and the blur comes back
+  const cycle = 9, local = ((t % cycle) + cycle) % cycle;
+  const held = Math.min(local, 6.5);
+  sc.lineCap = sc.lineJoin = 'round';
+  sc.lineWidth = 104;
+  sc.strokeStyle = '#000';
+  sc.globalAlpha = local > 7.2 ? Math.max(0, 1 - (local - 7.2) / 1.2) : 1;
+  sc.beginPath();
+  const base = t - local;
+  for (let s = 0; s <= held; s += 0.06) {
+    const [x, y] = fingerAt(base * 0.37 + s, scratchLayer.width, scratchLayer.height);
+    if (s === 0) sc.moveTo(x, y);
+    else sc.lineTo(x, y);
+  }
+  sc.stroke();
+  sc.globalAlpha = 1;
+  sc.globalCompositeOperation = 'source-in';
+  sc.drawImage(sharp, 0, 0);
+  c.drawImage(scratchLayer, px, py, pw, ph);
+  // the fingertip
+  if (local < 6.5) {
+    const [fx0, fy0] = fingerAt(base * 0.37 + held, scratchLayer.width, scratchLayer.height);
+    const fx = px + fx0, fy = py + fy0;
+    const g = c.createRadialGradient(fx, fy, 2, fx, fy, 40);
+    g.addColorStop(0, 'rgba(255,255,255,0.75)');
+    g.addColorStop(0.6, 'rgba(255,255,255,0.22)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(fx, fy, 40, 0, Math.PI * 2);
+    c.fill();
+  }
+  // the app's hint
+  c.fillStyle = 'rgba(0,0,0,0.55)';
+  roundRect(c, px + pw / 2 - 138, py + ph - 68, 276, 46, 23);
+  c.fill();
   c.fillStyle = '#fff';
-  c.font = '600 24px "Inter Tight", system-ui, sans-serif';
+  c.font = `700 19px ${UI}`;
   c.textAlign = 'center';
-  c.fillText('Hold to reveal', W / 2, H - 210);
+  c.fillText('Hold & scratch to reveal', px + pw / 2, py + ph - 44);
   c.textAlign = 'left';
-  // who posted
-  const ny = H - 120;
-  const av = c.createLinearGradient(60, ny - 24, 108, ny + 24);
-  av.addColorStop(0, '#ff3d8e');
-  av.addColorStop(1, '#8a4dff');
-  c.fillStyle = av;
-  c.beginPath();
-  c.arc(84, ny, 24, 0, Math.PI * 2);
-  c.fill();
-  c.strokeStyle = '#fff';
-  c.lineWidth = 3;
-  c.stroke();
-  c.fillStyle = '#fff';
-  c.font = '700 28px "Inter Tight", system-ui, sans-serif';
-  c.fillText('maya', 122, ny - 11);
-  c.fillStyle = 'rgba(255,255,255,0.7)';
-  c.font = '500 21px "Inter Tight", system-ui, sans-serif';
-  c.fillText('posted at the drop', 122, ny + 17);
+  c.restore();
+
+  // like and comment
+  const ay = py + ph + 18;
+  icon(c, 'heart', 28, ay, 34, APP.text, false);
+  icon(c, 'comment', 84, ay + 1, 32, APP.text, false);
+
+  // the bar at the bottom: Chat · Camera · Home
+  const by = H - 104;
+  c.fillStyle = APP.bg;
+  c.fillRect(0, by, W, 104);
+  c.fillStyle = APP.border;
+  c.fillRect(0, by, W, 1.5);
+  [['chat', 'Chat'], ['camera', 'Camera'], ['home', 'Home']].forEach(([name, label], i) => {
+    const x = W * (0.5 + (i - 1) * 0.31), on = i === 2;
+    const col = on ? APP.pink : APP.muted;
+    icon(c, name, x - 16, by + 16, 32, col, on);
+    c.fillStyle = col;
+    c.font = `${on ? 800 : 600} 15px ${UI}`;
+    c.textAlign = 'center';
+    c.fillText(label, x, by + 66);
+    c.textAlign = 'left';
+  });
   screenTex.needsUpdate = true;
 }
 
