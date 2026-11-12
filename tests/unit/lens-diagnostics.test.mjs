@@ -26,17 +26,27 @@ function load(updates = { channel: null }) {
   return { ...module.exports, required };
 }
 
-it('the readout is only on the testing channel (never in the App Store, on preview, in Expo Go or in development)', () => {
-  expect(load({ channel: 'testing' }).lensDiagnosticsOn()).toBe(true);
-  expect(load({ channel: 'production' }).lensDiagnosticsOn()).toBe(false);
-  expect(load({ channel: 'preview' }).lensDiagnosticsOn()).toBe(false);
-  expect(load({ channel: null }).lensDiagnosticsOn()).toBe(false);
+it('the readout is switched off for now: it shows nowhere, not even on the testing channel', () => {
+  expect(load().READOUT_SWITCHED_ON).toBe(false);
+  for (const channel of ['testing', 'production', 'preview', null]) {
+    expect(load({ channel }).lensDiagnosticsOn()).toBe(false);
+  }
   expect(load({}).lensDiagnosticsOn()).toBe(false);
   expect(load(new Error('no expo-updates here')).lensDiagnosticsOn()).toBe(false);
+});
+
+it('switched on again, the readout is only on the testing channel (never in the App Store, on preview or in Expo Go)', () => {
+  const on = (updates) => load(updates).lensDiagnosticsOn(undefined, true);
+  expect(on({ channel: 'testing' })).toBe(true);
+  expect(on({ channel: 'production' })).toBe(false);
+  expect(on({ channel: 'preview' })).toBe(false);
+  expect(on({ channel: null })).toBe(false);
+  expect(on({})).toBe(false);
+  expect(on(new Error('no expo-updates here'))).toBe(false);
   // The channel can be given straight away (the tests do).
   const { lensDiagnosticsOn } = load();
-  expect(lensDiagnosticsOn('testing')).toBe(true);
-  expect(lensDiagnosticsOn(null)).toBe(false);
+  expect(lensDiagnosticsOn('testing', true)).toBe(true);
+  expect(lensDiagnosticsOn(null, true)).toBe(false);
   // Loading the file reads nothing yet (expo-updates is only asked when the readout is wanted).
   expect(load({ channel: 'testing' }).required).toEqual([]);
 });

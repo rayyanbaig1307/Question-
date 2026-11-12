@@ -41,9 +41,15 @@ export function updateChannel(): string | null {
   }
 }
 
-// True only on the `testing` channel. `channel` is for the tests; the app leaves it out.
-export function lensDiagnosticsOn(channel?: string | null): boolean {
-  return (channel === undefined ? updateChannel() : channel) === 'testing';
+// The readout is switched off: the stretchy filters work now (the owner checked on TestFlight build 11,
+// 12 Nov 2026) and the line of numbers was in the way. To hunt a camera problem again, set this to true –
+// the line then shows on the `testing` channel only, never in the App Store.
+export const READOUT_SWITCHED_ON = false;
+
+// True only on the `testing` channel, and only while the switch above is on. `channel` and `switchedOn` are
+// for the tests; the app leaves them out.
+export function lensDiagnosticsOn(channel?: string | null, switchedOn: boolean = READOUT_SWITCHED_ON): boolean {
+  return switchedOn && (channel === undefined ? updateChannel() : channel) === 'testing';
 }
 
 // What one readout line is made from.
