@@ -72,13 +72,13 @@
       <li class="step glass bend" data-bend="card">
         <span class="step-num">02</span>
         <h3>Peek to see</h3>
-        <p>Your friends' posts stay blurred until you post yours. Then the whole feed opens up.</p>
+        <p>Give a peek to get a peek. Your friends' drops stay blurred until you post yours.</p>
         <div class="step-art art-peek" aria-hidden="true"><span></span></div>
       </li>
       <li class="step glass bend" data-bend="card">
         <span class="step-num">03</span>
         <h3>Hold to reveal</h3>
-        <p>Press and hold a post to wipe the blur away. Right where your finger is.</p>
+        <p>Hold a post and scratch. The blur wipes away right where your finger goes.</p>
         <div class="step-art art-hold" aria-hidden="true"><span></span></div>
       </li>
     </ol>
@@ -89,18 +89,22 @@
       <div class="try-copy">
         <p class="eyebrow">Try it</p>
         <h2 class="big warp-type">Go on. Hold&nbsp;it.</h2>
-        <p class="lede">Press and hold the post, then drag. That's how you peek in Peekaboo.</p>
+        <p class="lede">Hold the post and scratch the blur away. That's how you peek in Peekaboo.</p>
         <p class="try-meter glass-soft"><span id="revealPct">0</span>% revealed</p>
       </div>
       <figure class="post glass" id="post">
         <div class="post-top">
           <span class="avatar"></span>
-          <span class="post-name">maya</span>
-          <span class="post-time">posted at the drop</span>
+          <span class="post-who"><span class="post-name">maya</span><span class="post-meta">2m <b class="ontime">On time</b></span></span>
+          <span class="post-more" aria-hidden="true"><i></i><i></i><i></i></span>
         </div>
         <div class="post-media">
-          <canvas id="revealCanvas" aria-label="A blurred post. Press and hold to reveal it." role="img"></canvas>
-          <span class="post-hint glass bend" data-bend="pill" id="postHint">Press and hold</span>
+          <canvas id="revealCanvas" aria-label="A blurred post. Hold and scratch to reveal it." role="img"></canvas>
+          <span class="post-hint" id="postHint">Hold &amp; scratch to reveal</span>
+        </div>
+        <div class="post-actions" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 20.5C4 14.5 2 10.5 2 7.5 2 4.5 4.4 2.5 7 2.5c2 0 4 1.2 5 3.1 1-1.9 3-3.1 5-3.1 2.6 0 5 2 5 5 0 3-2 7-10 13z"/></svg>
+          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 3C6.5 3 2.5 6.8 2.5 11.5c0 2.1.8 4 2.1 5.5L3.4 21l4.4-1.7c1.3.5 2.7.7 4.2.7 5.5 0 9.500-3.800 9.500-8.500S17.500 3 12 3z"/></svg>
         </div>
       </figure>
     </div>
