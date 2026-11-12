@@ -108,8 +108,11 @@ and the owner's standing preferences.
   mid-swipe), old drawings freed two frames later (the camera had run out of buffers), frame output kept attached while
   the camera is open. The owner then said the filters work perfectly; the Plus session switched the testing readout off
   (`837149e`, `testing` `111099f5`). **App Store build 12** = EAS `a7393bc0-c128-4e1d-b58f-1b9f88f41aa6`, profile
-  `production`, version 1.1.0, from `837149e` – the Plus session uploads it, makes App Store version 1.1.0 and readies it
-  for the owner to submit. Once 1.1 is live, every `production` OTA must come from `837149e` or later (an older bundle
+  `production`, version 1.1.0, from `837149e` – uploaded by the Plus session (ASC build
+  `41d2deb6-8abe-428e-913a-5cab307abb9b`, VALID) and attached to App Store version 1.1.0
+  (`cf35c017-197a-4aea-b518-11e2e11857d4`, PREPARE_FOR_SUBMISSION, What's New set, release after approval); the owner
+  launch-checks build 12 in TestFlight and presses Submit for Review. Build 12 keeps its own embedded bundle: expo-updates
+  only loads a downloaded update with a newer commitTime, and the newest `production` OTA (`cd0eef12`, 9 Nov) is older. Once 1.1 is live, every `production` OTA must come from `837149e` or later (an older bundle
   hides the stretchy filters on 1.1; no crash). Android: no face-mesh APK yet (`WARPS_ON_ANDROID = false`).
 - **Face filters B 🫥🗿😃👾** (10 Nov; code `0380c72`, OTA `testing` `8fe2156f`; **TestFlight build 11** = EAS
   `73a4bc24-8f58-417f-8971-835673222a89`, profile `testflight-testing`, channel `testing`, version 1.1.0, uploaded by the
