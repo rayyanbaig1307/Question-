@@ -102,11 +102,19 @@ and the owner's standing preferences.
   - **Not in this update:** the 4 stretchy filters (Tiny Face, Gigachin, Big Mouth, Pixel Panic) change the camera
     picture itself, so they need **a new native build** (task "Face filters B"). **Android has no face mesh yet**,
     so Android shows no filter bubbles until a new APK.
+- **Stretchy filters fix + App Store 1.1 (12 Nov):** on build 11 the owner saw the picture upside down, filling ~92% and
+  flashing black. Fixed by OTA (`6415264`, `testing` `95448bde`): selfie turn rule (VisionCamera reports the front
+  camera's angle the other way round), overlay size from the camera view's layout (Canvas onSize was measured
+  mid-swipe), old drawings freed two frames later (the camera had run out of buffers), frame output kept attached while
+  the camera is open. The owner then said the filters work perfectly; the Plus session switched the testing readout off
+  (`837149e`, `testing` `111099f5`). **App Store build 12** = EAS `a7393bc0-c128-4e1d-b58f-1b9f88f41aa6`, profile
+  `production`, version 1.1.0, from `837149e` – the Plus session uploads it, makes App Store version 1.1.0 and readies it
+  for the owner to submit. Once 1.1 is live, every `production` OTA must come from `837149e` or later (an older bundle
+  hides the stretchy filters on 1.1; no crash). Android: no face-mesh APK yet (`WARPS_ON_ANDROID = false`).
 - **Face filters B 🫥🗿😃👾** (10 Nov; code `0380c72`, OTA `testing` `8fe2156f`; **TestFlight build 11** = EAS
   `73a4bc24-8f58-417f-8971-835673222a89`, profile `testflight-testing`, channel `testing`, version 1.1.0, uploaded by the
   Plus session with its ASC key (ASC build `c98fb6db-977a-4cb9-a421-8cdbe69f887a`, VALID, internal group "Team (Expo)");
-  not attached to any App Store version yet – next: the owner's Step 68 on build 11, then a `production` build + App
-  Review) – the 4 stretchy Peekaboo+ filters – 🫥 Tiny Face,
+  not attached to any App Store version yet) – the 4 stretchy Peekaboo+ filters – 🫥 Tiny Face,
   🗿 Gigachin, 😃 Big Mouth, 👾 Pixel Panic – stretch the camera picture itself, live and on the photo. Code in
   `src/components/lens/warp/` and `src/lib/frameAccess.ts`; `needsFrames: true` in `src/lib/lensLooks.ts`. Videos stay
   plain (owner: "dont do video leave it"); Soft Glow and Golden Hour stay free.
