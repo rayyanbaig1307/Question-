@@ -918,7 +918,7 @@ function placePhone(t, dt) {
   const useDownload = scrollP > (heroEl.offsetHeight + dlTop) / 2;
   let sx, sy, scale, spin;
   if (!useDownload) {
-    sx = small ? view.w * 0.62 : view.w * 0.72;
+    sx = small ? view.w * 0.62 : view.w * 0.81;
     const baseY = small ? view.h * 0.42 : view.h * 0.52;
     sy = baseY - scrollP * 0.78;
     scale = small ? 0.42 : 1.0;
