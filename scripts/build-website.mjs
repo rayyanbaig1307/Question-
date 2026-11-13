@@ -1,5 +1,5 @@
 // Builds Peekaboo's small public website (website/) from the legal documents in legal/*.md:
-// a home page, Support, Privacy Policy, Terms of Service, Community Guidelines and Dare Safety Rules.
+// the home page (the glass landing page from glass/), Support, Privacy Policy, Terms of Service, Community Guidelines and Dare Safety Rules.
 // Apple and Google both need the Privacy Policy (and Support) at a public web address.
 // It also makes the invite page (invite.html): where personal invite links go (…/invite?c=<code>).
 //
@@ -7,7 +7,7 @@
 //
 // Run it after changing anything in legal/ (together with scripts/sync-legal.mjs), then upload the website/
 // folder again (Cloudflare → Workers & Pages → peekaboo → Create deployment → upload the folder).
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
@@ -227,4 +227,12 @@ writeFileSync(
 
 // A missing page says so instead of showing the host's default error.
 writeFileSync(join(out, '404.html'), layout({ title: 'Not found – Peekaboo', body: '<h1>Page not found</h1><p><a href="index.html">Go to the home page</a></p>' }));
+// The home page is the glass landing page (glass/): its index.html replaces the plain home page above, and
+// its css, js, fonts and three.js folders come along. The plain one stays as the fallback if glass/ is missing.
+const glass = join(root, 'glass');
+if (existsSync(join(glass, 'index.html'))) {
+  copyFileSync(join(glass, 'index.html'), join(out, 'index.html'));
+  for (const folder of ['css', 'js', 'fonts', 'vendor']) cpSync(join(glass, folder), join(out, folder), { recursive: true });
+}
+
 console.log(`Wrote website/ (${['index.html', ...pages.map((page) => page.file), 'invite.html'].join(', ')})`);

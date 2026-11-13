@@ -2,67 +2,183 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Peekaboo</title>
-<meta name="description" content="Peekaboo – a camera-first app for close friends: stories, disappearing peeks, chat and a daily dare.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" href="favicon.png">
-<style>
-:root{--bg:#fff;--text:#14121f;--muted:#5d5873;--card:#f5f2fb;--line:#e6e0f2;--accent:#8650db;--pink:#fe59a5}
-@media (prefers-color-scheme:dark){:root{--bg:#0b0b10;--text:#f4f2fa;--muted:#a9a3bf;--card:#17151f;--line:#2a2638;--accent:#b18cff;--pink:#ff7ab8}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-a{color:var(--accent)}
-header.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-header.bar a.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--text);text-decoration:none;letter-spacing:-.5px}
-header.bar img{width:40px;height:32px;object-fit:contain}
-nav{display:flex;gap:14px;flex-wrap:wrap;font-size:15px}
-nav a{color:var(--muted);text-decoration:none}nav a:hover,nav a.on{color:var(--text)}
-main{max-width:760px;margin:0 auto;padding:28px 20px 60px}
-main h1{font-size:34px;line-height:1.2;letter-spacing:-.5px}
-main h2{margin-top:2em;font-size:23px}main h3{font-size:19px}
-table{width:100%;border-collapse:collapse;display:block;overflow-x:auto;font-size:15px}
-th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
-th{background:var(--card)}
-blockquote{margin:1em 0;padding:4px 16px;border-left:4px solid var(--pink);background:var(--card);border-radius:8px}
-code{background:var(--card);padding:2px 5px;border-radius:5px}
-footer{border-top:1px solid var(--line);padding:24px 20px;text-align:center;color:var(--muted);font-size:14px}
-footer a{color:var(--muted)}
-.hero{background:linear-gradient(135deg,#fe59a5,#e469c7 50%,#8650db);color:#fff;text-align:center;padding:72px 20px 80px}
-.hero img{width:190px;max-width:60%;height:auto}
-.hero h1{margin:14px 0 6px;font-size:56px;letter-spacing:-2px;line-height:1}
-.hero p{margin:0 auto;max-width:520px;font-size:20px;font-weight:700;opacity:.92}
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;max-width:900px;margin:-40px auto 0;padding:0 20px}
-.features div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
-.features b{display:block;font-size:18px;margin-bottom:4px}
-.features span{color:var(--muted);font-size:15px}
-[hidden]{display:none!important}
-.invite{text-align:center;padding:40px 20px 8px;max-width:560px;margin:0 auto}
-.invite img{width:120px;height:auto}
-.invite h1{font-size:34px;line-height:1.2;letter-spacing:-.5px;margin:12px 0 8px}
-.invite .lead{color:var(--muted);margin:0 0 20px}
-.invite .label{color:var(--muted);font-size:14px;font-weight:700;text-transform:uppercase;margin:0}
-.invite .code{font:800 34px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:4px;margin:4px 0 20px;overflow-wrap:anywhere}
-.invite .missing{background:var(--card);border-radius:14px;padding:12px 16px}
-.buttons{display:flex;flex-direction:column;gap:12px;margin:8px 0}
-.btn{display:block;padding:15px 20px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--text);font-weight:800;text-decoration:none}
-.btn.primary{background:linear-gradient(135deg,#fe59a5,#8650db);border:0;color:#fff}
-.steps li{margin-bottom:10px}
-</style>
+<title>Peekaboo: Dare Your Friends</title>
+<meta name="description" content="Peekaboo is the camera app for your close friends. Once a day, everyone gets the cue to post. Out now on iPhone.">
+<link rel="preload" href="fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
-<header class="bar"><a class="brand" href="index.html"><img src="logo-eyes.png" alt="">peekaboo</a><nav><a href="support.html">Support</a><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Service</a><a href="guidelines.html">Community Guidelines</a><a href="dare-safety.html">Dare Safety Rules</a></nav></header>
-<section class="hero"><img src="logo-eyes.png" alt="Peekaboo eyes"><h1>peekaboo</h1>
-<p>Peek it. Share it. Gone in 24h – or forever on your profile.</p></section>
-<section class="features">
-<div><b>👀 Peeks</b><span>Photos and videos for your friends that disappear after they're seen.</span></div>
-<div><b>🎯 Daily dare</b><span>A new dare every day. Do it, post it, see who else did.</span></div>
-<div><b>⏰ The drop</b><span>Once a day, everyone gets 2 minutes to show what they're doing.</span></div>
-<div><b>🕵️ Guess Who</b><span>Post a mystery photo and let your friends guess who it is.</span></div>
-</section>
-<main><h2>For close friends only</h2>
-<p>Your stories, peeks and chats go to the people you choose. No ads, and we never sell your data.
-Peekaboo is for ages 13 and up.</p>
-<p>Questions? See <a href="support.html">Support</a> or email <a href="mailto:rbaig18@z2automation.net">rbaig18@z2automation.net</a>.</p></main>
-<footer>© 2026 2865113 Ontario Inc. · <a href="mailto:rbaig18@z2automation.net">rbaig18@z2automation.net</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="support.html">Support</a></footer>
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<!-- Glass filters. The bend maps are drawn in code (js/glass.js) for each piece of glass. -->
+<svg class="defs" aria-hidden="true" width="0" height="0">
+  <defs id="filters"></defs>
+</svg>
+
+<header class="nav">
+  <a class="nav-mark glass-soft" href="#top" aria-label="Peekaboo, back to top">
+    <span class="eye"></span><span class="eye"></span>
+    <span class="nav-word">peekaboo</span>
+  </a>
+  <nav class="nav-links glass bend" data-bend="nav">
+    <a href="#how">How it works</a>
+    <a href="#try">Try it</a>
+    <a href="#dares">Dares</a>
+    <a href="#extras">Extras</a>
+  </nav>
+  <div class="nav-right">
+    <a class="nav-get" href="https://apps.apple.com/ca/app/peekaboo-dare-your-friends/id6829561855" target="_blank" rel="noopener">Get the app</a>
+    <button class="sound glass bend" data-bend="sound" type="button" aria-pressed="false">
+      <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="sound-label">Enable sound</span>
+    </button>
+  </div>
+</header>
+
+<div id="viewport">
+<main id="content">
+
+  <!-- Hero: the huge word is drawn in the glass scene behind this, so the drops can bend it. -->
+  <section class="hero" id="top" data-view="hero">
+    <h1 class="sr-only">Peekaboo</h1>
+    <div class="hero-word-space" aria-hidden="true"></div>
+    <div class="hero-foot">
+      <div class="hero-copy">
+        <p class="pill glass bend" data-bend="pill"><span class="dot"></span>Out now on iPhone</p>
+        <h2 class="hero-line">The camera app for your close&nbsp;friends.</h2>
+        <p class="hero-sub">Once a day, at a random time, everyone gets the cue to post. Your friends' posts stay blurred until you post yours.</p>
+        <div class="hero-actions">
+          <a class="btn btn-main" href="https://apps.apple.com/ca/app/peekaboo-dare-your-friends/id6829561855" target="_blank" rel="noopener">Get it on the App Store <span class="arrow" aria-hidden="true">&rarr;</span></a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+      </div>
+    </div>
+    <p class="scroll-cue" aria-hidden="true"><span></span>Scroll</p>
+  </section>
+
+  <section class="how" id="how" data-view="how">
+    <div class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2 class="big warp-type">No post, no&nbsp;peek.</h2>
+    </div>
+    <ol class="steps">
+      <li class="step glass bend" data-bend="card">
+        <span class="step-num">01</span>
+        <h3>The drop</h3>
+        <p>Once a day, at a random time, everyone gets the cue. Stop what you're doing and post.</p>
+        <div class="step-art art-drop" aria-hidden="true"><span></span><span></span><span></span></div>
+      </li>
+      <li class="step glass bend" data-bend="card">
+        <span class="step-num">02</span>
+        <h3>Dare</h3>
+        <p>Everyone gets the same dare every day. Do it, post it, and see how your friends did it.</p>
+        <div class="step-art art-hold" aria-hidden="true"><span></span></div>
+      </li>
+      <li class="step glass bend" data-bend="card">
+        <span class="step-num">03</span>
+        <h3>Guess Who</h3>
+        <p>Post a mystery photo with your name hidden. Your friends have to guess who posted it.</p>
+        <div class="step-art art-peek" aria-hidden="true"><span></span></div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="try" id="try" data-view="try">
+    <div class="try-grid">
+      <div class="try-copy">
+        <p class="eyebrow">Try it</p>
+        <h2 class="big warp-type">Go on. Hold&nbsp;it.</h2>
+        <p class="lede">Hold the post and scratch the blur away. That's how you peek in Peekaboo.</p>
+        <p class="try-meter glass-soft"><span id="revealPct">0</span>% revealed</p>
+      </div>
+      <figure class="post glass" id="post">
+        <div class="post-top">
+          <span class="avatar"></span>
+          <span class="post-who"><span class="post-name">maya</span><span class="post-meta">2m <b class="ontime">On time</b></span></span>
+          <span class="post-more" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <div class="post-media">
+          <canvas id="revealCanvas" aria-label="A blurred post. Hold and scratch to reveal it." role="img"></canvas>
+          <span class="post-hint" id="postHint">Hold &amp; scratch to reveal</span>
+        </div>
+        <div class="post-actions" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 20.5C4 14.5 2 10.5 2 7.5 2 4.5 4.4 2.5 7 2.5c2 0 4 1.2 5 3.1 1-1.9 3-3.1 5-3.1 2.6 0 5 2 5 5 0 3-2 7-10 13z"/></svg>
+          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 3C6.5 3 2.5 6.8 2.5 11.5c0 2.1.8 4 2.1 5.5L3.4 21l4.4-1.7c1.3.5 2.7.7 4.2.7 5.5 0 9.500-3.800 9.500-8.500S17.500 3 12 3z"/></svg>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="dares" id="dares" data-view="dares">
+    <div class="section-head">
+      <p class="eyebrow">Dares</p>
+      <h2 class="big warp-type">Dare your&nbsp;friends.</h2>
+      <p class="lede">A new dare every day. Do it, film it, post the proof.</p>
+    </div>
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-row" id="dareRowA"></div>
+      <div class="marquee-row rev" id="dareRowB"></div>
+    </div>
+    <div class="trio">
+      <article class="glass bend tile" data-bend="card">
+        <h3>Daily dares</h3>
+        <p>One dare for everyone, every day. Skip it or own it.</p>
+      </article>
+      <article class="glass bend tile" data-bend="card">
+        <h3>Guess Who</h3>
+        <p>Post a mystery peek. Your friends have to guess who it's from.</p>
+      </article>
+      <article class="glass bend tile" data-bend="card">
+        <h3>Screenshot alerts</h3>
+        <p>Took a screenshot? They'll know. So will you.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="extras" id="extras" data-view="extras">
+    <div class="section-head">
+      <p class="eyebrow">Extras</p>
+      <h2 class="big warp-type">Make it&nbsp;yours.</h2>
+    </div>
+    <div class="table glass" role="table" aria-label="Extras">
+      <div class="row" role="row"><span role="cell" class="k">App icons</span><span role="cell">Pick a new icon for your home screen.</span><span class="chip" role="cell">Look</span></div>
+      <div class="row" role="row"><span role="cell" class="k">Home and app themes</span><span role="cell">Change the whole feel of the app.</span><span class="chip" role="cell">Look</span></div>
+      <div class="row" role="row"><span role="cell" class="k">Chat backgrounds</span><span role="cell">Give every chat its own vibe.</span><span class="chip" role="cell">Chat</span></div>
+      <div class="row" role="row"><span role="cell" class="k">Sticker packs</span><span role="cell">The Bestie pack and Viral stickers.</span><span class="chip" role="cell">Chat</span></div>
+      <div class="row" role="row"><span role="cell" class="k">Dare mode</span><span role="cell">Dares, right from the camera.</span><span class="chip" role="cell">Camera</span></div>
+      <div class="row" role="row"><span role="cell" class="k">New text tool</span><span role="cell">Write on your posts, your way.</span><span class="chip" role="cell">Camera</span></div>
+      <div class="row" role="row"><span role="cell" class="k">Face filters</span><span role="cell">Three new ones to play with.</span><span class="chip" role="cell">Camera</span></div>
+    </div>
+  </section>
+
+  <section class="download" id="download" data-view="download">
+    <p class="eyebrow">Out now</p>
+    <h2 class="huge warp-type">Your friends are already&nbsp;posting.</h2>
+    <a class="btn btn-xl glass bend" data-bend="btnxl" href="https://apps.apple.com/ca/app/peekaboo-dare-your-friends/id6829561855" target="_blank" rel="noopener">Get it on the App Store</a>
+    <p class="small">Peekaboo: Dare Your Friends. For iPhone.</p>
+  </section>
+
+  <footer class="foot" data-view="footer">
+    <div class="foot-mark">peekaboo</div>
+    <div class="foot-row">
+      <p>The camera app for your close friends.</p>
+      <nav>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="guidelines.html">Guidelines</a>
+        <a href="dare-safety.html">Dare safety</a>
+        <a href="support.html">Support</a>
+      </nav>
+      <p>&copy; 2026 Peekaboo</p>
+    </div>
+  </footer>
+
+</main>
+</div>
+
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
