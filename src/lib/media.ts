@@ -10,7 +10,7 @@ import type { MediaFields } from './types';
 import { MAX_VIDEO_BYTES, TOO_BIG_VIDEO } from './videoLimits';
 
 // 'mystery' is for Guess Who: those files go in a shared folder, so the file name doesn't give away who posted it.
-type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery' | 'voice' | 'keeps' | 'group';
+type MediaFolder = 'posts' | 'stories' | 'snaps' | 'blurs' | 'mystery' | 'voice' | 'keeps' | 'group' | 'public';
 
 // What you're sending: a photo, or a video (with the text/stickers you added saved as a see-through picture).
 export type Capture = { kind: 'photo'; uri: string } | { kind: 'video'; uri: string; overlayUri?: string | null };
@@ -37,7 +37,7 @@ export async function makePoster(videoUri: string): Promise<string | null> {
 // Also returns the local still picture, for making a blurry drop preview.
 export async function uploadCapture(
   userId: string,
-  folder: 'posts' | 'stories' | 'snaps' | 'mystery' | 'keeps' | 'group',
+  folder: 'posts' | 'stories' | 'snaps' | 'mystery' | 'keeps' | 'group' | 'public',
   capture: Capture,
 ): Promise<{ fields: MediaFields; stillUri: string | null }> {
   if (capture.kind === 'photo') {

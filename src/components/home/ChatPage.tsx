@@ -29,6 +29,7 @@ import { useSafetyActions } from '@/lib/useSafetyActions';
 import { refreshStoryBadges, useStoryBadge } from '@/lib/storyRings';
 import { colors, font, radius, space, pageBackground } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
+import { usePublicChatStatus } from '@/lib/publicChat';
 import { PageHeader } from './PageHeader';
 
 type ChatRow = {
@@ -61,6 +62,8 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ query: string; people: Profile[] } | null>(null);
   const [links, setLinks] = useState<FriendLink[]>([]);
+  // Your place in the public chat (18+): the row for it only shows for adults, or to ask for a birthday.
+  const publicChat = usePublicChatStatus();
   const [refreshing, setRefreshing] = useState(false);
   // Your pinned chats (Peekaboo+ ⭐, up to 3), kept on this phone.
   const { pins, plus, toggle: togglePinned } = useChatPins();
@@ -330,6 +333,14 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
               matching.length > 0 ? <Text style={styles.sectionTitle}>💬 Chats</Text> : undefined
             ) : (
             <>
+              {/* The public chat (18+, photos only). People under 18 never see this row. */}
+              {publicChat === 'ok' || publicChat === 'no_birthday' ? (
+                <Pressable style={styles.inboxRow} onPress={() => router.push('/public-chat')} accessibilityRole="button" accessibilityLabel="Public chat, 18 and over">
+                  <Text style={styles.inboxEmoji}>📸</Text>
+                  <Text style={styles.inboxText}>Public chat · 18+</Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
               {inboxCount > 0 ? (
                 <Pressable style={styles.inboxRow} onPress={() => router.push('/inbox')} accessibilityRole="button">
                   <Text style={styles.inboxEmoji}>🔔</Text>

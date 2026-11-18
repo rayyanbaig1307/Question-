@@ -123,6 +123,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/plusLapse': { usePlusLapse() {}, endPlusExtras: async () => {} },
     // Dare safety: every dare is fine unless a test says otherwise (the rules themselves: tests/unit/dare-safety.test.mjs).
     '@/lib/dareSafety': { checkDare: () => null, dareProblem: () => null },
+    // The public chat (18+): hidden unless a test says who is looking.
+    '@/lib/publicChat': { PUBLIC_CHAT: 'public', usePublicChatStatus: () => 'under_18', fetchPublicChatStatus: async () => 'under_18', sendPublicPhoto: async () => {}, fetchPublicPhotos: async () => [], deletePublicPhoto: async () => {}, subscribeToPublicChat: () => () => {} },
     '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.
     '@/lib/chatPins': { MAX_PINS: 3, pinKeyForFriend: id => `friend:${id}`, pinKeyForGroup: id => `group:${id}`, sortByPins: items => items, useChatPins: () => ({ pins: [], plus: false, toggle: async () => 'needs-plus' }) },

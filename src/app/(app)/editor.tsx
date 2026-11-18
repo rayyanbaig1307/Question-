@@ -23,6 +23,7 @@ import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { claimChatDare, sendSnap } from '@/lib/chat';
 import { sendGroupCapture } from '@/lib/groupChat';
+import { PUBLIC_CHAT, sendPublicPhoto } from '@/lib/publicChat';
 import { postGroupGuess } from '@/lib/groupGuess';
 import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
@@ -342,6 +343,15 @@ export default function Editor() {
           router.dismissTo(`/groups/chat/${group}`);
           return;
         }
+        // From the public chat's camera (18+, photos only): it goes to the public chat, never to a group.
+        if (straightToGroup && group === PUBLIC_CHAT) {
+          await sendPublicPhoto(userId, photo);
+          finishedDirect.current = true;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast('Posted in the public chat 📸');
+          router.dismissTo('/public-chat');
+          return;
+        }
         if (straightToGroup && group) {
           await sendGroupCapture(userId, group, photo, groupDare);
           finishedDirect.current = true;
@@ -519,8 +529,10 @@ export default function Editor() {
                         ? 'Post Guess Who'
                         : straightToGroupGuess
                           ? 'Send Guess Who'
-                          : straightToGroup
-                            ? 'Send to group'
+                          : straightToGroup && group === PUBLIC_CHAT
+                            ? 'Post in public chat'
+                            : straightToGroup
+                              ? 'Send to group'
                             : 'Send to'}
                 </Text>
                 <Ionicons name="send" size={18} color={colors.onAccent} />
