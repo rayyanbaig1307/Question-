@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { updateChannel } from './lensDiagnostics';
 import { deleteMedia, uploadCapture, type Capture } from './media';
 import { supabase } from './supabase';
 import type { Profile } from './types';
@@ -27,7 +28,19 @@ export type PublicPhoto = {
 // The name the camera and editor use for "send it to the public chat" (in place of a group's id).
 export const PUBLIC_CHAT = 'public';
 
+// 🔒 The public chat is being tried out: it only shows in downloads on the `testing` update channel (the
+// owner's TestFlight builds). In the App Store build, on every other channel and in any new build it stays
+// hidden – whatever commit that build was made from – until the AI photo scanner exists. To open it to
+// everyone then, set this to true (a one-line update).
+export const PUBLIC_CHAT_FOR_EVERYONE = false;
+
+// Is the public chat switched on in this download? `channel` is for the tests; the app leaves it out.
+export function publicChatSwitchedOn(channel?: string | null): boolean {
+  return PUBLIC_CHAT_FOR_EVERYONE || (channel === undefined ? updateChannel() : channel) === 'testing';
+}
+
 export async function fetchPublicChatStatus(): Promise<PublicChatStatus> {
+  if (!publicChatSwitchedOn()) return 'unavailable';
   const { data, error } = await supabase.rpc('public_chat_status');
   if (error || (data !== 'ok' && data !== 'no_birthday' && data !== 'under_18')) return 'unavailable';
   return data;

@@ -49,6 +49,9 @@ and the owner's standing preferences.
   known spot): `private.can_read_media`, `private.media_path_in_use`, `private.report_evidence_paths`,
   `private.prepare_report`. **If a later migration redefines any of them, keep the `public_photo` lines**
   (`tests/database/public-chat.test.mjs` fails if they go missing).
+- **Locked to `testing` in the app itself:** `publicChatSwitchedOn()` in `src/lib/publicChat.ts` hides the row and the
+  room everywhere except the `testing` update channel, so a production OTA or a new native build (1.2) is safe by
+  default. To open it to everyone once the scanner exists: set `PUBLIC_CHAT_FOR_EVERYONE = true` (one line).
 - **Production hold:** there is no AI image scanner yet (the owner: "we'll create the scanner after"). A `production`
   OTA from `71faea9` or later turns the public chat on for App Store users (the row shows as soon as the server
   answers). So: no `production` publish from `71faea9` or later unless the owner OKs the public chat going live too –

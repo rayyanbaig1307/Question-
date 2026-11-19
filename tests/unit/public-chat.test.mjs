@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { loadLibrary } from './libHarness.mjs';
 
 // The public chat's data code (src/lib/publicChat.ts): photos only, and a failed post leaves no file behind.
-function load({ insertError = null, status = 'ok', statusError = null } = {}) {
+function load({ insertError = null, status = 'ok', statusError = null, channel = 'testing' } = {}) {
   const done = { uploaded: [], deleted: [], inserted: [] };
   const lib = loadLibrary('publicChat', {
     supabase: {
@@ -10,6 +10,7 @@ function load({ insertError = null, status = 'ok', statusError = null } = {}) {
       from: () => ({ insert: async (row) => { done.inserted.push(row); return { error: insertError }; } }),
     },
     mocks: {
+      './lensDiagnostics': { updateChannel: () => channel },
       './media': {
         uploadCapture: async (me, folder, capture) => {
           done.uploaded.push([me, folder, capture.kind]);
@@ -47,4 +48,16 @@ it('your place in the room: the server\'s answer, or "unavailable" when it can\'
   expect(await load({ status: 'no_birthday' }).lib.fetchPublicChatStatus()).toBe('no_birthday');
   expect(await load({ status: null, statusError: new Error('no such function') }).lib.fetchPublicChatStatus()).toBe('unavailable');
   expect(await load({ status: 'something else' }).lib.fetchPublicChatStatus()).toBe('unavailable');
+});
+
+it('the public chat is only switched on for the testing channel: everywhere else the server is not even asked', async () => {
+  for (const channel of ['production', 'preview', null]) {
+    const { lib } = load({ channel, status: 'ok' });
+    expect(lib.PUBLIC_CHAT_FOR_EVERYONE).toBe(false);
+    expect(lib.publicChatSwitchedOn()).toBe(false);
+    expect(await lib.fetchPublicChatStatus()).toBe('unavailable');
+  }
+  const { lib } = load({ channel: 'testing', status: 'ok' });
+  expect(lib.publicChatSwitchedOn()).toBe(true);
+  expect(await lib.fetchPublicChatStatus()).toBe('ok');
 });
