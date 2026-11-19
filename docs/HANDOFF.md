@@ -37,6 +37,25 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Public chat (19 Nov): on `testing` only – DO NOT put it on `production` yet
+
+- **What:** one room for everyone 18 and over, photos only (the owner's choice, 18 Nov). Commit `71faea9`.
+  App: `src/lib/publicChat.ts`, `src/app/(app)/public-chat.tsx`, a "Public chat · 18+" row on the Chat page (only
+  shown when the server says `ok` or `no_birthday`), and the camera/editor send to it with `group=public`.
+- **Server:** `supabase/migrations/20261225000000_public_chat.sql` is **applied live** (19 Nov). Table `public_photos`;
+  18+ from the saved birthday (`private.in_public_chat`, `public.public_chat_status()`); slow mode (one photo every
+  30 seconds, 40 a day); report kind `public_photo`, and 3 different reporters hide a photo; a `public` upload folder.
+- **Four functions each got one public-chat line** (the migration reads the live definition and adds the line at a
+  known spot): `private.can_read_media`, `private.media_path_in_use`, `private.report_evidence_paths`,
+  `private.prepare_report`. **If a later migration redefines any of them, keep the `public_photo` lines**
+  (`tests/database/public-chat.test.mjs` fails if they go missing).
+- **Production hold:** there is no AI image scanner yet (the owner: "we'll create the scanner after"). A `production`
+  OTA from `71faea9` or later turns the public chat on for App Store users (the row shows as soon as the server
+  answers). So: no `production` publish from `71faea9` or later unless the owner OKs the public chat going live too –
+  tell them it is included when they say "publish". `testing`: group `9fca0573` (from `71faea9`).
+- **Next:** the AI scanner (the owner picks the service and adds its key in Supabase – never in chat). Planned to
+  cover public things: public chat photos, public posts, Guess Who posts and profile pictures.
+
 ## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who, invite links and face filters
 
 - **Live:** Peekaboo 1.0 (build 10) is "Ready for Distribution" and Peekaboo+ Monthly is APPROVED (owner's screenshot
