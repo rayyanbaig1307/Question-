@@ -37,6 +37,16 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Livestreams (owner, 19–20 Nov) – in progress
+- v1 (version 1.2 native build, LiveKit): friends-only lives, comments + hearts, host brings 1 friend on, push to
+  friends. Design: session scratchpad `live/DESIGN.md` (summarised in the migration header). LiveKit URL
+  `wss://peekaboo-0i4j4n84.livekit.cloud`; the owner put LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET into
+  Supabase Edge Function secrets (20 Nov). Code is WIP until the review finishes – don't publish or build from WIP commits.
+- **v2, owner-approved for right after v1 works (20 Nov):** dares during a live, stickers in the comment box,
+  viewers can "ask to join" (host says yes/no), up to 5 people on screen (host + 4). Watch rule: anyone who is friends
+  with the host; for each guest who is under 18 (or has no birthday), viewers must also be friends with that guest.
+  JS/DB/edge only – ships by OTA to 1.2, no new native build.
+
 ## Public chat (19 Nov): on `testing` only – DO NOT put it on `production` yet
 
 - **What:** one room for everyone 18 and over, photos only (the owner's choice, 18 Nov). Commit `71faea9`.
