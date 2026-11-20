@@ -41,7 +41,15 @@ and the owner's standing preferences.
 - v1 (version 1.2 native build, LiveKit): friends-only lives, comments + hearts, host brings 1 friend on, push to
   friends. Design: session scratchpad `live/DESIGN.md` (summarised in the migration header). LiveKit URL
   `wss://peekaboo-0i4j4n84.livekit.cloud`; the owner put LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET into
-  Supabase Edge Function secrets (20 Nov). Code is WIP until the review finishes – don't publish or build from WIP commits.
+  Supabase Edge Function secrets (20 Nov). Finished in `5f67df1` (two review rounds, all tests pass). Edge Functions
+  `live-token` and `live-admin` deployed 20 Nov (Verify JWT off). Migration `20261226000000_livestreams.sql` (sha256
+  starts `f752a6bef2fe`) – copy page https://claude.ai/artifact/H5yvPwsq6aYEeKwtEYeHC9 – **waiting for the owner to
+  paste it**; then run `select private.live_selftest();` and check `private.live_jobs` (room 'live_selftest').
+  **TestFlight build 13** (version 1.2.0) = EAS `9cb52cf4-1122-4adb-a197-051664a63cc2`, profile `testflight-testing`,
+  channel `testing`, uploaded by the Plus session (ASC build `606d7b53-1990-4ae8-afc8-92503b429980`, VALID, internal
+  group). Lives start testers-only (`private.live_settings.who_can_go_live = 'testers'`: the owner, and @ayaan while
+  he's the owner's friend). `testing` publishes must come from `5f67df1` or later (older bundles hide lives on 1.2).
+  Nothing from lives goes to `production` until 1.2 passes App Review and the owner says "publish".
 - **v2, owner-approved for right after v1 works (20 Nov):** dares during a live, stickers in the comment box,
   viewers can "ask to join" (host says yes/no), up to 5 people on screen (host + 4). Watch rule: anyone who is friends
   with the host; for each guest who is under 18 (or has no birthday), viewers must also be friends with that guest.
