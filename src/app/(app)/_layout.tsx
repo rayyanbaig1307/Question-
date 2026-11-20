@@ -2,10 +2,12 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 
 import { ProfileSetup, useNeedsSetup } from '@/components/ProfileSetup';
+import { HeardAbout } from '@/components/HeardAbout';
 import { PendingInvite } from '@/components/PendingInvite';
 import { CouldNotCheck, TermsGate } from '@/components/TermsGate';
 import { useAuth } from '@/lib/auth';
 import { syncCommunityDares } from '@/lib/communityDares';
+import { useNeedsHeardAbout } from '@/lib/heardAbout';
 import { useShareLocationWhileOpen } from '@/lib/location';
 import { fetchNotificationPrefs } from '@/lib/notificationPrefs';
 import { registerForPush, scheduleDropNotifications, useNotificationTaps } from '@/lib/notifications';
@@ -47,11 +49,16 @@ export default function AppLayout() {
   // If we couldn't check (no internet?), or your profile isn't loaded yet, say so and offer "Try again" –
   // never the app, and never an empty setup form.
   const [needsSetup, setupDone, setupCheck] = useNeedsSetup();
+  // A brand-new account: "How did you hear about Peekaboo?" once, after the name and username (never blocks:
+  // a slow or failed check just skips it).
+  const [needsHeardAbout, heardAboutDone] = useNeedsHeardAbout(needsSetup === false ? userId : null);
   if (needsSetup === null) return null;
   if (setupCheck.failed || (needsSetup && !profile)) {
     return <CouldNotCheck onRetry={setupCheck.retry} checking={setupCheck.checking} />;
   }
   if (needsSetup) return <ProfileSetup onDone={setupDone} />;
+  if (needsHeardAbout === null) return null;
+  if (needsHeardAbout && userId) return <HeardAbout userId={userId} onDone={heardAboutDone} />;
 
   return (
     <>

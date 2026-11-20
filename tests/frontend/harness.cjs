@@ -212,6 +212,9 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/dareSafety': { checkDare: () => null, dareProblem: () => null },
     // The public chat (18+): hidden unless a test says who is looking.
     '@/lib/publicChat': { PUBLIC_CHAT: 'public', usePublicChatStatus: () => 'under_18', fetchPublicChatStatus: async () => 'under_18', sendPublicPhoto: async () => {}, fetchPublicPhotos: async () => [], deletePublicPhoto: async () => {}, subscribeToPublicChat: () => () => {} },
+    // "How did you hear about Peekaboo?": not asked unless a test says so.
+    '@/lib/heardAbout': { useNeedsHeardAbout: () => [false, () => {}], saveHeardAbout: async () => {}, HEARD_ABOUT_OPTIONS: [] },
+    '@/components/HeardAbout': { HeardAbout: host('HeardAbout') },
     '@/lib/termsCache': { knownAgreed: () => false, knownAgreedAny: () => false, rememberAgreed() {}, forgetAgreed() {} },
     // The chat screens' keyboard lift: no keyboard in these tests.
     '@/lib/chatPins': { MAX_PINS: 3, pinKeyForFriend: id => `friend:${id}`, pinKeyForGroup: id => `group:${id}`, sortByPins: items => items, useChatPins: () => ({ pins: [], plus: false, toggle: async () => 'needs-plus' }) },
