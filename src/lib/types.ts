@@ -70,4 +70,14 @@ export type Story = MediaFields & {
   expires_at: string;
 };
 
-export type ReportContentType = 'user' | 'post' | 'story' | 'message' | 'group_message' | 'comment' | 'public_photo';
+export type ReportContentType =
+  | 'user'
+  | 'post'
+  | 'story'
+  | 'message'
+  | 'group_message'
+  | 'comment'
+  | 'public_photo'
+  // Lives 🔴: a live (the host or the co-host, whoever is reported) or one comment in a live.
+  | 'live'
+  | 'live_comment';

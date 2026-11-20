@@ -56,6 +56,87 @@ function frameAccessMock(available, { broken = false } = {}) {
   };
 }
 
+// A stand-in for src/lib/liveAccess.ts (lives 🔴). `available`: this download can do lives (version 1.2.0 or
+// newer with LiveKit inside). The default is false, like App Store 1.0/1.1, old TestFlight builds, old APKs and
+// Expo Go, so every screen looks the way it does there. `isLiveAvailable` counts its calls (the camera and Home
+// must never call it). The live-now flag and the camera hand-off work like the real ones.
+function liveAccessMock(available = false, { stage = null } = {}) {
+  let role = null;
+  let held = false;
+  const roleListeners = new Set();
+  const cameraListeners = new Set();
+  const ended = new Set();
+  const waiting = new Map();
+  const calls = { isLiveAvailable: 0, holds: 0, releases: 0, released: 0, roles: [], loads: 0, afterLive: [] };
+  const tell = (set) => [...set].forEach((listener) => listener());
+  const mock = {
+    LIVE_ENABLED: true, LIVE_ON_ANDROID: false, HEARTS_ENABLED: true, LIVE_MIN_APP_VERSION: '1.2.0',
+    LIVE_NATIVE_MODULES: ['WebRTCModule', 'LivekitReactNativeModule'], CAMERA_RELEASE_MIN_MS: 500, CAMERA_RELEASE_MAX_MS: 1200,
+    LIVE_UNAVAILABLE_WORDS: {
+      update: 'Update Peekaboo to watch lives 🔴',
+      android: "Lives aren't on Android yet – soon! 🔴",
+      off: 'Lives are switched off for now.',
+      broken: "Lives aren't working on this phone right now.",
+    },
+    calls,
+    versionAtLeast: () => true,
+    liveBroken: () => false, markLiveBroken() {}, subscribeLiveBroken: () => () => {},
+    liveMaybeAvailable: () => available,
+    isLiveAvailable: () => { calls.isLiveAvailable++; return available; },
+    liveUnavailableReason: () => (available ? null : 'update'),
+    loadLiveStage: () => { calls.loads++; return available ? stage : null; },
+    setLiveNow(next) {
+      if (role === next) return;
+      const before = role;
+      role = next;
+      calls.roles.push(next);
+      tell(roleListeners);
+      if (before !== null && next === null) {
+        tell(ended);
+        const jobs = [...waiting.values()];
+        waiting.clear();
+        jobs.forEach((job) => job());
+      }
+    },
+    liveNowRole: () => role,
+    isLiveNow: () => role !== null,
+    useLiveNow: () => React.useSyncExternalStore((l) => { roleListeners.add(l); return () => roleListeners.delete(l); }, () => role),
+    onLiveEnded: (listener) => { ended.add(listener); return () => ended.delete(listener); },
+    runAfterLive(key, work) { calls.afterLive.push(key); if (role === null) work(); else waiting.set(key, work); },
+    holdCameraForLive() { if (held) return; held = true; calls.holds++; tell(cameraListeners); },
+    useCameraHeldByLive: () => React.useSyncExternalStore((l) => { cameraListeners.add(l); return () => cameraListeners.delete(l); }, () => held),
+    isCameraHeldByLive: () => held,
+    markCameraReleased() { calls.released++; },
+    waitForCameraRelease: async () => {},
+    releaseCameraFromLive() { if (!held) return; held = false; calls.releases++; tell(cameraListeners); },
+  };
+  return mock;
+}
+
+// A stand-in for src/lib/lives.ts: the server says nothing is live and you can't go live, unless a test says so.
+function livesMock(overrides = {}) {
+  return {
+    LIVE_COMMENT_MAX: 150,
+    LIVE_TOKEN_WORDS: {
+      login: 'Please log in again.', login_changed: 'Your login changed – please log in again.', not_set_up: "Lives aren't set up yet.",
+      unavailable: "Lives aren't working right now – try again in a bit.", not_allowed: "This live is only for the host's friends.",
+      removed: 'You were removed from this live.', ended: 'This live has ended.',
+      paused: "Your friend brought someone on – this part is just for their shared friends. We'll let you back in after.",
+      full: 'This live is full right now – try again in a bit.', busy: 'Lives are busy right now – try again later.',
+      stage_wait: 'Getting the stage ready…', network: "Couldn't reach the server – check your internet.",
+    },
+    isLiveId: (value) => typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value),
+    liveHint: (error) => error?.hint ?? null,
+    useLiveBubble: () => false,
+    fetchLiveState: async () => ({ can_go_live: false, why_not: 'testers', my_live: null, max_minutes: 60, lives_left_today: 0, rules_accepted: false }),
+    fetchFriendsLiveNow: async () => [],
+    checkLiveComment: () => null,
+    listenToLive: () => () => {},
+    fetchLiveComments: async () => [],
+    ...overrides,
+  };
+}
+
 function host(name) {
   return function Host(props) {
     if (name === 'Modal' && !props.visible) return null;
@@ -167,6 +248,12 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     // build 10, TestFlight 7–9, old APKs and Expo Go), so every screen looks the way it does there. Tests for the
     // new build pass their own frameAccessMock(true).
     '@/lib/frameAccess': frameAccessMock(false),
+    // Lives 🔴: not on this download by default (see liveAccessMock), and the server has nothing live.
+    '@/lib/liveAccess': liveAccessMock(false),
+    '@/lib/lives': livesMock(),
+    '@/lib/liveExit': { setLiveExit: () => () => {}, leaveLiveNow: async () => {}, openUnlessLive: (open) => open() },
+    '@/lib/livePermissions': { ensureLivePermissions: async () => 'ok', openPhoneSettings() {}, LIVE_PERMISSION_WORDS: 'Peekaboo needs your camera and microphone so friends can see and hear you' },
+    '@/components/live/GoLiveSheet': { GoLiveSheet: host('GoLiveSheet') },
     // App icons (a native part only new iPhone downloads have): off by default, like Expo Go.
     '@/lib/appIcons': {
       CAN_CHANGE_APP_ICON: false,
@@ -210,5 +297,5 @@ function button(tree, title) { return tree.root.findAllByType('Button').find(nod
 function option(tree, title) { return tree.root.findAllByType('Pressable').find(node => textOf(node).startsWith(title) || node.findAllByType('Text').some(child => textOf(child) === title)); }
 async function unmount(tree) { await act(() => tree.unmount()); }
 
-module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host, frameAccessMock };
+module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host, frameAccessMock, liveAccessMock, livesMock };
 

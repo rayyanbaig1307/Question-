@@ -76,6 +76,15 @@ export default function AppLayout() {
       <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="map" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="plus" options={{ animation: 'slide_from_bottom' }} />
+      {/* Lives 🔴: going live, and watching a friend's live. No swipe-back, so a swipe can't end a live by accident. */}
+      <Stack.Screen
+        name="go-live"
+        options={{ animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: colors.black } }}
+      />
+      <Stack.Screen
+        name="live/[id]"
+        options={{ animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: colors.black } }}
+      />
     </Stack>
     {/* Everyone must have agreed to the current Terms of Service. */}
     <TermsGate />

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { APP_ICONS, CAN_CHANGE_APP_ICON, currentAppIcon, setAppIcon } from '@/lib/appIcons';
+import { runAfterLive } from './liveAccess';
 import { plusSurelyOff, refreshServerPlus, watchMyPlus } from '@/lib/plus';
 import { PLUS_THEMES, saveThemeChoice, themeChoice, type PlusTheme } from '@/theme';
 
@@ -49,7 +50,8 @@ export async function endPlusExtras(): Promise<void> {
   }
   if ((PLUS_THEMES as readonly string[]).includes(themeChoice as PlusTheme)) {
     await saveThemeChoice('dark');
-    // The colours are chosen when the app starts, so start again in Dark.
-    await reloadAppAsync();
+    // The colours are chosen when the app starts, so start again in Dark – after the live, if you're in one 🔴
+    // (right away otherwise).
+    runAfterLive('plusLapse', () => reloadAppAsync());
   }
 }

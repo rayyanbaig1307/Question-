@@ -10,6 +10,10 @@ import { supabase } from './supabase';
 // Bump a version when a change needs everyone to agree again – they're asked on their next open.
 export const TERMS_VERSION = '2026-11-06';
 export const DARE_RULES_VERSION = '2026-10-31';
+// The Live rules card 🔴 (components/live/LiveRulesSheet.tsx): agreed once before your first live or your first
+// time on someone's live. Bump it when the card's rules change. (The Terms themselves didn't change for lives,
+// so TERMS_VERSION stays as it is and older app downloads show nothing new.)
+export const LIVE_RULES_VERSION = '2026-11-20';
 
 // The documents you can open in the app (/legal/<key>).
 export const LEGAL_PAGES = {
@@ -34,7 +38,7 @@ export function contactEmail(terms: string): string | null {
   return match ? match[0] : null;
 }
 
-type Document = 'terms' | 'dare_rules';
+type Document = 'terms' | 'dare_rules' | 'live_rules';
 
 // Records that you agreed (the database stamps the time).
 export async function acceptLegal(document: Document, version: string): Promise<void> {

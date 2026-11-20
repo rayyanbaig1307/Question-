@@ -10,6 +10,7 @@ import { OverlayProvider } from '@/components/Overlays';
 import { SetupNeeded } from '@/components/SetupNeeded';
 import { useStayUpToDate } from '@/lib/appUpdates';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { runAfterLive } from '@/lib/liveAccess';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { colors, isDark, navigationTheme, phoneScheme, themeChoice } from '@/theme';
 
@@ -18,11 +19,12 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   // Switch to a new version as soon as one is out (see lib/appUpdates.ts).
   useStayUpToDate();
-  // "Match phone": when the phone switches between light and dark, restart in the new colors.
+  // "Match phone": when the phone switches between light and dark, restart in the new colors (after the live,
+  // if you're in one 🔴).
   useEffect(() => {
     if (themeChoice !== 'system') return;
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      if ((colorScheme === 'light' ? 'light' : 'dark') !== phoneScheme) reloadAppAsync().catch(() => {});
+      if ((colorScheme === 'light' ? 'light' : 'dark') !== phoneScheme) runAfterLive('theme', () => reloadAppAsync().catch(() => {}));
     });
     return () => subscription.remove();
   }, []);

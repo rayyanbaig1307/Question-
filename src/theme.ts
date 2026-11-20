@@ -71,6 +71,8 @@ const dark = {
   green: '#3DDC97',
   orange: '#FF8A3D',
   red: '#FF4D5E',
+  // Lives 🔴: the live pink (rings, the LIVE pill, the Go live bubble). Red stays for recording.
+  live: '#FF3D7F',
   black: '#000000',
   white: '#FFFFFF',
   overlay: 'rgba(0,0,0,0.35)',
@@ -96,6 +98,7 @@ const light: typeof dark = {
   green: '#1DB97F',
   orange: '#FF7A1F',
   red: '#F0384A',
+  live: '#FF3D7F',
   black: '#000000',
   white: '#FFFFFF',
   overlay: 'rgba(0,0,0,0.3)',

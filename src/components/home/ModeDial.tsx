@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -30,7 +30,8 @@ import { colors, gradients, radius, space } from '@/theme';
 // the list is in lib/lensLooks.ts) use MediaPipe face tracking – only on downloads that have it. Soft Glow and
 // Golden Hour are free, the rest are Peekaboo+. The 4 stretchy ones (Tiny Face, Gigachin, Big Mouth, Pixel Panic)
 // also need the camera's own pixels, so they're only on the newest downloads (lib/frameAccess.ts).
-export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | LensLook;
+// 'live' 🔴: go live to your friends (only on downloads that can, see LIVE_MODE below).
+export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | 'live' | LensLook;
 
 type ModeItem = {
   key: Exclude<CameraMode, 'photo'>;
@@ -63,6 +64,18 @@ export const CAMERA_MODES: ModeItem[] = [
     : []),
 ];
 
+// 🔴 Go live: right after Guess Who on the home camera, only when this download can do lives and the server
+// didn't say "never for you" (CameraPage works that out with useLiveBubble and passes `live`). It isn't in
+// CAMERA_MODES itself, so nothing about lives runs when the app starts; the row adds it below.
+export const LIVE_MODE: ModeItem = { key: 'live', emoji: '🔴', label: 'Go live', hint: 'Go live to your friends' };
+
+// The home camera's row: CAMERA_MODES with 🔴 after Guess Who when `live` is on.
+export function homeModes(live: boolean): ModeItem[] {
+  if (!live) return CAMERA_MODES;
+  const at = CAMERA_MODES.findIndex((item) => item.key === 'guess') + 1;
+  return [...CAMERA_MODES.slice(0, at), LIVE_MODE, ...CAMERA_MODES.slice(at)];
+}
+
 // Everything on the row, including the empty spot for the plain camera at the start.
 
 // Every spot on the row is this wide, so the row snaps one spot at a time and the chosen one lands dead centre.
@@ -80,7 +93,7 @@ export const LENS_MODES: CameraMode[] = [
   ...LENS_LOOKS.filter((look) => lookHere(look, FRAME_ACCESS_AVAILABLE && !framesBroken())).map((look) => look.key),
 ];
 
-export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false, locked = false }: {
+export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess = false, locked = false, live = false }: {
   mode: CameraMode;
   // Return false to say "not allowed" (e.g. a Peekaboo+ filter without Plus): the row then glides back to the
   // mode you're still in, so it never stays parked on a bubble that isn't on.
@@ -92,13 +105,17 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
   withGuess?: boolean;
   // We're sure you don't have Peekaboo+: the Plus bubbles get a small ⭐ so you know before you pick one.
   locked?: boolean;
+  // Show the 🔴 Go live bubble (home camera only; never in a chat's camera).
+  live?: boolean;
 }) {
   // False once the stretchy filters broke on this phone: their bubbles go away at once.
   const warpsOn = useWarpLooksOn();
+  const withLive = live && !lensesOnly;
+  const list = useMemo(() => homeModes(withLive), [withLive]);
   const modes = (
     lensesOnly
       ? CAMERA_MODES.filter((item) => LENS_MODES.includes(item.key) || (withGuess && item.key === 'guess'))
-      : CAMERA_MODES
+      : list
   ).filter((item) => warpsOn || !isWarpLook(item.key));
   const SLOTS: CameraMode[] = ['photo', ...modes.map((item) => item.key)];
   // The row stretches across the whole screen, so "the middle" is the middle of the screen – right over the shutter.
@@ -196,8 +213,8 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
 
-  // The face filters explain themselves (no words on the camera).
-  if (isLensLook(mode)) return null;
+  // The face filters explain themselves (no words on the camera), and 🔴 Go live has its own sheet.
+  if (isLensLook(mode) || mode === 'live') return null;
 
   if (mode === 'googly') {
     // The lens explains itself (eyes on faces). Without face tracking, say how to get it.

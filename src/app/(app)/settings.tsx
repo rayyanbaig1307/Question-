@@ -15,6 +15,7 @@ import { fetchShowInProfileViews, setShowInProfileViews } from '@/lib/insights';
 import { prefetchInviteCode } from '@/lib/invite';
 import { contactEmail, type LegalPage } from '@/lib/legal';
 import { LEGAL_DOCS } from '@/lib/legalDocs';
+import { liveMaybeAvailable } from '@/lib/liveAccess';
 import { setLocationSharing } from '@/lib/location';
 import { ALL_ON, fetchNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { scheduleDropNotifications } from '@/lib/notifications';
@@ -356,6 +357,10 @@ export default function Settings() {
             subtitle="The 'you have 2 minutes' alert, and group nudges"
             right={notifySwitch('drops')}
           />
+          {/* Lives 🔴: only on downloads that can open a live. */}
+          {liveMaybeAvailable() ? (
+            <Row icon="radio" color={colors.live} title="Friends going live 🔴" right={notifySwitch('lives')} />
+          ) : null}
         </Section>
 
         <Section title="Peekaboo drops">

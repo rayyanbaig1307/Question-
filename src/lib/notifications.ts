@@ -5,6 +5,8 @@ import { useCallback, useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { dropAt, localDay } from './drop';
+import { isLiveNow, liveMaybeAvailable, liveNowRole, type LiveRole } from './liveAccess';
+import { openUnlessLive } from './liveExit';
 import { supabase } from './supabase';
 
 // Notifications are a native part of the app. Expo Go has them, but an app built before they were added
@@ -67,6 +69,14 @@ export function useOpenChat(chat: string | null) {
   );
 }
 
+// Lives 🔴: while you're hosting or on stage, nothing pops up over the live (no banner, no sound) – the
+// notifications still wait for you in the Inbox. A "… is live" notification never pops up while you're in a
+// live (hosting, on stage or watching).
+export function quietDuringLive(data: unknown, role: LiveRole | null): boolean {
+  if (role === 'host' || role === 'cohost') return true;
+  return role !== null && (data as { type?: unknown } | null | undefined)?.type === 'live';
+}
+
 const DROP_DAYS_AHEAD = 7;
 const DROP_ID = 'peekaboo-drop-';
 
@@ -78,12 +88,14 @@ async function getReady(): Promise<boolean> {
     // While Peekaboo is open: a quick banner, but it isn't kept in the phone's notification list
     // (you're already in the app, so it would only pile up there).
     // Nothing at all for a message from the chat you're looking at right now (you can already see it).
+    // While you're in a live, see quietDuringLive.
     handleNotification: async (notification) => {
-      const forOpenChat = isForOpenChat(notification.request.content.data);
+      const data = notification.request.content.data;
+      const quiet = isForOpenChat(data) || quietDuringLive(data, liveNowRole());
       return {
-        shouldShowBanner: !forOpenChat,
+        shouldShowBanner: !quiet,
         shouldShowList: false,
-        shouldPlaySound: !forOpenChat,
+        shouldPlaySound: !quiet,
         shouldSetBadge: false,
       };
     },
@@ -132,6 +144,13 @@ export async function registerForPush(): Promise<void> {
     if (error) ({ error } = await supabase.rpc('register_push_token', { push_token: token, phone }));
     if (error) throw error;
     myPushToken = token;
+    // Lives 🔴: can this phone open a live? Only then does the server send it "… is live" notifications
+    // (older downloads can't open a live). Always sent, so switching lives off by an update also stops them.
+    supabase
+      .rpc('set_push_capability', { push_token: token, live_ok: liveMaybeAvailable() })
+      .then(({ error: capabilityError }) => {
+        if (capabilityError) console.warn('Could not save whether this phone can open lives', capabilityError);
+      }, () => {});
   } catch (error) {
     // Expected in Expo Go on Android, and in Android builds until Firebase is set up – everything else still works.
     console.warn('Push notifications are not available on this phone yet', error);
@@ -180,7 +199,19 @@ export async function scheduleDropNotifications(enabled: boolean): Promise<void>
 }
 
 // Tapping a notification opens the right screen (also when the tap is what started the app).
-function openFor(data: Record<string, unknown> | undefined) {
+// While you're hosting or on stage, you're asked first ("End your live to open this?", lib/liveExit.ts).
+export function openFor(data: Record<string, unknown> | undefined) {
+  if (data?.type === 'live') {
+    // "🔴 Sam is live": open the live – only on a phone that can show lives, and not while you're in one.
+    if (liveMaybeAvailable() && !isLiveNow() && typeof data.live === 'string') {
+      router.push({ pathname: '/live/[id]', params: { id: data.live } });
+    }
+    return;
+  }
+  openUnlessLive(() => openScreenFor(data));
+}
+
+function openScreenFor(data: Record<string, unknown> | undefined) {
   switch (data?.type) {
     case 'drop':
       router.push({ pathname: '/camera', params: { drop: '1' } });

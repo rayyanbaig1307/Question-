@@ -20,6 +20,7 @@ import { StatusBar } from 'expo-status-bar';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
+import { ReactionBurst } from '@/components/FloatingEmoji';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { PersonRow } from '@/components/PersonRow';
@@ -368,7 +369,7 @@ export default function StoryViewer() {
           </View>
         </SafeEdge>
       )}
-      {burst ? <ReactionBurst key={burst.count} emoji={burst.emoji} /> : null}
+      {burst ? <ReactionBurst key={burst.count} emoji={burst.emoji} style={styles.burst} /> : null}
 
       <Modal visible={viewersOpen} transparent animationType="slide" onRequestClose={() => setViewersOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setViewersOpen(false)}>
@@ -431,34 +432,6 @@ export default function StoryViewer() {
       </Modal>
     </View>
   );
-}
-
-// A handful of the emoji you tapped float up the screen and fade away.
-function ReactionBurst({ emoji }: { emoji: string }) {
-  return (
-    <View style={styles.burst} pointerEvents="none">
-      {[0, 1, 2, 3, 4, 5].map((index) => (
-        <FloatingEmoji key={index} emoji={emoji} index={index} />
-      ))}
-    </View>
-  );
-}
-
-function FloatingEmoji({ emoji, index }: { emoji: string; index: number }) {
-  const rise = useSharedValue(0);
-  useEffect(() => {
-    rise.set(withTiming(1, { duration: 1100 + index * 120, easing: Easing.out(Easing.quad) }));
-  }, [rise, index]);
-  const drift = (index - 2.5) * 28;
-  const style = useAnimatedStyle(() => ({
-    opacity: 1 - rise.get(),
-    transform: [
-      { translateX: drift * rise.get() },
-      { translateY: -320 * rise.get() - index * 12 },
-      { scale: 0.8 + rise.get() * (index === 0 ? 1.4 : 0.6) },
-    ],
-  }));
-  return <Animated.Text style={[styles.floating, style]}>{emoji}</Animated.Text>;
 }
 
 function ProgressBar({ state, progress }: { state: 'full' | 'current' | 'empty'; progress: SharedValue<number> }) {
@@ -572,10 +545,6 @@ const styles = StyleSheet.create({
     width: 1,
     height: 1,
     alignItems: 'center',
-  },
-  floating: {
-    position: 'absolute',
-    fontSize: 44,
   },
   closeTag: {
     paddingHorizontal: space.sm,

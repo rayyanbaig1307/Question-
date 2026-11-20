@@ -13,6 +13,9 @@ import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { countUnguessed } from '@/lib/guess';
 import { inviteFriends, prefetchInviteCode } from '@/lib/invite';
+import { liveMaybeAvailable } from '@/lib/liveAccess';
+import { fetchFriendsLiveNow, type FriendLive } from '@/lib/lives';
+import { onNotificationArrived } from '@/lib/notifications';
 import { noteDropSeen } from '@/lib/peeks';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
@@ -42,6 +45,8 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
   // How many Guess Who posts you can still guess (a number on the Guess Who circle).
   const [toGuess, setToGuess] = useState(0);
+  // Friends who are live right now 🔴 (only on downloads that can open a live).
+  const [lives, setLives] = useState<FriendLive[]>([]);
 
   const show = useCallback(
     (loaded: {
@@ -49,12 +54,14 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
       page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
       days: Set<string>;
       toGuess: number;
+      lives: FriendLive[];
     }) => {
       setRings(loaded.rings);
       setPosts(loaded.page.posts);
       setNext(loaded.page.next);
       setMyDropDays(loaded.days);
       setToGuess(loaded.toGuess);
+      setLives(loaded.lives);
     },
     [],
   );
@@ -66,7 +73,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   const loadAll = useCallback(async () => {
     const ticket = storyRingsTicket();
-    const [rings, page, days, toGuess] = await Promise.all([
+    const [rings, page, days, toGuess, lives] = await Promise.all([
       fetchStoryRings(userId)
         .then((loaded) => {
           // The same list gives the rings on profile pictures everywhere else.
@@ -80,9 +87,28 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
       fetchDiscover(userId),
       fetchMyDropDays(userId).catch(() => new Set<string>()),
       countUnguessed().catch(() => 0),
+      liveMaybeAvailable() ? fetchFriendsLiveNow().catch(() => [] as FriendLive[]) : Promise.resolve([] as FriendLive[]),
     ]);
-    return { rings, page, days, toGuess };
+    return { rings, page, days, toGuess, lives };
   }, [userId]);
+
+  // Friends who are live: checked again every 30 seconds while Home is on screen, and when a "… is live"
+  // notification comes in.
+  const refreshLives = useCallback(() => {
+    if (!liveMaybeAvailable()) return;
+    fetchFriendsLiveNow()
+      .then(setLives)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!visible || !liveMaybeAvailable()) return;
+    const timer = setInterval(refreshLives, 30_000);
+    const stop = onNotificationArrived('live', refreshLives);
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  }, [visible, refreshLives]);
 
   // Fresh stories and posts every time you come to this page.
   useEffect(() => {
@@ -234,7 +260,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   const loading = posts === null || rings === null;
   // Nothing at all yet (no friends' stories, no posts): one friendly message instead of two empty sections.
-  const nothingYet = !loading && rings.friends.length === 0 && posts.length === 0;
+  const nothingYet = !loading && rings.friends.length === 0 && posts.length === 0 && lives.length === 0;
   const invite = () => inviteFriends(profile?.username);
 
   return (
@@ -252,7 +278,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
         ListHeaderComponent={
           loading || nothingYet ? undefined : (
             <View style={styles.top}>
-              <StoryRow rings={rings} toGuess={toGuess} onCamera={onCamera} />
+              <StoryRow rings={rings} toGuess={toGuess} lives={lives} onCamera={onCamera} />
             </View>
           )
         }

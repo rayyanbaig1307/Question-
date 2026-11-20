@@ -7,18 +7,27 @@ export type NotificationPrefs = {
   likes: boolean;
   comments: boolean;
   drops: boolean;
+  // "🔴 Sam is live" (only sent to phones that can open a live).
+  lives: boolean;
 };
 
-export const ALL_ON: NotificationPrefs = { messages: true, friend_requests: true, likes: true, comments: true, drops: true };
+export const ALL_ON: NotificationPrefs = { messages: true, friend_requests: true, likes: true, comments: true, drops: true, lives: true };
 
 export async function fetchNotificationPrefs(me: string): Promise<NotificationPrefs> {
-  const { data, error } = await supabase
-    .from('notification_prefs')
-    .select('messages, friend_requests, likes, comments, drops')
-    .eq('user_id', me)
-    .maybeSingle();
+  // Every column ('*'), so a server from before lives (no `lives` column yet) still answers.
+  const { data, error } = await supabase.from('notification_prefs').select('*').eq('user_id', me).maybeSingle();
   if (error) throw error;
-  return (data as NotificationPrefs | null) ?? ALL_ON; // nothing saved yet = everything on
+  if (!data) return ALL_ON; // nothing saved yet = everything on
+  const row = data as Partial<NotificationPrefs>;
+  const on = (value: unknown) => value !== false;
+  return {
+    messages: on(row.messages),
+    friend_requests: on(row.friend_requests),
+    likes: on(row.likes),
+    comments: on(row.comments),
+    drops: on(row.drops),
+    lives: on(row.lives), // missing (an older server) = on
+  };
 }
 
 export async function saveNotificationPrefs(me: string, prefs: NotificationPrefs): Promise<void> {

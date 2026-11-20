@@ -22,12 +22,15 @@ import { DareBanner, DarePill } from '@/components/DareBanner';
 import { DropPill, DropTimer } from '@/components/DropPill';
 import { IconButton } from '@/components/IconButton';
 import { SafeEdge } from '@/components/SafeEdge';
+import { GoLiveSheet } from '@/components/live/GoLiveSheet';
 import { useMe } from '@/lib/auth';
 import { todayDareDay, useDareDone } from '@/lib/dares';
 import { useDropDone, useDropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE, type FaceLook, type LensItem } from '@/lib/faceLens';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
+import { markCameraReleased, useCameraHeldByLive } from '@/lib/liveAccess';
+import { useLiveBubble } from '@/lib/lives';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
@@ -73,6 +76,8 @@ const MODE_RING: Record<CameraMode, string> = {
   dare: colors.pink,
   drop: colors.accent,
   guess: colors.yellow,
+  // 🔴 Go live: the live pink (not red – red is for recording).
+  live: colors.live,
 };
 
 // How long a Plus filter may stay on while we still can't tell whether you have Peekaboo+ (just after the app
@@ -138,6 +143,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // Missed it: a small "post today's drop · you're late" button on the camera until you do.
   const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false;
   const guessOn = guess || (isHome && homeMode === 'guess');
+  // 🔴 Go live (home camera only): the bubble shows when this download can do lives and the server says you may
+  // (asked each time the camera comes into view). In live mode the shutter opens the Go live sheet.
+  const liveBubble = useLiveBubble(active && isHome);
+  const liveOn = isHome && homeMode === 'live' && liveBubble;
+  const [goLiveOpen, setGoLiveOpen] = useState(false);
+  // While a live is using the camera, this camera shows nothing at all (two cameras at once fails).
+  const cameraHeld = useCameraHeldByLive();
   // 🕵️ Guess Who in this group chat: photos only (no videos), and it goes to the group with no name on it.
   const groupGuessOn = groupGuessHere && homeMode === 'guess';
   // When you're taking the dare photo, a reminder of the dare pops up and then goes away.
@@ -219,12 +231,24 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       return false;
     }
     setHomeMode(next);
-    if ((next === 'googly' || isLensLook(next)) && facing === 'back') setFacing('front');
+    // Lenses are for faces, and you go live facing yourself first (you can flip during the live).
+    if ((next === 'googly' || next === 'live' || isLensLook(next)) && facing === 'back') setFacing('front');
     return true;
   }
 
   // A stretchy filter is on and it just switched itself off (it broke on this phone): back to the plain camera.
   useEffect(() => subscribeFramesBroken(() => setHomeMode((now) => (isWarpLook(now) ? 'photo' : now))), []);
+
+  // The 🔴 bubble went away (lives switched off, or not for you right now): back to the plain camera.
+  useEffect(() => {
+    if (!liveBubble) setHomeMode((now) => (now === 'live' ? 'photo' : now));
+  }, [liveBubble]);
+
+  // A live took the camera: once this screen's camera views have gone (this runs after they're removed), say so,
+  // so the live can open the camera (lib/liveAccess.ts waits a moment more for the camera to really stop).
+  useEffect(() => {
+    if (cameraHeld) markCameraReleased();
+  }, [cameraHeld]);
 
   // A Plus filter is on, but Plus isn't (or is no longer) confirmed: back to the plain camera. Right away when
   // we're sure you don't have Plus (e.g. it ran out), or once the PLUS_CHECK_MS wait is used up when we still
@@ -270,6 +294,12 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     });
 
   async function takePhoto() {
+    // 🔴 Live mode: the shutter opens the Go live sheet (no photo).
+    if (liveOn) {
+      Haptics.selectionAsync();
+      setGoLiveOpen(true);
+      return;
+    }
     if (busy || (glowOn ? !glowRef.current : lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -319,6 +349,10 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     });
 
   async function startRecording() {
+    if (liveOn) {
+      takePhoto();
+      return;
+    }
     if (busy || recording) return;
     if (!lensOn && !glowOn && !cameraRef.current) return;
     // First time: ask for the microphone (so videos have sound), then you hold again.
@@ -457,8 +491,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   return (
     <View style={styles.fill}>
       {!permission ? null : permission.granted ? (
-        // Switching between face filters keeps this same camera (only `look` changes), so it never restarts.
-        meshLook !== null && !lensRecording && SoftGlow ? (
+        // A live is using the camera: no camera here at all. Otherwise: switching between face filters keeps
+        // this same camera (only `look` changes), so it never restarts.
+        cameraHeld ? null : meshLook !== null && !lensRecording && SoftGlow ? (
           <SoftGlow ref={glowRef} look={meshLook} active={active} facing={facing} flash={flash} zoom={camZoom} />
         ) : lensOn && !lensRecording && FaceLens ? (
           <FaceLens ref={lensRef} active={active} facing={facing} flash={flash} zoom={camZoom} />
@@ -555,6 +590,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             onChange={changeMode}
             dots={{ dare: dareDone === false }}
             locked={plusAnswer === 'no'}
+            live={liveBubble}
           />
         ) : lensesHere ? (
           // In a chat: just the lenses. In a group chat (not a dare proof), Guess Who too.
@@ -569,7 +605,11 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           </View>
         ) : null}
         <View style={styles.shutterRow}>
-          <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
+          {liveOn ? (
+            <View style={styles.shutterSpacer} />
+          ) : (
+            <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
+          )}
           {/* The big shutter button: tap for a photo, hold for a video. It squishes when you press it. */}
           <Bouncy
             onPress={takePhoto}
@@ -579,7 +619,15 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             onPressOut={stopRecording}
             disabled={!permission?.granted || (busy && !recording)}
             accessibilityRole="button"
-            accessibilityLabel={autoDrop ? 'Take your Peekaboo drop photo' : groupGuessOn ? 'Take your Guess Who photo' : 'Take photo, or hold to record a video'}
+            accessibilityLabel={
+              liveOn
+                ? 'Go live'
+                : autoDrop
+                  ? 'Take your Peekaboo drop photo'
+                  : groupGuessOn
+                    ? 'Take your Guess Who photo'
+                    : 'Take photo, or hold to record a video'
+            }
             pressScale={0.82}
             style={[
               styles.shutter,
@@ -595,6 +643,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           )}
         </View>
       </SafeEdge>
+      {isHome && liveBubble ? (
+        <GoLiveSheet visible={goLiveOpen && liveOn} facing={facing === 'back' ? 'back' : 'front'} onClose={() => setGoLiveOpen(false)} />
+      ) : null}
     </View>
   );
 }

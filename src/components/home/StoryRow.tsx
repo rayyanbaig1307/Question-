@@ -7,15 +7,22 @@ import { Avatar } from '@/components/Avatar';
 import { Bouncy } from '@/components/Bouncy';
 import { useMe } from '@/lib/auth';
 import { inviteFriends } from '@/lib/invite';
+import type { FriendLive } from '@/lib/lives';
 import type { StoryRing } from '@/lib/stories';
 import { colors, font, gradients, space } from '@/theme';
 
 export type Rings = { mine: StoryRing | null; friends: StoryRing[] };
 
 // The row of story circles at the top of Home, like Instagram: My Story first (tap ＋ to add one),
-// then Guess Who (anonymous posts from friends – a number when there are some to guess), then friends'
-// stories (colorful ring = new, grey = seen, green = close friends), then an Invite circle.
-export function StoryRow({ rings, toGuess, onCamera }: { rings: Rings; toGuess: number; onCamera: () => void }) {
+// then friends who are live right now 🔴 (a pink ring and a LIVE tag; tap to watch), then Guess Who (anonymous
+// posts from friends – a number when there are some to guess), then friends' stories (colorful ring = new,
+// grey = seen, green = close friends), then an Invite circle.
+export function StoryRow({ rings, toGuess, lives = [], onCamera }: {
+  rings: Rings;
+  toGuess: number;
+  lives?: FriendLive[];
+  onCamera: () => void;
+}) {
   const { userId, profile } = useMe();
   const { mine, friends } = rings;
   const myName = profile?.display_name || profile?.username;
@@ -47,6 +54,35 @@ export function StoryRow({ rings, toGuess, onCamera }: { rings: Rings; toGuess: 
           My Story
         </Text>
       </Pressable>
+
+      {lives.map((live) => {
+        const name = live.host_name || live.host_username;
+        return (
+          <Pressable
+            key={live.live_id}
+            style={styles.circle}
+            onPress={() => router.push({ pathname: '/live/[id]', params: { id: live.live_id } })}
+            accessibilityRole="button"
+            accessibilityLabel={`${name} is live${live.cohost_username ? ` with @${live.cohost_username}` : ''}. Watch`}>
+            <View style={[styles.ring, styles.liveRing]}>
+              <View style={styles.ringGap}>
+                <Avatar path={live.host_avatar} name={name} size={64} />
+              </View>
+            </View>
+            {live.cohost_id ? (
+              <View style={styles.cohost} accessibilityLabel={live.cohost_username ? `@${live.cohost_username}` : undefined}>
+                <Avatar path={live.cohost_avatar} name={live.cohost_username ?? undefined} size={26} />
+              </View>
+            ) : null}
+            <View style={styles.livePill} pointerEvents="none">
+              <Text style={styles.livePillText}>LIVE</Text>
+            </View>
+            <Text style={styles.name} numberOfLines={1}>
+              {name}
+            </Text>
+          </Pressable>
+        );
+      })}
 
       <Pressable style={styles.circle} onPress={() => router.push('/guess')} accessibilityLabel="Guess Who">
         <Ring active={toGuess > 0}>
@@ -183,6 +219,36 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 11,
     fontWeight: '900',
+  },
+  // A friend who's live: a solid live-pink ring, a LIVE tag at the bottom, and the co-host's face in the corner.
+  liveRing: {
+    borderWidth: 3,
+    borderColor: colors.live,
+  },
+  livePill: {
+    position: 'absolute',
+    top: RING - 14,
+    alignSelf: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: colors.live,
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  livePillText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  cohost: {
+    position: 'absolute',
+    top: 0,
+    right: -2,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
   inviteRing: {
     borderWidth: 2,
