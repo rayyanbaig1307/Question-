@@ -86,6 +86,14 @@ const PLUS_CHECK_MS = 8000;
 
 // The home screen: a full-screen camera.
 // Also used on its own (with `sendTo`) when you tap the camera inside a chat.
+// After a pinch, double taps are ignored for this long, so lifting your fingers never flips the camera.
+const PINCH_QUIET_MS = 700;
+// The time now in milliseconds, readable from the gesture code that runs off the main thread.
+function nowMs(): number {
+  'worklet';
+  return Date.now();
+}
+
 export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup, groupDare, groupGuess = false, groupGuessOk = false, dare = false, drop = false, guess = false, forfeit, forfeitText }: {
   // The camera only runs while you're looking at it (saves battery).
   active: boolean;
@@ -423,22 +431,39 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   }
 
   // Pinch anywhere on the camera to zoom; double-tap to flip between the front and back camera.
+  // A pinch must never flip the camera: the two fingers going down and up can look like a double tap, so a
+  // double tap during a pinch, or just after one, is ignored (the owner zoomed the back camera and it jumped
+  // to the selfie camera).
+  const pinchedAt = useSharedValue(0);
   const pinchZoom = usePinchGesture({
+    onBegin: () => {
+      'worklet';
+      pinchedAt.set(nowMs());
+    },
     onActivate: () => {
       'worklet';
+      pinchedAt.set(nowMs());
       zoomStart.set(camZoomShared.get());
     },
     onUpdate: (event) => {
       'worklet';
+      pinchedAt.set(nowMs());
       const next = Math.min(1, Math.max(0, zoomStart.get() + (event.scale - 1) * 0.45));
       camZoomShared.set(next);
       scheduleOnRN(setCamZoom, next);
     },
+    onFinalize: () => {
+      'worklet';
+      pinchedAt.set(nowMs());
+    },
   });
   const doubleTapFlip = useTapGesture({
     numberOfTaps: 2,
+    // Two quick taps in about the same spot – not two fingers far apart.
+    maxDistance: 24,
     onActivate: () => {
       'worklet';
+      if (nowMs() - pinchedAt.get() < PINCH_QUIET_MS) return;
       scheduleOnRN(tapFlip);
     },
   });
