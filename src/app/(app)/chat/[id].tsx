@@ -617,23 +617,30 @@ export default function ChatScreen() {
                   color={colors.onAccent}
                   onPress={() => router.push({ pathname: '/camera', params: { to: friendId } })}
                 />
-                <IconButton icon="flag" label="Write a dare" background={colors.card} color={colors.pink} onPress={() => setDareOpen(true)} />
-                <IconButton icon="happy" label="Send a sticker" background={colors.card} color={colors.yellow} onPress={() => setStickersOpen(true)} />
-                <TextInput
-                  value={text}
-                  onChangeText={(value) => {
-                    draft.current = value;
-                    setText(value);
-                    onTextChange(value);
-                  }}
-                  placeholder="Send a chat"
-                  placeholderTextColor={colors.textFaint}
-                  keyboardAppearance={keyboardAppearance}
-                  selectionColor={colors.accent}
-                  multiline
-                  maxLength={2000}
-                  style={styles.input}
-                />
+                <View style={styles.field}>
+                  <TextInput
+                    value={text}
+                    onChangeText={(value) => {
+                      draft.current = value;
+                      setText(value);
+                      onTextChange(value);
+                    }}
+                    placeholder="Send a chat"
+                    placeholderTextColor={colors.textFaint}
+                    keyboardAppearance={keyboardAppearance}
+                    selectionColor={colors.accent}
+                    multiline
+                    maxLength={2000}
+                    style={styles.input}
+                  />
+                  {/* While you type they step aside, so the words have the whole box. */}
+                  {text.trim() ? null : (
+                    <>
+                      <IconButton icon="flag" label="Write a dare" size={34} background="transparent" color={colors.pink} onPress={() => setDareOpen(true)} style={styles.fieldButton} />
+                      <IconButton icon="happy" label="Send a sticker" size={34} background="transparent" color={colors.yellow} onPress={() => setStickersOpen(true)} style={styles.fieldButton} />
+                    </>
+                  )}
+                </View>
                 {/* Nothing typed: hold the mic for a voice note. Typing: the send button. */}
                 {text.trim() || !Audio ? (
                   <IconButton
@@ -1283,17 +1290,30 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
+  // The text box is one rounded pill. The dare and sticker buttons sit inside it on the right (like Instagram),
+  // so the box stays wide enough for the words to fit on one line.
+  field: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    paddingLeft: space.lg,
+    paddingRight: 4,
+  },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: 0,
     paddingTop: 12,
     paddingBottom: 12,
     color: colors.text,
     fontSize: 16,
+  },
+  fieldButton: {
+    marginBottom: 5,
   },
   notFriends: {
     ...font.small,
