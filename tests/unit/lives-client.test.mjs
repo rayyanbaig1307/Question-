@@ -49,9 +49,12 @@ function load({ rpc = {}, invoke, maybe = true } = {}) {
     removeChannel: (ch) => { removed.push(ch.name); },
   };
   let brokenListener = null;
+  // Steps that run when someone logs out (auth.tsx runs them; here the test does).
+  const signOutSteps = [];
   const lives = loadLibrary('lives', {
     supabase,
     mocks: {
+      './auth': { runAfterSignOut: (step) => { signOutSteps.push(step); return () => {}; } },
       './liveAccess': {
         liveMaybeAvailable: () => maybe,
         subscribeLiveBroken: (fn) => { brokenListener = fn; return () => { brokenListener = null; }; },
@@ -59,7 +62,8 @@ function load({ rpc = {}, invoke, maybe = true } = {}) {
       react: { useEffect: (fn) => { fn(); }, useSyncExternalStore: (_subscribe, get) => get() },
     },
   });
-  return { lives, calls, channels, removed, queries, brokenListener: () => brokenListener };
+  const signOut = () => signOutSteps.forEach((step) => step('old-user'));
+  return { lives, calls, channels, removed, queries, brokenListener: () => brokenListener, signOut };
 }
 
 afterEach(() => {
@@ -302,6 +306,45 @@ it('the 🔴 bubble: hidden until the server answers, hidden for off/testers/ban
   expect(lives.liveBubbleShown()).toBe(true);
   lives.forgetLiveState();
   expect(lives.liveBubbleShown()).toBe(false);
+});
+
+it('the 🔴 bubble is forgotten at log-out; an answer for the old account that arrives later is thrown away', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-20T10:00:00Z'));
+  let answer;
+  const { lives, calls, signOut } = load({
+    rpc: { live_state: () => new Promise((resolve) => { answer = resolve; }) },
+  });
+  const allowed = { data: { can_go_live: true, why_not: null, max_minutes: 60, lives_left_today: 3, rules_accepted: true }, error: null };
+  lives.refreshLiveBubble();
+  answer(allowed);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(lives.liveBubbleShown()).toBe(true);
+  // Account A logs out and account B logs in within the minute: B's camera asks the server again at once.
+  signOut();
+  expect(lives.liveBubbleShown()).toBe(false);
+  lives.refreshLiveBubble();
+  expect(calls).toHaveLength(2);
+  // An answer still on its way for A when A logged out doesn't bring A's bubble back for B.
+  const late = answer;
+  signOut();
+  late(allowed);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(lives.liveBubbleShown()).toBe(false);
+  // B's own question goes out straight away (an old question finishing doesn't block the new one).
+  lives.refreshLiveBubble();
+  expect(calls).toHaveLength(3);
+});
+
+it('the person on stage: who may see them comes from the server, ids only', async () => {
+  const A = '33333333-3333-4333-8333-333333333333';
+  const { lives, calls } = load({ rpc: { live_stage_allowlist: { data: [OTHER, ME, 'not-an-id', null, A], error: null } } });
+  expect(await lives.fetchStageWatchers(LIVE)).toEqual([OTHER, ME, A]);
+  expect(calls).toEqual([['live_stage_allowlist', { live: LIVE }]]);
+  const empty = load({ rpc: { live_stage_allowlist: { data: null, error: null } } });
+  expect(await empty.lives.fetchStageWatchers(LIVE)).toEqual([]);
+  const sql = readFileSync(MIGRATION, 'utf8');
+  expect(sql).toContain('create or replace function public.live_stage_allowlist(live uuid)');
 });
 
 it('the 🔴 bubble never shows (or asks the server) where lives can\'t run', async () => {

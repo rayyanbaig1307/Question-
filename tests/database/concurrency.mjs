@@ -829,6 +829,81 @@ try {
         return results;
       });
     });
+    // Lives 🔴 (20261226000000_livestreams.sql). The "busy" limits (lives at the same time) hold even when
+    // several people press Go live at the same moment; a pass is never given to someone whose removal is
+    // being saved at that very moment; a removal and the once-a-minute audit never wait on each other.
+    if(includeFixes){
+      const liveHosts=async(label,n)=>{
+        const ids=await invitePeople(label,n);
+        const fan=(await invitePeople(`${label}fan`,1))[0];
+        for(const id of ids){
+          await friend(db,id,fan);
+          await db.query("insert into legal_acceptances(user_id,document,version) values($1,'live_rules','2026-11-20') on conflict do nothing",[id]);
+        }
+        return {ids,fan};
+      };
+      await db.query("update private.live_settings set who_can_go_live='everyone'");
+      await check('Lives: people pressing Go live at the same moment can\'t pass the lives-at-once limit',async()=>{
+        await db.query('update lives set ended_at=now() where ended_at is null');
+        await db.query('update private.live_settings set max_live_now=2');
+        const {ids}=await liveHosts('liverace',5);
+        await asUser(db,ids[0],tx=>tx.query('select start_live($1)',[ids[0]]));
+        await pause('lives',true);
+        const all=await Promise.allSettled(ids.slice(1).map(id=>asUser(db,id,tx=>tx.query('select start_live($1)',[id]))));
+        await pause('lives',false);
+        const open=(await db.query('select count(*)::int as n from lives where ended_at is null')).rows[0].n;
+        const refused=all.filter(x=>x.status==='rejected').map(x=>x.reason.hint);
+        await db.query('update lives set ended_at=now() where ended_at is null');
+        await db.query('update private.live_settings set max_live_now=4');
+        assert.equal(open,2,`lives at once: ${open}`);
+        assert.deepEqual(refused,['live_busy','live_busy','live_busy']);
+        return {open,refused:refused.length};
+      });
+      await check('Lives: a pass asked for while the host\'s "Remove" is being saved waits for it and is refused',async()=>{
+        const {ids:[host],fan}=await liveHosts('liveremove',1);
+        const live=(await asUser(db,host,tx=>tx.query('select start_live($1) as id',[host]))).rows[0].id;
+        await asUser(db,host,tx=>tx.query('select live_on_air($1)',[live]));
+        const first=(await asUser(db,null,tx=>tx.query('select live_join($1,$2) as r',[fan,live]),'service_role')).rows[0].r;
+        assert.equal(first.ok,true);
+        // The host's Remove, not saved yet.
+        const client=await pool.connect();
+        let joining;
+        try {
+          await client.query('begin');
+          await client.query("set local role authenticated");
+          await client.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role','authenticated',true)",[host]);
+          await client.query('select remove_live_viewer($1,$2)',[live,fan]);
+          joining=asUser(db,null,tx=>tx.query('select live_join($1,$2) as r',[fan,live]),'service_role').then(r=>r.rows[0].r,e=>`ERR ${e.message}`);
+          await new Promise(r=>setTimeout(r,300));
+          await client.query('commit');
+        } catch(error){await client.query('rollback');throw error;} finally{client.release();}
+        const second=await joining;
+        await db.query('update lives set ended_at=now() where id=$1',[live]);
+        assert.deepEqual(second,{ok:false,reason:'removed'});
+        return second;
+      });
+      await check('Lives: the host removing someone and the minute audit at the same time never deadlock',async()=>{
+        const {ids:[host]}=await liveHosts('liveaudit',1);
+        const fans=await invitePeople('liveauditfan',12);
+        for(const fan of fans)await friend(db,host,fan);
+        const live=(await asUser(db,host,tx=>tx.query('select start_live($1) as id',[host]))).rows[0].id;
+        await asUser(db,host,tx=>tx.query('select live_on_air($1)',[live]));
+        for(const fan of fans)await asUser(db,null,tx=>tx.query('select live_join($1,$2)',[fan,live]),'service_role');
+        const room=`live_${live}`;
+        const errors=[];
+        for(const fan of fans){
+          const all=await Promise.allSettled([
+            asUser(db,null,tx=>tx.query('select live_audit($1,$2,$3)',[room,[host,...fans],[]]),'service_role'),
+            asUser(db,host,tx=>tx.query('select remove_live_viewer($1,$2)',[live,fan])),
+            asUser(db,null,tx=>tx.query('select live_audit($1,$2,$3)',[room,[...fans].reverse(),[]]),'service_role'),
+          ]);
+          for(const x of all)if(x.status==='rejected')errors.push(x.reason.message);
+        }
+        await db.query('update lives set ended_at=now() where id=$1',[live]);
+        assert.deepEqual(errors,[]);
+        return {rounds:fans.length};
+      });
+    }
     await pool.end();pools=pools.filter(p=>p!==pool);
   }
   await admin.end();

@@ -146,6 +146,11 @@ export type StageHandle = {
   sendHearts(count: number, hostId: string): Promise<void>;
   // Host: hearts to everyone.
   broadcastHearts(count: number): Promise<void>;
+  // Who may receive your camera and voice: null = everyone in the room (the host), or a list of user ids (the
+  // person brought on: the server's list of people who may watch them). LiveKit itself then refuses everyone
+  // else – also someone who comes back with an old pass while they should be waiting. Kept for every later
+  // connection of this stage; set it BEFORE connecting, then again whenever the server's list changes.
+  setWatchers(identities: string[] | null): void;
   // Closes the connection. `keepAudio`: you'll connect again right away (watching → stage → watching).
   disconnect(options?: { keepAudio?: boolean }): Promise<void>;
   // For StageView.
@@ -172,10 +177,22 @@ function reasonOf(reason: DisconnectReason | undefined): StageDisconnectReason {
 
 const facingMode = (facing: Facing) => (facing === 'front' ? 'user' : 'environment');
 
+// Stopping your camera and microphone: each track stops at once, and the server's answer is waited for only
+// this long (the disconnect that follows closes the connection anyway). On a weak connection each answer can
+// otherwise take up to 15 seconds.
+export const UNPUBLISH_WAIT_MS = 1500;
+
 export function createStage(events: StageEvents): StageHandle {
   let current: Room | null = null;
   let facing: Facing = 'front';
   let audioHeld = false;
+  let watchers: string[] | null = null;
+  // Tells LiveKit who may receive this phone's camera and voice (see setWatchers). LiveKit keeps it, and sends
+  // it again by itself after a reconnect.
+  const applyWatchers = (room: Room) => {
+    if (watchers === null) room.localParticipant.setTrackSubscriptionPermissions(true);
+    else room.localParticipant.setTrackSubscriptionPermissions(false, watchers.map((participantIdentity) => ({ participantIdentity, allowAll: true })));
+  };
   const listeners = new Set<() => void>();
   const tell = () => {
     for (const listener of [...listeners]) {
@@ -266,6 +283,8 @@ export function createStage(events: StageEvents): StageHandle {
       });
       current = room;
       watch(room);
+      // Before anything can be sent: who may receive it (sent to LiveKit as the connection opens).
+      if (watchers !== null) applyWatchers(room);
       try {
         await room.connect(url, token);
       } catch (error) {
@@ -288,6 +307,7 @@ export function createStage(events: StageEvents): StageHandle {
       if (!room) throw new Error('Not connected');
       facing = nextFacing;
       tell();
+      if (watchers !== null) applyWatchers(room);
       await room.localParticipant.setCameraEnabled(true, { facingMode: facingMode(facing), resolution: VideoPresets.h720.resolution });
       await room.localParticipant.setMicrophoneEnabled(true);
     },
@@ -296,14 +316,23 @@ export function createStage(events: StageEvents): StageHandle {
       const room = current;
       if (!room) return;
       const local = room.localParticipant;
-      for (const publication of [...local.trackPublications.values()]) {
-        if (!publication.track) continue;
-        try {
-          await local.unpublishTrack(publication.track, true);
-        } catch (error) {
-          console.warn('Could not stop sending a live track', error);
-        }
-      }
+      // All at once (camera first): each track stops straight away; only the server's answer takes time.
+      const stopping = [...local.trackPublications.values()]
+        .filter((publication) => !!publication.track)
+        .map((publication) =>
+          local.unpublishTrack(publication.track!, true).catch((error: unknown) => {
+            console.warn('Could not stop sending a live track', error);
+          }),
+        );
+      if (!stopping.length) return;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      await Promise.race([
+        Promise.all(stopping),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, UNPUBLISH_WAIT_MS);
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
     },
 
     async flip() {
@@ -334,6 +363,11 @@ export function createStage(events: StageEvents): StageHandle {
       const n = Math.floor(count);
       if (!room || room.localParticipant.identity !== events.hostId || !(n >= 1 && n <= HOST_MAX_PER_MESSAGE)) return;
       await room.localParticipant.publishData(encodeHearts(n), { reliable: false, topic: HEARTS_TOPIC });
+    },
+
+    setWatchers(identities) {
+      watchers = identities === null ? null : [...new Set(identities.filter((id) => typeof id === 'string' && !!id))];
+      if (current) applyWatchers(current);
     },
 
     async disconnect(options) {
@@ -383,7 +417,12 @@ function Tiles({ hostId, cohostId, facing, style }: { hostId: string; cohostId: 
   const find = (identity: string | null): TrackReference | undefined =>
     identity ? refs.find((ref) => isTrackReference(ref) && ref.participant.identity === identity && !!ref.publication.track) : undefined;
   const host = find(hostId);
-  const cohost = cohostId && cohostId !== hostId ? find(cohostId) : undefined;
+  // The person on stage: the one the server named, or else any camera that isn't the host's (only the host and
+  // the person brought on can send video, and LiveKit only gives it to people allowed to see it). So their
+  // picture shows at once, without waiting for the next check with the server.
+  const cohost =
+    (cohostId && cohostId !== hostId ? find(cohostId) : undefined) ??
+    refs.find((ref): ref is TrackReference => isTrackReference(ref) && ref.participant.identity !== hostId && !!ref.publication.track);
   const mirror = (participant: Participant) => participant.isLocal && facing === 'front';
   return (
     <View style={[styles.fill, style]}>

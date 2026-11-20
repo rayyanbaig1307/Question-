@@ -35,8 +35,9 @@ it('viewer: checking → joining → watching, with the right things to do at ea
   expect(m.liveTodo(s)).toBe(null);
   expect(m.shouldDisconnect(s)).toBe(false);
   expect(m.holdsCamera(s)).toBe(false);
-  // Every change moves the step on; no change keeps the same object.
-  expect(s.step).toBe(3);
+  // Every new thing to do moves the step on (token_ok only remembers the role: the screen is already
+  // connecting); no change keeps the same object.
+  expect(s.step).toBe(2);
   expect(m.liveReducer(s, { type: 'reconnected' })).toBe(s);
 });
 
@@ -223,7 +224,11 @@ it('background: a viewer stops watching (rejoins on return); a co-host leaves th
   expect(m.holdsCamera(c)).toBe(false);
   c = m.liveReducer(c, { type: 'app_state', active: true });
   expect(c).toMatchObject({ phase: 'checking', role: 'viewer' });
-  // Not watching: the background changes nothing.
+  // Waiting (or a retry card): its timers stop too, so nothing rejoins out of sight; coming back checks again.
+  const paused = run(viewer(), { type: 'status', info: { status: 'paused' } }, { type: 'app_state', active: false });
+  expect(paused).toMatchObject({ phase: 'away', retryInMs: null });
+  expect(m.liveReducer(paused, { type: 'app_state', active: true }).phase).toBe('checking');
+  // Not watching any more (ended, removed…): the background changes nothing.
   const blocked = m.liveReducer(viewer(), { type: 'status', info: { status: 'ended' } });
   expect(m.liveReducer(blocked, { type: 'app_state', active: false })).toBe(blocked);
 });
@@ -310,11 +315,96 @@ it('host: a dropped connection rejoins with the camera still held', () => {
   expect(s.phase).toBe('live');
 });
 
-it('a camera/microphone refusal is recognised', () => {
+it('a camera/microphone refusal is recognised by the error\'s name only (never by a server\'s words)', () => {
   expect(m.isPermissionError({ name: 'NotAllowedError', message: 'x' })).toBe(true);
-  expect(m.isPermissionError(new Error('Permission denied by system'))).toBe(true);
+  expect(m.isPermissionError({ name: 'SecurityError', message: 'Permission denied.' })).toBe(true);
+  expect(m.isPermissionError({ name: 'PermissionDeniedError' })).toBe(true);
+  expect(m.isPermissionError({ name: 'PermissionDismissedError' })).toBe(true);
+  expect(m.isPermissionError(new Error('Permission denied by system'))).toBe(false);
+  expect(m.isPermissionError({ name: 'ConnectionError', message: 'permissions denied' })).toBe(false);
+  expect(m.isPermissionError({ name: 'PublishTrackError', message: 'failed to publish track, insufficient permissions' })).toBe(false);
   expect(m.isPermissionError(new Error('could not establish pc connection'))).toBe(false);
+  expect(m.isPermissionError('NotAllowedError')).toBe(false);
   expect(m.isPermissionError(null)).toBe(false);
+});
+
+it('facts that need no new work never move the step (so a screen never starts or connects twice)', () => {
+  // token_ok while starting, joining and going on: same step, same thing to do.
+  const starting = m.liveReducer(host(), { type: 'start' });
+  const started = m.liveReducer(starting, { type: 'token_ok', role: 'host' });
+  expect(started.step).toBe(starting.step);
+  expect(m.liveTodo(started)).toBe('start');
+  const joining = m.liveReducer(viewer(), live());
+  const joined = m.liveReducer(joining, { type: 'token_ok', role: 'viewer' });
+  expect(joined.step).toBe(joining.step);
+  const goingOn = run(watching(), { type: 'accept', now: 0 });
+  const ticketed = m.liveReducer(goingOn, { type: 'token_ok', role: 'cohost' });
+  expect(ticketed.step).toBe(goingOn.step);
+  expect(m.liveTodo(ticketed)).toBe('connect');
+  // Mute keeps the step and a running retry timer.
+  const waiting = run(viewer(), { type: 'status', info: { status: 'paused' } });
+  const muted = m.liveReducer(waiting, { type: 'mute', muted: true });
+  expect(muted.step).toBe(waiting.step);
+  expect(muted.retryInMs).toBe(waiting.retryInMs);
+  // 'resumed' just clears the flag.
+  const resumed = run(hostLive(), { type: 'app_state', active: false }, { type: 'app_state', active: true }, live('host'));
+  const done = m.liveReducer(resumed, { type: 'resumed' });
+  expect(done.step).toBe(resumed.step);
+  expect(m.liveTodo(done)).toBe(null);
+});
+
+it('a viewer\'s ticket never makes them the co-host (only saying yes does)', () => {
+  const joining = m.liveReducer(viewer(), live());
+  const s = run(joining, { type: 'token_ok', role: 'cohost' }, { type: 'connected' });
+  expect(s).toMatchObject({ phase: 'watching', role: 'viewer' });
+  expect(m.holdsCamera(s)).toBe(false);
+});
+
+it('taken off while the connection was coming back: leave the stage now (the reconnect would send the camera again)', () => {
+  let s = m.liveReducer(onStage(), { type: 'reconnecting' });
+  expect(s).toMatchObject({ phase: 'reconnecting', resumeTo: 'on_stage' });
+  s = m.liveReducer(s, live('viewer'));
+  expect(s).toMatchObject({ phase: 'leaving_stage', role: 'viewer', resumeTo: null });
+  expect(m.liveTodo(s)).toBe('leave_stage');
+  // Still the co-host: nothing changes.
+  const still = m.liveReducer(onStage(), { type: 'reconnecting' });
+  expect(m.liveReducer(still, live('cohost'))).toBe(still);
+});
+
+it('host: the background while starting or rejoining – nothing goes on air while away; back in front picks up', () => {
+  // Home pressed during the 3·2·1: the start carries on (same step: nothing runs twice) but goes to 'away'.
+  let s = m.liveReducer(host(), { type: 'start' });
+  const before = s.step;
+  s = m.liveReducer(s, { type: 'app_state', active: false });
+  expect(s).toMatchObject({ phase: 'starting', background: true });
+  expect(s.step).toBe(before);
+  s = run(s, { type: 'token_ok', role: 'host' }, { type: 'on_air' });
+  expect(s.phase).toBe('away');
+  expect(m.liveTodo(s)).toBe('away');
+  s = m.liveReducer(s, { type: 'app_state', active: true });
+  expect(s).toMatchObject({ phase: 'checking', background: false });
+  s = m.liveReducer(s, live('host'));
+  expect(s).toMatchObject({ phase: 'live', resume: true });
+  expect(m.liveTodo(s)).toBe('resume');
+  // Back in front before going on air: just clears the flag.
+  const front = run(host(), { type: 'start' }, { type: 'app_state', active: false }, { type: 'app_state', active: true });
+  expect(front).toMatchObject({ phase: 'starting', background: false });
+  expect(run(front, { type: 'on_air' }).phase).toBe('live');
+  // Live → away → the connection drops → a rejoin connects while still away: 'away', not 'live'.
+  let r = run(hostLive(), { type: 'app_state', active: false }, { type: 'disconnected', reason: 'other' });
+  expect(r.phase).toBe('rejoining');
+  r = run(r, { type: 'retry' }, { type: 'token_ok', role: 'host' }, { type: 'connected' });
+  expect(r.phase).toBe('away');
+  // Rejoining → background → connected → back: the sound, mic and camera come back on.
+  let j = run(hostLive(), { type: 'reconnecting' }, { type: 'retry' }, { type: 'app_state', active: false }, { type: 'retry' });
+  expect(j).toMatchObject({ phase: 'joining', background: true });
+  j = run(j, { type: 'connected' });
+  expect(j.phase).toBe('away');
+  j = run(j, { type: 'app_state', active: true }, live('host'));
+  expect(j).toMatchObject({ phase: 'live', resume: true });
+  // A start that failed in the background doesn't keep the flag once you're back.
+  const failed = run(host(), { type: 'start' }, { type: 'app_state', active: false }, { type: 'token_failed', reason: 'network', now: 0 }, { type: 'app_state', active: true });
+  expect(failed).toMatchObject({ phase: 'failed', background: false });
 });
 
 it('the fixed times match the design', () => {

@@ -239,7 +239,7 @@ async function remove(lk: LiveKit, job: Job): Promise<Outcome> {
 }
 
 // A co-host back to an ordinary viewer: hidden, no camera or microphone. LiveKit replaces the permissions as a
-// whole, so all of them are sent. (Not RemoveParticipant: that would keep them out for about a minute.)
+// whole, so all of them are sent. (Not a normal RemoveParticipant: that would keep them out for about a minute.)
 async function demote(lk: LiveKit, job: Job): Promise<Outcome> {
   const result = await twirp(lk, 'UpdateParticipant', {
     room: job.room,
@@ -249,7 +249,15 @@ async function demote(lk: LiveKit, job: Job): Promise<Outcome> {
       canUpdateMetadata: false,
     },
   }, job.room);
-  if (result.ok || result.notFound) return 'done';
+  if (result.ok) return 'done';
+  if (result.notFound) {
+    // Not in the room right now (their phone may be between connections, holding its co-host ticket). A "soft"
+    // removal cancels the tickets they already have, so a reconnect can't bring their camera back; they can
+    // still come straight back as a viewer with a new ticket. If LiveKit doesn't know them at all, that's fine.
+    const gone = await removeParticipant(lk, job.room, job.identity!, true);
+    if (gone.ok || gone.notFound) return 'done';
+    return { error: problem('RemoveParticipant', gone) };
+  }
   return { error: problem('UpdateParticipant', result) };
 }
 

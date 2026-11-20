@@ -28,6 +28,7 @@ import {
   releaseCameraFromLive,
   setLiveNow,
   waitForCameraRelease,
+  whileLeaving,
   type LiveStageModule,
 } from '@/lib/liveAccess';
 import { setLiveExit } from '@/lib/liveExit';
@@ -76,6 +77,9 @@ type Facing = 'front' | 'back';
 
 const COUNTDOWN_FROM = 3;
 const FIVE_MINUTES = 5 * 60_000;
+// Home pressed during the 3·2·1: the camera and microphone start (and friends are told) only once you're back.
+// Not back within this long: the start is given up (safer than going on air while you're away).
+const BACKGROUND_START_WAIT_MS = 90_000;
 // A friend has 60 seconds to answer "come on"; a few seconds more for the answer to arrive.
 const INVITE_WAIT_MS = 63_000;
 
@@ -186,6 +190,12 @@ function HostLive({ userId, me, startFacing }: {
   const { hearts, add: drawHearts, done: heartDone } = useFloatingHearts();
   const stopped = useRef(false);
   const ended = useRef(false);
+  // Which start (or rejoin) is the current one: an older one that is still waiting for an answer stops itself.
+  const runId = useRef(0);
+  // This screen's hold on the camera (so a late release can't take it from a newer live).
+  const cameraHold = useRef<number | null>(null);
+  // Someone waiting for the app to be in front again (see waitForFront).
+  const frontWaiter = useRef<((how: 'front' | 'closed') => void) | null>(null);
   const myName = me?.display_name || me?.username || 'You';
 
   const showInvite = useCallback((next: { id: string; guest: LiveViewer } | null) => {
@@ -199,6 +209,7 @@ function HostLive({ userId, me, startFacing }: {
   const stopSending = useCallback(async () => {
     if (stopped.current) return;
     stopped.current = true;
+    frontWaiter.current?.('closed');
     const handle = stage.current;
     try {
       await handle?.unpublish();
@@ -210,20 +221,40 @@ function HostLive({ userId, me, startFacing }: {
     } catch {
       // Already gone.
     }
-    releaseCameraFromLive();
+    releaseCameraFromLive(cameraHold.current);
   }, []);
 
-  // Tells the server the live is over (in the background, with retries). Its numbers replace the phone's.
+  // Tells the server the live is over (in the background, with retries). Its numbers replace the phone's. A
+  // waiting app update waits for this first (whileLeaving), so a restart can't cancel it on its way out.
   const tellServerEnded = useCallback(() => {
     const live = liveId.current;
     if (!live || ended.current) return;
     ended.current = true;
-    endLiveInBackground(live, collector.current.total).then((summary: LiveSummary | null) => {
+    const telling = endLiveInBackground(live, collector.current.total).then((summary: LiveSummary | null) => {
       if (!summary || !alive.current) return;
       setServerNumbers({ minutes: summary.seconds / 60, viewers: summary.viewers, hearts: summary.hearts, comments: summary.comments });
       if (summary.ended_reason && summary.ended_reason !== 'host') send({ type: 'status', info: { status: 'ended', ended_reason: summary.ended_reason } });
     });
+    whileLeaving(telling);
   }, [send]);
+
+  // Waits until the app is in front again ('front'), the screen closed or the live stopped ('closed'), or
+  // BACKGROUND_START_WAIT_MS passed ('timeout'). At once when the app is in front.
+  const waitForFront = useCallback((): Promise<'front' | 'closed' | 'timeout'> => {
+    if (!alive.current || stopped.current) return Promise.resolve('closed');
+    if (!machine.current.background) return Promise.resolve('front');
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        frontWaiter.current = null;
+        resolve('timeout');
+      }, BACKGROUND_START_WAIT_MS);
+      frontWaiter.current = (how) => {
+        clearTimeout(timer);
+        frontWaiter.current = null;
+        resolve(how);
+      };
+    });
+  }, []);
 
   // Back from the background or a phone call: sound, then the mic as YOU left it, then the camera.
   const resumeSending = useCallback(async () => {
@@ -269,17 +300,22 @@ function HostLive({ userId, me, startFacing }: {
   // Going live: make the live → ticket → LiveKit → camera → on air.
   // ---------------------------------------------------------------------------
   const runStart = useCallback(async () => {
+    const run = ++runId.current;
+    // A newer start (Try again) took over: this one stops, whatever it was waiting for.
+    const stale = () => runId.current !== run;
     stopped.current = false;
     ended.current = false;
-    holdCameraForLive();
+    cameraHold.current = holdCameraForLive();
     let live: string;
     try {
       live = await startLive(userId);
     } catch (error) {
+      if (stale()) return;
       const hint = liveHint(error);
       send({ type: 'failed', why: hostFailureForHint(hint), message: hint ? (error as Error).message : null });
       return;
     }
+    if (stale()) return;
     liveId.current = live;
     // The screen closed meanwhile (its clean-up already ran): end the new live straight away.
     const closed = () => !alive.current || stopped.current;
@@ -290,10 +326,18 @@ function HostLive({ userId, me, startFacing }: {
     setId(live);
     // Every failure from here on also ends the live on the server (best effort).
     const giveUp = (event: LiveEvent) => {
+      if (stale()) return;
       send(event);
       tellServerEnded();
     };
+    // Closed (or ended) while connecting: stop sending at once.
+    const stopNow = async (handle: StageHandle) => {
+      await handle.unpublish().catch(() => {});
+      await handle.disconnect().catch(() => {});
+      releaseCameraFromLive(cameraHold.current);
+    };
     const ticket = await getLiveToken(live, userId);
+    if (stale()) return;
     if (!ticket.ok) {
       giveUp({ type: 'token_failed', reason: ticket.reason, message: ticket.message, now: Date.now() });
       return;
@@ -306,19 +350,47 @@ function HostLive({ userId, me, startFacing }: {
     }
     const handle = ensureStage(module);
     await waitForCameraRelease();
-    if (closed()) return;
+    if (stale() || closed()) return;
+    // Connecting on its own: a refusal from the server is never "the camera wasn't allowed".
     try {
       await handle.connect(ticket.url, ticket.token);
+    } catch {
+      giveUp({ type: 'connect_failed', permission: false, now: Date.now() });
+      return;
+    }
+    if (stale()) return;
+    if (closed()) {
+      await stopNow(handle);
+      return;
+    }
+    // In the background (Home pressed during the 3·2·1)? The camera and microphone start only once you're back.
+    const front = await waitForFront();
+    if (stale()) return;
+    if (front === 'closed' || closed()) {
+      await stopNow(handle);
+      return;
+    }
+    if (front === 'timeout') {
+      giveUp({ type: 'failed', why: 'network' });
+      return;
+    }
+    try {
       await handle.publish(facing);
     } catch (error) {
       giveUp({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
       return;
     }
+    if (stale()) return;
     if (closed()) {
-      // Closed while connecting: stop sending at once.
-      await handle.unpublish().catch(() => {});
-      await handle.disconnect().catch(() => {});
-      releaseCameraFromLive();
+      await stopNow(handle);
+      return;
+    }
+    // Friends are told only while you're in the app (went away just now: wait again).
+    const stillFront = await waitForFront();
+    if (stale()) return;
+    if (stillFront !== 'front' || closed()) {
+      if (stillFront === 'timeout') giveUp({ type: 'failed', why: 'network' });
+      else await stopNow(handle);
       return;
     }
     try {
@@ -328,14 +400,16 @@ function HostLive({ userId, me, startFacing }: {
       giveUp({ type: 'failed', why: hint ? 'unavailable' : 'network', message: hint ? (error as Error).message : null });
       return;
     }
-    if (!alive.current) return;
+    if (!alive.current || stale()) return;
     setOnAirAt(new Date().toISOString());
     send({ type: 'on_air' });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [userId, send, tellServerEnded, ensureStage, facing]);
+  }, [userId, send, tellServerEnded, ensureStage, facing, waitForFront]);
 
   // A dropped connection that LiveKit couldn't resume: a fresh ticket, connect, send the camera again.
   const runRejoin = useCallback(async () => {
+    const run = ++runId.current;
+    const stale = () => runId.current !== run;
     const live = liveId.current;
     const module = stageModuleRef.current ?? loadLiveStage();
     if (!live || !module) {
@@ -343,6 +417,7 @@ function HostLive({ userId, me, startFacing }: {
       return;
     }
     const ticket = await getLiveToken(live, userId);
+    if (stale()) return;
     if (!ticket.ok) {
       send({ type: 'token_failed', reason: ticket.reason, message: ticket.message, now: Date.now() });
       return;
@@ -351,11 +426,21 @@ function HostLive({ userId, me, startFacing }: {
     const handle = ensureStage(module);
     try {
       await handle.connect(ticket.url, ticket.token);
-      await handle.publish(facing);
-      await handle.setMic(!machine.current.userMuted);
-    } catch (error) {
-      send({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
+    } catch {
+      if (!stale()) send({ type: 'connect_failed', permission: false, now: Date.now() });
       return;
+    }
+    if (stale()) return;
+    // In the background, the camera and microphone stay off (they come back with everything else on return).
+    if (!machine.current.background) {
+      try {
+        await handle.publish(facing);
+        await handle.setMic(!machine.current.userMuted);
+      } catch (error) {
+        if (!stale()) send({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
+        return;
+      }
+      if (stale()) return;
     }
     send({ type: 'connected' });
   }, [userId, send, ensureStage, facing]);
@@ -511,15 +596,16 @@ function HostLive({ userId, me, startFacing }: {
     return () => clearTimeout(timer);
   }, [invite, showInvite, showToast]);
 
-  // The app going to the background and coming back. (A phone call that doesn't leave the app: when it comes
-  // back to the front, the sound, mic and camera are turned back on too.)
+  // The app going to the background and coming back (also while starting: see waitForFront). Back in front –
+  // also after a phone call that didn't leave the app – the sound, mic and camera are turned back on.
   useEffect(() => {
     let last = AppState.currentState;
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'background') send({ type: 'app_state', active: false });
       if (state === 'active') {
         if (last === 'background') send({ type: 'app_state', active: true });
-        else if (machine.current.phase === 'live') resumeSending();
+        if (machine.current.phase === 'live') resumeSending();
+        frontWaiter.current?.('front');
       }
       last = state;
     });
@@ -539,14 +625,17 @@ function HostLive({ userId, me, startFacing }: {
   );
 
   // Leaving the screen any other way: the same steps as End (the phone stops sending first, then the server is
-  // told), then nothing is live any more. A stop that hangs is given up on after a few seconds.
+  // told), then nothing is live any more. A stop that hangs is given up on after a few seconds – the camera is
+  // given back then too (only this screen's own hold).
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      frontWaiter.current?.('closed');
       Promise.race([stopSending(), new Promise((resolve) => setTimeout(resolve, 3000))]).finally(() => {
         tellServerEnded();
-        setLiveNow(null);
+        releaseCameraFromLive(cameraHold.current);
+        if (liveNowRole() === 'host') setLiveNow(null);
       });
     };
   }, [stopSending, tellServerEnded]);

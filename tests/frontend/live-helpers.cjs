@@ -17,6 +17,9 @@ function fakeStage(log, { connect, publish } = {}) {
       let connected = false;
       const handle = {
         events,
+        // Who may receive this phone's camera (set by the co-host before connecting; null = everyone).
+        watchers: null,
+        setWatchers(list) { handle.watchers = list; },
         async connect(url, token) {
           log.push(`connect:${token}`);
           if (connect) await connect(url, token);

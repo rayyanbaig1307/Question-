@@ -1306,6 +1306,11 @@ The other phone sees you live. (This proves LiveKit, the secrets and the room al
    **Stay** keeps the live going. No banners pop up over A's live.
 10. **An app update waiting:** open the app **from a "… is live" notification** while an update is waiting → the
     live is never restarted; the update happens after **Done**. (G8)
+11. **Home during the 3·2·1:** A taps Go live and presses Home before the countdown ends → no friend gets the "… is
+    live" notification while A is away; A comes back → the live starts, with sound and camera. (G8)
+12. **Watching, then a chat on top:** B taps a message notification while watching → the chat opens (no live
+    banner blocks it); B goes back to the live → it rejoins by itself.
+13. **On stage, then leaving:** B (on stage) taps ✕ → back on Home the camera works at once (not black or frozen).
 
 **C. Old phones and other builds**
 
@@ -1319,4 +1324,7 @@ The other phone sees you live. (This proves LiveKit, the secrets and the room al
 
 **D. Checks for the developer (alongside A–C):** G5 (taking a co-host off really stops their camera), G9 (LiveKit's
 participant list shows a hidden viewer) and G10 (after a live ends, an old host ticket can't rebuild the room – or the
-one-minute check removes it again). Plan B for each gate is in the design.
+one-minute check removes it again). G13 (review round 3): while a friend is on stage, a viewer who should wait and
+reconnects with an old ticket (airplane mode for 20 s, then back) sees only the host, never the person on stage –
+LiveKit refuses them the stage's camera (subscription permissions from `live_stage_allowlist`); a friend of both who
+joins mid-stage sees the person on stage within about 5 seconds. Plan B for each gate is in the design.

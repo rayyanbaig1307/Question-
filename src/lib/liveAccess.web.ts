@@ -12,6 +12,7 @@ export const LIVE_MIN_APP_VERSION = '1.2.0';
 export const LIVE_NATIVE_MODULES = ['WebRTCModule', 'LivekitReactNativeModule'] as const;
 export const CAMERA_RELEASE_MIN_MS = 500;
 export const CAMERA_RELEASE_MAX_MS = 1200;
+export const LEAVE_WAIT_MS = 8000;
 
 export type LiveStageModule = Native.LiveStageModule;
 export type LiveRole = Native.LiveRole;
@@ -80,7 +81,11 @@ export function runAfterLive(_key: string, work: () => unknown): void {
   }
 }
 
-export function holdCameraForLive(): void {}
+export function whileLeaving(_work: Promise<unknown>): void {}
+
+export function holdCameraForLive(): number {
+  return 0;
+}
 export function useCameraHeldByLive(): boolean {
   return false;
 }
@@ -91,15 +96,15 @@ export function markCameraReleased(): void {}
 export function waitForCameraRelease(): Promise<void> {
   return Promise.resolve();
 }
-export function releaseCameraFromLive(): void {}
+export function releaseCameraFromLive(_hold?: number | null): void {}
 
 // Type check only: the web version must have every name the phone version has, with the same shapes.
 type Same = { [K in keyof typeof Native]: (typeof Native)[K] };
 const _same: Same = {
   LIVE_ENABLED, LIVE_ON_ANDROID, HEARTS_ENABLED, LIVE_MIN_APP_VERSION, LIVE_NATIVE_MODULES, CAMERA_RELEASE_MIN_MS,
-  CAMERA_RELEASE_MAX_MS, LIVE_UNAVAILABLE_WORDS, versionAtLeast, liveBroken, markLiveBroken, subscribeLiveBroken,
-  liveMaybeAvailable, isLiveAvailable, liveUnavailableReason, loadLiveStage, setLiveNow, liveNowRole, isLiveNow,
-  useLiveNow, onLiveEnded, runAfterLive, holdCameraForLive, useCameraHeldByLive, isCameraHeldByLive,
-  markCameraReleased, waitForCameraRelease, releaseCameraFromLive,
+  CAMERA_RELEASE_MAX_MS, LEAVE_WAIT_MS, LIVE_UNAVAILABLE_WORDS, versionAtLeast, liveBroken, markLiveBroken,
+  subscribeLiveBroken, liveMaybeAvailable, isLiveAvailable, liveUnavailableReason, loadLiveStage, setLiveNow,
+  liveNowRole, isLiveNow, useLiveNow, onLiveEnded, runAfterLive, whileLeaving, holdCameraForLive,
+  useCameraHeldByLive, isCameraHeldByLive, markCameraReleased, waitForCameraRelease, releaseCameraFromLive,
 };
 void _same;

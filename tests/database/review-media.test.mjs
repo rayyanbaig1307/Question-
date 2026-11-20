@@ -591,6 +591,7 @@ const AUTHENTICATED_ALLOWED = [
   'public.leave_live(live uuid)',
   'public.live_on_air(live uuid)',
   'public.live_ping(live uuid)',
+  'public.live_stage_allowlist(live uuid)',
   'public.live_state()',
   'public.live_status(live uuid)',
   'public.live_viewers_list(live uuid)',

@@ -158,3 +158,56 @@ it('while the live holds the camera, camera screens show none; releasing gives i
   access.markCameraReleased();
   expect(access.useCameraHeldByLive()).toBe(false);
 });
+
+it('a waiting app update waits for "I\'ve left" to reach the server first (at most LEAVE_WAIT_MS), then restarts once', async () => {
+  const { access } = load();
+  const reloads = [];
+  access.setLiveNow('viewer');
+  access.runAfterLive('ota', () => { reloads.push('reload'); });
+  let finish;
+  access.whileLeaving(new Promise((resolve) => { finish = resolve; }));
+  access.setLiveNow(null);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(reloads).toEqual([], 'not while the leave message is still on its way');
+  finish();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reloads).toEqual(['reload']);
+  // A leave message that never finishes holds the restart only LEAVE_WAIT_MS.
+  access.setLiveNow('host');
+  access.runAfterLive('ota', () => { reloads.push('reload-2'); });
+  access.whileLeaving(new Promise(() => {}));
+  access.setLiveNow(null);
+  await vi.advanceTimersByTimeAsync(access.LEAVE_WAIT_MS - 10);
+  expect(reloads).toEqual(['reload']);
+  await vi.advanceTimersByTimeAsync(20);
+  expect(reloads).toEqual(['reload', 'reload-2']);
+  // A failed leave message doesn't stop the restart either; with nothing registered it runs at once.
+  access.setLiveNow('viewer');
+  access.runAfterLive('ota', () => { reloads.push('reload-3'); });
+  access.whileLeaving(Promise.reject(new Error('offline')));
+  access.setLiveNow(null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reloads.at(-1)).toBe('reload-3');
+  access.setLiveNow('viewer');
+  access.runAfterLive('ota', () => { reloads.push('reload-4'); });
+  access.setLiveNow(null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reloads.at(-1)).toBe('reload-4');
+});
+
+it('a late "release" from a closing screen never gives the camera back while a newer live holds it', () => {
+  const { access } = load();
+  const first = access.holdCameraForLive();
+  expect(access.isCameraHeldByLive()).toBe(true);
+  // A newer live takes the hold over (the old screen is still closing).
+  const second = access.holdCameraForLive();
+  expect(second).not.toBe(first);
+  access.releaseCameraFromLive(first);
+  expect(access.isCameraHeldByLive()).toBe(true, 'the old screen can\'t end the new hold');
+  access.releaseCameraFromLive(second);
+  expect(access.isCameraHeldByLive()).toBe(false);
+  // Without a number it always gives the camera back (nothing started at all).
+  access.holdCameraForLive();
+  access.releaseCameraFromLive();
+  expect(access.isCameraHeldByLive()).toBe(false);
+});

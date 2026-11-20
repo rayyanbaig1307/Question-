@@ -1270,12 +1270,14 @@ test('The owner\'s teen check fires once when an adult\'s live has 5 under-18 vi
 // ---------------------------------------------------------------------------
 // 14. Reports
 // ---------------------------------------------------------------------------
-test('Reports: only people who were there, for 24 hours; the co-host can be chosen; comment words go in the report', async () => {
+test('Reports: only people who were there, for 24 hours; the co-host can be chosen; comment words go in the report while it is up', async () => {
   await ready(3);
   await befriend(0, 3, 5);
   await befriend(3, 1, 2, 4);
   const id = await goLive(0, [1, 2, 3, 4]);
   await putOn(id, 3);
+  // (Here the reports must not end the live: that is tested below.)
+  await db.query('update private.live_settings set report_end_count = 5');
   const report = (i, type, contentId, reported, details = null) => as(i,
     "insert into reports(reporter_id,reported_user_id,content_type,content_id,reason,details) values($1,$2,$3,$4,'bullying',$5) returning reported_user_id, details",
     [users[i], reported, type, contentId, details]);
@@ -1285,19 +1287,37 @@ test('Reports: only people who were there, for 24 hours; the co-host can be chos
   // The host, the co-host by choice, or the host when the choice wasn't on the stage.
   assert.equal((await report(1, 'live', id, users[0])).rows[0].reported_user_id, users[0]);
   assert.equal((await report(1, 'live', id, users[3])).rows[0].reported_user_id, users[3]);
-  assert.equal((await report(1, 'live', id, users[2])).rows[0].reported_user_id, users[0]);
+  assert.equal((await report(4, 'live', id, users[2])).rows[0].reported_user_id, users[0]);
+  // The same report again (here: 1 choosing someone who wasn't on, which means the host again) is quietly
+  // skipped, and so is a report about yourself.
+  assert.equal((await report(1, 'live', id, users[2])).rows.length, 0);
+  assert.equal((await report(0, 'live', id, users[0])).rows.length, 0, 'the host reporting their own live');
+  assert.equal(await count("reports where content_type = 'live'"), 3);
   // Each report keeps a frozen copy for 90 days.
   const copy = await one("select reason, extract(day from keep_until - now())::int as days, snapshot from private.live_snapshots where report_id is not null order by id limit 1");
   assert.equal(copy.reason, 'report');
   assert.ok(copy.days >= 89);
   assert.equal(copy.snapshot.live.cohost_id, users[3]);
-  // A comment: the words go into the report, also after it was deleted.
+  // A comment: the words go into the report while it is up. After a delete they don't (the reporter can read
+  // their report back), but the owner still has them in the report's private copy.
   const c1 = (await say(2, id, 'mean words')).rows[0];
   assert.equal((await report(1, 'live_comment', c1.id, null, 'please look')).rows[0].details, 'Comment: "mean words"\nplease look');
   await as(2, 'select delete_live_comment($1)', [c1.id]);
-  const after = (await report(4, 'live_comment', c1.id, null)).rows[0];
-  assert.equal(after.details, 'Comment: "mean words"');
+  const after = (await report(4, 'live_comment', c1.id, null, 'it was mean')).rows[0];
+  assert.equal(after.details, 'it was mean');
   assert.equal(after.reported_user_id, users[2]);
+  assert.equal((await as(4, "select details from reports where reporter_id = $1 and content_type = 'live_comment'", [users[4]])).rows[0].details, 'it was mean');
+  const kept = await one(`select x.snapshot from private.live_snapshots x join reports r on r.id = x.report_id
+    where r.reporter_id = $1 and r.content_type = 'live_comment'`, [users[4]]);
+  assert.equal(kept.snapshot.reported_comment.body, 'mean words');
+  assert.equal(kept.snapshot.reported_comment.id, c1.id);
+  // Someone who joins after a comment was deleted can't read its words through their own report either.
+  await befriend(0, 6);
+  await befriend(3, 6);
+  assert.equal((await join(6, id)).ok, true);
+  const late = (await report(6, 'live_comment', c1.id, null)).rows[0];
+  assert.equal(late.details, null);
+  assert.ok(!JSON.stringify((await as(6, 'select * from reports where reporter_id = $1', [users[6]])).rows).includes('mean words'));
   // 24 hours after the end: too late.
   await as(0, 'select end_live($1, 0)', [id]);
   assert.equal(await hint(report(2, 'live', id, users[0])), 'ok', 'still fine right after the end');
@@ -1316,9 +1336,13 @@ test('Two reporters end the live and stop the host for 24 hours (never shortenin
   const report = (i, type, contentId, reported) => as(i,
     "insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,$3,$4,'bullying')",
     [users[i], reported, type, contentId]);
-  // The co-host: two different reporters take them off (the same person twice counts once).
+  // The co-host: two different reporters take them off (the same person twice counts once: the second time adds
+  // no report and no copy).
   await report(1, 'live', id, users[3]);
-  await report(1, 'live', id, users[3]);
+  const copies = await count('private.live_snapshots');
+  assert.equal((await report(1, 'live', id, users[3])).affectedRows ?? 0, 0);
+  assert.equal(await count('private.live_snapshots'), copies);
+  assert.equal(await count("reports where content_type = 'live' and reporter_id = $1", [users[1]]), 1);
   assert.equal((await liveRow(id)).cohost_id, users[3]);
   await report(2, 'live', id, users[3]);
   assert.equal((await liveRow(id)).cohost_id, null);
@@ -1351,6 +1375,200 @@ test('Two reporters end the live and stop the host for 24 hours (never shortenin
   assert.deepEqual(await one('select body, removed_by from private.live_removed_comments where comment_id = $1', [c.id]),
     { body: 'hurtful words', removed_by: null }, 'the reports hid it; nobody deleted it');
   assert.equal(await count("private.live_restrictions where user_id = $1", [users[4]]), 0, 'a comment stops nobody');
+});
+
+test('Reports from people the reported person removed or blocked are kept but never count towards the automatic stop', async () => {
+  const report = (i, id, reported) => as(i,
+    "insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'live',$3,'bullying')",
+    [users[i], reported, id]);
+  const votes = async (id) => (await db.query('select reporter_id, counts from private.live_report_votes where live_id = $1 order by created_at, reporter_id', [id]))
+    .rows.map((r) => `${who(r.reporter_id)}:${r.counts}`);
+  // A host removes and blocks two people, who then both report her: her live goes on and she isn't stopped,
+  // but both reports and their copies are kept for the owner.
+  const first = await goLive(0, [1, 2, 3]);
+  await as(0, 'select remove_live_viewer($1,$2,true)', [first, users[1]]);
+  await as(0, 'select remove_live_viewer($1,$2,true)', [first, users[2]]);
+  await report(1, first, users[0]);
+  await report(2, first, users[0]);
+  assert.equal((await liveRow(first)).ended_at, null);
+  assert.equal(await count('private.live_restrictions where user_id = $1', [users[0]]), 0);
+  assert.equal(await count("reports where content_type = 'live' and content_id = $1", [first]), 2);
+  assert.equal(await count('private.live_snapshots where live_id = $1', [first]), 2);
+  assert.deepEqual((await votes(first)).sort(), ['1:false', '2:false']);
+  // Someone who reports and THEN blocks the host (as the app suggests) still counts.
+  const second = await goLive(4, [5, 6]);
+  await report(5, second, users[4]);
+  await block(5, 4);
+  await report(6, second, users[4]);
+  assert.equal((await liveRow(second)).ended_reason, 'reports');
+  // A report made before the host removed and blocked its writer still counts (decided when it was filed).
+  const third = await goLive(7, [8, 9]);
+  await report(8, third, users[7]);
+  await as(7, 'select remove_live_viewer($1,$2,true)', [third, users[8]]);
+  await report(9, third, users[7]);
+  assert.equal((await liveRow(third)).ended_reason, 'reports');
+  assert.deepEqual(await votes(third), ['8:true', '9:true']);
+  // A comment: its writer blocking a reporter takes that reporter's vote away too.
+  const fourth = await goLive(10, [11, 12, 13]);
+  const c = (await say(11, fourth, 'hello there')).rows[0];
+  await block(11, 12);
+  await as(12, "insert into reports(reporter_id,content_type,content_id,reason) values($1,'live_comment',$2,'bullying')", [users[12], c.id]);
+  await as(13, "insert into reports(reporter_id,content_type,content_id,reason) values($1,'live_comment',$2,'bullying')", [users[13], c.id]);
+  assert.equal((await one('select deleted_at from live_comments where id = $1', [c.id])).deleted_at, null);
+});
+
+test('Reports about the person brought on count only from people who could see them', async () => {
+  // 3 is on with host 0. 1 and 2 are friends of both (3 then blocks them). 4 and 5 are only the host's friends
+  // (they wait while 3 is on). 6 and 8 are friends of both and really watched.
+  await ready(3);
+  await befriend(0, 3);
+  await befriend(3, 1, 2, 6, 8);
+  const id = await goLive(0, [1, 2, 3, 4, 5, 6, 8]);
+  await putOn(id, 3);
+  const report = (i) => as(i,
+    "insert into reports(reporter_id,reported_user_id,content_type,content_id,reason) values($1,$2,'live',$3,'bullying')",
+    [users[i], users[3], id]);
+  await block(3, 1);
+  await block(3, 2);
+  await report(1);
+  await report(2);
+  assert.equal((await liveRow(id)).cohost_id, users[3], 'people she blocked can\'t take her off');
+  await report(4);
+  await report(5);
+  assert.equal((await liveRow(id)).cohost_id, users[3], 'people waiting (not her friends) never saw her');
+  assert.equal(await count('private.live_restrictions'), 0);
+  await report(6);
+  await report(8);
+  assert.equal((await liveRow(id)).cohost_id, null);
+  assert.equal((await one('select reason from private.live_restrictions where user_id = $1', [users[3]])).reason, 'reports');
+  assert.equal(await count("reports where content_type = 'live'"), 6, 'every report is kept');
+});
+
+test('Reports: more than 20 about one live from one person get a friendly no; reports aren\'t among the copy\'s 100 events', async () => {
+  await db.query('update private.live_settings set report_end_count = 20');
+  const id = await goLive(0, [1, 2]);
+  const comments = [];
+  for (let n = 0; n < 21; n++) {
+    await db.query("update live_comments set created_at = created_at - interval '5 seconds' where user_id = $1", [users[2]]);
+    comments.push((await say(2, id, `comment number ${n}`)).rows[0].id);
+  }
+  for (let n = 0; n < 20; n++) {
+    await as(1, "insert into reports(reporter_id,content_type,content_id,reason) values($1,'live_comment',$2,'spam')", [users[1], comments[n]]);
+  }
+  assert.match(await failure(as(1, "insert into reports(reporter_id,content_type,content_id,reason) values($1,'live_comment',$2,'spam')", [users[1], comments[20]])),
+    /a lot of reports for this live/);
+  const copy = (await one('select snapshot from private.live_snapshots order by id desc limit 1')).snapshot;
+  assert.equal(copy.report_count, 19, 'the reports before this one (the copy is made first)');
+  assert.equal(copy.events.filter((e) => e.kind === 'report').length, 0);
+  assert.ok(copy.events.some((e) => e.kind === 'start'));
+});
+
+test('Starting: at most 10 starts an hour per person (testers too), counting starts that never went on air', async () => {
+  await ready(0);
+  await befriend(0, 13);
+  await db.query('insert into private.live_testers(user_id, no_limits) values($1, true)', [users[0]]);
+  for (let n = 0; n < 10; n++) await start(0);
+  assert.equal(await hint(as(0, 'select start_live($1)', [users[0]])), 'live_busy');
+  assert.equal(await count('lives where host_id = $1', [users[0]]), 10);
+  await db.query("update lives set started_at = started_at - interval '61 minutes' where host_id = $1", [users[0]]);
+  assert.equal(await hint(as(0, 'select start_live($1)', [users[0]])), 'ok');
+});
+
+test('Testers are never added by a name someone else could take; @ayaan only while he is the owner\'s friend', async () => {
+  const OWNER = 'df5aae76-7e6a-4e91-9645-5b897a533156';
+  await db.query('insert into auth.users(id,email,raw_user_meta_data) values ($1,$2,$3)', [OWNER, 'owner@example.invalid', { username: 'owner_test', display_name: 'Owner' }]);
+  const named = async (name) => {
+    const id = `00000000-0000-4000-9000-${String(name.length).padStart(12, '0')}`;
+    await db.query('insert into auth.users(id,email,raw_user_meta_data) values ($1,$2,$3)', [id, `${name}@example.invalid`, { username: name, display_name: name }]);
+    assert.equal((await one('select username from profiles where id = $1', [id])).username, name);
+    return id;
+  };
+  const ayaan = await named('ayaan');
+  const review = await named('peekaboo_review');
+  const review2 = await named('peekaboo_review2');
+  await db.query('delete from private.live_testers');
+  await db.exec(await migrationSql(MIGRATION));
+  const testers = async () => (await db.query('select user_id from private.live_testers')).rows.map((r) => r.user_id).sort();
+  assert.deepEqual(await testers(), [OWNER]);
+  await friend(db, OWNER, ayaan);
+  await db.exec(await migrationSql(MIGRATION));
+  assert.deepEqual(await testers(), [OWNER, ayaan].sort());
+  assert.ok(!(await testers()).includes(review) && !(await testers()).includes(review2));
+});
+
+test('A friend coming on has its own pass allowance: "Getting the stage ready…" retries never stop them watching', async () => {
+  await ready(3);
+  await befriend(0, 3);
+  const id = await goLive(0, [3]);
+  // 3 already used 29 of the 30 passes for watching.
+  await db.query('insert into private.live_token_log(account, ok) select $1, true from generate_series(1, 28)', [users[3]]);
+  await putOn(id, 3);
+  // While the stage isn't ready yet, the app asks every 2 seconds for up to 70 seconds (35 times).
+  for (let n = 0; n < 35; n++) {
+    const pass = await join(3, id);
+    assert.equal(pass.role, 'cohost', `stage request ${n + 1}`);
+    assert.equal(pass.stage_check, true);
+  }
+  assert.equal(await count('private.live_token_log where account = $1 and stage', [users[3]]), 35);
+  // It didn't work out: back to watching, with the watching allowance untouched.
+  await as(3, 'select end_cohost($1)', [id]);
+  assert.equal((await join(3, id)).role, 'viewer');
+  assert.deepEqual(await join(3, id), { ok: false, reason: 'busy' }, 'the 31st watching pass');
+  // The stage allowance has its own limit too (80 in 10 minutes).
+  await db.query('delete from private.live_token_log');
+  await putOn(id, 3);
+  await db.query('insert into private.live_token_log(account, ok, stage) select $1, true, true from generate_series(1, 80)', [users[3]]);
+  assert.deepEqual(await join(3, id), { ok: false, reason: 'busy' });
+});
+
+test('live_stage_allowlist: only the person on stage gets it – the host, them, and everyone who may watch them', async () => {
+  // 3 is on with host 0. 1 and 2 are friends of both; 4 only the host's friend (waits, last seen 5 minutes
+  // ago); 5 was removed.
+  await ready(3);
+  await befriend(0, 3);
+  await befriend(3, 1, 2, 5);
+  const id = await goLive(0, [1, 2, 3, 4, 5]);
+  await as(0, 'select remove_live_viewer($1,$2)', [id, users[5]]);
+  await stale(id, 4, 300);
+  await putOn(id, 3);
+  const list = async (i) => (await as(i, 'select live_stage_allowlist($1) as l', [id])).rows[0].l;
+  assert.deepEqual(await list(3), [users[0], users[3], ...[users[1], users[2]].sort()]);
+  for (const other of [0, 1, 4, 5, 7]) assert.deepEqual(await list(other), [], `user ${other} gets nothing`);
+  // 3 blocks 2: 2 drops off the list.
+  await block(3, 2);
+  assert.deepEqual(await list(3), [users[0], users[3], users[1]]);
+  // Taken off the stage: an empty list (nobody may see them any more).
+  await as(0, 'select end_cohost($1)', [id]);
+  assert.deepEqual(await list(3), []);
+  assert.match(await failure(asUser(db, null, (tx) => tx.query('select live_stage_allowlist($1)', [id]), 'anon')), /permission denied/);
+});
+
+test('An ended live whose room was never closed (a step that failed) is closed and watched by the minute check', async () => {
+  const id = await goLive(0, [1, 2]);
+  await db.query('update lives set ended_at = now() where id = $1', [id]);
+  // Pretend the end's own steps were lost.
+  await db.query("delete from private.live_jobs where live_id = $1 and kind = 'end'", [id]);
+  await db.query('delete from private.live_watch_rooms where live_id = $1', [id]);
+  await db.query('update live_viewers set left_at = null where live_id = $1', [id]);
+  await clearJobs();
+  await sweep();
+  assert.ok((await waiting()).includes('end:-'));
+  assert.equal(await count('private.live_watch_rooms where live_id = $1', [id]), 1);
+  assert.equal(await count('live_viewers where live_id = $1 and left_at is null', [id]), 0);
+  // One step of the end failing never undoes the others: the room is still closed and watched.
+  const second = await goLive(5, [6]);
+  const keep = (await one("select pg_get_functiondef('private.live_log(uuid,text,uuid,uuid,jsonb)'::regprocedure) as d")).d;
+  await db.exec(`create or replace function private.live_log(live uuid, what text, by_whom uuid, about uuid, extra jsonb default null)
+    returns void language plpgsql security definer set search_path = '' as $$ begin raise exception 'broken on purpose'; end; $$;`);
+  try {
+    await as(5, 'select end_live($1, 0)', [second]);
+  } finally {
+    await db.exec(keep);
+  }
+  assert.ok((await liveRow(second)).ended_at);
+  assert.ok((await waiting()).includes('end:-'));
+  assert.equal(await count('private.live_watch_rooms where live_id = $1', [second]), 1);
+  assert.equal(await count('live_viewers where live_id = $1 and left_at is null', [second]), 0);
 });
 
 // ---------------------------------------------------------------------------

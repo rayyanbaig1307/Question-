@@ -33,12 +33,14 @@ function renderViewer({ lives = {}, access, permissions = 'ok', stageOptions = {
     fetchLiveComments: async () => [],
     answerCohostInvite: async (invite, accept) => { log.push(`answer:${accept}`); return { role: accept ? 'cohost' : 'viewer' }; },
     endCohost: async () => { log.push('endCohost'); },
+    // On stage: the people who may see you (the host and you).
+    fetchStageWatchers: async () => [HOST, 'alice'],
     sendLiveComment: async (_id, text) => { log.push(`comment:${text}`); return { id: 'c-new', live_id: LIVE, user_id: 'alice', name: 'Alice', avatar_path: null, body: text, created_at: '', deleted_at: null }; },
   };
-  const { mocks, appState } = liveScreenMocks({ log, stage: module, access: liveAccess, lives: { ...defaults, ...lives }, calls, params: { id: LIVE } });
+  const { mocks, appState, focus } = liveScreenMocks({ log, stage: module, access: liveAccess, lives: { ...defaults, ...lives }, calls, params: { id: LIVE } });
   mocks['@/lib/livePermissions'] = { ensureLivePermissions: async () => { log.push(`permissions:${permissions}`); return permissions; }, openPhoneSettings() {} };
   const screen = loadScreen('src/app/(app)/live/[id].tsx', mocks);
-  return { screen, log, calls, access: liveAccess, handlers, handles, appState, tickets: () => tickets };
+  return { screen, log, calls, access: liveAccess, handlers, handles, appState, focus, tickets: () => tickets };
 }
 
 async function open(setup) {
@@ -266,7 +268,9 @@ test('coming on stage: permissions → yes → off the viewer connection → cam
     setup.log.length = 0;
     await act(async () => { await live.find('InviteSheet')[0].props.onJoin(); });
     await settle(act);
-    assert.deepEqual(setup.log.slice(0, 4), ['permissions:ok', 'answer:true', 'disconnect:keepAudio', 'token']);
+    assert.deepEqual(setup.log.filter((step) => !step.startsWith('status')).slice(0, 4), ['permissions:ok', 'answer:true', 'disconnect:keepAudio', 'token']);
+    // Who is on stage is asked at once (the names at the top don't wait for the next ping).
+    assert.ok(setup.log.includes('status(as cohost)'));
     assert.equal(setup.access.liveNowRole(), 'cohost');
     assert.equal(setup.access.isCameraHeldByLive(), true);
     // "Getting the stage ready…" while the server clears the stage; tried again 2 seconds later.
@@ -274,6 +278,8 @@ test('coming on stage: permissions → yes → off the viewer connection → cam
     stageReady = true;
     await live.runLastTimer();
     assert.deepEqual(setup.log.slice(-4), ['token', 'connect:cohost-token', 'publish:front', 'mic:true']);
+    // LiveKit was told who may see you BEFORE connecting (everyone else is refused by LiveKit itself).
+    assert.deepEqual(setup.handles[0].watchers, [HOST, 'alice']);
     assert.ok(live.find('Button').some((b) => b.props.title === 'Leave stage'));
 
     // Leave stage: end the stage, stop the camera, back to a hidden viewer connection, camera given back.
@@ -365,4 +371,174 @@ test('the comment list and composer: empty words, the note, and "Comments are of
   assert.equal(textOf(tree.toJSON()), 'Comments are off');
   assert.equal(tree.root.findAllByType('TextInput').length, 0);
   await unmount(tree);
+});
+
+// ---------------------------------------------------------------------------
+// Review fixes: real waits between steps, a failed "come on", another screen on top, giving the camera back
+// ---------------------------------------------------------------------------
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function runFor(rounds, ms = 25) {
+  for (let i = 0; i < rounds; i++) await act(async () => { await wait(ms); });
+}
+const invite = (id) => ({ id, live_id: LIVE, guest_id: 'alice', expires_at: new Date(Date.now() + 60_000).toISOString() });
+
+test('with real waits between the steps: one ticket, one connect, watching (no "Reconnecting…"); coming on: one co-host ticket, one connect, on stage', async () => {
+  // Like LiveStage: a second connect closes the room that is still connecting (that connect then fails).
+  const log = [];
+  let generation = 0;
+  const stageModule = {
+    StageView: host('StageView'),
+    resumeLiveAudio: async () => {},
+    createStage(events) {
+      return {
+        events, watchers: null,
+        setWatchers(list) { this.watchers = list; },
+        async connect(_url, token) {
+          const mine = ++generation;
+          log.push(`connect:${token}`);
+          await wait(80);
+          if (mine !== generation) throw new Error('Client initiated disconnect');
+        },
+        async publish() { log.push('publish'); }, async unpublish() {}, async disconnect() { generation++; },
+        async flip() {}, async setMic() {}, async setCamera() {}, async sendHearts() {}, async broadcastHearts() {},
+        subscribe: () => () => {}, room: () => null, facing: () => 'front', identity: () => null,
+      };
+    },
+  };
+  const access = liveAccessMock(true, { stage: stageModule });
+  access.waitForCameraRelease = () => wait(50);
+  const setup = renderViewer({
+    access,
+    lives: {
+      liveStatus: async () => { await wait(10); return status(); },
+      getLiveToken: async () => {
+        await wait(40);
+        const role = access.liveNowRole() === 'cohost' ? 'cohost' : 'viewer';
+        log.push(`token:${role}`);
+        return { ok: true, url: 'wss://x', token: `${role}-token`, room: 'r', role, identity: 'alice', expires_at: '' };
+      },
+    },
+  });
+  let tree;
+  await act(async () => { tree = renderer.create(React.createElement(setup.screen.Component)); });
+  try {
+    await runFor(20);
+    assert.deepEqual(log, ['token:viewer', 'connect:viewer-token']);
+    assert.equal(textOf(tree.toJSON()).includes('Reconnecting'), false);
+    assert.equal(tree.root.findAllByType('LiveCard').length, 0);
+    // Coming on stage.
+    log.length = 0;
+    await act(() => setup.handlers.onInvite(invite('inv-real')));
+    await act(async () => { await tree.root.findAllByType('InviteSheet')[0].props.onJoin(); });
+    await runFor(20);
+    assert.deepEqual(log, ['token:cohost', 'connect:cohost-token', 'publish']);
+    assert.ok(tree.root.findAllByType('Button').some((b) => b.props.title === 'Leave stage'));
+  } finally { await unmount(tree); }
+});
+
+test('coming on didn\'t work (the camera was refused): the turn is ended on the server and the camera is never sent again', async () => {
+  let refuse = true;
+  const setup = renderViewer({
+    stageOptions: { publish: async () => { if (refuse) { const e = new Error('Permission denied'); e.name = 'NotAllowedError'; throw e; } } },
+    lives: {
+      getLiveToken: async () => {
+        const role = setup.access.liveNowRole() === 'cohost' ? 'cohost' : 'viewer';
+        setup.log.push(`token:${role}`);
+        return { ok: true, url: 'wss://x', token: `${role}-token`, room: 'r', role, identity: 'alice', expires_at: '' };
+      },
+    },
+  });
+  const live = await open(setup);
+  try {
+    await act(() => setup.handlers.onInvite(invite('inv-5')));
+    setup.log.length = 0;
+    await act(async () => { await live.find('InviteSheet')[0].props.onJoin(); });
+    await settle(act);
+    refuse = false;
+    assert.ok(setup.log.includes('endCohost'), 'the server no longer has you on stage');
+    assert.ok(setup.log.indexOf('endCohost') < setup.log.lastIndexOf('token:viewer'), 'ended before asking for a watching ticket');
+    assert.equal(setup.log.filter((s) => s.startsWith('publish')).length, 1, 'only the one try that was refused');
+    assert.equal(setup.access.isCameraHeldByLive(), false);
+    assert.equal(setup.access.liveNowRole(), 'viewer');
+    assert.ok(setup.calls.toasts.includes('You need to allow the camera and microphone to come on.'));
+  } finally { await unmount(live.tree); }
+});
+
+test('a ticket that still says "co-host" while you\'re just watching: the turn is ended and nothing is sent', async () => {
+  let serverSaysCohost = true;
+  const setup = renderViewer({
+    lives: {
+      getLiveToken: async () => {
+        const role = serverSaysCohost ? 'cohost' : 'viewer';
+        setup.log.push(`token:${role}`);
+        return { ok: true, url: 'wss://x', token: `${role}-token`, room: 'r', role, identity: 'alice', expires_at: '' };
+      },
+      endCohost: async () => { setup.log.push('endCohost'); serverSaysCohost = false; },
+    },
+  });
+  const live = await open(setup);
+  try {
+    assert.deepEqual(setup.log.filter((s) => !s.startsWith('status')), ['token:cohost', 'endCohost']);
+    assert.equal(setup.log.some((s) => s.startsWith('connect') || s.startsWith('publish')), false);
+    assert.equal(setup.access.calls.holds, 0, 'the camera is never taken');
+    // The retry gets a watching ticket.
+    await live.runLastTimer();
+    assert.ok(setup.log.includes('connect:viewer-token'));
+    assert.equal(setup.log.some((s) => s.startsWith('publish')), false);
+  } finally { await unmount(live.tree); }
+});
+
+test('another screen on top: nothing counts as live any more; back to the live: live again before the server is asked', async () => {
+  const setup = renderViewer();
+  const live = await open(setup);
+  try {
+    assert.equal(setup.access.liveNowRole(), 'viewer');
+    // A chat opens on top (the live screen stays underneath, without focus).
+    setup.log.length = 0;
+    await act(async () => { setup.focus.cleanup(); });
+    await settle(act);
+    assert.deepEqual([...setup.log], ['unpublish', 'disconnect', 'leaveLive']);
+    assert.equal(setup.access.liveNowRole(), null, 'app updates may run, the screen may dim, live notifications show');
+    // The app going to the background and back while the chat is open doesn't rejoin underneath it.
+    await act(async () => { setup.appState.listener('background'); setup.appState.listener('active'); });
+    await settle(act);
+    assert.equal(setup.log.some((s) => s.startsWith('status') || s === 'token'), false);
+    assert.equal(setup.access.liveNowRole(), null);
+    // Back to the live: "live now" is set before the server is asked anything, then it rejoins.
+    await act(async () => { setup.focus.cleanup = setup.focus.effect(); });
+    await settle(act);
+    assert.equal(setup.log[3], 'status(as viewer)', 'the first thing after coming back, with "live now" already set');
+    assert.ok(setup.log.includes('connect:viewer-token'));
+    assert.equal(setup.access.liveNowRole(), 'viewer');
+  } finally { await unmount(live.tree); }
+});
+
+test('closing the screen while on stage gives the camera back only once LiveKit\'s camera has stopped', async () => {
+  let stopped;
+  const setup = renderViewer({
+    lives: {
+      getLiveToken: async () => {
+        const role = setup.access.liveNowRole() === 'cohost' ? 'cohost' : 'viewer';
+        return { ok: true, url: 'wss://x', token: `${role}-token`, room: 'r', role, identity: 'alice', expires_at: '' };
+      },
+    },
+  });
+  const live = await open(setup);
+  await act(() => setup.handlers.onInvite(invite('inv-6')));
+  await act(async () => { await live.find('InviteSheet')[0].props.onJoin(); });
+  await settle(act);
+  assert.equal(setup.access.liveNowRole(), 'cohost');
+  // Stopping the camera takes a moment now.
+  setup.handles[0].disconnect = () => new Promise((resolve) => { stopped = () => { setup.log.push('disconnect'); resolve(); }; });
+  await unmount(live.tree);
+  await settle(act);
+  assert.equal(setup.access.isCameraHeldByLive(), true, 'still held while LiveKit\'s camera is stopping');
+  assert.equal(setup.access.liveNowRole(), 'cohost');
+  assert.equal(setup.access.leaving.size, 1, 'telling the server is registered as leaving work');
+  stopped();
+  await settle(act);
+  assert.equal(setup.access.isCameraHeldByLive(), false);
+  assert.equal(setup.access.liveNowRole(), null);
+  assert.ok(setup.log.indexOf('disconnect') < setup.log.indexOf('endCohost'));
 });

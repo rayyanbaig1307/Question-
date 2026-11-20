@@ -63,6 +63,8 @@ function frameAccessMock(available, { broken = false } = {}) {
 function liveAccessMock(available = false, { stage = null } = {}) {
   let role = null;
   let held = false;
+  let holdId = 0;
+  const leaving = new Set();
   const roleListeners = new Set();
   const cameraListeners = new Set();
   const ended = new Set();
@@ -71,7 +73,7 @@ function liveAccessMock(available = false, { stage = null } = {}) {
   const tell = (set) => [...set].forEach((listener) => listener());
   const mock = {
     LIVE_ENABLED: true, LIVE_ON_ANDROID: false, HEARTS_ENABLED: true, LIVE_MIN_APP_VERSION: '1.2.0',
-    LIVE_NATIVE_MODULES: ['WebRTCModule', 'LivekitReactNativeModule'], CAMERA_RELEASE_MIN_MS: 500, CAMERA_RELEASE_MAX_MS: 1200,
+    LIVE_NATIVE_MODULES: ['WebRTCModule', 'LivekitReactNativeModule'], CAMERA_RELEASE_MIN_MS: 500, CAMERA_RELEASE_MAX_MS: 1200, LEAVE_WAIT_MS: 8000,
     LIVE_UNAVAILABLE_WORDS: {
       update: 'Update Peekaboo to watch lives 🔴',
       android: "Lives aren't on Android yet – soon! 🔴",
@@ -79,6 +81,9 @@ function liveAccessMock(available = false, { stage = null } = {}) {
       broken: "Lives aren't working on this phone right now.",
     },
     calls,
+    // Leaving work the screens registered (whileLeaving); `leaving` lets a test wait for it.
+    leaving,
+    whileLeaving(work) { const tracked = Promise.resolve(work).catch(() => {}).finally(() => leaving.delete(tracked)); leaving.add(tracked); },
     versionAtLeast: () => true,
     liveBroken: () => false, markLiveBroken() {}, subscribeLiveBroken: () => () => {},
     liveMaybeAvailable: () => available,
@@ -103,12 +108,12 @@ function liveAccessMock(available = false, { stage = null } = {}) {
     useLiveNow: () => React.useSyncExternalStore((l) => { roleListeners.add(l); return () => roleListeners.delete(l); }, () => role),
     onLiveEnded: (listener) => { ended.add(listener); return () => ended.delete(listener); },
     runAfterLive(key, work) { calls.afterLive.push(key); if (role === null) work(); else waiting.set(key, work); },
-    holdCameraForLive() { if (held) return; held = true; calls.holds++; tell(cameraListeners); },
+    holdCameraForLive() { holdId += 1; if (held) return holdId; held = true; calls.holds++; tell(cameraListeners); return holdId; },
     useCameraHeldByLive: () => React.useSyncExternalStore((l) => { cameraListeners.add(l); return () => cameraListeners.delete(l); }, () => held),
     isCameraHeldByLive: () => held,
     markCameraReleased() { calls.released++; },
     waitForCameraRelease: async () => {},
-    releaseCameraFromLive() { if (!held) return; held = false; calls.releases++; tell(cameraListeners); },
+    releaseCameraFromLive(hold) { if (!held) return; if (typeof hold === 'number' && hold !== holdId) return; held = false; calls.releases++; tell(cameraListeners); },
   };
   return mock;
 }
@@ -131,6 +136,7 @@ function livesMock(overrides = {}) {
     fetchLiveState: async () => ({ can_go_live: false, why_not: 'testers', my_live: null, max_minutes: 60, lives_left_today: 0, rules_accepted: false }),
     fetchFriendsLiveNow: async () => [],
     checkLiveComment: () => null,
+    fetchStageWatchers: async () => [],
     listenToLive: () => () => {},
     fetchLiveComments: async () => [],
     ...overrides,

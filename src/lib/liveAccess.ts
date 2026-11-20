@@ -274,6 +274,26 @@ function runSafely(work: () => unknown): Promise<void> {
   }
 }
 
+// Leaving work that is still running (telling the server you ended or left the live). A waiting restart waits
+// for it first – at most LEAVE_WAIT_MS – so a restart never cancels the "I've left" message on its way out.
+export const LEAVE_WAIT_MS = 8000;
+const leaving = new Set<Promise<unknown>>();
+
+export function whileLeaving(work: Promise<unknown>): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  // Each one counts for at most LEAVE_WAIT_MS (a request that never answers mustn't hold every later restart).
+  const tracked: Promise<unknown> = Promise.race([
+    work.catch(() => {}),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, LEAVE_WAIT_MS);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+    leaving.delete(tracked);
+  });
+  leaving.add(tracked);
+}
+
 // Each waiting job is a restart (app update, theme, Peekaboo+ ending). The app update goes first: it
 // restarts into the new version, which also picks up a new theme. The rest only run if it didn't restart.
 function runWaitingWork() {
@@ -282,6 +302,16 @@ function runWaitingWork() {
   waiting.clear();
   setTimeout(() => {
     void (async () => {
+      if (leaving.size) {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        await Promise.race([
+          Promise.allSettled([...leaving]),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, LEAVE_WAIT_MS);
+          }),
+        ]);
+        if (timer) clearTimeout(timer);
+      }
       for (let i = 0; i < jobs.length; i++) {
         if (isLiveNow()) {
           // A new live started meanwhile: the rest wait again.
@@ -298,6 +328,9 @@ function runWaitingWork() {
 // One camera user at a time. The Peekaboo camera (and its face filters) and LiveKit each open the phone's
 // camera, and two at once fails. So before a live sends your camera:
 //   holdCameraForLive() → await waitForCameraRelease() → publish.  When leaving: releaseCameraFromLive().
+// holdCameraForLive() returns a number for this hold. A screen that passes it to releaseCameraFromLive(hold)
+// can only end its own hold: a late "release" from a screen that is closing never gives the camera back while
+// a newer live is using it.
 // While the hold is on, every camera screen shows no camera at all (useCameraHeldByLive()), and calls
 // markCameraReleased() when its camera has gone. The camera parts stop a moment after their view goes, so the
 // wait lasts at least CAMERA_RELEASE_MIN_MS after the last "released" (or after the hold, when no camera screen
@@ -309,6 +342,7 @@ export const CAMERA_RELEASE_MIN_MS = 500;
 export const CAMERA_RELEASE_MAX_MS = 1200;
 
 let cameraHeld = false;
+let holdId = 0;
 let heldAt = 0;
 let lastRelease = 0;
 let releasesExpected = 0;
@@ -327,8 +361,9 @@ function subscribeCamera(listener: () => void): () => void {
   };
 }
 
-export function holdCameraForLive(): void {
-  if (cameraHeld) return;
+export function holdCameraForLive(): number {
+  holdId += 1;
+  if (cameraHeld) return holdId; // already held: the newest holder owns it now
   cameraHeld = true;
   heldAt = Date.now();
   lastRelease = 0;
@@ -336,6 +371,7 @@ export function holdCameraForLive(): void {
   // The camera screens open right now (each one listens through useCameraHeldByLive).
   releasesExpected = cameraListeners.size;
   tellAll(cameraListeners);
+  return holdId;
 }
 
 // For camera screens: true while a live is using the camera (show no camera then).
@@ -387,9 +423,11 @@ export function waitForCameraRelease(): Promise<void> {
   });
 }
 
-// The live is done with the camera: the camera screens show their camera again.
-export function releaseCameraFromLive(): void {
+// The live is done with the camera: the camera screens show their camera again. With `hold`: only if that is
+// still the newest hold.
+export function releaseCameraFromLive(hold?: number | null): void {
   if (!cameraHeld) return;
+  if (typeof hold === 'number' && hold !== holdId) return;
   cameraHeld = false;
   lastRelease = 0;
   releasesSeen = 0;

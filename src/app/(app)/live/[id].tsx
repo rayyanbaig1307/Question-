@@ -20,6 +20,7 @@ import { friendlyError } from '@/lib/errors';
 import {
   HEARTS_ENABLED,
   holdCameraForLive,
+  isCameraHeldByLive,
   isLiveAvailable,
   LIVE_UNAVAILABLE_WORDS,
   liveBroken,
@@ -32,6 +33,7 @@ import {
   setLiveNow,
   subscribeLiveBroken,
   waitForCameraRelease,
+  whileLeaving,
   type LiveStageModule,
 } from '@/lib/liveAccess';
 import { setLiveExit } from '@/lib/liveExit';
@@ -56,6 +58,7 @@ import {
   deleteLiveComment,
   endCohost,
   fetchLiveComments,
+  fetchStageWatchers,
   getLiveToken,
   isLiveId,
   LIVE_TOKEN_WORDS,
@@ -77,6 +80,10 @@ type Facing = 'front' | 'back';
 
 // Where you're in the live's room (for pings, comments and hearts).
 const IN_ROOM: readonly LivePhase[] = ['watching', 'invited', 'on_stage', 'reconnecting'];
+// On stage: how often the list of people who may see you is fetched again (someone new may have come in).
+const WATCHERS_REFRESH_MS = 5000;
+// Leaving the screen: the camera is given back once LiveKit's camera has stopped, or after this long.
+const STOP_WAIT_MS = 3000;
 
 // The words on the "can't watch" cards (`why` from the live machine). The server's own words come first.
 export function viewerCardWords(why: string | null, message: string | null): string {
@@ -185,6 +192,12 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const leftMyself = useRef(false);
   const joined = useRef(false);
+  // Which connect (or leave-stage) is the current one: an older one still waiting for an answer stops itself.
+  const runId = useRef(0);
+  // This screen's hold on the camera (so a late release can't take it from a newer live).
+  const cameraHold = useRef<number | null>(null);
+  // Another screen is on top of this one (a chat opened from a notification, for example).
+  const blurred = useRef(false);
   const sender = useRef(new HeartSender());
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { hearts, add: drawHearts, done: heartDone } = useFloatingHearts();
@@ -205,10 +218,23 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       const made = module.createStage({
         hostId: hostId.current ?? '',
         onReconnecting: () => send({ type: 'reconnecting' }),
-        onReconnected: () => send({ type: 'reconnected' }),
         onDisconnected: (reason) => send({ type: 'disconnected', reason }),
         onHearts: (count) => {
           if (HEARTS_ENABLED) drawHearts(count);
+        },
+        onReconnected: () => {
+          send({ type: 'reconnected' });
+          // Back on stage after a drop: ask the server straight away whether you're still on (the host may have
+          // taken you off meanwhile – then the camera must stop now, not at the next ping).
+          if (machine.current.phase === 'on_stage') {
+            livePing(liveId)
+              .then((status) => {
+                if (!alive.current) return;
+                remember(status);
+                send({ type: 'status', info: status as StatusInfo });
+              })
+              .catch(() => {});
+          }
         },
         // The host took you off the stage.
         onPublishAllowed: (allowed) => {
@@ -219,7 +245,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       setStageParts({ module, handle: made });
       return made;
     },
-    [send, drawHearts],
+    [send, drawHearts, liveId, remember],
   );
 
   // ---------------------------------------------------------------------------
@@ -238,13 +264,17 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
 
   // Get a ticket and connect: hidden as a viewer, or (coming on stage) with your camera and microphone.
   const runConnect = useCallback(async () => {
+    const run = ++runId.current;
+    const stale = () => runId.current !== run;
     const goingOn = machine.current.phase === 'going_on';
-    // On stage: the camera is handed over to the live first (the camera screens let go of it).
-    const withCamera = goingOn || machine.current.role === 'cohost';
-    if (withCamera) holdCameraForLive();
-    await (withCamera ? waitForCameraRelease() : Promise.resolve());
+    // Only someone coming on (or already on) may send their camera: the camera is handed over to the live
+    // first (the camera screens let go of it).
+    const mayPublish = goingOn || machine.current.role === 'cohost';
+    if (mayPublish) cameraHold.current = holdCameraForLive();
+    await (mayPublish ? waitForCameraRelease() : Promise.resolve());
+    if (stale() || !alive.current) return;
     const ticket = await getLiveToken(liveId, userId);
-    if (!alive.current) return;
+    if (stale() || !alive.current) return;
     if (!ticket.ok) {
       send({ type: 'token_failed', reason: ticket.reason, message: ticket.message, now: Date.now() });
       return;
@@ -254,6 +284,23 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       send({ type: 'taken_off' });
       return;
     }
+    if (ticket.role === 'cohost' && !mayPublish) {
+      // The server still has you on stage (coming on didn't work out earlier). Never send your camera from
+      // here: end that turn first, then try again for a plain watching ticket.
+      await endCohost(liveId).catch(() => {});
+      if (!stale()) send({ type: 'token_failed', reason: 'network', message: null, now: Date.now() });
+      return;
+    }
+    // On stage: who may see and hear you. LiveKit is told before anything is sent, and refuses everyone else.
+    let watchers: string[] | null = null;
+    if (ticket.role === 'cohost') {
+      watchers = await fetchStageWatchers(liveId).catch(() => null);
+      if (stale() || !alive.current) return;
+      if (!watchers?.length) {
+        send({ type: 'token_failed', reason: 'network', message: null, now: Date.now() });
+        return;
+      }
+    }
     send({ type: 'token_ok', role: ticket.role });
     const module = loadLiveStage();
     if (!module) {
@@ -261,15 +308,24 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       return;
     }
     const handle = ensureStage(module);
+    if (watchers) handle.setWatchers(watchers);
+    // Connecting on its own: a refusal from the server is never "the camera wasn't allowed".
     try {
       await handle.connect(ticket.url, ticket.token);
-      if (ticket.role === 'cohost') {
+    } catch {
+      if (!stale()) send({ type: 'connect_failed', permission: false, now: Date.now() });
+      return;
+    }
+    if (stale()) return;
+    if (ticket.role === 'cohost') {
+      try {
         await handle.publish(facing);
         await handle.setMic(!machine.current.userMuted);
+      } catch (error) {
+        if (!stale()) send({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
+        return;
       }
-    } catch (error) {
-      send({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
-      return;
+      if (stale()) return;
     }
     if (!alive.current) {
       handle.disconnect().catch(() => {});
@@ -280,63 +336,97 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     send({ type: 'connected' });
   }, [liveId, userId, send, ensureStage, facing]);
 
-  // Back to watching: (end the stage if you left yourself) → camera off → disconnect → a viewer ticket →
-  // connect hidden → give the camera back.
+  // Back to watching: end the stage on the server (whatever the reason: it only ever ends your own turn) →
+  // camera off → disconnect → a viewer ticket → connect hidden → give the camera back.
   const runLeaveStage = useCallback(async () => {
+    const run = ++runId.current;
+    const stale = () => runId.current !== run;
     const line = stageFailureWords(machine.current.why);
     if (line) showToast(line);
-    if (leftMyself.current) {
-      leftMyself.current = false;
-      await endCohost(liveId).catch(() => {});
-    }
+    leftMyself.current = false;
+    await endCohost(liveId).catch(() => {});
     const handle = stage.current;
     await handle?.unpublish().catch(() => {});
     await handle?.disconnect({ keepAudio: true }).catch(() => {});
+    if (stale()) return;
+    const backToWatching = () => {
+      releaseCameraFromLive(cameraHold.current);
+      setLiveNow(blurred.current ? null : 'viewer');
+    };
     const ticket = await getLiveToken(liveId, userId);
-    if (!alive.current) return;
+    if (stale() || !alive.current) return;
+    if (ticket.ok && ticket.role === 'cohost') {
+      // The server still has you on stage (the end didn't arrive): never connect with that ticket. Try again.
+      await endCohost(liveId).catch(() => {});
+      backToWatching();
+      if (!stale()) send({ type: 'token_failed', reason: 'network', message: null, now: Date.now() });
+      return;
+    }
     if (!ticket.ok) {
-      releaseCameraFromLive();
-      setLiveNow('viewer');
+      backToWatching();
       send({ type: 'token_failed', reason: ticket.reason, message: ticket.message, now: Date.now() });
       return;
     }
     const module = loadLiveStage();
     if (!module) {
-      releaseCameraFromLive();
+      releaseCameraFromLive(cameraHold.current);
       markLiveBroken('LiveKit could not load');
       return;
     }
     try {
       await ensureStage(module).connect(ticket.url, ticket.token);
-    } catch (error) {
-      releaseCameraFromLive();
-      setLiveNow('viewer');
-      send({ type: 'connect_failed', permission: isPermissionError(error), now: Date.now() });
+    } catch {
+      backToWatching();
+      if (!stale()) send({ type: 'connect_failed', permission: false, now: Date.now() });
       return;
     }
-    releaseCameraFromLive();
-    setLiveNow('viewer');
+    if (stale()) return;
+    backToWatching();
     send({ type: 'connected' });
   }, [liveId, userId, send, ensureStage, showToast]);
 
   // In the background (or another screen on top): stop watching, so no minutes are used. On stage: leave it.
+  // With another screen on top, nothing is live for you any more (updates may run, the screen may dim, live
+  // notifications show) until you come back to the live.
   const runAway = useCallback(async () => {
+    runId.current += 1; // any connect still waiting stops
     const handle = stage.current;
     // (The machine keeps your role while you're away: a co-host leaves the stage.)
     if (machine.current.role === 'cohost') endCohost(liveId).catch(() => {});
     await handle?.unpublish().catch(() => {});
     await handle?.disconnect().catch(() => {});
-    releaseCameraFromLive();
-    setLiveNow('viewer');
+    releaseCameraFromLive(cameraHold.current);
+    setLiveNow(blurred.current ? null : 'viewer');
     if (joined.current) leaveLive(liveId).catch(() => {});
   }, [liveId]);
 
   // You're "on stage" (co-host) or just watching – nothing restarts the app either way. Set before the server
-  // is asked anything (this runs before the steps below).
+  // is asked anything (this runs before the steps below). Not while another screen is on top (see runAway).
   const onStage = m.role === 'cohost' && holdsCamera(m);
   useEffect(() => {
+    if (blurred.current) return;
     setLiveNow(onStage ? 'cohost' : 'viewer');
   }, [onStage]);
+
+  // On stage: the list of people who may see you is fetched again every few seconds (someone may have come in,
+  // or someone may have to wait now). If it can't be fetched, the old list stays.
+  const sending = m.phase === 'on_stage' || (m.phase === 'reconnecting' && m.resumeTo === 'on_stage');
+  useEffect(() => {
+    const handle = stageParts?.handle;
+    if (!sending || !handle) return;
+    let stop = false;
+    const timer = setInterval(() => {
+      fetchStageWatchers(liveId)
+        .then((list) => {
+          if (!stop) handle.setWatchers(list);
+        })
+        .catch(() => {});
+    }, WATCHERS_REFRESH_MS);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [sending, stageParts, liveId]);
 
   const doneStep = useRef(-1);
   useEffect(() => {
@@ -366,7 +456,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     (async () => {
       await handle?.unpublish().catch(() => {});
       await handle?.disconnect(between ? { keepAudio: true } : undefined).catch(() => {});
-      if (!holdsCamera(machine.current)) releaseCameraFromLive();
+      if (!holdsCamera(machine.current)) releaseCameraFromLive(cameraHold.current);
     })();
   }, [m]);
 
@@ -440,20 +530,25 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   );
 
   // The app going to the background (or another screen opening on top) stops watching; coming back rejoins.
+  // While another screen is on top, the app's own coming and going is ignored: only coming back to this
+  // screen rejoins (never hidden underneath another screen).
   useEffect(() => {
     let last = AppState.currentState;
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background') send({ type: 'app_state', active: false });
-      if (state === 'active' && last === 'background') send({ type: 'app_state', active: true });
+      if (!blurred.current) {
+        if (state === 'background') send({ type: 'app_state', active: false });
+        if (state === 'active' && last === 'background') send({ type: 'app_state', active: true });
+      }
       last = state;
     });
     return () => subscription.remove();
   }, [send]);
-  const blurred = useRef(false);
   useFocusEffect(
     useCallback(() => {
       if (blurred.current) {
         blurred.current = false;
+        // Live again before the server is asked anything.
+        setLiveNow('viewer');
         send({ type: 'app_state', active: true });
       }
       return () => {
@@ -468,31 +563,51 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     if (!onStage) return;
     return setLiveExit(async () => {
       leftMyself.current = false;
+      runId.current += 1;
       await endCohost(liveId).catch(() => {});
       await stage.current?.unpublish().catch(() => {});
       await stage.current?.disconnect().catch(() => {});
-      releaseCameraFromLive();
+      releaseCameraFromLive(cameraHold.current);
       setLiveNow('viewer');
     });
   }, [onStage, liveId]);
 
-  // Leaving the screen: disconnect first, then tell the server (no waiting), give the camera back.
+  // Leaving the screen: stop sending and disconnect first, then tell the server (a waiting app update waits for
+  // that: whileLeaving). The camera is given back only once LiveKit's camera has stopped (or after a few
+  // seconds if stopping hangs), and only if no newer live took it meanwhile.
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      runId.current += 1;
       if (flushTimer.current) clearTimeout(flushTimer.current);
       const handle = stage.current;
       // Still on stage (the shared "live now" role says so: leaving the screen may already have moved the steps on).
-      const wasOnStage = liveNowRole() === 'cohost';
-      (async () => {
+      const role = liveNowRole();
+      const wasOnStage = role === 'cohost';
+      const hold = cameraHold.current;
+      const heldCamera = isCameraHeldByLive();
+      const stopping = (async () => {
         await handle?.unpublish().catch(() => {});
         await handle?.disconnect().catch(() => {});
-        if (wasOnStage) endCohost(liveId).catch(() => {});
-        if (joined.current) leaveLive(liveId).catch(() => {});
       })();
-      releaseCameraFromLive();
-      setLiveNow(null);
+      whileLeaving(
+        stopping.then(() =>
+          Promise.all([
+            wasOnStage ? endCohost(liveId).catch(() => {}) : null,
+            joined.current ? leaveLive(liveId).catch(() => {}) : null,
+          ]),
+        ),
+      );
+      // A plain viewer never had the camera: nothing to wait for.
+      if (!wasOnStage && !heldCamera) {
+        if (liveNowRole() === role) setLiveNow(null);
+        return;
+      }
+      Promise.race([stopping, new Promise((resolve) => setTimeout(resolve, STOP_WAIT_MS))]).finally(() => {
+        releaseCameraFromLive(hold);
+        if (liveNowRole() === role) setLiveNow(null);
+      });
     };
   }, [liveId]);
 
@@ -567,12 +682,20 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       // Off the viewer connection, then on with your camera.
       await stage.current?.disconnect({ keepAudio: true }).catch(() => {});
       setLiveNow('cohost');
-      holdCameraForLive();
+      cameraHold.current = holdCameraForLive();
       send({ type: 'accept', now: Date.now() });
+      // Who is on stage now (for the names at the top) – not only at the next ping.
+      liveStatus(liveId)
+        .then((status) => {
+          if (!alive.current) return;
+          remember(status);
+          send({ type: 'status', info: status as StatusInfo });
+        })
+        .catch(() => {});
     } finally {
       if (alive.current) setInviteBusy(false);
     }
-  }, [send, showToast]);
+  }, [send, showToast, liveId, remember]);
 
   const declineInvite = useCallback(() => {
     setRulesOpen(false);

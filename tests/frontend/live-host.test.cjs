@@ -356,3 +356,83 @@ test('the viewers sheet: grey Bring on when they can\'t come on; empty: "No frie
     assert.ok(tree.root.findAllByType('Text').some((t) => t.props.children === 'No friends watching yet'));
   } finally { await unmount(tree); }
 });
+
+// ---------------------------------------------------------------------------
+// Review fixes: real waits between steps, the background while starting, server refusals
+// ---------------------------------------------------------------------------
+
+// Real waits (like a real phone): React draws the screen between every step.
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function runFor(rounds, ms = 20) {
+  for (let i = 0; i < rounds; i++) await act(async () => { await wait(ms); });
+}
+
+test('with real waits between the steps: one start, one ticket, one connect – and the live goes on air', async () => {
+  let starts = 0;
+  const setup = renderHost({
+    stageOptions: { connect: () => wait(80) },
+    lives: {
+      startLive: async () => { await wait(10); starts++; setup.log.push('startLive'); return LIVE; },
+      getLiveToken: async () => { await wait(30); setup.log.push('token'); return { ok: true, url: 'wss://x', token: 'host-token', room: `live_${LIVE}`, role: 'host', identity: 'alice', expires_at: '' }; },
+      liveOnAir: async () => { await wait(10); setup.log.push('onAir'); },
+    },
+  });
+  setup.access.waitForCameraRelease = () => wait(50);
+  let tree;
+  await act(async () => { tree = renderer.create(React.createElement(setup.screen.Component)); });
+  try {
+    await runFor(25);
+    assert.equal(starts, 1, 'the live is made once');
+    assert.deepEqual(setup.log.filter((s) => ['startLive', 'token', 'connect:host-token', 'publish:front', 'onAir'].includes(s)),
+      ['startLive', 'token', 'connect:host-token', 'publish:front', 'onAir']);
+    assert.equal(tree.root.findAllByType('LiveCard').length, 0, 'no failure card');
+    assert.equal(setup.log.includes('endLive'), false);
+  } finally { await unmount(tree); }
+});
+
+test('Home pressed during the 3·2·1: nothing is sent and friends aren\'t told until you\'re back', async () => {
+  let release;
+  const setup = renderHost({ stageOptions: { connect: () => new Promise((resolve) => { release = resolve; }) } });
+  let tree;
+  await act(async () => { tree = renderer.create(React.createElement(setup.screen.Component)); });
+  await settle(act);
+  try {
+    // The app goes to the background while LiveKit is still connecting.
+    await act(async () => { setup.appState.listener('inactive'); setup.appState.listener('background'); });
+    await act(async () => { release(); });
+    await settle(act);
+    assert.equal(setup.log.some((s) => s.startsWith('publish')), false, 'no camera or microphone while away');
+    assert.equal(setup.log.includes('onAir'), false, 'friends aren\'t told while you\'re away');
+    // Back in front: the camera goes out and friends are told.
+    await act(async () => { setup.appState.listener('active'); });
+    await settle(act);
+    assert.deepEqual(setup.log.filter((s) => s === 'publish:front' || s === 'onAir'), ['publish:front', 'onAir']);
+    assert.equal(tree.root.findAllByType('LiveCard').length, 0);
+  } finally { await unmount(tree); }
+});
+
+test('LiveKit refusing the connection with "not allowed" words never shows the camera card', async () => {
+  const refusal = { name: 'ConnectionError', message: 'could not establish signal connection: not allowed, permission denied' };
+  const setup = renderHost({ stageOptions: { connect: async () => { throw refusal; } } });
+  const live = await open(setup);
+  try {
+    assert.equal(live.card().props.title, "Couldn't go live – check your internet");
+    assert.equal(live.find('Button').some((b) => b.props.title === 'Open Settings'), false);
+  } finally { await unmount(live.tree); }
+});
+
+test('ending: a restart waiting for the end of the live waits for "the live ended" to reach the server', async () => {
+  let finish;
+  const setup = renderHost({ lives: { endLiveInBackground: () => new Promise((resolve) => { finish = resolve; setup.log.push('endLive'); }) } });
+  const live = await open(setup);
+  try {
+    await live.tickCountdown();
+    await act(() => live.topBar().props.onClose());
+    await act(() => pressAlert(setup.calls, 'End'));
+    await settle(act);
+    assert.equal(setup.access.leaving.size, 1, 'the server call is registered as leaving work');
+    finish(null);
+    await settle(act);
+    assert.equal(setup.access.leaving.size, 0);
+  } finally { await unmount(live.tree); }
+});

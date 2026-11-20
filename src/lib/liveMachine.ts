@@ -59,10 +59,16 @@ export type LiveMachine = {
   retryInMs: number | null; // the screen sends { type: 'retry' } after this long
   resumeTo: LivePhase | null; // where 'reconnecting' goes back to
   resume: boolean; // host: back from the background, turn the mic and camera back on (then send 'resumed')
+  // Host: the app is in the background right now (also while starting or rejoining). Arriving "on air" while it
+  // is set goes to 'away' instead, so nothing is sent – and no friend is told – while you're out of the app.
+  background: boolean;
   invite: { id: string; expires_at: string } | null;
   stageWaitSince: number | null; // when coming on stage started (for the 70 s limit)
   userMuted: boolean; // your own mute choice (kept apart from the background mute)
-  step: number; // goes up on every change (screens can run effects per step)
+  // Goes up only when the screen must DO something new (a new phase, a retry, a new round). Events that just
+  // remember a fact (token_ok, mute, resumed, the host's background flag) leave it alone, so the screen never
+  // runs the same step twice (for example a second start or a second connect).
+  step: number;
 };
 
 // The status part of liveStatus / livePing that the machine needs.
@@ -126,6 +132,7 @@ export function newLiveMachine(screen: LiveScreen): LiveMachine {
     retryInMs: null,
     resumeTo: null,
     resume: false,
+    background: false,
     invite: null,
     stageWaitSince: null,
     userMuted: false,
@@ -142,6 +149,18 @@ type Patch = Partial<Omit<LiveMachine, 'screen' | 'step'>>;
 
 function to(state: LiveMachine, patch: Patch): LiveMachine {
   return { ...state, retryInMs: null, ...patch, step: state.step + 1 };
+}
+
+// Remembers a fact without asking the screen to do anything (the step stays the same).
+function note(state: LiveMachine, patch: Patch): LiveMachine {
+  return { ...state, ...patch };
+}
+
+// The host arrives "on air" (started, rejoined, or back after a check). While the app is in the background that
+// means 'away' instead: the camera and microphone stay off and viewers see "will be right back".
+function hostOnAir(state: LiveMachine, patch: Patch = {}): LiveMachine {
+  if (state.background) return to(state, { ...patch, phase: 'away', resume: false, round: null, attempt: 0 });
+  return to(state, { ...patch, phase: 'live', round: null, attempt: 0 });
 }
 
 // Start (or continue) a retry round; when it's used up: 'lost'.
@@ -199,7 +218,7 @@ function onStatus(state: LiveMachine, info: StatusInfo): LiveMachine {
     case 'checking':
       if (state.screen === 'host') {
         // Back from the background (or a check after a drop): still live.
-        return to(state, { phase: 'live', role: 'host', resume: true, round: null, attempt: 0 });
+        return hostOnAir(state, { role: 'host', resume: true });
       }
       // After a removal the room may refuse you for about a minute: the slow retry round.
       if (state.round === 'removed') return { ...nextTry(state, 'removed'), role };
@@ -218,6 +237,12 @@ function onStatus(state: LiveMachine, info: StatusInfo): LiveMachine {
     case 'on_stage':
       // The server says you're a viewer again: the host took you off.
       if (info.role === 'viewer') return to(state, { phase: 'leaving_stage', role: 'viewer', why: null });
+      return state;
+    case 'reconnecting':
+      // Taken off while your connection was coming back: close it now (it would send your camera again).
+      if (state.resumeTo === 'on_stage' && info.role === 'viewer') {
+        return to(state, { phase: 'leaving_stage', role: 'viewer', why: null, resumeTo: null });
+      }
       return state;
     default:
       return state;
@@ -322,13 +347,16 @@ export function liveReducer(state: LiveMachine, event: LiveEvent): LiveMachine {
     case 'status_failed':
       if (state.phase !== 'checking') return state;
       // Host back from the background: carry on as live (the next ping will tell if it ended).
-      if (state.screen === 'host') return to(state, { phase: 'live', resume: true });
+      if (state.screen === 'host') return hostOnAir(state, { resume: true });
       if (state.round) return nextTry(state);
       return to(state, { phase: 'lost', why: null });
 
     case 'token_ok':
-      if (OVER.includes(state.phase)) return state;
-      return to(state, { role: event.role, retryInMs: state.retryInMs });
+      // Only remembers the role (the screen is already connecting: it must not start again).
+      if (OVER.includes(state.phase) || state.role === event.role) return state;
+      // A viewer who is joining never becomes the co-host from a ticket alone (only by saying yes).
+      if (state.screen === 'viewer' && event.role === 'cohost' && state.phase !== 'going_on' && state.role !== 'cohost') return state;
+      return note(state, { role: event.role });
 
     case 'token_failed':
       if (OVER.includes(state.phase)) return state;
@@ -337,7 +365,7 @@ export function liveReducer(state: LiveMachine, event: LiveEvent): LiveMachine {
     case 'connected':
       switch (state.phase) {
         case 'joining':
-          if (state.screen === 'host') return to(state, { phase: 'live', round: null, attempt: 0 });
+          if (state.screen === 'host') return hostOnAir(state);
           return to(state, { phase: state.role === 'cohost' ? 'on_stage' : 'watching', round: null, attempt: 0 });
         case 'going_on':
           return to(state, { phase: 'on_stage', role: 'cohost', stageWaitSince: null, round: null, attempt: 0 });
@@ -405,13 +433,23 @@ export function liveReducer(state: LiveMachine, event: LiveEvent): LiveMachine {
 
     case 'app_state':
       if (state.screen === 'host') {
-        if (!event.active && (state.phase === 'live' || state.phase === 'reconnecting')) return to(state, { phase: 'away', resumeTo: null });
-        if (event.active && state.phase === 'away') return to(state, { phase: 'checking' });
-        return state;
+        if (!event.active) {
+          if (state.phase === 'live' || state.phase === 'reconnecting') return to(state, { phase: 'away', resumeTo: null, background: true });
+          // Starting, rejoining, checking…: carry on, but remember it (nothing goes on air while you're away).
+          if (OVER.includes(state.phase) || state.background) return state;
+          return note(state, { background: true });
+        }
+        if (state.phase === 'away') return to(state, { phase: 'checking', background: false });
+        if (!state.background) return state;
+        // Back while live (shouldn't happen, but just in case): turn everything back on.
+        if (state.phase === 'live') return to(state, { background: false, resume: true });
+        return note(state, { background: false });
       }
       if (!event.active) {
-        // Watching (or on stage) stops in the background, so no minutes are used. A co-host leaves the stage.
-        const busy: readonly LivePhase[] = ['joining', 'watching', 'reconnecting', 'rejoining', 'invited', 'going_on', 'on_stage', 'leaving_stage'];
+        // Watching (or on stage) stops in the background (or under another screen), so no minutes are used and
+        // nothing rejoins out of sight. A co-host leaves the stage. Waiting and retry cards stop their timers too
+        // (coming back checks again).
+        const busy: readonly LivePhase[] = ['checking', 'waiting', 'full', 'unavailable', 'lost', 'joining', 'watching', 'reconnecting', 'rejoining', 'invited', 'going_on', 'on_stage', 'leaving_stage'];
         if (!busy.includes(state.phase)) return state;
         return to(state, { phase: 'away', invite: null, stageWaitSince: null, round: null, attempt: 0, resumeTo: null });
       }
@@ -419,10 +457,10 @@ export function liveReducer(state: LiveMachine, event: LiveEvent): LiveMachine {
       return state;
 
     case 'mute':
-      return state.userMuted === event.muted ? state : to(state, { userMuted: event.muted, retryInMs: state.retryInMs });
+      return state.userMuted === event.muted ? state : note(state, { userMuted: event.muted });
 
     case 'resumed':
-      return state.resume ? to(state, { resume: false, retryInMs: state.retryInMs }) : state;
+      return state.resume ? note(state, { resume: false }) : state;
 
     case 'start':
       if (state.screen !== 'host' || (state.phase !== 'ready' && state.phase !== 'failed')) return state;
@@ -430,7 +468,7 @@ export function liveReducer(state: LiveMachine, event: LiveEvent): LiveMachine {
 
     case 'on_air':
       if (state.screen !== 'host' || state.phase !== 'starting') return state;
-      return to(state, { phase: 'live', round: null, attempt: 0 });
+      return hostOnAir(state);
 
     case 'failed':
       if (state.screen !== 'host' || state.phase === 'summary') return state;
@@ -500,12 +538,14 @@ export function holdsCamera(state: LiveMachine): boolean {
   return state.role === 'cohost' && ['going_on', 'on_stage', 'reconnecting', 'joining', 'rejoining'].includes(state.phase);
 }
 
-// Is this the phone saying "you didn't allow the camera or microphone"? (getUserMedia's error)
+// Is this the phone saying "you didn't allow the camera or microphone"? (getUserMedia's error.) Only the
+// error's NAME counts: a server's "not allowed" (LiveKit refusing the connection) has words like these in its
+// message, and must never show the camera card. (The WebRTC error isn't always a real Error, so just its name
+// is read.)
+const PERMISSION_ERRORS: readonly string[] = ['NotAllowedError', 'PermissionDeniedError', 'PermissionDismissedError', 'SecurityError'];
 export function isPermissionError(error: unknown): boolean {
-  const name = (error as { name?: unknown } | null)?.name;
-  if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') return true;
-  const message = String((error as { message?: unknown } | null)?.message ?? error ?? '');
-  return /permission|not allowed|denied|unauthori[sz]ed/i.test(message);
+  const name = error !== null && typeof error === 'object' ? (error as { name?: unknown }).name : undefined;
+  return typeof name === 'string' && PERMISSION_ERRORS.includes(name);
 }
 
 // Words for the states that have fixed words (the screens show the server's `message` first when there is one).

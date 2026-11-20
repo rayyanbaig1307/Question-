@@ -10,6 +10,7 @@ export type StageEvents = Native.StageEvents;
 export type StageHandle = Native.StageHandle;
 
 export const AUDIO_STOP_GRACE_MS = 1500;
+export const UNPUBLISH_WAIT_MS = 1500;
 
 export function setUpLiveKitOnce(): void {}
 export async function startLiveAudio(): Promise<void> {}
@@ -29,6 +30,7 @@ export function createStage(_events: StageEvents): StageHandle {
     setCamera: nothing,
     sendHearts: nothing,
     broadcastHearts: nothing,
+    setWatchers: () => {},
     disconnect: nothing,
     subscribe: () => () => {},
     room: () => null,
@@ -43,5 +45,5 @@ export function StageView(_props: Parameters<typeof Native.StageView>[0]) {
 
 // Type check only: the web version must have every name the phone version has.
 type Same = { [K in keyof typeof Native]: unknown };
-const _same: Same = { setUpLiveKitOnce, startLiveAudio, stopLiveAudio, resumeLiveAudio, createStage, StageView, AUDIO_STOP_GRACE_MS };
+const _same: Same = { setUpLiveKitOnce, startLiveAudio, stopLiveAudio, resumeLiveAudio, createStage, StageView, AUDIO_STOP_GRACE_MS, UNPUBLISH_WAIT_MS };
 void _same;

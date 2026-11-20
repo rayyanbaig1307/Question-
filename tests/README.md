@@ -245,6 +245,24 @@ Frontend (rendered screens, part of `npm test`):
 - `settings.test.cjs` (added to): the version at the bottom of Settings is the download's own ("1.0.0 (10)" on
   App Store build 10 even after an update that says 1.1.0), the update's version in Expo Go or without the native
   part.
+- Lives 🔴 (`20261226000000_livestreams.sql`, the `live-token` / `live-admin` Edge Functions and the live screens):
+  - `livestreams.test.mjs` (database): who may go live and watch, comments, the stage rule, the job list, the
+    minute check, reports and the limits. Since the third review also: reports from people the reported person
+    removed or blocked are kept but never count towards the automatic stop; a repeat report (or one about
+    yourself) is skipped and more than 20 per live get a friendly "no"; a deleted comment's words never go into a
+    report (only into its private copy); 10 starts an hour; testers are never added by a name someone else could
+    take; a friend coming on has its own pass allowance for "Getting the stage ready…"; `live_stage_allowlist`
+    (who may see the person on stage); an ended live whose room was never closed is closed by the minute check.
+  - `concurrency.mjs` (real PostgreSQL, qa_fixed only): people pressing Go live at the same moment can't pass the
+    lives-at-once limit; a pass asked for while the host's Remove is being saved is refused; Remove and the
+    minute audit never deadlock.
+  - `tests/api/live-token.test.mjs`, `tests/api/live-admin.test.mjs`: the two Edge Functions with a pretend
+    LiveKit (a co-host who isn't in the room when taken off is removed softly, so their saved ticket stops).
+  - `tests/unit/live-*.test.mjs`, `tests/unit/lives-client.test.mjs` and `tests/frontend/live-*.test.cjs`: the
+    guard, the state machine, the stage, hearts and the screens. With real waits between steps the host starts
+    once and goes on air, and a viewer connects once (these fail with the code before the third review); Home
+    during the 3·2·1 sends nothing until you're back; another screen on top clears "live now"; the camera is
+    given back only after LiveKit's camera stopped; a restart waits for "I've left" to reach the server.
 
 ## Real PostgreSQL and HTTP tests (Windows and Linux)
 

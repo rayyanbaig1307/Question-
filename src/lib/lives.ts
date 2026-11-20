@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
+import { runAfterSignOut } from './auth';
 import { checkClean, WORD_NOT_ALLOWED } from './cleanWords';
 import { dareProblem, type DareProblem } from './dareSafety';
 import { liveMaybeAvailable, subscribeLiveBroken, type LiveRole } from './liveAccess';
@@ -222,8 +223,10 @@ function readSummary(raw: unknown): LiveSummary {
 
 // Can you go live right now, and if not, why (also keeps the 🔴 bubble up to date).
 export async function fetchLiveState(): Promise<LiveState> {
+  const asked = generation;
   const state = readLiveState(await call<unknown>('live_state'));
-  rememberLiveState(state);
+  // (Not if you logged out meanwhile: that answer was for the old account.)
+  if (asked === generation) rememberLiveState(state);
   return state;
 }
 
@@ -322,6 +325,14 @@ export async function answerCohostInvite(invite: string, accept: boolean): Promi
 // Host ("Back to watching") or co-host ("Leave stage").
 export async function endCohost(id: string): Promise<void> {
   await call('end_cohost', { live: id });
+}
+
+// The person brought on: who may see and hear you right now (user ids: the host, you, and everyone watching who
+// is friends with you both). Empty when you aren't on stage. LiveKit is given this list (StageHandle.setWatchers)
+// so it never sends your camera to anyone else.
+export async function fetchStageWatchers(id: string): Promise<string[]> {
+  const list = await call<unknown>('live_stage_allowlist', { live: id });
+  return Array.isArray(list) ? list.filter((item): item is string => isLiveId(item)) : [];
 }
 
 // Host: removes someone from the live (and blocks them too, if asked).
@@ -534,10 +545,11 @@ export const LIVE_STATE_CACHE_MS = 60_000;
 let cached: { state: LiveState; at: number } | null = null;
 let lastAsked = 0;
 let asking: Promise<unknown> | null = null;
+// Goes up at every log-out: an answer that was still on its way for the old account is then thrown away.
+let generation = 0;
 const bubbleListeners = new Set<() => void>();
 
-function rememberLiveState(state: LiveState) {
-  cached = { state, at: Date.now() };
+function tellBubbleListeners() {
   for (const listener of [...bubbleListeners]) {
     try {
       listener();
@@ -547,12 +559,20 @@ function rememberLiveState(state: LiveState) {
   }
 }
 
-// Forget the remembered answer (for example after logging out).
+function rememberLiveState(state: LiveState) {
+  cached = { state, at: Date.now() };
+  tellBubbleListeners();
+}
+
+// Forget the remembered answer (after logging out, or when another account takes over).
 export function forgetLiveState(): void {
+  generation += 1;
   cached = null;
   lastAsked = 0;
-  for (const listener of [...bubbleListeners]) listener();
+  asking = null;
+  tellBubbleListeners();
 }
+runAfterSignOut(() => forgetLiveState());
 
 function subscribeBubble(listener: () => void): () => void {
   bubbleListeners.add(listener);
@@ -574,11 +594,12 @@ export function refreshLiveBubble(): void {
   const now = Date.now();
   if (now - Math.max(cached?.at ?? 0, lastAsked) < LIVE_STATE_CACHE_MS) return;
   lastAsked = now;
-  asking = fetchLiveState()
+  const request: Promise<unknown> = fetchLiveState()
     .catch(() => {})
     .finally(() => {
-      asking = null;
+      if (asking === request) asking = null;
     });
+  asking = request;
 }
 
 // For the camera: is the 🔴 bubble shown? `focused` (optional): pass the camera page's focus, so the answer

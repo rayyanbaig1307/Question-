@@ -219,6 +219,27 @@ describe('live-admin: each job', () => {
     ]);
   });
 
+  it('a co-host who is not in the room (between connections) is removed softly, so their saved co-host ticket stops working', async () => {
+    const w = world({
+      batches: [[job(5, 'demote', { identity: B })]],
+      livekit: { UpdateParticipant: () => twirpError(404, 'not_found') },
+    });
+    const response = await w.handler()(poke());
+    expect(await response.json()).toEqual({ done: 1, failed: 0, recheck: 0 });
+    expect(w.calls.map((call) => call.method)).toEqual(['UpdateParticipant', 'RemoveParticipant']);
+    const removal = w.calls[1].body;
+    expect(Object.keys(removal).sort()).toEqual(['identity', 'revokeTokenTs', 'room']);
+    expect(removal.identity).toBe(B);
+    expect(removal.revokeTokenTs).toMatch(/^\d{10}$/);
+    // A failing soft removal is a failure (tried again later), never "done".
+    const failing = world({
+      batches: [[job(6, 'demote', { identity: B })]],
+      livekit: { UpdateParticipant: () => twirpError(404, 'not_found'), RemoveParticipant: () => twirpError(500, 'internal') },
+    });
+    expect(await (await failing.handler()(poke())).json()).toEqual({ done: 0, failed: 1, recheck: 0 });
+    expect(failing.finishes()[0].failed).toEqual([{ id: 6, error: 'RemoveParticipant: 500 internal' }]);
+  });
+
   it('closes a room: list → take everyone out for good → DeleteRoom, in that order', async () => {
     const w = world({
       batches: [[job(7, 'end_room')]],

@@ -22,13 +22,16 @@
 --     at least one friend, and (while lives are for testers) being on the testers list.
 --   * Limits: 60 minutes a live, 3 lives a day, 20 viewers, 4 lives at the same time, a monthly minute budget,
 --     600 minutes per host per month, a live with nobody watching ends after 5 minutes, one "is live"
---     notification per host every 2 hours, comment slow mode, 30 pass requests per person per 10 minutes.
+--     notification per host every 2 hours, comment slow mode, 30 pass requests per person per 10 minutes (a
+--     friend coming on has a separate allowance for the "getting the stage ready" retries), 10 starts an hour.
 --   * Comments: the slur filter and the dare-safety rules, 150 characters, one every 3 seconds. The host can
 --     delete comments or switch them off. Blocked people never see each other's comments.
 --   * Reports: the live, the person brought on, or a comment, up to 24 hours after the end, only by people who
 --     were there. Each report keeps a private record (who was there, comments, also deleted ones, what happened)
 --     for 90 days. 2 different people reporting the same person ends their live (or takes them off) and stops
 --     them going live for 24 hours (never shorter than a stop the owner set). 2 reporting a comment hides it.
+--     Only reports from people the reported person hadn't removed or blocked count towards that (all reports
+--     are still kept for the owner). The same report twice, or a report about yourself, is quietly skipped.
 --   * Unfriend, block, ban, account deletion, the owner ending a live and the report limit take people out
 --     within seconds; a check every minute catches anything missed.
 --   * The owner gets a "👀 Live check" notification when an adult's live has 5 or more under-18 viewers.
@@ -48,8 +51,11 @@
 --   * Testers: schema "private" → live_testers → Insert row with their user_id (tick no_limits only for the App
 --     Review accounts: it skips the 3-a-day limit and the 2-hour notification wait).
 --   * Cost limits: schema "private" → live_settings → change the number → Save.
---   * Reading a report: reports (content_type 'live' or 'live_comment'; "details" has the comment text), then
---     private.live_snapshots by report_id (or by live_id for a 'host_deleted' one), then lives / live_viewers.
+--   * Reading a report: reports (content_type 'live' or 'live_comment'; "details" has the comment text only if
+--     the comment was still up when it was reported), then private.live_snapshots by report_id (its
+--     "reported_comment" has the words, also of a deleted comment; or by live_id for a 'host_deleted' one), then
+--     lives / live_viewers. private.live_report_votes says which reports counted towards the automatic stop:
+--     reports from people the reported person had removed or blocked are kept for you but don't count.
 --   * How many older one-tap friendships of under-18s were found (SQL Editor):
 --       select count(*) from private.live_unconfirmed_friends;
 --     To give one back (that friend can then watch that under-18's lives again): delete its row. The list is
@@ -101,15 +107,15 @@ create table if not exists private.live_testers (
   added_at timestamptz not null default now(),
   no_limits boolean not null default false     -- true = skips the daily limit and the notification wait (App Review)
 );
--- The owner and @ayaan (adds nobody on an empty or test database).
+-- The owner, and @ayaan only while he is the owner's friend (so nobody gets in just by taking that name). Adds
+-- nobody on an empty or test database. The App Review accounts are NOT added here: a name like
+-- 'peekaboo_review2' could be taken by a stranger first. The owner's copy page adds them by the id of the
+-- account the owner has just made.
 insert into private.live_testers (user_id)
   select p.id from public.profiles p
-   where p.id = 'df5aae76-7e6a-4e91-9645-5b897a533156' or p.username = 'ayaan'
+   where p.id = 'df5aae76-7e6a-4e91-9645-5b897a533156'
+      or (p.username = 'ayaan' and private.are_friends(p.id, 'df5aae76-7e6a-4e91-9645-5b897a533156'::uuid))
   on conflict do nothing;
--- The App Review accounts (adds nobody until they exist).
-insert into private.live_testers (user_id, no_limits)
-  select p.id, true from public.profiles p where p.username in ('peekaboo_review', 'peekaboo_review2')
-  on conflict (user_id) do update set no_limits = true;
 
 -- People the owner (or 2 reports) stopped from going live or coming on.
 create table if not exists private.live_restrictions (
@@ -259,6 +265,9 @@ create table if not exists private.live_token_log (
   ok boolean not null
 );
 create index if not exists live_token_log_idx on private.live_token_log (account, at desc);
+-- A friend coming on stage asks again every 2 seconds while the stage is made ready: those requests are counted
+-- on their own (stage = true), so they can never use up that friend's allowance for watching.
+alter table private.live_token_log add column if not exists stage boolean not null default false;
 
 -- What happened in each live (the record for reports). Kept 30 days.
 create table if not exists private.live_events (
@@ -296,8 +305,22 @@ create table if not exists private.live_snapshots (
 );
 create index if not exists live_snapshots_live_idx on private.live_snapshots (live_id);
 
+-- Does each live report count towards the automatic stop? Decided once, when the report is filed, and never
+-- looked at again (so removing or blocking someone later doesn't undo a report they already made). Kept 30 days.
+create table if not exists private.live_report_votes (
+  report_id uuid primary key,
+  live_id uuid not null,
+  content_type text not null,
+  content_id uuid not null,
+  reported_user_id uuid,
+  reporter_id uuid,
+  counts boolean not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists live_report_votes_idx on private.live_report_votes (content_type, content_id, reported_user_id);
+
 revoke all on private.live_jobs, private.live_watch_rooms, private.live_token_log, private.live_events,
-  private.live_removed_comments, private.live_snapshots from public, anon, authenticated;
+  private.live_removed_comments, private.live_snapshots, private.live_report_votes from public, anon, authenticated;
 
 -- A random password, kept in the Vault, that this database sends so only it can wake live-admin.
 do $$
@@ -532,7 +555,8 @@ $$;
 revoke all on function private.live_watch(text, uuid, interval) from public, anon, authenticated;
 
 -- A frozen copy of a live for the record: the live, who was there (with their age group at the time),
--- the last 50 comments (also deleted ones) and the last 100 events.
+-- the last 50 comments (also deleted ones), the last 100 events and how many reports there were (reports
+-- aren't among the 100, so a flood of reports can't push the real events out).
 create or replace function private.live_snapshot(live uuid)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
@@ -560,7 +584,8 @@ returns jsonb language sql stable security definer set search_path = '' as $$
          where x.live_id = live order by x.created_at desc limit 50) c), '[]'::jsonb),
     'events', coalesce((select jsonb_agg(to_jsonb(e) order by e.at, e.id) from (
         select y.id, y.at, y.kind, y.actor, y.target, y.detail from private.live_events y
-         where y.live_id = live order by y.at desc, y.id desc limit 100) e), '[]'::jsonb)
+         where y.live_id = live and y.kind <> 'report' order by y.at desc, y.id desc limit 100) e), '[]'::jsonb),
+    'report_count', (select count(*)::integer from private.live_events y where y.live_id = live and y.kind = 'report')
   );
 $$;
 revoke all on function private.live_snapshot(uuid) from public, anon, authenticated;
@@ -889,9 +914,19 @@ begin
   end if;
   -- One start at a time per person.
   perform pg_advisory_xact_lock(hashtextextended('live:' || me::text, 0));
+  -- One start at a time for everyone, so two people starting at the same moment can't both get past the
+  -- "busy" limits (lives at once, the monthly minutes). It is its own statement on purpose: the checks below
+  -- then see a start that was saved while we waited. (Minutes still add up while lives run, so the monthly
+  -- budget stays a soft limit.)
+  perform pg_advisory_xact_lock(hashtextextended('live:start', 0));
   why := private.live_why_not(me);
   if why is not null then
     perform private.live_fail('live_' || why);
+  end if;
+  -- At most 10 starts an hour, for everyone (testers too), counting starts that never went on air: each start
+  -- adds work to the job list every live shares, and calls to LiveKit.
+  if (select count(*) from public.lives l where l.host_id = me and l.started_at > now() - interval '1 hour') >= 10 then
+    perform private.live_fail('live_busy');
   end if;
   s := private.live_config();
   update public.lives x
@@ -1065,12 +1100,14 @@ begin
   if me is null then
     return;
   end if;
+  -- The live row before the presence row (the same order as everything else, so two can't wait on each
+  -- other). It is only locked when you really are the person brought on.
+  update public.lives x set cohost_id = null, cohost_since = null
+   where x.id = live and x.cohost_id = me and x.ended_at is null;
   update public.live_viewers v
      set watch_seconds = v.watch_seconds + least(greatest(floor(extract(epoch from (now() - v.last_seen_at))), 0), 60)::integer,
          left_at = now()
    where v.live_id = live and v.user_id = me and v.left_at is null;
-  update public.lives x set cohost_id = null, cohost_since = null
-   where x.id = live and x.cohost_id = me and x.ended_at is null;
 end;
 $$;
 revoke execute on function public.leave_live(uuid) from public, anon;
@@ -1155,6 +1192,30 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.live_viewers_list(uuid) from public, anon;
 grant execute on function public.live_viewers_list(uuid) to authenticated;
+
+-- The person brought on: who may see and hear me right now? The host, me, and everyone in this live who may
+-- watch while I'm on (friends of both). My phone gives LiveKit this list before my camera goes out, and again
+-- every few seconds, so LiveKit itself never sends my camera or voice to anyone else – not even to someone
+-- who comes back with an old pass while they should be waiting. Anyone else asking gets an empty list.
+create or replace function public.live_stage_allowlist(live uuid)
+returns text[] language plpgsql stable security definer set search_path = '' as $$
+declare
+  me uuid := auth.uid();
+  l public.lives%rowtype;
+begin
+  if private.live_access(live, me) is distinct from 'cohost' then
+    return '{}'::text[];
+  end if;
+  select * into l from public.lives x where x.id = live;
+  return array[l.host_id::text, me::text] || array(
+    select v.user_id::text from public.live_viewers v
+     where v.live_id = live and v.removed_at is null and v.user_id <> l.host_id and v.user_id <> me
+       and private.live_access(live, v.user_id) = 'viewer'
+     order by v.user_id);
+end;
+$$;
+revoke execute on function public.live_stage_allowlist(uuid) from public, anon;
+grant execute on function public.live_stage_allowlist(uuid) to authenticated;
 
 -- The host asks a friend who is watching to come on (60 seconds to answer).
 create or replace function public.invite_cohost(live uuid, guest uuid)
@@ -1449,27 +1510,36 @@ declare
   l public.lives%rowtype;
   s private.live_settings := private.live_config();
   access text;
+  stage_wait boolean;
+  allowance integer;
 begin
   if who is null then
     return jsonb_build_object('ok', false, 'reason', 'not_allowed');
   end if;
   perform pg_advisory_xact_lock(hashtextextended('live_token:' || who::text, 0));
-  if (select count(*) from private.live_token_log t where t.account = who and t.at > now() - interval '10 minutes') >= 30 then
-    insert into private.live_token_log (account, ok) values (who, false);
+  -- The live is locked BEFORE anything is decided, so a removal (or a change of who is on stage) being saved at
+  -- this very moment is waited for and seen. The order is always: this person, then the live, then presence.
+  select * into l from public.lives x where x.id = live for update;
+  access := private.live_access(live, who);
+  -- A friend coming on asks again every 2 seconds while the stage is made ready. Those requests have their own
+  -- allowance (80 per 10 minutes), so they can never use up the 30 per 10 minutes for watching.
+  stage_wait := access = 'cohost' and (l.stage_clean_at is null or l.stage_clean_at < l.cohost_since);
+  allowance := case when stage_wait then 80 else 30 end;
+  if (select count(*) from private.live_token_log t
+       where t.account = who and t.stage = stage_wait and t.at > now() - interval '10 minutes') >= allowance then
+    insert into private.live_token_log (account, ok, stage) values (who, false, stage_wait);
     return jsonb_build_object('ok', false, 'reason', 'busy');
   end if;
-  access := private.live_access(live, who);
   if access not in ('host', 'cohost', 'viewer') then
-    insert into private.live_token_log (account, ok) values (who, false);
+    insert into private.live_token_log (account, ok, stage) values (who, false, false);
     return jsonb_build_object('ok', false, 'reason', access);
   end if;
-  select * into l from public.lives x where x.id = live for update;
   if access = 'viewer' and not private.connected(live, who) and (
     select count(*) from public.live_viewers v
      where v.live_id = live and v.left_at is null and v.last_seen_at > now() - interval '75 seconds'
        and v.removed_at is null and v.user_id is distinct from l.cohost_id
   ) >= s.max_viewers then
-    insert into private.live_token_log (account, ok) values (who, false);
+    insert into private.live_token_log (account, ok, stage) values (who, false, false);
     return jsonb_build_object('ok', false, 'reason', 'full');
   end if;
   if access = 'host' then
@@ -1487,7 +1557,7 @@ begin
                   where e.live_id = live and e.kind = 'join' and e.actor = who and e.at > now() - interval '60 seconds') then
     perform private.live_log(live, 'join', who, null, jsonb_build_object('role', access));
   end if;
-  insert into private.live_token_log (account, ok) values (who, true);
+  insert into private.live_token_log (account, ok, stage) values (who, true, stage_wait);
   return jsonb_build_object(
     'ok', true,
     'role', access,
@@ -1495,7 +1565,7 @@ begin
     'max_participants', s.max_viewers + 2,
     'create_room', access = 'host',
     'ttl', case when access = 'viewer' then 60 else 600 end,
-    'stage_check', access = 'cohost' and (l.stage_clean_at is null or l.stage_clean_at < l.cohost_since),
+    'stage_check', stage_wait,
     'cohost_since', case when access = 'cohost' then l.cohost_since end
   );
 end;
@@ -1688,7 +1758,8 @@ declare
   watching boolean := false;
   people text[] := coalesce(identities, '{}');
 begin
-  select * into l from public.lives x where x.room = room_name;
+  -- The live row first, before any presence row (the same order as everything else).
+  select * into l from public.lives x where x.room = room_name for update;
   if not found or l.ended_at is not null or now() >= l.ends_at then
     foreach listed in array people loop
       removals := removals || jsonb_build_array(jsonb_build_object('identity', listed, 'soft', false));
@@ -1758,38 +1829,68 @@ drop trigger if exists lives_before_update on public.lives;
 create trigger lives_before_update before update on public.lives
   for each row execute function private.lives_before_update();
 
--- A live ended: open asks expire, everyone counts as gone, the room is closed and watched for 20 minutes.
+-- A live ended: the room is closed and watched for 20 minutes, open asks expire, everyone counts as gone.
 -- The co-host changed: the old one is turned back into a viewer; with a new one, everyone who must now wait
--- is checked.
+-- is checked. Each step is guarded on its own, most important first, so one step failing (for example two
+-- saves waiting on each other) can never undo the others. The minute check also closes any ended room that
+-- was missed.
 create or replace function private.lives_after_change()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
   v record;
 begin
-  begin
-    if old.ended_at is null and new.ended_at is not null then
+  if old.ended_at is null and new.ended_at is not null then
+    begin
+      perform private.live_enqueue(new.id, new.room, null, 'end');
+    exception when others then
+      raise warning 'Lives (after change, close the room): %', sqlerrm;
+    end;
+    begin
+      perform private.live_watch(new.room, new.id, interval '20 minutes');
+    exception when others then
+      raise warning 'Lives (after change, watch the room): %', sqlerrm;
+    end;
+    begin
+      perform private.live_log(new.id, 'end', auth.uid(), null, jsonb_build_object('reason', new.ended_reason));
+    exception when others then
+      raise warning 'Lives (after change, log): %', sqlerrm;
+    end;
+    begin
       update public.live_invites i set answer = 'expired', answered_at = now()
        where i.live_id = new.id and i.answer is null;
+    exception when others then
+      raise warning 'Lives (after change, asks): %', sqlerrm;
+    end;
+    begin
       update public.live_viewers y set left_at = now() where y.live_id = new.id and y.left_at is null;
-      perform private.live_log(new.id, 'end', auth.uid(), null, jsonb_build_object('reason', new.ended_reason));
-      perform private.live_watch(new.room, new.id, interval '20 minutes');
-      perform private.live_enqueue(new.id, new.room, null, 'end');
-    elsif new.ended_at is null and new.cohost_id is distinct from old.cohost_id then
-      if old.cohost_id is not null then
-        perform private.live_log(new.id, 'cohost_off', auth.uid(), old.cohost_id);
+    exception when others then
+      raise warning 'Lives (after change, presence): %', sqlerrm;
+    end;
+  elsif new.ended_at is null and new.cohost_id is distinct from old.cohost_id then
+    if old.cohost_id is not null then
+      begin
         perform private.live_enqueue(new.id, new.room, old.cohost_id, 'demote');
-      end if;
-      if new.cohost_id is not null then
+      exception when others then
+        raise warning 'Lives (after change, demote): %', sqlerrm;
+      end;
+      begin
+        perform private.live_log(new.id, 'cohost_off', auth.uid(), old.cohost_id);
+      exception when others then
+        raise warning 'Lives (after change, log): %', sqlerrm;
+      end;
+    end if;
+    if new.cohost_id is not null then
+      begin
         for v in select y.user_id from public.live_viewers y where y.live_id = new.id and y.user_id <> new.cohost_id loop
           if private.live_access(new.id, v.user_id) = 'paused' then
             perform private.live_check(new.id, v.user_id);
           end if;
         end loop;
-      end if;
+      exception when others then
+        raise warning 'Lives (after change, checks): %', sqlerrm;
+      end;
     end if;
-  exception when others then
-    raise warning 'Lives (after change): %', sqlerrm;
-  end;
+  end if;
   return null;
 end;
 $$;
@@ -1950,22 +2051,79 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function private.live_report_author(text, uuid, uuid, uuid) from public, anon, authenticated;
 
--- Nothing is recorded, so a reported comment's words go into the report (also after it was deleted).
+-- Nothing is recorded, so a reported comment's words go into the report – but only while the comment is still
+-- up. Reporters can read their own reports back, so the words of a deleted or hidden comment never go there
+-- (the owner finds them in the report's private copy: private.live_snapshots → "reported_comment").
 create or replace function private.live_report_details(kind text, target uuid, given text)
 returns text language sql stable security definer set search_path = '' as $$
   select case when kind = 'live_comment' then
     nullif(left(concat_ws(E'\n',
-      'Comment: "' || coalesce(
-        (select nullif(c.body, '') from public.live_comments c where c.id = target),
-        (select r.body from private.live_removed_comments r where r.comment_id = target)) || '"',
+      'Comment: "' || (select c.body from public.live_comments c
+                         where c.id = target and c.deleted_at is null and c.body <> '') || '"',
       nullif(btrim(given), '')), 1000), '')
   else given end;
 $$;
 revoke all on function private.live_report_details(text, uuid, text) from public, anon, authenticated;
 
--- After a live report is saved: a frozen copy for the owner (90 days). With enough different reporters: the
--- reported host's live ends (or the reported co-host comes off) and they can't go live for 24 hours (never
--- shorter than a stop the owner set); a reported comment is hidden.
+-- A repeat report (you already reported this person for this) or a report about yourself is quietly skipped
+-- (true = skip). More than 20 reports about one live from one person get a friendly "no".
+create or replace function private.live_report_repeat(kind text, target uuid, author uuid, me uuid)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+  live uuid;
+begin
+  if me is null or author is null then
+    return false;
+  end if;
+  if author = me or exists (select 1 from public.reports r
+                             where r.reporter_id = me and r.content_type = kind and r.content_id = target
+                               and r.reported_user_id is not distinct from author) then
+    return true;
+  end if;
+  live := case when kind = 'live' then target else (select c.live_id from public.live_comments c where c.id = target) end;
+  if (select count(*) from public.reports r
+       where r.reporter_id = me
+         and ((r.content_type = 'live' and r.content_id = live)
+              or (r.content_type = 'live_comment'
+                  and r.content_id in (select c.id from public.live_comments c where c.live_id = live)))) >= 20 then
+    raise exception 'You''ve sent a lot of reports for this live – we''ll look at them.';
+  end if;
+  return false;
+end;
+$$;
+revoke all on function private.live_report_repeat(text, uuid, uuid, uuid) from public, anon, authenticated;
+
+-- One live report per person, thing and reported person (the back-stop for two taps at the same moment).
+create unique index if not exists reports_live_once on public.reports (reporter_id, content_type, content_id, reported_user_id)
+  where content_type in ('live', 'live_comment');
+
+-- Does this report count towards the automatic stop? Decided once, when it is filed (private.live_report_votes).
+-- It counts only if:
+--   (a) the reported person had not blocked the reporter (one way only: someone who reports and then blocks,
+--       as the app suggests, still counts);
+--   (b) the reporter was the host, the person on stage, or someone watching who wasn't removed;
+--   (c) for a report about the person brought on: the reporter could see them (the host, one of their friends,
+--       or someone who blocked them).
+-- So the people a host (or the person on stage) removed or blocked can't use the automatic stop against them.
+create or replace function private.live_report_counts(kind text, live uuid, reported uuid, reporter uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select reported is not null and reporter is not null
+     and not exists (select 1 from public.blocks b where b.blocker_id = reported and b.blocked_id = reporter)
+     and (exists (select 1 from public.lives l where l.id = live and reporter in (l.host_id, l.cohost_id))
+          or exists (select 1 from public.live_viewers v
+                      where v.live_id = live and v.user_id = reporter and v.removed_at is null))
+     and (kind <> 'live'
+          or exists (select 1 from public.lives l where l.id = live and reported = l.host_id)
+          or exists (select 1 from public.lives l where l.id = live and reporter = l.host_id)
+          or coalesce(private.are_friends(reported, reporter), false)
+          or exists (select 1 from public.blocks b where b.blocker_id = reporter and b.blocked_id = reported));
+$$;
+revoke all on function private.live_report_counts(text, uuid, uuid, uuid) from public, anon, authenticated;
+
+-- After a live report is saved: a frozen copy for the owner (90 days; for a comment, with the reported
+-- comment's words, also when it was deleted). With enough different reporters whose reports count (see
+-- live_report_counts): the reported host's live ends (or the reported co-host comes off) and they can't go
+-- live for 24 hours (never shorter than a stop the owner set); a reported comment is hidden.
 create or replace function private.live_after_report()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
@@ -1973,24 +2131,36 @@ declare
   l public.lives%rowtype;
   s private.live_settings := private.live_config();
   reporters integer;
+  reported_comment jsonb;
 begin
   begin
     if new.content_type = 'live' then
       live := new.content_id;
     else
       select c.live_id into live from public.live_comments c where c.id = new.content_id;
+      select jsonb_build_object('reported_comment', jsonb_build_object(
+               'id', c.id, 'user_id', c.user_id, 'body', coalesce(r.body, c.body),
+               'created_at', c.created_at, 'deleted_at', c.deleted_at))
+        into reported_comment
+        from public.live_comments c left join private.live_removed_comments r on r.comment_id = c.id
+       where c.id = new.content_id;
     end if;
     if live is null then
       return null;
     end if;
     insert into private.live_snapshots (report_id, live_id, reason, keep_until, snapshot)
-    values (new.id, live, 'report', now() + interval '90 days', private.live_snapshot(live))
+    values (new.id, live, 'report', now() + interval '90 days',
+            private.live_snapshot(live) || coalesce(reported_comment, '{}'::jsonb))
     on conflict (report_id) do nothing;
     perform private.live_log(live, 'report', new.reporter_id, new.reported_user_id,
       jsonb_build_object('report', new.id, 'kind', new.content_type, 'reason', new.reason));
-    select count(distinct r.reporter_id) into reporters from public.reports r
-     where r.content_type = new.content_type and r.content_id = new.content_id
-       and r.reported_user_id is not distinct from new.reported_user_id;
+    insert into private.live_report_votes (report_id, live_id, content_type, content_id, reported_user_id, reporter_id, counts)
+    values (new.id, live, new.content_type, new.content_id, new.reported_user_id, new.reporter_id,
+            private.live_report_counts(new.content_type, live, new.reported_user_id, new.reporter_id))
+    on conflict (report_id) do nothing;
+    select count(distinct v.reporter_id) into reporters from private.live_report_votes v
+     where v.counts and v.content_type = new.content_type and v.content_id = new.content_id
+       and v.reported_user_id is not distinct from new.reported_user_id;
     if reporters >= s.report_end_count and new.reported_user_id is not null then
       if new.content_type = 'live' then
         select * into l from public.lives x where x.id = live;
@@ -2042,6 +2212,10 @@ begin
     -- Lives (20261226000000_livestreams.sql): who it is about, and whether you were there.
     select r.author, r.visible into author, visible
       from private.live_report_author(new.content_type, new.content_id, new.reported_user_id, me) r;
+    -- The same report twice, or a report about yourself: quietly skipped.
+    if coalesce(visible, false) and private.live_report_repeat(new.content_type, new.content_id, author, me) then
+      return null;
+    end if;
     new.details := private.live_report_details(new.content_type, new.content_id, new.details);
   elsif new.content_type = 'group_message' then$b$)
     ) as t(fn, marker, anchor, replacement)
@@ -2138,6 +2312,23 @@ begin
   exception when others then
     raise warning 'Lives check (audit): %', sqlerrm;
   end;
+  -- 5b. A live that ended in the last 30 minutes but whose room was never closed (a step that failed when it
+  --     ended): close it and watch it now, and count everyone as gone.
+  begin
+    for v in select l.id, l.room from public.lives l
+              where l.ended_at > now() - interval '30 minutes'
+                and not exists (select 1 from private.live_jobs j where j.live_id = l.id and j.kind = 'end') loop
+      perform private.live_enqueue(v.id, v.room, null, 'end');
+      if not exists (select 1 from private.live_watch_rooms w where w.room = v.room) then
+        perform private.live_watch(v.room, v.id, interval '20 minutes');
+      end if;
+    end loop;
+    update public.live_viewers y set left_at = least(y.last_seen_at, l.ended_at)
+      from public.lives l
+     where l.id = y.live_id and y.left_at is null and l.ended_at > now() - interval '30 minutes';
+  exception when others then
+    raise warning 'Lives check (missed ends): %', sqlerrm;
+  end;
   -- 6. Clean-up.
   begin
     delete from public.live_comments c using public.lives l
@@ -2149,6 +2340,7 @@ begin
     delete from private.live_events e where e.at < now() - interval '30 days';
     delete from private.live_removed_comments r where r.removed_at < now() - interval '30 days';
     delete from private.live_snapshots x where x.keep_until < now();
+    delete from private.live_report_votes r where r.created_at < now() - interval '30 days';
     delete from private.live_token_log t where t.at < now() - interval '1 day';
     delete from private.live_watch_rooms w where w.until < now() - interval '1 day';
     delete from private.live_jobs j where j.done_at < now() - interval '7 days';

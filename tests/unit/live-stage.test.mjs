@@ -13,7 +13,7 @@ const REASON = { CLIENT_INITIATED: 1, DUPLICATE_IDENTITY: 2, PARTICIPANT_REMOVED
 const bytes = (text) => Uint8Array.from([...text].map((c) => c.charCodeAt(0)));
 const text = (data) => String.fromCharCode(...data);
 
-function setup({ identity = VIEWER, failConnect = false } = {}) {
+function setup({ identity = VIEWER, failConnect = false, hangUnpublish = false, tracks = [] } = {}) {
   const audio = [];
   const log = [];
   const rooms = [];
@@ -45,6 +45,11 @@ function setup({ identity = VIEWER, failConnect = false } = {}) {
     async unpublishTrack(track, stop) {
       log.push(['unpublish', track.kind, stop]);
       for (const [key, pub] of this.trackPublications) if (pub.track === track) this.trackPublications.delete(key);
+      // A weak connection: the server's answer never comes (the track itself has already stopped).
+      if (hangUnpublish) await new Promise(() => {});
+    }
+    setTrackSubscriptionPermissions(all, list = []) {
+      log.push(['watchers', all, list.map((p) => `${p.participantIdentity}:${p.allowAll}`), this.identity ? 'connected' : 'before connect']);
     }
     async publishData(data, options) {
       log.push(['data', text(data), JSON.parse(JSON.stringify(options))]);
@@ -93,7 +98,7 @@ function setup({ identity = VIEWER, failConnect = false } = {}) {
         globals.URLSearchParams = function PolyfillSearch() {};
       },
       RoomContext: { Provider: 'RoomContext.Provider' },
-      useTracks: () => [],
+      useTracks: () => tracks,
       VideoTrack: 'VideoTrack',
       isTrackReference: () => true,
     },
@@ -327,4 +332,61 @@ it('the web twin shows nothing and loads nothing', async () => {
   const stage = web.createStage({ hostId: HOST });
   await expect(stage.connect('wss://x', 't')).rejects.toThrow();
   expect(stage.room()).toBe(null);
+});
+
+it('stopping the camera and mic never waits more than UNPUBLISH_WAIT_MS for the server (camera first, both at once)', async () => {
+  const t = setup({ identity: HOST, hangUnpublish: true });
+  const stage = t.stage.createStage({ hostId: HOST });
+  await stage.connect('wss://x', 'tok');
+  await stage.publish('front');
+  let done = false;
+  const stopping = stage.unpublish().then(() => { done = true; });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(t.log.filter((e) => e[0] === 'unpublish')).toEqual([['unpublish', 'camera', true], ['unpublish', 'mic', true]]);
+  expect(done).toBe(false);
+  await vi.advanceTimersByTimeAsync(t.stage.UNPUBLISH_WAIT_MS);
+  await stopping;
+  expect(done).toBe(true);
+  expect(t.stage.UNPUBLISH_WAIT_MS).toBe(1500);
+});
+
+it('the person on stage: LiveKit is told who may receive the camera before connecting and before publishing', async () => {
+  const t = setup();
+  const stage = t.stage.createStage({ hostId: HOST });
+  stage.setWatchers([HOST, VIEWER, HOST, '']);
+  await stage.connect('wss://x', 'cohost-token');
+  const watchers = t.log.filter((e) => e[0] === 'watchers');
+  expect(watchers[0]).toEqual(['watchers', false, [`${HOST}:true`, `${VIEWER}:true`], 'before connect']);
+  expect(t.log.findIndex((e) => e[0] === 'watchers')).toBeLessThan(t.log.findIndex((e) => e[0] === 'connect'));
+  await stage.publish('front');
+  const beforeCamera = t.log.findIndex((e) => e[0] === 'camera');
+  expect(t.log.slice(0, beforeCamera).filter((e) => e[0] === 'watchers').length).toBe(2);
+  // A newer list goes to LiveKit at once.
+  stage.setWatchers([HOST]);
+  expect(t.log.at(-1)).toEqual(['watchers', false, [`${HOST}:true`], 'connected']);
+  // The host never sets a list: everyone in the room may watch, nothing is sent.
+  const h = setup({ identity: HOST });
+  const hostStage = h.stage.createStage({ hostId: HOST });
+  await hostStage.connect('wss://x', 'host-token');
+  await hostStage.publish('front');
+  expect(h.log.filter((e) => e[0] === 'watchers')).toEqual([]);
+});
+
+it('the picture of the person on stage shows at once, before the server has named them', async () => {
+  const COHOST = '33333333-3333-4333-8333-333333333333';
+  const ref = (identity, track = {}) => ({ participant: { identity, isLocal: false }, publication: { track } });
+  const render = async (tracks, cohostId) => {
+    const t = setup({ tracks });
+    const stage = t.stage.createStage({ hostId: HOST });
+    await stage.connect('wss://x', 'tok');
+    const provider = t.stage.StageView({ stage, hostId: HOST, cohostId });
+    const tiles = provider.props.children;
+    const view = tiles.type(tiles.props);
+    return view.props.children.filter((child) => child && child.type === 'VideoTrack').map((child) => child.props.trackRef.participant.identity);
+  };
+  expect(await render([ref(HOST), ref(COHOST)], null)).toEqual([HOST, COHOST]);
+  expect(await render([ref(HOST), ref(COHOST)], COHOST)).toEqual([HOST, COHOST]);
+  // A camera without a picture yet (or one LiveKit doesn't let you see) isn't drawn.
+  expect(await render([ref(HOST), ref(COHOST, null)], null)).toEqual([HOST]);
+  expect(await render([ref(HOST)], null)).toEqual([HOST]);
 });
