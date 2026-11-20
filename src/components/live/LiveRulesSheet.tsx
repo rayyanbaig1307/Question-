@@ -9,8 +9,8 @@ import { acceptLegal, LIVE_RULES_VERSION } from '@/lib/legal';
 import { colors, font, radius, space } from '@/theme';
 
 // The Live rules card 🔴. Everyone agrees once, before their first live or their first time on someone's live
-// (the server checks it: saved as 'live_rules'). If the rules change, LIVE_RULES_VERSION goes up and everyone
-// is asked again.
+// (the server checks it: saved as 'live_rules', with the version in LIVE_RULES_VERSION). The server only checks
+// that you agreed once: asking everyone again after a change to the rules would need a server change too.
 export const LIVE_RULES = [
   '**Friends only.** Only your friends can watch. While a friend is on with you, only people who are friends with you both can watch.',
   '**Bringing someone on needs their yes**, and anyone on the stage can leave it any time.',
@@ -23,11 +23,34 @@ export const LIVE_RULES = [
 export const TAKE_IT_DOWN_URL = 'https://takeitdown.ncmec.org';
 export const CYBERTIP_URL = 'https://www.cybertip.ca';
 
-export function LiveRulesSheet({ visible, onAccepted, onClose }: {
+// The Live rules sheet on its own (a pop-up sheet). Where another sheet is already open (the Go live sheet,
+// the "come on my live?" sheet), show LiveRulesCard inside that sheet instead: a phone can't open a second
+// pop-up sheet while one is open or closing.
+export function LiveRulesSheet({ visible, onAccepted, onClose, onOpenPage = onClose }: {
   visible: boolean;
   // Called once agreeing was saved.
   onAccepted: () => void;
   onClose: () => void;
+  // A link opens the Privacy Policy or the Guidelines: close whatever would cover that page (a pop-up sheet
+  // stays on top of every screen). Closes just this card unless told otherwise.
+  onOpenPage?: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close the Live rules">
+        <SafeEdge edge="bottom" style={styles.sheet}>
+          <LiveRulesCard onAccepted={onAccepted} onClose={onClose} onOpenPage={onOpenPage} />
+        </SafeEdge>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// The card itself: the rules, the links, "I agree" (saved on the server) and "Not now".
+export function LiveRulesCard({ onAccepted, onClose, onOpenPage = onClose }: {
+  onAccepted: () => void;
+  onClose: () => void;
+  onOpenPage?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -45,56 +68,50 @@ export function LiveRulesSheet({ visible, onAccepted, onClose }: {
   }
 
   function openPage(doc: 'privacy' | 'guidelines') {
-    onClose();
+    onOpenPage();
     router.push({ pathname: '/legal/[doc]', params: { doc } });
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close the Live rules">
-        <SafeEdge edge="bottom" style={styles.sheet}>
-          <Pressable>
-            <ScrollView contentContainerStyle={styles.inner}>
-              <Text style={styles.title}>Live rules 🔴</Text>
-              {LIVE_RULES.map((rule) => (
-                <View key={rule} style={styles.row}>
-                  <Text style={styles.bullet}>•</Text>
-                  <Text style={styles.text}>{bold(rule)}</Text>
-                </View>
-              ))}
-              <Text style={styles.small}>
-                Lives use a company called LiveKit to carry your video and sound – see the{' '}
-                <Text style={styles.link} onPress={() => openPage('privacy')} accessibilityRole="link">
-                  Privacy Policy
-                </Text>
-                .
-              </Text>
-              <Text style={styles.small}>
-                Under 18 and someone shared a photo or video of you that they shouldn&apos;t have? Get help taking it
-                down:{' '}
-                <Text style={styles.link} onPress={() => Linking.openURL(TAKE_IT_DOWN_URL).catch(() => {})} accessibilityRole="link">
-                  Take It Down
-                </Text>{' '}
-                (NCMEC) or{' '}
-                <Text style={styles.link} onPress={() => Linking.openURL(CYBERTIP_URL).catch(() => {})} accessibilityRole="link">
-                  Cybertip.ca
-                </Text>
-                .
-              </Text>
-              <Text style={styles.small}>
-                By going live you agree to these rules and the{' '}
-                <Text style={styles.link} onPress={() => openPage('guidelines')} accessibilityRole="link">
-                  Community Guidelines
-                </Text>
-                .
-              </Text>
-              <Button title="I agree" icon="checkmark-circle" loading={busy} onPress={accept} />
-              <Button title="Not now" variant="plain" onPress={onClose} />
-            </ScrollView>
-          </Pressable>
-        </SafeEdge>
-      </Pressable>
-    </Modal>
+    <Pressable style={styles.card}>
+      <ScrollView contentContainerStyle={styles.inner}>
+        <Text style={styles.title}>Live rules 🔴</Text>
+        {LIVE_RULES.map((rule) => (
+          <View key={rule} style={styles.row}>
+            <Text style={styles.bullet}>•</Text>
+            <Text style={styles.text}>{bold(rule)}</Text>
+          </View>
+        ))}
+        <Text style={styles.small}>
+          Lives use a company called LiveKit to carry your video and sound – see the{' '}
+          <Text style={styles.link} onPress={() => openPage('privacy')} accessibilityRole="link">
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+        <Text style={styles.small}>
+          Under 18 and someone shared a photo or video of you that they shouldn&apos;t have? Get help taking it
+          down:{' '}
+          <Text style={styles.link} onPress={() => Linking.openURL(TAKE_IT_DOWN_URL).catch(() => {})} accessibilityRole="link">
+            Take It Down
+          </Text>{' '}
+          (NCMEC) or{' '}
+          <Text style={styles.link} onPress={() => Linking.openURL(CYBERTIP_URL).catch(() => {})} accessibilityRole="link">
+            Cybertip.ca
+          </Text>
+          .
+        </Text>
+        <Text style={styles.small}>
+          By going live you agree to these rules and the{' '}
+          <Text style={styles.link} onPress={() => openPage('guidelines')} accessibilityRole="link">
+            Community Guidelines
+          </Text>
+          .
+        </Text>
+        <Button title="I agree" icon="checkmark-circle" loading={busy} onPress={accept} />
+        <Button title="Not now" variant="plain" onPress={onClose} />
+      </ScrollView>
+    </Pressable>
   );
 }
 
@@ -122,6 +139,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     maxHeight: '90%',
+  },
+  card: {
+    flexShrink: 1,
   },
   inner: {
     padding: space.lg,

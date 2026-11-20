@@ -5,7 +5,7 @@ These are the documents Peekaboo needs on the App Store and Google Play. Peekabo
 | File | What it is | Where it must appear |
 | --- | --- | --- |
 | `TERMS_OF_SERVICE.md` | The agreement between the operator and every user. Includes the Peekaboo+ subscription terms (section 9), the dare waiver, the hit-up rules, limits on liability and Apple's required terms (section 15). | Accepted in the app (sign-up, and again when `TERMS_VERSION` changes), in Settings, on the Peekaboo+ screen ("Terms of Use"), on the website and linked in the App Store description. |
-| `PRIVACY_POLICY.md` | What data the app collects, why, where it is stored, who sees it, which outside services get it (Supabase, Expo, RevenueCat, Apple, Google) and how people delete it. Written to match what the app really does. | Website (Apple and Google both need a public address), in Settings, on the Peekaboo+ screen, and in the App Store "Privacy Policy URL" field. |
+| `PRIVACY_POLICY.md` | What data the app collects, why, where it is stored, who sees it, which outside services get it (Supabase, Expo, RevenueCat, Apple, Google, LiveKit for lives) and how people delete it. Written to match what the app really does. | Website (Apple and Google both need a public address), in Settings, on the Peekaboo+ screen, and in the App Store "Privacy Policy URL" field. |
 | `COMMUNITY_GUIDELINES.md` | The rules for what people may post and how they treat each other, and how to report and block. | In Settings and on the website. |
 | `DARE_SAFETY_RULES.md` | The safety rules and the "I understand" text people must accept before their first dare, drop or forfeit. The end of the file (from "The 'I understand' screen") is for the operator only. | Shown in the app before the first dare (one time), in Settings and on the website. |
 | `SUPPORT.md` | The help page: contact email, reporting, blocking, account questions, and cancelling, restoring and refunding Peekaboo+. | Website only (`/support`) – it is the App Store "Support URL". |
@@ -15,7 +15,7 @@ These are the documents Peekaboo needs on the App Store and Google Play. Peekabo
 ## Who, when and contact
 
 - **Operator:** 2865113 Ontario Inc. (Ontario, Canada). **Contact:** rbaig18@z2automation.net. Both are filled in everywhere – there are no placeholders left.
-- **Effective date:** 6 November 2026 (Terms) and 9 November 2026 (Privacy Policy: the new face filters and the expressions they react to). Change it whenever you change what a document says.
+- **Effective date:** 6 November 2026 (Terms) and 20 November 2026 (Privacy Policy: lives 🔴 and LiveKit; before that, 9 November 2026 for the face filters). Change it whenever you change what a document says. The Terms didn't change for lives (their duties are in the Community Guidelines, which are part of the Terms, and in the Live rules card), so `TERMS_VERSION` stays and older app downloads show nothing new.
 - **Mailing address:** left out on purpose – that's the owner's choice. The company's registered office is public in the Ontario Business Registry anyway. Selling Peekaboo+ in the EU would make Apple show the company's address there (see section F of the checklist). Add an address here and in the Contact sections if that ever changes.
 
 ## Honest note on liability (please read)

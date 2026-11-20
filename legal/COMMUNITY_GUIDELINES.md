@@ -23,6 +23,18 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 - **No spam, scams or fake accounts.** No bots, no impersonation, no mass friend-requesting, no selling, no phishing.
 - **Be honest in Guess Who and hit ups.** Don't pretend to be someone else or use someone else's photos.
 
+## Going live 🔴
+
+- **Lives are for friends only.** Only your friends can watch. We check this every time someone joins, and we take people out of a live when a friendship ends or someone is blocked.
+- **The limits:** a live lasts up to 60 minutes, and you can go live up to 3 times a day. To go live (or come on someone's live) you need a saved birthday and you must accept the Live rules. We can end a live or stop someone going live.
+- **Bringing a friend on needs their yes.** Either of you can leave the stage any time. While two of you are on, only people who are friends with you **both** can watch.
+- **Keep it 13+** – friends of all ages may be watching. Nothing sexual, and never pressure anyone to do or show something. No dangerous stunts, no drugs or alcohol, and don't go live while driving. Don't show people who haven't agreed to be on your live, and never show your school, your address or anything that says where you are.
+- **Dares on a live follow the [Dare Safety Rules](DARE_SAFETY_RULES.md).** If you're under 18: no physical dares on a live without an adult there.
+- **Don't move people to other apps** – keep chats with people you meet in a live inside Peekaboo, where reporting and blocking work.
+- **Comments on a live follow the same rules as everywhere else**, and everyone watching sees your name. Don't record or share someone's live without their permission.
+- **We don't watch lives** and we don't record them. When a live is reported, we keep what the [Privacy Policy](PRIVACY_POLICY.md) says, so we can look into it.
+- **Leave, remove, report and block:** anyone can leave a live at any time. The person who is live can tap 👀 to see who's watching and remove anyone (or remove and block them).
+
 ## Respect the law and the app
 
 - Nothing illegal: no theft, trespass, vandalism, fraud, or content that infringes copyright or trademarks.
@@ -32,6 +44,7 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 ## Reporting and blocking
 
 - Every post, story, peek, profile, Guess Who post, dare idea, hit up, comment and chat message can be reported. For a post, story, peek, profile, Guess Who post, dare idea or hit up, tap its **⋯** menu. For a comment or a chat message, **press and hold** it. Then tap **Report** and pick a reason: spam, bullying, nudity, a dangerous dare, self-harm, or something else. Reports are confidential: the person isn't told who reported them.
+- **Lives can be reported too:** while watching, tap the live's **⋯** menu to report or block the person who is live (or the friend on with them); press and hold a live comment to report it. You can still report a live for 24 hours after it ends, from the card that shows when it's over.
 - **Report dangerous dares and self-harm straight away.** If a dare, dare idea or post could get someone hurt, or someone seems to be thinking about hurting themselves, report it so we can act fast.
 - You can **block** anyone from their profile. Blocked people can't see your content, message you, or find you on the map, and you won't see them.
 - We review reports and act on objectionable content **within 24 hours**, removing content and the people who post it where needed.

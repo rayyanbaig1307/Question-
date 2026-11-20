@@ -204,6 +204,57 @@ describe('legal documents', () => {
     expect(row).not.toContain('1.4.1');
   });
 
+  // Lives 🔴 (app 1.2): the Terms don't change (old downloads must show nothing new – no re-accept screen), so
+  // the live duties are in the Community Guidelines (part of the Terms) and the Live rules card, and LiveKit is
+  // named in the Privacy Policy. If the Terms are changed on purpose later, update the first two lines with the
+  // new TERMS_VERSION.
+  it('lives: the Terms and TERMS_VERSION stay as they were; Privacy names LiveKit; the Guidelines have the live rules', () => {
+    expect(file('src/lib/legal.ts')).toContain("TERMS_VERSION = '2026-11-06'");
+    expect(effectiveDate(terms)).toBe('2026-11-06');
+    expect(terms).not.toMatch(/LiveKit/);
+    expect(file('src/lib/legal.ts')).toContain("LIVE_RULES_VERSION = '2026-11-20'");
+    expect(file('src/lib/legal.ts')).toContain("DARE_RULES_VERSION = '2026-10-31'");
+
+    // Privacy: the new date, LiveKit as a provider and in the short version, and how long live data is kept.
+    expect(effectiveDate(privacy)).toBe('2026-11-20');
+    const livekit = privacy.split('\n').find((line) => line.startsWith('| **LiveKit, Inc.**'));
+    expect(livekit).toContain("doesn't keep the video or sound");
+    expect(livekit).toContain('your Peekaboo user ID (a random code)');
+    expect(privacy).toContain("We don't record or save it, and neither does LiveKit – but friends watching could screen-record it.");
+    expect(privacy).toMatch(/Google ML Kit \(basic technical data and a random code for this install, as above\) and LiveKit/);
+    expect(privacy).toContain('| Live comments | Deleted 24 hours after the live ends. |');
+    expect(privacy).toContain('for 90 days – **even if an account is deleted**');
+    expect(privacy).toContain('or 90 days when an adult\'s live had viewers under 18');
+    expect(privacy).toContain('only people who are friends with you **both** can watch');
+    expect(privacy).toContain('Only the person who is live sees who is watching');
+    // The website has the new Privacy Policy (with LiveKit) too.
+    expect(file('website/privacy.html')).toContain('LiveKit, Inc.');
+
+    // Guidelines: their own live section, and a separate sentence for reporting lives (the ⋯ sentence stays exact).
+    expect(guidelines).toContain('## Going live 🔴');
+    expect(guidelines).toContain('**Lives are for friends only.**');
+    expect(guidelines).toContain('**Bringing a friend on needs their yes.**');
+    expect(guidelines).toContain("If you're under 18: no physical dares on a live without an adult there.");
+    expect(guidelines).toContain("**Don't move people to other apps**");
+    expect(guidelines).toContain('**Lives can be reported too:**');
+
+    // Support answers the two live questions, and the checklist has the 1.2 rows.
+    expect(support).toContain('**How do I remove someone from my live?**');
+    expect(support).toContain('**How do I turn off live notifications?**');
+    expect(support).toContain('**Friends going live 🔴**');
+    expect(file('src/app/(app)/settings.tsx')).toContain('Friends going live 🔴');
+    expect(checklist).toContain('add **no background modes**');
+    expect(checklist).toContain('**live comments** (1.2)');
+    expect(checklist).toContain('**watching lives**');
+    expect(checklist).toMatch(/re-check this questionnaire before submitting 1\.2/);
+    expect(checklist).toContain('**Re-confirm the export-compliance answer for 1.2**');
+    // The permission texts in the checklist are the ones in app.json.
+    const app = JSON.parse(file('app.json'));
+    const camera = app.expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-camera')[1];
+    expect(checklist).toContain(camera.cameraPermission);
+    expect(checklist).toContain(camera.microphonePermission);
+  });
+
   it('the README is up to date for a paid app on Cloudflare Pages', () => {
     expect(readme).not.toMatch(/free app with no payments|GitHub Pages|\[OPERATOR NAME\]|\[CONTACT EMAIL\]/);
     expect(readme).toContain('Cloudflare Pages');

@@ -174,7 +174,7 @@ function loadSheet({ state, permission = 'ok', available = true }) {
   const screen = loadScreen('src/components/live/GoLiveSheet.tsx', {
     'expo-router': { router: { push: (to) => log.push(['push', to]) } },
     '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
-    '@/components/live/LiveRulesSheet': { LiveRulesSheet: host('LiveRulesSheet') },
+    '@/components/live/LiveRulesSheet': { LiveRulesSheet: host('LiveRulesSheet'), LiveRulesCard: host('LiveRulesCard') },
     '@/lib/liveAccess': tracked,
     '@/lib/livePermissions': {
       ensureLivePermissions: async () => { log.push(`permissions:${permission}`); return permission; },
@@ -222,10 +222,18 @@ test('each "not yet" reason has its own words (and the right button)', async () 
   } finally { await unmount(sheet.tree); }
 });
 
-test('the Live rules open straight away when they are the next step', async () => {
+test('the Live rules open straight away when they are the next step – inside the same sheet (one pop-up at a time)', async () => {
   const sheet = await renderSheet({ state: { why_not: 'rules' } });
   try {
-    assert.equal(sheet.tree.root.findByType('LiveRulesSheet').props.visible, true);
+    const modals = sheet.tree.root.findAllByType('Modal');
+    assert.equal(modals.length, 1);
+    const card = modals[0].findByType('LiveRulesCard');
+    // "Not now" goes back to the sheet ("Read the Live rules"); a link closes the whole sheet so the page shows.
+    await act(() => card.props.onClose());
+    assert.ok(sheet.button('Read the Live rules'));
+    await act(() => sheet.button('Read the Live rules').props.onPress());
+    await act(() => sheet.tree.root.findByType('LiveRulesCard').props.onOpenPage());
+    assert.equal(sheet.closed.length, 1);
   } finally { await unmount(sheet.tree); }
 });
 

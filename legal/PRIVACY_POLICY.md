@@ -1,6 +1,6 @@
 # Peekaboo – Privacy Policy
 
-**Effective date:** 9 November 2026
+**Effective date:** 20 November 2026
 **Who is responsible for your data ("data controller"):** 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net
 
 This policy explains what Peekaboo collects, why, where it goes, and what you can do about it. It is written to match what the app really does. If we change how the app works, we update this policy and tell you in the app.
@@ -13,6 +13,7 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 - **Peekaboo+:** if you subscribe, Apple takes the payment and we never see your card details. A company called RevenueCat tells us whether your subscription is active.
 - **Who saw what:** Peekaboo+ members can see who viewed their profile and who rewatched or screenshotted their stories and posts – so they may see that it was you. Everyone logged in can see who has Peekaboo+ (the ⭐ badge).
 - **Face filters work on your phone only.** We never store or send face data.
+- **Lives:** when you go live, your video and sound go to your friends who are watching through a company called LiveKit. We don't record or save it, and neither does LiveKit – but friends watching could screen-record it.
 - You can delete your account in Settings at any time; that deletes your data (section 6 lists the few things that can outlive it).
 - Data is stored on Supabase servers in the **United States (AWS, us-east-1)**.
 
@@ -28,13 +29,14 @@ This policy explains what Peekaboo collects, why, where it goes, and what you ca
 | **Peekaboo+ (purchases)** | Whether you have Peekaboo+, until when, and which plan. The messages RevenueCat sends us when you buy, renew, cancel, get a refund or move Peekaboo+ to another account: the plan, the dates, the price and currency, your App Store country or region, and Apple's transaction number. We **never** see your card or bank details or your Apple Account password – Apple handles the payment. | To switch Peekaboo+ on and off, show the ⭐ badge, and answer billing questions. | Contract |
 | **Friends and safety** | Friend requests and friendships, close-friends list, groups, blocks, reports you make or that are made about you, forfeits given and received, dare chains and streaks (and any Peek-a-Save used on them), your invite code, and whose invite links you used and when (to stop misuse). When a friendship or friend request is removed (unfriend, decline, cancel or block), we keep a note that the two accounts were linked and when, so that person can't use an invite link to add you straight away. Each time someone uses an invite link we log whether they were 18 or over, and the Peekaboo team is alerted when several under-18s use one adult's link in a day. | To run the social features and keep people safe. | Contract; legitimate interest (safety) |
 | **Location** | Precise GPS position **only while you have the friend map's location sharing turned on**. Turning on ghost mode deletes your stored position. | Friend map. | Consent (phone permission + in-app switch) |
+| **Lives** | When you go live or watch a friend's live: when it started and ended, who watched and when they joined and left, who was brought on with you, the comments, the heart count, removals and reports, and what happened in the live (for example "comments turned off" or "someone was removed"). While you're live, your video and sound pass through LiveKit to the people watching, but nobody records or saves them. We also note whether your phone's Peekaboo can open a live, so only those phones get "… is live" notifications. | To run lives (who may watch, the time and daily limits, comments, bringing a friend on) and keep people safe. | Contract; legitimate interest (safety) |
 | **Birthday and hit ups** | Your birthday (only you see it); who you hit up and who hit you up, the optional message, whether it was answered or ignored, and your "who can hit me up" setting. | To keep hit ups for adults only (18+), limit them to 10 a day, and run the feature. Also, so that people under 18 always get a friend request instead of being added straight away (section 3). | Contract; legitimate interest (safety) |
 | **Device and technical data** | Push-notification token for your device, device type and app version, your time zone (so drop alerts come at your local time), when your phone last checked in with us (so we can send a drop reminder if you haven't opened Peekaboo for a while), the IP address and timestamps of requests to our servers (kept in server logs), and data from Expo's update service (device platform, app runtime version, when the app checked for updates). | To send notifications, keep the app updated, secure the service and fix problems. | Legitimate interest |
 | **Support** | Anything you send us by email. | To help you. | Legitimate interest |
 
 **Face filters.** The googly-eyes lens and the other face filters (like Soft Glow, Golden Hour, Peekaboo Eyes and Heart Eyes) use Google's ML Kit and MediaPipe tools, which run **on your phone**. They find the points of faces in the live camera picture (where the eyes, nose and mouth are) and simple expressions (like a smile, raised eyebrows or an open mouth), so the filter can follow a face and react to it. This happens on your phone only: we never store face points or expressions, never send them to our servers, and never use them to recognise who someone is. Only the photo or video you choose to post or send is saved, like any other post. Google's ML Kit tool may send Google basic technical information (such as device and app details, a random code for this install, error codes and how fast it ran) so Google can keep it working and see how it is used. The random code only belongs to this install of the app: it is not your name, your Peekaboo account or an advertising ID. ML Kit never sends pictures or face data.
 
-We do **not** collect: contacts/address book, health data, payment card or bank details (Apple handles payments), advertising identifiers, or precise location when sharing is off. We do not show ads, and we do not use advertising or tracking tools. The only outside tools in the app that send data to their makers are Expo (app updates), RevenueCat (subscriptions – it also gives us summary charts, such as how many people subscribe) and Google ML Kit (basic technical data and a random code for this install, as above). See section 4.
+We do **not** collect: contacts/address book, health data, payment card or bank details (Apple handles payments), advertising identifiers, or precise location when sharing is off. We do not show ads, and we do not use advertising or tracking tools. The only outside tools in the app that send data to their makers are Expo (app updates), RevenueCat (subscriptions – it also gives us summary charts, such as how many people subscribe), Google ML Kit (basic technical data and a random code for this install, as above) and LiveKit (only while you're in a live). See section 4.
 
 **Photos of other people.** If you post a photo or video with other people in it, you are responsible for having their permission. Anyone who finds themselves in content on Peekaboo without consent can email rbaig18@z2automation.net and we will remove it.
 
@@ -51,6 +53,7 @@ We do **not** collect: contacts/address book, health data, payment card or bank 
 - **Who saw your content (free for everyone):** you see who viewed your stories ("Seen by") and which friends revealed or scrolled past your drop ("Who Peeked"). You are told when someone takes a screenshot of your chat or peek, or of your story or post (the alert for stories and posts doesn't say who). You also see counts: how many people visited your profile in the last 30 days, and how many rewatched or screenshotted a story or screenshotted a post.
 - **Peekaboo+ insights (members only):** a Peekaboo+ member can also see **who**: who visited their profile in the last 30 days, who rewatched their stories (and how many times), and who took screenshots of their stories and posts. So when you do these things, the person may see that it was you. People who have blocked each other are never shown.
 - **"Show me in Profile views"** (Settings → Privacy & safety, on unless you turn it off): when it's off, your visits to other profiles are not saved and nobody sees them – but you can't see who visited you either. This switch only covers profile visits; story rewatches and screenshots are always recorded.
+- **Lives:** only your friends can watch your live – we check every time someone joins, and remove people when a friendship ends or someone is blocked. While you bring a friend on, only people who are friends with you **both** can watch; everyone else waits and comes back by themselves when the stage clears. Only the person who is live sees who is watching (a friend on with them sees how many). Comments show your name and photo to everyone watching that live. Your friends see a live circle on Home while you're live, and friends with the newest Peekaboo get a notification (at most once every 2 hours).
 - **Who has Peekaboo+:** every logged-in user can see whether you have Peekaboo+ (the ⭐ badge next to your name). Behind the badge, the app can also read when your current Peekaboo+ period ends and which plan it is – never any payment details.
 
 ## 4. Who we share data with (service providers)
@@ -63,6 +66,7 @@ We share data only with companies that help run Peekaboo, under contracts or ter
 | **Expo (650 Industries, Inc.)** | Delivers app updates and routes push notifications to Apple and Google. | United States |
 | **RevenueCat, Inc.** | Keeps track of Peekaboo+ subscriptions for us. It gets your Peekaboo user ID (a random code, not your name or email), your purchase history from Apple (plan, dates, price, store country) and basic phone details (such as the iOS and app version), and tells our server when your subscription starts, renews or ends. It also gives us summary charts about subscriptions. | United States |
 | **Apple Inc.** | App Store and in-app payments for Peekaboo+ (Apple handles your payment details; we never see them), Sign in with Apple, push notifications on iPhone, iTunes Search for profile-song previews (your search words are sent to Apple). | United States and worldwide |
+| **LiveKit, Inc.** | Carries live video and sound. It gets your Peekaboo user ID (a random code), your internet address and connection quality, and the video and sound while you're live. It doesn't keep the video or sound. | United States, and servers near the people in the live |
 | **Google LLC** | Google Play, Sign in with Google, push notifications on Android, Google Maps for the Android friend map (the map requests reveal your approximate position to Google), and the ML Kit and MediaPipe face tools inside the app (they run on your phone; ML Kit may send Google basic technical data and a random code for this install, never pictures or face data). | United States and worldwide |
 
 We also disclose data when the law requires it, to respond to a valid legal request, to protect someone's safety, to enforce our Terms, or as part of a sale or transfer of Peekaboo (we would tell you).
@@ -71,7 +75,7 @@ We also disclose data when the law requires it, to respond to a valid legal requ
 
 ## 5. International transfers
 
-Peekaboo is operated from Canada and stores data in the United States. If you live in the European Economic Area, the United Kingdom or Switzerland, your data is transferred outside those areas; our providers rely on standard contractual clauses or the EU-U.S. Data Privacy Framework for those transfers. Contact us for details.
+Peekaboo is operated from Canada and stores data in the United States. Live video and sound go through LiveKit's servers near the people in the live, so they may pass through other countries. If you live in the European Economic Area, the United Kingdom or Switzerland, your data is transferred outside those areas; our providers rely on standard contractual clauses or the EU-U.S. Data Privacy Framework for those transfers. Contact us for details.
 
 ## 6. How long we keep data
 
@@ -84,7 +88,11 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 | Profile visits | Shown for 30 days. Older visits are cleared away over time (the next time someone visits that profile), and all of them are deleted when either account is deleted. |
 | Story rewatches and screenshot records | Kept with the story or post they belong to; deleted with that post, or when either account is deleted. |
 | Location | Replaced each time it updates; deleted when you turn on ghost mode or stop sharing; deleted with your account. |
-| Reports and blocks | For as long as needed to keep people safe, then deleted with the account. |
+| Reports and blocks | For as long as needed to keep people safe, then deleted with the account (reports about lives: see below). |
+| Live video and sound | Never saved – not by us and not by LiveKit. |
+| Live comments | Deleted 24 hours after the live ends. |
+| The record of a live (times, who watched, who was on, removals, what happened, comments that were deleted during it) | 30 days after the live. |
+| Reported lives | When a live or a live comment is reported, we keep a private copy of who was there, the comments (also deleted ones) and what happened, for 90 days – **even if an account is deleted**, so the report can still be looked at. |
 | Birthday and hit ups | Kept while your account exists (so the 18+ rule and the daily limit keep working). |
 | Notes of removed friendships and friend requests, and invite logs | Kept until either account is deleted (so the invite and child-safety rules keep working). |
 | Peekaboo+ status | Kept while your account exists; deleted with it. |
@@ -92,7 +100,7 @@ Peekaboo is operated from Canada and stores data in the United States. If you li
 | Server logs | Up to 90 days. |
 | Everything else | Deleted when you delete your account (see below). |
 
-**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, hit ups, your Peekaboo+ status and all your files right away. If you made your account with Apple, we also ask Apple to disconnect Peekaboo from your Apple Account (you can check this yourself on your iPhone: Settings → your name → Sign-In & Security → Sign in with Apple). Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things in our app that can outlive the deletion.
+**Deleting your account** (Settings → Delete account) permanently deletes your profile, posts, stories, chats, friends, likes, comments, hit ups, your Peekaboo+ status and all your files right away. If you made your account with Apple, we also ask Apple to disconnect Peekaboo from your Apple Account (you can check this yourself on your iPhone: Settings → your name → Sign-In & Security → Sign in with Apple). Copies that other users already received (for example a saved peek or a screenshot), and backups, which are overwritten in the normal course of business within 30 days, are the only things in our app that can outlive the deletion – apart from these safety records about lives: reports about a live (kept 90 days, see above), and, if someone deletes their account, a record of their recent lives that had viewers (who was there, comments, what happened), kept 30 days, or 90 days when an adult's live had viewers under 18. These are kept for safety, so the record can't be wiped before anyone reports something.
 
 **Peekaboo+ and deleting your account.** Deleting your account **does not cancel Peekaboo+** – Apple keeps billing you until you cancel it on your iPhone (Settings → your name → Subscriptions). Please cancel first. Apple keeps its own record of your purchase, and RevenueCat keeps the purchase history linked to your Peekaboo user ID, each under its own privacy policy. We keep our purchase log until you ask us to delete it. Email us and we will delete our log and ask RevenueCat to delete its record of you.
 
@@ -109,13 +117,15 @@ Wherever you live, you can: see the data we hold about you; correct it (most of 
 
 Peekaboo is not for children under 13 and we do not knowingly collect their data. If you believe a child under 13 has an account, email rbaig18@z2automation.net and we will delete it. Users aged 13–17 need a parent's or guardian's permission (also before buying Peekaboo+), and hit ups are not available to them: hit ups are only for people 18 and over. Nobody can add someone under 18 as a friend straight away: they always get a friend request that they can accept or decline.
 
+**Teens and lives.** People under 18 can only go live to their friends. Friends an under-18 account got through an older one-tap add (before friend requests needed a teen's OK) are left out of that teen's lives and live notifications. Bringing someone on a live needs both people to say yes, and either can leave at any time. If an adult's live has 5 or more viewers under 18, the Peekaboo team is alerted so we can check it's OK.
+
 ## 9. Security
 
 Data travels encrypted (HTTPS) and is stored on providers with industry-standard protections; passwords are hashed; database rules make sure each person can only read what they are allowed to see; access to the production database is limited to the operator. No system is perfectly secure, so if your account has a password, please make it strong and unique. If we learn of a breach that puts you at risk, we will tell you and the authorities as the law requires.
 
 ## 10. Screenshots and disappearing content
 
-Stories expire and peeks are meant to be viewed once, but the people you send content to can screenshot or record it. We try to notify you when a chat, peek, story or post is screenshotted; this is best-effort and can be missed. Please post accordingly.
+Stories expire and peeks are meant to be viewed once, but the people you send content to can screenshot or record it. The same goes for lives: we don't record them, but friends watching could screen-record a live. We try to notify you when a chat, peek, story or post is screenshotted; this is best-effort and can be missed. Please post accordingly.
 
 ## 11. Changes
 

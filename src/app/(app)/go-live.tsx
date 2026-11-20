@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
@@ -76,6 +76,8 @@ type Facing = 'front' | 'back';
 
 const COUNTDOWN_FROM = 3;
 const FIVE_MINUTES = 5 * 60_000;
+// A friend has 60 seconds to answer "come on"; a few seconds more for the answer to arrive.
+const INVITE_WAIT_MS = 63_000;
 
 // What a server "no" from start_live means for the host screen (the server's own words are shown with it).
 export function hostFailureForHint(hint: string | null): HostFailure {
@@ -148,16 +150,22 @@ function HostLive({ userId, me, startFacing }: {
 }) {
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
-  const [m, dispatch] = useReducer(liveReducer, undefined, () => newLiveMachine('host'));
-  const machine = useRef(m);
-  machine.current = m;
+  const [first] = useState(() => newLiveMachine('host'));
+  const [m, dispatch] = useReducer(liveReducer, first);
+  // The newest state, for the steps that run in the background. Every event goes through `send`, which works
+  // out the same next state here straight away, so this never lags behind `m`.
+  const machine = useRef(first);
   const alive = useRef(true);
   const send = useCallback((event: LiveEvent) => {
-    if (alive.current) dispatch(event);
+    if (!alive.current) return;
+    machine.current = liveReducer(machine.current, event);
+    dispatch(event);
   }, []);
 
-  const [stageModule, setStageModule] = useState<LiveStageModule | null>(null);
+  // LiveKit (loaded only once the live starts) and this screen's connection to it.
+  const [stageParts, setStageParts] = useState<{ module: LiveStageModule; handle: StageHandle } | null>(null);
   const stage = useRef<StageHandle | null>(null);
+  const stageModuleRef = useRef<LiveStageModule | null>(null);
   const liveId = useRef<string | null>(null);
   const [id, setId] = useState<string | null>(null);
   const [facing, setFacing] = useState<Facing>(startFacing);
@@ -166,15 +174,24 @@ function HostLive({ userId, me, startFacing }: {
   const [countdown, setCountdown] = useState(COUNTDOWN_FROM);
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
+  // The friend you asked on (waiting for their answer). The ref is the same, for the live updates.
   const [invite, setInvite] = useState<{ id: string; guest: LiveViewer } | null>(null);
+  const openInvite = useRef<{ id: string; guest: LiveViewer } | null>(null);
   const [mostViewers, setMostViewers] = useState(0);
-  const [numbers, setNumbers] = useState<LiveNumbers | null>(null);
+  const [heartTotal, setHeartTotal] = useState(0);
+  // The summary's numbers from the server (until it answers, the phone's own numbers show).
+  const [serverNumbers, setServerNumbers] = useState<LiveNumbers | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const collector = useRef(new HeartCollector(userId));
   const { hearts, add: drawHearts, done: heartDone } = useFloatingHearts();
   const stopped = useRef(false);
   const ended = useRef(false);
   const myName = me?.display_name || me?.username || 'You';
+
+  const showInvite = useCallback((next: { id: string; guest: LiveViewer } | null) => {
+    openInvite.current = next;
+    setInvite(next);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Stopping: the phone stops sending first (camera off, disconnect, camera given back), only then the server.
@@ -203,24 +220,12 @@ function HostLive({ userId, me, startFacing }: {
     ended.current = true;
     endLiveInBackground(live, collector.current.total).then((summary: LiveSummary | null) => {
       if (!summary || !alive.current) return;
-      setNumbers({ minutes: summary.seconds / 60, viewers: summary.viewers, hearts: summary.hearts, comments: summary.comments });
+      setServerNumbers({ minutes: summary.seconds / 60, viewers: summary.viewers, hearts: summary.hearts, comments: summary.comments });
       if (summary.ended_reason && summary.ended_reason !== 'host') send({ type: 'status', info: { status: 'ended', ended_reason: summary.ended_reason } });
     });
   }, [send]);
 
-  const localNumbers = useCallback((): LiveNumbers => {
-    const started = onAirAt ? Date.parse(onAirAt) : NaN;
-    return {
-      minutes: Number.isFinite(started) ? (Date.now() - started) / 60_000 : 0,
-      viewers: mostViewers,
-      hearts: collector.current.total,
-      comments: null,
-    };
-  }, [onAirAt, mostViewers]);
-
   // Back from the background or a phone call: sound, then the mic as YOU left it, then the camera.
-  const stageModuleRef = useRef<LiveStageModule | null>(null);
-  stageModuleRef.current = stageModule;
   const resumeSending = useCallback(async () => {
     const handle = stage.current;
     const phase = machine.current.phase;
@@ -248,12 +253,15 @@ function HostLive({ userId, me, startFacing }: {
       onHeartFromViewer: (sender, count) => {
         if (!HEARTS_ENABLED) return;
         const counted = collector.current.receive(HEART_TOPIC, sender, encodeHearts(count), Date.now());
-        if (counted > 0) drawHearts(counted);
+        if (counted <= 0) return;
+        drawHearts(counted);
+        setHeartTotal(collector.current.total);
       },
       onMediaError: () => resumeSending(),
     });
     stage.current = made;
-    setStageModule(module);
+    stageModuleRef.current = module;
+    setStageParts({ module, handle: made });
     return made;
   }, [userId, send, drawHearts, resumeSending]);
 
@@ -352,12 +360,12 @@ function HostLive({ userId, me, startFacing }: {
     send({ type: 'connected' });
   }, [userId, send, ensureStage, facing]);
 
+  // End: the phone stops sending first, then the server is told (in the background). The summary shows meanwhile.
   const runEnd = useCallback(async () => {
-    setNumbers(localNumbers());
     await stopSending();
     tellServerEnded();
     send({ type: 'ended' });
-  }, [localNumbers, stopSending, tellServerEnded, send]);
+  }, [stopSending, tellServerEnded, send]);
 
   // ---------------------------------------------------------------------------
   // Do what the machine asks for, once per change.
@@ -391,21 +399,21 @@ function HostLive({ userId, me, startFacing }: {
   }, [m, runStart, runRejoin, runEnd, resumeSending, send]);
 
   // The live is over (ended, failed, lost): stop sending and tell the server.
+  const phase = m.phase;
   useEffect(() => {
-    if (m.phase === 'lost') {
+    if (phase === 'lost') {
       send({ type: 'ended', reason: 'host_gone' });
       return;
     }
-    if (m.phase === 'summary' || m.phase === 'failed') {
-      if (m.phase === 'summary') setNumbers((now) => now ?? localNumbers());
+    if (phase === 'summary' || phase === 'failed') {
       stopSending().then(() => {
         if (machine.current.phase === 'summary') tellServerEnded();
       });
-    } else if (shouldDisconnect(m) && m.phase === 'rejoining') {
+    } else if (phase === 'rejoining' && shouldDisconnect(machine.current)) {
       // Between tries: the camera stays held for the next one.
       stage.current?.disconnect({ keepAudio: true }).catch(() => {});
     }
-  }, [m, send, localNumbers, stopSending, tellServerEnded]);
+  }, [phase, send, stopSending, tellServerEnded]);
 
   // Waits the machine asked for (retries).
   useEffect(() => {
@@ -478,18 +486,30 @@ function HostLive({ userId, me, startFacing }: {
       onComment: (comment) => setComments((now) => (now.some((c) => c.id === comment.id) ? now : [comment, ...now].slice(0, 50))),
       onCommentGone: (commentId) => setComments((now) => now.filter((c) => c.id !== commentId)),
       onInviteChange: (changed) => {
-        setInvite((open) => {
-          if (!open || open.id !== changed.id || !changed.answer) return open;
+        const open = openInvite.current;
+        if (open && open.id === changed.id && changed.answer) {
+          showInvite(null);
           const name = viewerName(open.guest);
           if (changed.answer === 'declined') showToast(`${name} said not now`);
           else if (changed.answer === 'expired') showToast(`${name} didn't answer`);
           else if (changed.answer === 'accepted') showToast(`${name} is on with you 🎉`);
-          return null;
-        });
+        }
         if (changed.answer === 'accepted') liveStatus(id).then((info) => alive.current && setStatus(info)).catch(() => {});
       },
     });
-  }, [id, userId, showToast]);
+  }, [id, userId, showToast, showInvite]);
+
+  // An ask runs out after 60 seconds. The server marks it within a minute; the phone doesn't wait for that.
+  useEffect(() => {
+    if (!invite) return;
+    const timer = setTimeout(() => {
+      const open = openInvite.current;
+      if (!open || open.id !== invite.id) return;
+      showInvite(null);
+      showToast(`${viewerName(open.guest)} didn't answer`);
+    }, INVITE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [invite, showInvite, showToast]);
 
   // The app going to the background and coming back. (A phone call that doesn't leave the app: when it comes
   // back to the front, the sound, mic and camera are turned back on too.)
@@ -534,12 +554,31 @@ function HostLive({ userId, me, startFacing }: {
   // ---------------------------------------------------------------------------
   // Buttons
   // ---------------------------------------------------------------------------
-  function confirmEnd() {
+  const confirmEnd = useCallback(() => {
     Alert.alert('End your live?', 'Your friends will see that it has ended.', [
       { text: 'Keep going', style: 'cancel' },
-      { text: 'End', style: 'destructive', onPress: () => send({ type: 'end' }) },
+      {
+        text: 'End',
+        style: 'destructive',
+        onPress: () => {
+          // The summary's minutes count up to now (the clock otherwise only ticks every few seconds).
+          setNow(Date.now());
+          send({ type: 'end' });
+        },
+      },
     ]);
-  }
+  }, [send]);
+
+  // Android's back button while you're live: the same as ✕ (it asks first, so a slip doesn't end the live).
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const phase = machine.current.phase;
+      if (phase !== 'live' && phase !== 'reconnecting' && phase !== 'away') return false;
+      confirmEnd();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [confirmEnd]);
 
   function done() {
     setLiveNow(null);
@@ -600,10 +639,11 @@ function HostLive({ userId, me, startFacing }: {
       {
         text: 'Ask them',
         onPress: async () => {
+          // The viewers sheet closes first: the answer shows as a message on the live, which the sheet would cover.
+          setViewersOpen(false);
           try {
             const inviteId = await inviteCohost(live, viewer.user_id);
-            setInvite({ id: inviteId, guest: viewer });
-            setViewersOpen(false);
+            showInvite({ id: inviteId, guest: viewer });
             showToast(`Asked ${name} 🎥`);
           } catch (error) {
             const hint = liveHint(error);
@@ -619,10 +659,12 @@ function HostLive({ userId, me, startFacing }: {
   function cancelAsk() {
     const live = liveId.current;
     if (!live) return;
-    setInvite(null);
+    showInvite(null);
     cancelCohostInvite(live).catch(() => {});
   }
 
+  // The ⋯ next to a friend in the viewers sheet. A system pop-up (it can show on top of the open sheet, which
+  // the app's own menus can't).
   function removeMenu(viewer: LiveViewer) {
     const live = liveId.current;
     if (!live) return;
@@ -630,18 +672,17 @@ function HostLive({ userId, me, startFacing }: {
     const remove = async (alsoBlock: boolean) => {
       try {
         await removeLiveViewer(live, viewer.user_id, alsoBlock);
+        setViewersOpen(false);
         showToast(alsoBlock ? `Removed and blocked ${name}` : `Removed ${name}`);
       } catch (error) {
         Alert.alert('Could not remove', friendlyError(error));
       }
     };
-    showOptions({
-      title: name,
-      options: [
-        { label: 'Remove from my live', destructive: true, onPress: () => remove(false) },
-        { label: 'Remove and block', destructive: true, onPress: () => remove(true) },
-      ],
-    });
+    Alert.alert(name, undefined, [
+      { text: 'Remove from my live', style: 'destructive', onPress: () => remove(false) },
+      { text: 'Remove and block', style: 'destructive', onPress: () => remove(true) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function backToWatching(viewer: LiveViewer) {
@@ -650,6 +691,7 @@ function HostLive({ userId, me, startFacing }: {
     try {
       await endCohost(live);
       setStatus((now) => (now ? { ...now, cohost: null } : now));
+      setViewersOpen(false);
       showToast(`${viewerName(viewer)} is back to watching`);
     } catch (error) {
       Alert.alert('Could not change', friendlyError(error));
@@ -711,9 +753,17 @@ function HostLive({ userId, me, startFacing }: {
   // ---------------------------------------------------------------------------
   // What's on screen
   // ---------------------------------------------------------------------------
-  const StageView = stageModule?.StageView;
-  const handle = stage.current;
+  const StageView = stageParts?.module.StageView;
+  const handle = stageParts?.handle ?? null;
   const viewers = status?.viewers ?? 0;
+  // The summary: the server's numbers once it answers; until then the phone's own (no comment count).
+  const started = onAirAt ? Date.parse(onAirAt) : NaN;
+  const numbers: LiveNumbers = serverNumbers ?? {
+    minutes: Number.isFinite(started) ? Math.max(0, now - started) / 60_000 : 0,
+    viewers: mostViewers,
+    hearts: heartTotal,
+    comments: null,
+  };
   const endsAt = status?.ends_at ? Date.parse(status.ends_at) : NaN;
   const emptyEndsAt = status?.empty_ends_at ? Date.parse(status.empty_ends_at) : NaN;
   const live = m.phase === 'live' || m.phase === 'reconnecting';
@@ -813,7 +863,7 @@ function HostLive({ userId, me, startFacing }: {
         </LiveCard>
       ) : null}
 
-      {(m.phase === 'ending' || m.phase === 'summary') && numbers ? (
+      {m.phase === 'ending' || m.phase === 'summary' ? (
         <HostSummaryCard numbers={numbers} reason={m.phase === 'summary' ? m.why : null} maxMinutes={maxMinutes} onDone={done} />
       ) : null}
 
@@ -825,7 +875,7 @@ function HostLive({ userId, me, startFacing }: {
           inviteOpen={!!invite}
           onClose={() => setViewersOpen(false)}
           onBringOn={askBringOn}
-          onCantBringOn={(viewer) => showToast(`${viewerName(viewer)} can't come on right now`)}
+          onCantBringOn={(viewer) => Alert.alert(`${viewerName(viewer)} can't come on right now`)}
           onRemove={removeMenu}
           onBackToWatching={backToWatching}
         />

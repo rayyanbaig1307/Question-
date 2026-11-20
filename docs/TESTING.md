@@ -1245,3 +1245,78 @@ Close the app fully and open it twice, so the update is in. Then:
    not 1.1.0. That is how you tell an old download from the new one.
 
 If anything in A goes wrong, say which step and which camera (front or back). Most fixes can go out by update.
+
+## Step 69 – Lives 🔴 (new TestFlight build, version 1.2)
+
+You need **two iPhones on the new 1.2 TestFlight build** whose accounts are **friends** (both with a saved birthday),
+plus, for the "old phones" checks, **TestFlight 11**, one older build on the testing channel (**TestFlight 9**) and
+**Expo Go**. Lives start switched to "testers only" (you and @ayaan) – the steps to change who can go live are at the
+top of `supabase/migrations/20261226000000_livestreams.sql`. Android stays off until an Android phone has passed
+these checks too. If a step goes wrong, write down its number (and the G-number) – most fixes go out by update.
+
+**First, before anything else:** on your phone, Camera → swipe the bubbles to 🔴 → tap the shutter → **Go live**.
+The other phone sees you live. (This proves LiveKit, the secrets and the room all work.)
+
+**A. Going live (phone A) and watching (phone B)**
+
+1. Phone A: the 🔴 **Go live** bubble sits right after 🕵️ Guess Who. In 🔴 mode there's no gallery button, and the
+   shutter opens the **Go live** sheet (no photo, no video). (G1)
+2. The sheet says "Only your friends can watch", who gets a notification, and "We don't record or save your live –
+   but friends watching could screen-record it". The first time, the **Live rules** card comes first → **I agree**.
+3. **Microphone never allowed before** (or switch it off in iPhone Settings → Peekaboo first): Go live asks for it;
+   tap **Don't allow** → the sheet says "Peekaboo needs your camera and microphone…" with **Open Settings**, and
+   nothing starts. Allow it, come back, and tap Go live again. (G11)
+4. A **3·2·1** countdown, then the **LIVE** pill and the timer. Phone B gets "🔴 … is live" (only once every 2 hours
+   per friend), and a pink **LIVE** circle shows at the front of Home (Home checks every 30 seconds).
+5. Phone B: tap the circle → "Starting…" with A's picture, then A's video full screen. **Phone B's silent switch
+   on: you still hear A.** (G7)
+6. Phone B: comment ("Add a comment…" – "Everyone watching sees your comment and name"), tap ❤️ and double-tap the
+   video → hearts float up on **both** phones. (G2 – if A never sees B's hearts, tell us: hearts can be switched off
+   by an update.) A bad word → "That word isn't allowed on Peekaboo." and nothing is sent.
+7. Phone A: **👀 n** → the sheet lists B. Flip, mute (B hears nothing, then A again), ⋯ → **Turn comments off** → B
+   sees "Comments are off".
+8. **Bring on:** A → 👀 → **Bring on** B → "Bring … on?" → **Ask them**. B gets "🎥 … wants you on their live" with a
+   60-second bar → **Join live** → (camera/mic allowed) → a split screen, A on top, B below, on **both** phones.
+   **A hears B and B hears A.** (G7) B → **Leave stage** → back to watching. Ask again and let it run out → A sees
+   "… didn't answer". B taps **Not now** → A sees "… said not now", and asking a third time says "You can't ask …
+   again this live".
+9. **Camera hand-off:** before going live, pick ✨ Soft Glow (or a face filter), then go to 🔴 and go live → the live
+   camera works (no black screen). After the live, the filter camera works again. Same for B coming on stage. (G6)
+10. **End:** A → ✕ → **End** → "That's a wrap 🎬" with minutes, friends, ❤️ and 💬 → **Done** → back to the camera.
+    B sees "…'s live has ended" (never why) with **Say something nice 💬**, **Report** and **Block**.
+11. **After a live:** play a story video with sound and record a voice note – sound works as before. Open an invite
+    link – it still works. (G3, G7)
+
+**B. When things go wrong (each on its own short live)**
+
+1. A puts Peekaboo in the background for **10 seconds** → B sees A paused; A comes back → video, sound and A's own
+   mute choice are back. For **more than 90 seconds** → the live ends ("Your connection dropped."). (G8)
+2. A takes (or declines) a **phone call** mid-live → afterwards the sound and the mic work again. (G8)
+3. **Airplane mode for 5 seconds at about minute 2**, then a **10-second app switch at about minute 2** – on A, then
+   on B. Each time the live carries on (B may see "Reconnecting…" briefly). (G8)
+4. A **removes** B (👀 → ⋯ → Remove from my live) → B sees "You were removed from this live." and can't get back in
+   for that live. (G4)
+5. A brings on a friend who is **not friends with B** → B goes to "Hang on a moment" **before** the new person's
+   video appears, and comes back by itself when they leave the stage. (G4, G12)
+6. **Unfriend or block mid-live** → the other person is out within a few seconds.
+7. Two reports of the live (from two accounts) → the live ends ("Your live was ended for a safety check.").
+8. Nobody joins for 5 minutes → "Nobody joined, so we ended your live." (lead: set `empty_minutes` lower to test).
+   Time limit: set `max_minutes = 3` for a test → "That's 3 minutes!". (G8)
+9. **A notification tapped mid-live** (a message, or the drop alert): A is asked "End your live to open this?" →
+   **Stay** keeps the live going. No banners pop up over A's live.
+10. **An app update waiting:** open the app **from a "… is live" notification** while an update is waiting → the
+    live is never restarted; the update happens after **Done**. (G8)
+
+**C. Old phones and other builds**
+
+1. **TestFlight 11, TestFlight 9 and Expo Go** (after the update reaches them): no 🔴 bubble, no live circles on
+   Home, no "Friends going live" switch in Settings, **no Terms screen**, and no "… is live" notification when a
+   friend goes live. (G1)
+2. **A 1.2 phone that never goes live:** opening the app is as fast as on build 12; a story video with sound, a voice
+   note, the silent switch and AirPods all behave as before. (G7b)
+3. **Settings** on the 1.2 build: Notifications has **Friends going live 🔴**; switch it off → no more live
+   notifications for that phone. At the bottom: **Peekaboo 1.2.0** with the new build number.
+
+**D. Checks for the developer (alongside A–C):** G5 (taking a co-host off really stops their camera), G9 (LiveKit's
+participant list shows a hidden viewer) and G10 (after a live ends, an old host ticket can't rebuild the room – or the
+one-minute check removes it again). Plan B for each gate is in the design.

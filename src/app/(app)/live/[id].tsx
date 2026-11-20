@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -13,7 +13,7 @@ import { InviteSheet } from '@/components/live/InviteSheet';
 import { LiveCommentList, LiveComposer } from '@/components/live/LiveComments';
 import { LiveCard } from '@/components/live/LiveEndedCard';
 import { LiveHearts, useFloatingHearts } from '@/components/live/LiveHearts';
-import { LiveRulesSheet } from '@/components/live/LiveRulesSheet';
+import { LiveRulesCard } from '@/components/live/LiveRulesSheet';
 import { LiveTopBar, personName } from '@/components/live/LiveTopBar';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
@@ -22,12 +22,15 @@ import {
   holdCameraForLive,
   isLiveAvailable,
   LIVE_UNAVAILABLE_WORDS,
+  liveBroken,
   liveMaybeAvailable,
   liveNowRole,
   liveUnavailableReason,
   loadLiveStage,
+  markLiveBroken,
   releaseCameraFromLive,
   setLiveNow,
+  subscribeLiveBroken,
   waitForCameraRelease,
   type LiveStageModule,
 } from '@/lib/liveAccess';
@@ -154,20 +157,27 @@ export default function WatchLive() {
 function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   const { showOptions, showToast } = useOverlays();
   const { report, confirmBlock } = useSafetyActions();
-  const [m, dispatch] = useReducer(liveReducer, undefined, () => newLiveMachine('viewer'));
-  const machine = useRef(m);
-  machine.current = m;
+  const [first] = useState(() => newLiveMachine('viewer'));
+  const [m, dispatch] = useReducer(liveReducer, first);
+  // The newest state, for the steps that run in the background. Every event goes through `send`, which works
+  // out the same next state here straight away, so this never lags behind `m`.
+  const machine = useRef(first);
   const alive = useRef(true);
   const send = useCallback((event: LiveEvent) => {
-    if (alive.current) dispatch(event);
+    if (!alive.current) return;
+    machine.current = liveReducer(machine.current, event);
+    dispatch(event);
   }, []);
 
   const [info, setInfo] = useState<LiveStatus | null>(null);
   const hostId = useRef<string | null>(null);
-  const lastCohost = useRef<LivePerson | null>(null);
-  const [stageModule, setStageModule] = useState<LiveStageModule | null>(null);
+  // The co-host you saw last (so you can still report them after the live ends: the server stops naming them).
+  const [lastCohost, setLastCohost] = useState<LivePerson | null>(null);
+  // LiveKit (loaded only once you join) and this screen's connection to it.
+  const [stageParts, setStageParts] = useState<{ module: LiveStageModule; handle: StageHandle } | null>(null);
   const stage = useRef<StageHandle | null>(null);
-  const [broken, setBroken] = useState(false);
+  // LiveKit couldn't load on this phone (lives switch themselves off until the app is closed).
+  const broken = useSyncExternalStore(subscribeLiveBroken, liveBroken, liveBroken);
   const [connectedOnce, setConnectedOnce] = useState(false);
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [facing, setFacing] = useState<Facing>('front');
@@ -182,7 +192,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
 
   const remember = useCallback((status: LiveStatus) => {
     if (status.host?.id) hostId.current = status.host.id;
-    if (status.cohost) lastCohost.current = status.cohost;
+    if (status.cohost) setLastCohost(status.cohost);
     setInfo(status);
   }, []);
 
@@ -206,7 +216,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
         },
       });
       stage.current = made;
-      setStageModule(module);
+      setStageParts({ module, handle: made });
       return made;
     },
     [send, drawHearts],
@@ -215,24 +225,24 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   // ---------------------------------------------------------------------------
   // The steps the machine asks for.
   // ---------------------------------------------------------------------------
-  const runStatus = useCallback(async () => {
-    try {
-      const status = await liveStatus(liveId);
-      if (!alive.current) return;
-      remember(status);
-      send({ type: 'status', info: status as StatusInfo });
-    } catch {
-      send({ type: 'status_failed' });
-    }
+  const runStatus = useCallback(() => {
+    liveStatus(liveId).then(
+      (status) => {
+        if (!alive.current) return;
+        remember(status);
+        send({ type: 'status', info: status as StatusInfo });
+      },
+      () => send({ type: 'status_failed' }),
+    );
   }, [liveId, remember, send]);
 
   // Get a ticket and connect: hidden as a viewer, or (coming on stage) with your camera and microphone.
   const runConnect = useCallback(async () => {
     const goingOn = machine.current.phase === 'going_on';
-    if (goingOn || machine.current.role === 'cohost') {
-      holdCameraForLive();
-      await waitForCameraRelease();
-    }
+    // On stage: the camera is handed over to the live first (the camera screens let go of it).
+    const withCamera = goingOn || machine.current.role === 'cohost';
+    if (withCamera) holdCameraForLive();
+    await (withCamera ? waitForCameraRelease() : Promise.resolve());
     const ticket = await getLiveToken(liveId, userId);
     if (!alive.current) return;
     if (!ticket.ok) {
@@ -247,7 +257,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     send({ type: 'token_ok', role: ticket.role });
     const module = loadLiveStage();
     if (!module) {
-      setBroken(true);
+      markLiveBroken('LiveKit could not load');
       return;
     }
     const handle = ensureStage(module);
@@ -293,7 +303,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     const module = loadLiveStage();
     if (!module) {
       releaseCameraFromLive();
-      setBroken(true);
+      markLiveBroken('LiveKit could not load');
       return;
     }
     try {
@@ -387,6 +397,26 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     };
   }, [inRoom, liveId, remember, send]);
 
+  // The host's camera is off (their app went to the background, or a phone call): "⏸ Sam will be right back".
+  // Checked every 2 seconds from the connection itself (the host's camera is there but switched off).
+  const [hostAway, setHostAway] = useState(false);
+  const watchingNow = m.phase === 'watching' || m.phase === 'invited' || m.phase === 'on_stage';
+  useEffect(() => {
+    const handle = stageParts?.handle;
+    if (!watchingNow || !handle) return;
+    const check = () => {
+      const host = hostId.current ? handle.room()?.remoteParticipants?.get(hostId.current) : undefined;
+      // Only once the host has been seen sending (not before their first picture arrives).
+      setHostAway(!!host && host.videoTrackPublications.size > 0 && !host.isCameraEnabled);
+    };
+    check();
+    const timer = setInterval(check, 2000);
+    return () => {
+      clearInterval(timer);
+      setHostAway(false);
+    };
+  }, [watchingNow, stageParts]);
+
   // The newest comments each time you (re)join.
   useEffect(() => {
     if (!inRoom) return;
@@ -453,7 +483,8 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       alive.current = false;
       if (flushTimer.current) clearTimeout(flushTimer.current);
       const handle = stage.current;
-      const wasOnStage = machine.current.role === 'cohost' && holdsCamera(machine.current);
+      // Still on stage (the shared "live now" role says so: leaving the screen may already have moved the steps on).
+      const wasOnStage = liveNowRole() === 'cohost';
       (async () => {
         await handle?.unpublish().catch(() => {});
         await handle?.disconnect().catch(() => {});
@@ -468,20 +499,22 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   // ---------------------------------------------------------------------------
   // Hearts: drawn at once, sent to the host only, at most one message every 400 ms.
   // ---------------------------------------------------------------------------
-  const flushHearts = useCallback(() => {
-    flushTimer.current = null;
-    const host = hostId.current;
-    const count = sender.current.take(Date.now());
-    if (count > 0 && host) stage.current?.sendHearts(count, host).catch(() => {});
-    const wait = sender.current.waitMs(Date.now());
-    if (wait !== null) flushTimer.current = setTimeout(flushHearts, wait);
-  }, []);
   const tapHeart = useCallback(() => {
     if (!HEARTS_ENABLED || !IN_ROOM.includes(machine.current.phase)) return;
     sender.current.tap();
     drawHearts(1);
-    if (!flushTimer.current) flushTimer.current = setTimeout(flushHearts, sender.current.waitMs(Date.now()) ?? 0);
-  }, [drawHearts, flushHearts]);
+    if (flushTimer.current) return;
+    // Sends what's waiting, then again after the 400 ms gap while more taps keep coming.
+    const flush = () => {
+      flushTimer.current = null;
+      const host = hostId.current;
+      const count = sender.current.take(Date.now());
+      if (count > 0 && host) stage.current?.sendHearts(count, host).catch(() => {});
+      const wait = sender.current.waitMs(Date.now());
+      if (wait !== null) flushTimer.current = setTimeout(flush, wait);
+    };
+    flushTimer.current = setTimeout(flush, sender.current.waitMs(Date.now()) ?? 0);
+  }, [drawHearts]);
   // Double-tap the live for a heart.
   function tapVideo() {
     const now = Date.now();
@@ -542,6 +575,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
   }, [send, showToast]);
 
   const declineInvite = useCallback(() => {
+    setRulesOpen(false);
     const invite = machine.current.invite;
     if (invite) answerCohostInvite(invite.id, false).catch(() => {});
     send({ type: 'decline' });
@@ -637,7 +671,7 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
 
   // Report and Block on the end, removed and waiting cards (reports are taken for 24 hours after a live).
   function safetyButtons() {
-    const people = [host, lastCohost.current].filter((p, i, all): p is LivePerson => !!p && p.id !== userId && all.findIndex((q) => q?.id === p.id) === i);
+    const people = [host, lastCohost].filter((p, i, all): p is LivePerson => !!p && p.id !== userId && all.findIndex((q) => q?.id === p.id) === i);
     return people.flatMap((person) => [
       <Button key={`report-${person.id}`} title={`Report @${person.username}`} icon="flag" variant="secondary" onPress={() => reportLive(person)} />,
       <Button
@@ -663,20 +697,22 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
     );
   }
 
-  const StageView = stageModule?.StageView;
-  const handle = stage.current;
+  const StageView = stageParts?.module.StageView;
+  const handle = stageParts?.handle ?? null;
   const hostName = personName(host);
   const live = IN_ROOM.includes(m.phase) || m.phase === 'going_on' || m.phase === 'leaving_stage';
   const starting = !connectedOnce && (m.phase === 'checking' || m.phase === 'joining');
   let banner: string | null = null;
   if (m.phase === 'reconnecting' || m.phase === 'rejoining') banner = LIVE_MACHINE_WORDS.reconnecting;
   else if (m.phase === 'going_on') banner = m.message ?? LIVE_MACHINE_WORDS.stage_wait;
+  else if (hostAway && watchingNow) banner = `⏸ ${hostName} ${LIVE_MACHINE_WORDS.host_away}`;
 
   let card = null;
   if (m.phase === 'blocked' && m.why === 'ended') {
     card = (
       <LiveCard emoji="👋" title={`${hostName}'s live has ended`}>
-        {host ? <Button title="Say something nice 💬" onPress={() => router.push(`/chat/${host.id}`)} /> : null}
+        {/* The chat takes this screen's place: the live is over, so nothing should still count as "live now". */}
+        {host ? <Button title="Say something nice 💬" onPress={() => router.replace(`/chat/${host.id}`)} /> : null}
         {safetyButtons()}
         <Button title="Done" variant="plain" onPress={leaveScreen} />
       </LiveCard>
@@ -779,24 +815,30 @@ function Watch({ liveId, userId }: { liveId: string; userId: string }) {
       {card}
 
       <InviteSheet
-        visible={m.phase === 'invited' && !rulesOpen}
+        visible={m.phase === 'invited' || rulesOpen}
         hostName={hostName}
         expiresAt={m.invite?.expires_at ?? null}
         busy={inviteBusy}
         onJoin={answerInvite}
         onNotNow={declineInvite}
         onExpired={inviteExpired}
-      />
-      <LiveRulesSheet
-        visible={rulesOpen}
-        onAccepted={() => {
-          setRulesOpen(false);
-          answerInvite();
-        }}
-        onClose={() => {
-          setRulesOpen(false);
-          declineInvite();
-        }}
+        // The Live rules, in the same sheet (the ask stays open meanwhile), then the answer is sent again.
+        rules={
+          rulesOpen ? (
+            <LiveRulesCard
+              onAccepted={() => {
+                setRulesOpen(false);
+                answerInvite();
+              }}
+              onClose={() => {
+                setRulesOpen(false);
+                declineInvite();
+              }}
+              // Reading the Privacy Policy or the Guidelines isn't a "no": the ask stays open meanwhile.
+              onOpenPage={() => setRulesOpen(false)}
+            />
+          ) : null
+        }
       />
     </View>
   );

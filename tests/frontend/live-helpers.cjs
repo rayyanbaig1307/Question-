@@ -80,6 +80,8 @@ function liveScreenMocks({ log, stage, access, lives = {}, calls, params = {} })
     showOptions: (request) => calls.options.push(request),
   };
   const appState = { listener: null };
+  // Android's back button: `backPress.listener()` presses it (true = the screen handled it).
+  const backPress = { listener: null };
   const exits = [];
   const focus = { effect: null, cleanup: null };
   const mocks = {
@@ -105,6 +107,9 @@ function liveScreenMocks({ log, stage, access, lives = {}, calls, params = {} })
         addEventListener: (_type, listener) => { appState.listener = listener; return { remove() { if (appState.listener === listener) appState.listener = null; } }; },
       },
       Linking: { openSettings: async () => {}, openURL: async () => {} },
+      BackHandler: {
+        addEventListener: (_type, listener) => { backPress.listener = listener; return { remove() { if (backPress.listener === listener) backPress.listener = null; } }; },
+      },
     },
     '@/components/IconButton': { IconButton: host('IconButton') },
     '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
@@ -115,7 +120,7 @@ function liveScreenMocks({ log, stage, access, lives = {}, calls, params = {} })
     '@/components/live/LiveTopBar': { LiveTopBar: host('LiveTopBar'), personName: (p) => p?.display_name || p?.username || 'Your friend' },
     '@/components/live/ViewersSheet': { ViewersSheet: host('ViewersSheet'), viewerName: (v) => v.display_name || v.username },
     '@/components/live/InviteSheet': { InviteSheet: host('InviteSheet') },
-    '@/components/live/LiveRulesSheet': { LiveRulesSheet: host('LiveRulesSheet') },
+    '@/components/live/LiveRulesSheet': { LiveRulesSheet: host('LiveRulesSheet'), LiveRulesCard: host('LiveRulesCard') },
     '@/lib/liveAccess': access ?? liveAccessMock(true, { stage }),
     '@/lib/liveExit': { setLiveExit: (fn) => { exits.push(fn); return () => {}; }, leaveLiveNow: async () => {}, openUnlessLive: (open) => open() },
     '@/lib/liveHearts': loadPure('src/lib/liveHearts.ts'),
@@ -128,7 +133,7 @@ function liveScreenMocks({ log, stage, access, lives = {}, calls, params = {} })
       }),
     },
   };
-  return { mocks, appState, exits, focus };
+  return { mocks, appState, exits, focus, backPress };
 }
 
 // Lets every waiting promise (and the screen's reaction to it) finish.

@@ -29,9 +29,9 @@ function renderHost({ lives = {}, stageOptions = {}, role = 'host' } = {}) {
     fetchLiveComments: async () => [],
     listenToLive: () => () => {},
   };
-  const { mocks, appState, exits } = liveScreenMocks({ log, stage: module, access, lives: { ...defaults, ...lives }, calls, params: { facing: 'front' } });
+  const { mocks, appState, exits, backPress } = liveScreenMocks({ log, stage: module, access, lives: { ...defaults, ...lives }, calls, params: { facing: 'front' } });
   const screen = loadScreen('src/app/(app)/go-live.tsx', mocks);
-  return { screen, log, calls, access, handles, appState, exits };
+  return { screen, log, calls, access, handles, appState, exits, backPress };
 }
 
 async function open(setup) {
@@ -125,6 +125,20 @@ test('End: the camera stops and disconnects BEFORE the server is told; the summa
     await act(() => live.summary().props.onDone());
     assert.equal(setup.access.liveNowRole(), null);
     assert.deepEqual(setup.calls.routes.at(-1), ['back']);
+  } finally { await unmount(live.tree); }
+});
+
+test('Android\'s back button mid-live asks "End your live?" first (Keep going = still live)', async () => {
+  const setup = renderHost();
+  const live = await open(setup);
+  try {
+    await live.tickCountdown();
+    let handled;
+    await act(async () => { handled = setup.backPress.listener(); });
+    assert.equal(handled, true);
+    assert.equal(setup.calls.alerts.at(-1)[0], 'End your live?');
+    assert.deepEqual(setup.calls.routes, []);
+    assert.equal(setup.log.includes('endLive'), false);
   } finally { await unmount(live.tree); }
 });
 
@@ -242,8 +256,9 @@ test('Bring on: asks first, then the answer comes back as a toast; a friend who 
     assert.equal(setup.calls.toasts.at(-1), 'Ayaan said not now');
     assert.equal(sheet().props.inviteOpen, false);
     // Grey "Bring on" never says why.
+    // (A system pop-up: the app's own messages would be hidden behind the open viewers sheet.)
     await act(() => sheet().props.onCantBringOn(ayaan));
-    assert.equal(setup.calls.toasts.at(-1), "Ayaan can't come on right now");
+    assert.equal(setup.calls.alerts.at(-1)[0], "Ayaan can't come on right now");
   } finally { await unmount(live.tree); }
 });
 
@@ -276,6 +291,34 @@ test('the answers: didn\'t answer → a toast; cancelled → nothing; asked twic
     await act(() => pressAlert(setup.calls, 'Ask them'));
     await settle(act);
     assert.equal(setup.calls.toasts.at(-1), "You can't ask Ayaan again this live");
+  } finally { await unmount(live.tree); }
+});
+
+test('an ask nobody answers clears itself after a minute ("… didn\'t answer"), without waiting for the server', async () => {
+  let listeners = null;
+  const setup = renderHost({
+    lives: {
+      listenToLive: (_id, _me, handlers) => { listeners = handlers; return () => {}; },
+      inviteCohost: async () => 'invite-3',
+    },
+  });
+  const live = await open(setup);
+  try {
+    await live.tickCountdown();
+    const ayaan = { user_id: 'ayaan', username: 'ayaan', display_name: 'Ayaan', avatar_path: null, joined_at: '', is_cohost: false, can_cohost: true };
+    await act(() => live.find('ViewersSheet')[0].props.onBringOn(ayaan));
+    await act(() => pressAlert(setup.calls, 'Ask them'));
+    await settle(act);
+    assert.equal(live.find('ViewersSheet')[0].props.inviteOpen, true);
+    // The minute runs out (the newest timer is the ask's).
+    const timers = setup.screen.calls.timers;
+    await act(async () => { timers[timers.length - 1](); });
+    assert.equal(setup.calls.toasts.at(-1), "Ayaan didn't answer");
+    assert.equal(live.find('ViewersSheet')[0].props.inviteOpen, false);
+    // The server's own "expired" a little later says nothing more.
+    const before = setup.calls.toasts.length;
+    await act(() => listeners.onInviteChange({ id: 'invite-3', answer: 'expired' }));
+    assert.equal(setup.calls.toasts.length, before);
   } finally { await unmount(live.tree); }
 });
 

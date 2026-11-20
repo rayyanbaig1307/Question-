@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -31,23 +31,30 @@ export function ViewersSheet({ visible, liveId, cohostId, inviteOpen, onClose, o
   const [viewers, setViewers] = useState<LiveViewer[] | null>(null);
   const [failed, setFailed] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const list = await fetchLiveViewers(liveId);
-      setViewers(list);
-      setFailed(false);
-    } catch {
-      setFailed(true);
-      setViewers((now) => now ?? []);
-    }
-  }, [liveId]);
-
+  // Fresh every 10 seconds while the sheet is open.
   useEffect(() => {
     if (!visible) return;
+    let stop = false;
+    const load = () =>
+      fetchLiveViewers(liveId).then(
+        (list) => {
+          if (stop) return;
+          setViewers(list);
+          setFailed(false);
+        },
+        () => {
+          if (stop) return;
+          setFailed(true);
+          setViewers((now) => now ?? []);
+        },
+      );
     load();
     const timer = setInterval(load, 10_000);
-    return () => clearInterval(timer);
-  }, [visible, load]);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [visible, liveId]);
 
   // The co-host first, then the newest to join.
   const sorted = [...(viewers ?? [])].sort((a, b) => Number(b.is_cohost) - Number(a.is_cohost) || b.joined_at.localeCompare(a.joined_at));

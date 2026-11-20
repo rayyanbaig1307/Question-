@@ -27,6 +27,12 @@ Report it in the app, or email us with a screenshot and we'll remove it.
 **Is my location shared?**
 Only with your friends, and only while you turn sharing on. Ghost mode hides you any time.
 
+**How do I remove someone from my live?**
+While you're live, tap **👀** at the top to see who's watching. Tap **⋯** next to them and pick **Remove from my live** (or **Remove and block**). You can also press and hold one of their comments. They can't come back to that live.
+
+**How do I turn off live notifications?**
+Settings → Notifications → turn off **Friends going live 🔴**. You can still watch your friends' lives from the circles at the top of Home.
+
 ## Peekaboo+
 
 **How do I cancel Peekaboo+?**

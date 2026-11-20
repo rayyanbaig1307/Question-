@@ -4,7 +4,7 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 
 import { Button } from '@/components/Button';
 import { SafeEdge } from '@/components/SafeEdge';
-import { LiveRulesSheet } from '@/components/live/LiveRulesSheet';
+import { LiveRulesCard } from '@/components/live/LiveRulesSheet';
 import { holdCameraForLive, isLiveAvailable, LIVE_UNAVAILABLE_WORDS, setLiveNow } from '@/lib/liveAccess';
 import { ensureLivePermissions, LIVE_PERMISSION_WORDS, openPhoneSettings, type LivePermission } from '@/lib/livePermissions';
 import { fetchLiveState, type LiveState, type LiveWhyNot } from '@/lib/lives';
@@ -36,12 +36,16 @@ export function goLiveLines(maxMinutes: number): string[] {
 
 // The "Go live" sheet over the camera (the 🔴 bubble, then the shutter). The camera keeps running behind it.
 // It asks the server whether you can go live; when you can, Go live checks the camera and microphone, checks
-// this phone can do lives, then opens the live screen.
+// this phone can do lives, then opens the live screen. Each time it opens it starts fresh (and asks again).
 export function GoLiveSheet({ visible, facing, onClose }: {
   visible: boolean;
   facing: 'front' | 'back';
   onClose: () => void;
 }) {
+  return visible ? <OpenSheet facing={facing} onClose={onClose} /> : null;
+}
+
+function OpenSheet({ facing, onClose }: { facing: 'front' | 'back'; onClose: () => void }) {
   const [state, setState] = useState<LiveState | null>(null);
   const [failed, setFailed] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -50,28 +54,32 @@ export function GoLiveSheet({ visible, facing, onClose }: {
   const [busy, setBusy] = useState(false);
   const asking = useRef(0);
 
-  const load = useCallback(() => {
-    const ask = ++asking.current;
-    setFailed(false);
-    setState(null);
-    fetchLiveState()
-      .then((next) => {
-        if (ask !== asking.current) return;
+  // Asks the server whether you can go live (the newest answer wins).
+  const ask = useCallback(() => {
+    const n = ++asking.current;
+    fetchLiveState().then(
+      (next) => {
+        if (n !== asking.current) return;
         setState(next);
         // The rules are the next step: open them straight away.
         if (next.why_not === 'rules') setRulesOpen(true);
-      })
-      .catch(() => {
-        if (ask === asking.current) setFailed(true);
-      });
+      },
+      () => {
+        if (n === asking.current) setFailed(true);
+      },
+    );
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
-    setPermission(null);
-    setBroken(false);
-    load();
-  }, [visible, load]);
+    ask();
+  }, [ask]);
+
+  // Try again (or after agreeing to the Live rules): ask once more.
+  function load() {
+    setFailed(false);
+    setState(null);
+    ask();
+  }
 
   async function goLive() {
     if (busy) return;
@@ -157,28 +165,32 @@ export function GoLiveSheet({ visible, facing, onClose }: {
     );
   }
 
+  // One pop-up sheet for everything (the Live rules show inside it): a phone can't open a second pop-up sheet
+  // while one is open or closing.
   return (
-    <>
-      <Modal visible={visible && !rulesOpen} transparent animationType="slide" onRequestClose={onClose}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close">
-          <SafeEdge edge="bottom" style={styles.sheet}>
+    <Modal visible transparent animationType="slide" onRequestClose={rulesOpen ? () => setRulesOpen(false) : onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close">
+        <SafeEdge edge="bottom" style={[styles.sheet, rulesOpen && styles.tall]}>
+          {rulesOpen ? (
+            <LiveRulesCard
+              onAccepted={() => {
+                setRulesOpen(false);
+                load();
+              }}
+              onClose={() => setRulesOpen(false)}
+              // A link opens a page: this whole sheet closes, or it would cover the page.
+              onOpenPage={onClose}
+            />
+          ) : (
             <Pressable style={styles.inner}>
               <Text style={styles.title}>Go live 🔴</Text>
               {body}
               <Button title="Not now" variant="plain" onPress={onClose} />
             </Pressable>
-          </SafeEdge>
-        </Pressable>
-      </Modal>
-      <LiveRulesSheet
-        visible={visible && rulesOpen}
-        onAccepted={() => {
-          setRulesOpen(false);
-          load();
-        }}
-        onClose={() => setRulesOpen(false)}
-      />
-    </>
+          )}
+        </SafeEdge>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -192,6 +204,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+  },
+  tall: {
+    maxHeight: '90%',
   },
   inner: {
     padding: space.lg,

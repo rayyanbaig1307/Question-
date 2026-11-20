@@ -148,6 +148,12 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const liveBubble = useLiveBubble(active && isHome);
   const liveOn = isHome && homeMode === 'live' && liveBubble;
   const [goLiveOpen, setGoLiveOpen] = useState(false);
+  // The 🔴 bubble went away (lives switched off, or not for you right now): back to the plain camera.
+  const [bubbleBefore, setBubbleBefore] = useState(liveBubble);
+  if (bubbleBefore !== liveBubble) {
+    setBubbleBefore(liveBubble);
+    if (!liveBubble && homeMode === 'live') setHomeMode('photo');
+  }
   // While a live is using the camera, this camera shows nothing at all (two cameras at once fails).
   const cameraHeld = useCameraHeldByLive();
   // 🕵️ Guess Who in this group chat: photos only (no videos), and it goes to the group with no name on it.
@@ -239,10 +245,6 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // A stretchy filter is on and it just switched itself off (it broke on this phone): back to the plain camera.
   useEffect(() => subscribeFramesBroken(() => setHomeMode((now) => (isWarpLook(now) ? 'photo' : now))), []);
 
-  // The 🔴 bubble went away (lives switched off, or not for you right now): back to the plain camera.
-  useEffect(() => {
-    if (!liveBubble) setHomeMode((now) => (now === 'live' ? 'photo' : now));
-  }, [liveBubble]);
 
   // A live took the camera: once this screen's camera views have gone (this runs after they're removed), say so,
   // so the live can open the camera (lib/liveAccess.ts waits a moment more for the camera to really stop).

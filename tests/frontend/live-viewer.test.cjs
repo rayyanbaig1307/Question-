@@ -94,6 +94,24 @@ test('joining: "live now" is set first, then the status, the ticket, and a hidde
   assert.equal(setup.access.liveNowRole(), null);
 });
 
+test('the host\'s camera switched off (their app went to the background): "⏸ Sam will be right back"', async () => {
+  const setup = renderViewer();
+  const live = await open(setup);
+  try {
+    const sam = { videoTrackPublications: new Map([['camera', {}]]), isCameraEnabled: true };
+    setup.handles[0].room = () => ({ remoteParticipants: new Map([[HOST, sam]]) });
+    const check = async () => { for (const run of setup.screen.calls.intervals.values()) await act(async () => { run(); }); };
+    await check();
+    assert.equal(textOf(live.tree.toJSON()).includes('will be right back'), false);
+    sam.isCameraEnabled = false;
+    await check();
+    assert.ok(textOf(live.tree.toJSON()).includes('⏸ Sam will be right back'));
+    sam.isCameraEnabled = true;
+    await check();
+    assert.equal(textOf(live.tree.toJSON()).includes('will be right back'), false);
+  } finally { await unmount(live.tree); }
+});
+
 test('the end card: never says why, offers "Say something nice", Report and Block', async () => {
   const setup = renderViewer({ lives: { liveStatus: async () => status({ status: 'ended', role: null, ended_reason: null }) } });
   const live = await open(setup);
@@ -101,7 +119,8 @@ test('the end card: never says why, offers "Say something nice", Report and Bloc
     assert.equal(live.card().props.title, "Sam's live has ended");
     assert.deepEqual(live.buttons(), ['Say something nice 💬', 'Report @sam', 'Block @sam', 'Done']);
     await act(() => live.card().findAllByType('Button')[0].props.onPress());
-    assert.deepEqual(setup.calls.routes.at(-1), ['push', `/chat/${HOST}`]);
+    // The chat takes the live screen's place (the live is over: nothing counts as "live now" any more).
+    assert.deepEqual(setup.calls.routes.at(-1), ['replace', `/chat/${HOST}`]);
     await act(() => live.card().findAllByType('Button')[1].props.onPress());
     assert.equal(setup.calls.reports.at(-1).contentType, 'live');
     assert.equal(setup.calls.reports.at(-1).contentId, LIVE);
@@ -267,6 +286,31 @@ test('coming on stage: permissions → yes → off the viewer connection → cam
   } finally { await unmount(live.tree); }
 });
 
+test('closing the live screen while on stage ends the stage, stops the camera and gives it back', async () => {
+  const setup = renderViewer({
+    lives: {
+      getLiveToken: async () => {
+        const role = setup.access.liveNowRole() === 'cohost' ? 'cohost' : 'viewer';
+        return { ok: true, url: 'wss://x', token: `${role}-token`, room: 'r', role, identity: 'alice', expires_at: '' };
+      },
+    },
+  });
+  const live = await open(setup);
+  await act(() => setup.handlers.onInvite({ id: 'inv-4', live_id: LIVE, guest_id: 'alice', expires_at: new Date(Date.now() + 60_000).toISOString() }));
+  await act(async () => { await live.find('InviteSheet')[0].props.onJoin(); });
+  await settle(act);
+  assert.ok(setup.log.includes('connect:cohost-token'));
+  assert.equal(setup.access.liveNowRole(), 'cohost');
+  setup.log.length = 0;
+  // Leaving the screen (it loses focus first, then closes).
+  await unmount(live.tree);
+  await settle(act);
+  assert.ok(setup.log.includes('endCohost'), 'the stage is ended for the host too');
+  assert.ok(setup.log.indexOf('unpublish') < setup.log.indexOf('endCohost'), 'the camera stops first');
+  assert.equal(setup.access.isCameraHeldByLive(), false);
+  assert.equal(setup.access.liveNowRole(), null);
+});
+
 test('the Live rules come first if you never agreed (the ask stays open), then the answer is sent again', async () => {
   let rulesAgreed = false;
   const setup = renderViewer({
@@ -287,8 +331,10 @@ test('the Live rules come first if you never agreed (the ask stays open), then t
     await act(() => setup.handlers.onInvite({ id: 'inv-3', live_id: LIVE, guest_id: 'alice', expires_at: new Date(Date.now() + 60_000).toISOString() }));
     await act(async () => { await live.find('InviteSheet')[0].props.onJoin(); });
     await settle(act);
-    const rules = () => live.find('LiveRulesSheet')[0];
-    assert.equal(rules().props.visible, true);
+    // The rules show inside the same sheet (a phone can't open a second pop-up sheet while one is open).
+    const rules = () => live.find('InviteSheet')[0].props.rules;
+    assert.ok(rules());
+    assert.equal(live.find('InviteSheet')[0].props.visible, true);
     assert.equal(setup.access.calls.holds, 0);
     rulesAgreed = true;
     await act(async () => { rules().props.onAccepted(); });
