@@ -81,11 +81,90 @@ export function timeZoneOffsetMinutes(): number {
   return -new Date().getTimezoneOffset();
 }
 
-// The days you've posted a drop for. Friends' drops from those days are unlocked for you ("peek to see").
-export async function fetchMyDropDays(me: string): Promise<Set<string>> {
-  const { data, error } = await supabase.from('posts').select('drop_day').eq('user_id', me).not('drop_day', 'is', null);
+// The moment the drop AFTER `day` goes off, for someone whose time zone is `offsetMinutes` ahead of UTC
+// (milliseconds, like Date.now()). Same formula as private.next_drop_at in
+// supabase/migrations/20261228000000_drop_unlock.sql – keep them in sync.
+export function nextDropAt(day: string, offsetMinutes: number | null): number {
+  const [y, m, d] = day.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  return Date.UTC(y, m - 1, d + 1, 0, dropMinute(nextDay) - (offsetMinutes ?? 0));
+}
+
+// After the next drop goes off, drops from the day of your drop and before stay open this much longer (an hour).
+// The time a drop goes off is worked out in the time zone you posted your drop from. When the clocks go back in
+// autumn (or you fly west) the new drop goes off later than that, and without this your older drops would lock
+// before you could even post the new one. Brand-new drops from the next day still lock right on time – that's
+// the "give a peek to get a peek" moment. Same as private.drop_open_for in
+// supabase/migrations/20261228000000_drop_unlock.sql – keep them in sync.
+export const OLDER_DROPS_EXTRA_MS = 60 * 60 * 1000;
+
+// Your own drops, for "give a peek to get a peek":
+// - `days`: the days you posted a drop (drops from those days are always open for you);
+// - `windows`: for each drop you posted, its day and when the next drop goes off after it (in the time zone you
+//   posted from). Until then it opens every drop; drops from its day and before stay open an hour longer.
+//   Drops whose window ended long ago are left out.
+export type DropWindow = { day: string; until: number };
+export type MyDrops = { days: Set<string>; windows: DropWindow[] };
+
+export const NO_DROPS: MyDrops = { days: new Set(), windows: [] };
+
+export async function fetchMyDrops(me: string): Promise<MyDrops> {
+  const { data, error } = await supabase
+    .from('posts')
+    .select('drop_day, drop_offset_minutes')
+    .eq('user_id', me)
+    .not('drop_day', 'is', null);
   if (error) throw error;
-  return new Set((data ?? []).map((row) => row.drop_day as string));
+  const days = new Set<string>();
+  const windows: DropWindow[] = [];
+  const now = Date.now();
+  for (const row of data ?? []) {
+    const day = row.drop_day as string;
+    days.add(day);
+    const until = nextDropAt(day, row.drop_offset_minutes as number | null);
+    if (until + OLDER_DROPS_EXTRA_MS > now) windows.push({ day, until });
+  }
+  return { days, windows };
+}
+
+// Is your latest drop still the current one (so every drop is open for you)?
+export function dropKeyOpen(mine: MyDrops | null, now = Date.now()): boolean {
+  return !!mine && mine.windows.some((window) => now < window.until);
+}
+
+// Is a drop from `day` open for you? (Only whether your own drops unlock it – who may see it at all is decided
+// by the database first.) Same rule as private.drop_open_for in the database.
+export function dropDayOpen(mine: MyDrops | null, day: string, now = Date.now()): boolean {
+  if (!mine) return false;
+  if (mine.days.has(day)) return true;
+  return mine.windows.some(
+    (window) => now < window.until || (day <= window.day && now < window.until + OLDER_DROPS_EXTRA_MS),
+  );
+}
+
+// The next moment a drop locks again (null = nothing left that can change).
+export function nextDropLockAt(mine: MyDrops | null, now = Date.now()): number | null {
+  let next: number | null = null;
+  for (const window of mine?.windows ?? []) {
+    for (const at of [window.until, window.until + OLDER_DROPS_EXTRA_MS]) {
+      if (at > now && (next === null || at < next)) next = at;
+    }
+  }
+  return next;
+}
+
+// dropKeyOpen, and the screen is drawn again each time a drop locks (when the next drop goes off, new drops lock
+// until you post it; an hour later, older ones too).
+export function useDropKeyOpen(mine: MyDrops | null): boolean {
+  const [, redraw] = useState(0);
+  const next = nextDropLockAt(mine);
+  useEffect(() => {
+    if (next === null) return;
+    // A little extra, so the clock has surely passed the moment when it fires.
+    const timer = setTimeout(() => redraw((n) => n + 1), Math.max(0, next - Date.now()) + 50);
+    return () => clearTimeout(timer);
+  }, [next]);
+  return dropKeyOpen(mine);
 }
 
 // Have I posted today's drop? Checked whenever `enabled` turns on. `null` = still checking.
@@ -106,27 +185,24 @@ export function useDropDone(me: string, enabled: boolean): boolean | null {
   return done?.day === localDay() ? done.done : null;
 }
 
-// Why a friend's drop photo is still blurred for you (the database enforces this too):
-// - 'drop': you haven't posted your own drop that day yet ("peek to see");
+// Why someone else's drop photo is still blurred for you (the database enforces this too):
+// - 'drop': you haven't posted a drop since the latest one went off ("give a peek to get a peek"). Posting it
+//   opens every drop – friends' and everyone's, old ones too – until the next day's drop goes off (drops from
+//   your drop's day and before: an hour longer). Drops from a day you posted your own drop always stay open.
 // - 'group': you're in a Group Peek together and someone in it hasn't posted that day's drop yet.
+// `mine` = null while your own drops are still loading (until then, drops count as locked).
 export type DropLock = 'drop' | 'group' | null;
 
-export function dropLock(
-  post: { drop_day: string | null; user_id: string; group_hold?: boolean | null },
-  me: string,
-  myDropDays: Set<string> | null,
-): DropLock {
+type DropPost = { drop_day: string | null; user_id: string; group_hold?: boolean | null };
+
+export function dropLock(post: DropPost, me: string, mine: MyDrops | null, now = Date.now()): DropLock {
   if (post.drop_day === null || post.user_id === me) return null;
-  if (!(myDropDays?.has(post.drop_day) ?? false)) return 'drop';
+  if (!dropDayOpen(mine, post.drop_day, now)) return 'drop';
   return post.group_hold ? 'group' : null;
 }
 
-export function isDropLocked(
-  post: { drop_day: string | null; user_id: string; group_hold?: boolean | null },
-  me: string,
-  myDropDays: Set<string> | null,
-): boolean {
-  return dropLock(post, me, myDropDays) !== null;
+export function isDropLocked(post: DropPost, me: string, mine: MyDrops | null, now = Date.now()): boolean {
+  return dropLock(post, me, mine, now) !== null;
 }
 
 type PostFiles = {
@@ -144,8 +220,8 @@ type PostFiles = {
 // - locked drop → only the tiny blurry preview;
 // - photo → the photo;
 // - video → its still picture, the video, and its text/sticker layer.
-export function postMedia(post: PostFiles, me: string, myDropDays: Set<string> | null) {
-  const lock = dropLock(post, me, myDropDays);
+export function postMedia(post: PostFiles, me: string, mine: MyDrops | null, now = Date.now()) {
+  const lock = dropLock(post, me, mine, now);
   const locked = lock !== null;
   if (locked) return { locked, lock, still: post.blur_path, video: null, overlay: null };
   const isVideo = post.media_type === 'video';
@@ -159,22 +235,23 @@ export function postMedia(post: PostFiles, me: string, myDropDays: Set<string> |
 }
 
 // The picture to show for a post in grids and previews (blurry preview / photo / video's still picture).
-export function visiblePath(post: PostFiles, me: string, myDropDays: Set<string> | null): string | null {
-  return postMedia(post, me, myDropDays).still;
+export function visiblePath(post: PostFiles, me: string, mine: MyDrops | null, now = Date.now()): string | null {
+  return postMedia(post, me, mine, now).still;
 }
 
-// The days you've posted a drop for, loaded again whenever `refreshKey` changes. `null` = still loading
-// (until then, friends' drops count as locked).
-export function useMyDropDays(me: string, refreshKey: unknown): Set<string> | null {
-  const [days, setDays] = useState<Set<string> | null>(null);
+// Your own drops, loaded again whenever `refreshKey` changes. `null` = still loading (until then, other
+// people's drops count as locked). Redraws the screen when the next drop goes off.
+export function useMyDrops(me: string, refreshKey: unknown): MyDrops | null {
+  const [mine, setMine] = useState<MyDrops | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetchMyDropDays(me)
-      .then((loaded) => !cancelled && setDays(loaded))
-      .catch(() => !cancelled && setDays(new Set()));
+    fetchMyDrops(me)
+      .then((loaded) => !cancelled && setMine(loaded))
+      .catch(() => !cancelled && setMine(NO_DROPS));
     return () => {
       cancelled = true;
     };
   }, [me, refreshKey]);
-  return days;
+  useDropKeyOpen(mine);
+  return mine;
 }

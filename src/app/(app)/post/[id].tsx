@@ -25,7 +25,7 @@ import { friendlyError } from '@/lib/errors';
 import { fetchPostStats, setLiked, type PostStats } from '@/lib/feed';
 import { fetchRelation } from '@/lib/friends';
 import { fetchPostScreenshots, useContentScreenshots } from '@/lib/insights';
-import { postMedia, useMyDropDays } from '@/lib/drop';
+import { postMedia, useMyDrops } from '@/lib/drop';
 import { useMediaUrls } from '@/lib/media';
 import { noteDropSeen } from '@/lib/peeks';
 import { deletePost, fetchPost } from '@/lib/posts';
@@ -42,9 +42,9 @@ export default function PostViewer() {
   const { report } = useSafetyActions();
   const [post, setPost] = useState<PostWithAuthor | null | undefined>(undefined);
   const [stats, setStats] = useState<PostStats | null>(null);
-  // A friend's drop stays blurry until you've posted your own drop that day ("peek to see").
-  const myDropDays = useMyDropDays(userId, post);
-  const files = post ? postMedia(post, userId, myDropDays) : null;
+  // Someone else's drop stays blurry until you've posted your drop ("give a peek to get a peek").
+  const myDrops = useMyDrops(userId, post);
+  const files = post ? postMedia(post, userId, myDrops) : null;
   const locked = files?.locked ?? false;
   const urls = useMediaUrls([files?.still, files?.video, files?.overlay].filter((path): path is string => !!path));
   const uri = files?.still ? urls[files.still] : undefined;
@@ -56,8 +56,8 @@ export default function PostViewer() {
   // Who Peeked: opening a friend's drop full screen counts as seeing it (if it's unlocked for you).
   const friendsDrop = !!post && post.drop_day !== null && post.user_id !== userId;
   useEffect(() => {
-    if (friendsDrop && myDropDays !== null) noteDropSeen(id, !locked);
-  }, [friendsDrop, myDropDays, locked, id]);
+    if (friendsDrop && myDrops !== null) noteDropSeen(id, !locked);
+  }, [friendsDrop, myDrops, locked, id]);
 
   // Loaded again when you come back to it (e.g. after editing the caption).
   useFocusEffect(

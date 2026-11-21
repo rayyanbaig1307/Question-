@@ -78,7 +78,7 @@ function loadHome({ available, lives = [] }) {
   const screen = loadScreen('src/components/home/HomePage.tsx', {
     '@/components/FeedCard': { FeedCard: host('FeedCard') },
     '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions() {} }) },
-    '@/lib/drop': { fetchMyDropDays: async () => new Set(), localDay: () => '2026-11-20', postMedia: () => ({ still: null, video: null, overlay: null, locked: false }) },
+    '@/lib/drop': { fetchMyDrops: async () => ({ days: new Set(), windows: [] }), NO_DROPS: { days: new Set(), windows: [] }, useDropKeyOpen: () => false, postMedia: () => ({ still: null, video: null, overlay: null, locked: false }) },
     '@/lib/feed': { fetchDiscover: async () => ({ posts: [], next: null }), setLiked: async () => {} },
     '@/lib/guess': { countUnguessed: async () => 0 },
     '@/lib/invite': { inviteFriends() {}, prefetchInviteCode() {} },

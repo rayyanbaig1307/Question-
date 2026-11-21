@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FeedCard } from '@/components/FeedCard';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
-import { fetchMyDropDays, localDay, postMedia } from '@/lib/drop';
+import { fetchMyDrops, NO_DROPS, postMedia, useDropKeyOpen, type MyDrops } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { countUnguessed } from '@/lib/guess';
@@ -41,8 +41,10 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   const [next, setNext] = useState<DiscoverCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  // The days you've posted a drop for – friends' drops from those days are unlocked ("peek to see").
-  const [myDropDays, setMyDropDays] = useState<Set<string> | null>(null);
+  // Your own drops: posting one opens every drop until the next day's drop goes off ("give a peek to get a peek").
+  const [myDrops, setMyDrops] = useState<MyDrops | null>(null);
+  // Is your latest drop still the current one? (Redraws Home whenever drops lock again.)
+  const dropKey = useDropKeyOpen(myDrops);
   // How many Guess Who posts you can still guess (a number on the Guess Who circle).
   const [toGuess, setToGuess] = useState(0);
   // Friends who are live right now 🔴 (only on downloads that can open a live).
@@ -52,14 +54,14 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
     (loaded: {
       rings: Rings;
       page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
-      days: Set<string>;
+      drops: MyDrops;
       toGuess: number;
       lives: FriendLive[];
     }) => {
       setRings(loaded.rings);
       setPosts(loaded.page.posts);
       setNext(loaded.page.next);
-      setMyDropDays(loaded.days);
+      setMyDrops(loaded.drops);
       setToGuess(loaded.toGuess);
       setLives(loaded.lives);
     },
@@ -73,7 +75,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   const loadAll = useCallback(async () => {
     const ticket = storyRingsTicket();
-    const [rings, page, days, toGuess, lives] = await Promise.all([
+    const [rings, page, drops, toGuess, lives] = await Promise.all([
       fetchStoryRings(userId)
         .then((loaded) => {
           // The same list gives the rings on profile pictures everywhere else.
@@ -85,11 +87,11 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
           return { mine: null, friends: [] } as Rings;
         }),
       fetchDiscover(userId),
-      fetchMyDropDays(userId).catch(() => new Set<string>()),
+      fetchMyDrops(userId).catch(() => NO_DROPS),
       countUnguessed().catch(() => 0),
       liveMaybeAvailable() ? fetchFriendsLiveNow().catch(() => [] as FriendLive[]) : Promise.resolve([] as FriendLive[]),
     ]);
-    return { rings, page, days, toGuess, lives };
+    return { rings, page, drops, toGuess, lives };
   }, [userId]);
 
   // Friends who are live: checked again every 30 seconds while Home is on screen, and when a "… is live"
@@ -128,17 +130,16 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
     };
   }, [visible, loadAll, show]);
 
-  // You just posted today's drop: celebrate – your friends' drops are unlocking.
-  const hadToday = useRef<boolean | null>(null);
+  // You just posted your drop: celebrate – every drop is unlocking (friends' and everyone's, old ones too).
+  const hadKey = useRef<boolean | null>(null);
   useEffect(() => {
-    if (!myDropDays) return;
-    const hasToday = myDropDays.has(localDay());
-    if (hadToday.current === false && hasToday) {
+    if (!myDrops) return;
+    if (hadKey.current === false && dropKey) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast("🔓 Today's drops unlocked!");
+      showToast('🔓 All drops unlocked!');
     }
-    hadToday.current = hasToday;
-  }, [myDropDays, showToast]);
+    hadKey.current = dropKey;
+  }, [myDrops, dropKey, showToast]);
 
   async function refresh() {
     setRefreshing(true);
@@ -228,7 +229,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   }
 
   // Locked drops only get their tiny blurry preview; videos also need the video and its text/sticker layer.
-  const media = (post: DiscoverPost) => postMedia(post, userId, myDropDays);
+  const media = (post: DiscoverPost) => postMedia(post, userId, myDrops);
   const urls = useMediaUrls(
     (posts ?? [])
       .flatMap((post) => {
@@ -253,10 +254,10 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   useEffect(() => {
     for (const post of posts ?? []) {
       if (!visible || post.drop_day === null || post.user_id === userId || !onScreen.includes(post.id)) continue;
-      const { locked } = postMedia(post, userId, myDropDays);
+      const { locked } = postMedia(post, userId, myDrops);
       noteDropSeen(post.id, !locked && (!scratchToReveal || post.media_type === 'video'));
     }
-  }, [visible, onScreen, posts, myDropDays, scratchToReveal, userId]);
+  }, [visible, onScreen, posts, myDrops, dropKey, scratchToReveal, userId]);
 
   const loading = posts === null || rings === null;
   // Nothing at all yet (no friends' stories, no posts): one friendly message instead of two empty sections.

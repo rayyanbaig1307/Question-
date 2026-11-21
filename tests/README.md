@@ -97,6 +97,14 @@ Database (PGlite, part of `npm test`):
   "📸 Posted proof – legit or cap?"; the doer gets at most one "cap" and one "legit" push per proof, none when
   the group is muted, notifications are off or they left; a deleted account's votes are removed and the totals
   counted again; files, reports, the clean-up and the message rules still work for proofs.
+- `drop-unlock.test.mjs` (`20261228000000_drop_unlock.sql`, the owner, 21 Nov): with no drop of your own every
+  drop is only a blurry preview; posting your drop opens every drop you may see (friends' and public accounts',
+  old ones too) until the next day's drop goes off (older days: an hour more, so the clocks going back can't lock
+  them early; the new day's drops lock on time), then only drops from days you posted stay open; private
+  accounts, close friends and blocks still win; Group Peek still holds today's drops but an old day's hold ends
+  once nobody can post that day's drop; Who Peeked and report evidence follow the same rule; the three patched
+  functions keep their public chat lines, the new helpers are private, a second run changes nothing, and a
+  changed function stops the migration instead of being skipped.
 
 API and library (Vitest, part of `npm test`):
 
@@ -115,6 +123,11 @@ API and library (Vitest, part of `npm test`):
   and thousands of seeded random strings. It also checks that the sign-up name check (`public_name_allowed`)
   treats the username as a name and the display name as content, like the app. Run it after changing either
   side.
+- `tests/unit/drop-unlock-parity.test.mjs`: the app's "when does the next drop go off" (`nextDropAt`) and the
+  database's (`private.next_drop_at`) agree to the millisecond for 1,200 days and time zones from -12:00 to
+  +14:00 (PGlite), and on the whole open/locked rule (`dropDayOpen` vs `private.drop_open_for`) just before and
+  after that moment and the extra hour for older drops. `tests/unit/library-security.test.mjs` checks the app's
+  lock rule around those moments, including the clocks going back in New York.
 - `tests/unit/username-search.test.mjs`: friend search sends `_` as a real underscore (not "any one letter"),
   drops `%`, `*` and `\` that the person typed, and `likePrefix` escapes `_`, `%` and `\`.
 - `tests/unit/chat-delete.test.mjs`: a deleted peek or voice note counts as deleted even when its file
@@ -169,6 +182,18 @@ API and library (Vitest, part of `npm test`):
 
 Frontend (rendered screens, part of `npm test`):
 
+- `zoomable-image.test.cjs`: pinch-zoom on photos (posts, public chat, group chat). Fingers lifting a moment
+  apart at the end of a pinch (looks like a double tap) no longer zoom out; a drag or pinch ending while the photo
+  glides never leaves it at normal size but pushed off screen (the owner's screenshot, 21 Nov); a real double tap
+  still zooms in on the tapped spot and back out. A photo with black bars (3:4 and 4:3 in a phone-shaped frame)
+  can only be dragged to its own edges, never pulling the black bar onto the screen, and stays centred while the
+  zoomed photo is still smaller than the screen; peeks ('cover') and photos not loaded yet use the frame's edges.
+  The animations are stand-ins that keep their old value until the test finishes them, so gestures ending
+  mid-animation are tested too.
+- `drop-unlock.test.cjs`: Home and profile grids with the app's real drop rules. After posting your drop a
+  friend's older drop and a public account's drop open (full photo, "🔓 All drops unlocked!"); when the next drop
+  goes off, the new day's drops lock again on screen by themselves and older ones an hour later; Group Peek drops
+  still wait.
 - `home-pager.test.cjs`: phones still use the real native pager with the same settings; the web pager starts
   on the page asked for, reports swipes like the native one, and a swipe past Chat does not make the browser
   go back.

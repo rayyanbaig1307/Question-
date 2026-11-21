@@ -57,8 +57,8 @@ export function FeedCard({
   overlayUrl?: string;
   // On screen right now (videos only play then).
   active?: boolean;
-  // Peek to see: a friend's drop you can't see yet – until you've posted your own drop that day ('drop'),
-  // or until everyone in a Group Peek you share has posted ('group').
+  // Peek to see: someone's drop you can't see yet – until you've posted your drop ('drop'; it opens every
+  // drop until the next day's drop goes off), or until everyone in a Group Peek you share has posted ('group').
   lock?: DropLock;
   // Hold to reveal: the photo starts blurred and you scratch it clear.
   scratch?: boolean;

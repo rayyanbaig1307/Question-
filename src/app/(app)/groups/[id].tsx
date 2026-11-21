@@ -22,7 +22,7 @@ import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
-import { postMedia, useDropStatus, useMyDropDays } from '@/lib/drop';
+import { postMedia, useDropStatus, useMyDrops } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import {
   counting,
@@ -56,7 +56,7 @@ export default function GroupScreen() {
   const [drops, setDrops] = useState<Post[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [nudged, setNudged] = useState<Set<string>>(new Set());
-  const myDropDays = useMyDropDays(userId, group);
+  const myDrops = useMyDrops(userId, group);
 
   const load = useCallback(async () => {
     const loaded = await fetchGroup(id);
@@ -105,7 +105,7 @@ export default function GroupScreen() {
     if (complete) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [complete]);
 
-  const files = (post: Post) => postMedia(post, userId, myDropDays);
+  const files = (post: Post) => postMedia(post, userId, myDrops);
   const urls = useMediaUrls(drops.map((post) => files(post).still).filter((path): path is string => !!path));
 
   async function sendNudge(member: GroupMember) {

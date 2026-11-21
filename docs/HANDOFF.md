@@ -37,6 +37,38 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Two iPhone bugs (owner, 20–21 Nov): photo zoom + "only one drop opens" – built, not shipped yet
+
+- **Zoom (JS only, OTA):** pinching a friend's post and letting go left the photo at normal size but pushed half
+  off the screen (black on the left and top). Two fingers lifting a moment apart counted as a double tap (zoom out),
+  and the pinch ending a moment later aimed the position at the old zoom. `src/components/ZoomableImage.tsx` now
+  ignores double taps during/just after a pinch (`maxDistance: 24`, 700 ms – the same fix as the camera, `320118a`)
+  and always aims zoom and position at the same resting place (`goalScale/goalX/goalY`). The drag limits follow
+  the photo's own edges (its real size from expo-image `onLoad`), not the frame's, so a photo with black bars
+  (posts, Public chat and group chat show the whole photo) can't be dragged until a black bar covers part of the
+  screen. Covers posts, public chat and group chat. Test: `tests/frontend/zoomable-image.test.cjs`.
+- **Drops (database + OTA):** a friend's drop only opened if you had posted your own drop that SAME day, so older
+  drops said "Post your Peekaboo drop to see Prab's" forever. The owner's rule now: **posting your drop opens every
+  drop you may see** (friends' and public accounts', old ones too) **until the next day's drop goes off** (worked
+  out in the time zone you posted from); then the new day's drops show the 🙈 until you post the new one. Drops
+  from your drop's day and before get **one hour more** (`OLDER_DROPS_EXTRA_MS`), so the clocks going back in
+  autumn can't lock them before the new drop is even live. Known leftover (accepted): on that night a friend's
+  NEW-day drop from a time zone ahead can lock up to an hour before your own drop goes off, and after flying west
+  across several time zones older drops can lock for a few hours until your new drop goes off. Drops from a day you
+  posted stay open (what old app versions expect).
+  Group Peek holds now end once nobody can post that day's drop any more (12:00 UTC the next day) instead of never.
+  - Migration `20261228000000_drop_unlock.sql` (new helpers `private.next_drop_at`, `private.drop_open_for`,
+    `private.drop_day_over_at`, all private; `private.group_holds_drop` rewritten; `can_read_media`,
+    `report_evidence_paths` and `mark_drop_seen` patched in place like the public chat migration, so their
+    `public_photo` lines stay). App: `fetchMyDrops`/`useMyDrops`/`nextDropAt`/`dropDayOpen`/`useDropKeyOpen` in
+    `src/lib/drop.ts`.
+  - **Ship order: the owner pastes `20261228000000_drop_unlock.sql` FIRST** (it doesn't need the livestreams
+    migration), check `select count(*) from pg_proc where prosrc like '%drop_open_for%'` is 3. Only then the OTA
+    (`testing` first). An app update before the migration shows older drops as open but their photos stay grey.
+  - Tests: `tests/database/drop-unlock.test.mjs`, `tests/frontend/drop-unlock.test.cjs`,
+    `tests/unit/drop-unlock-parity.test.mjs` (app and database agree on the moment to the millisecond, and on the
+    whole open/locked rule around it, the extra hour included).
+
 ## Livestreams (owner, 19–20 Nov) – in progress
 - v1 (version 1.2 native build, LiveKit): friends-only lives, comments + hearts, host brings 1 friend on, push to
   friends. Design: session scratchpad `live/DESIGN.md` (summarised in the migration header). LiveKit URL

@@ -290,7 +290,7 @@ export default function Share() {
             <Option
               emoji="👀"
               title="Today's drop"
-              subtitle="Unlocks your friends' drops"
+              subtitle="Unlocks everyone's drops"
               selected={toDrop}
               onPress={() => toggle(setToDrop, !toDrop)}
             />

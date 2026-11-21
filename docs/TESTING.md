@@ -351,10 +351,15 @@ Two friends, two phones. Your friend posts today's drop first.
 
 1. Open **Discover**: their drop shows as a **blurry picture** with **"Give a peek to get a peek 👀"** and an
    **Open camera** button. Same on their profile grid (🙈) and when you open it full screen.
-2. Tap **Open camera** → take your drop → Send. You land back on Discover: **"🔓 Today's drops unlocked!"**, a happy
+2. Tap **Open camera** → take your drop → Send. You land back on Discover: **"🔓 All drops unlocked!"**, a happy
    buzz, and their photo pops into view.
-3. This only applies to drop posts – normal posts, stories and chat are never blurred.
-4. Not friends with someone (public account)? You still only see the blurry preview of their drop until you post yours.
+3. **Every** drop opens, not just today's: scroll down to your friends' **older** drops (from days you skipped)
+   and open their profiles – no 🙈 left anywhere. Public accounts' drops further down Home open too.
+4. They stay open until the **next day's drop goes off**. Then the new day's drops show the 🙈 straight away
+   until you post the new drop (late is fine). Older drops follow **an hour later** (so the clocks changing can't
+   lock them before you can post). Drops from days you posted stay open for good.
+5. This only applies to drop posts – normal posts, stories and chat are never blurred.
+6. Never posted a drop at all? You only see the blurry previews.
 
 ## Step 18 – Hold to reveal (scratch) 👆
 
@@ -436,6 +441,8 @@ You need 2 friends on Peekaboo (or 2 test accounts) for this.
    within 15 minutes says to give them a minute.
 6. When the last person posts → open the group: "Everyone posted! 🎉", a happy buzz, and all the drops pop
    in one by one. They're now clear in Discover too. Tap one to open it full screen.
+   If someone never posts that day's drop, the group's drops from that day open during the next day (once nobody
+   can post that day's drop any more) instead of staying hidden for good.
 7. ••• on the group page: **Edit group** (rename, add friends), **Leave group**, and – if you made it –
    **Delete group**. If you made it, hold down on a person to remove them.
 8. The Discover row shows each group as "2/3 posted 👀" or "Everyone posted 🎉".
@@ -782,6 +789,14 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
 3. While zoomed, **drag with one finger** to look around – it stops at the photo's edges.
 4. **Double-tap** a spot → zooms in on it. Double-tap again → back to normal.
 5. Not zoomed: one-finger swipes do what they did before (e.g. swipe back on iPhone). Videos don't zoom.
+6. **The "half the screen" bug (21 Nov):** on a friend's photo, pinch towards the **top-left** and let go quickly,
+   lifting your two fingers a moment apart. Do it 10 times, then again on a photo in **Public chat** and in a
+   **group chat**. Every time the photo either stays zoomed with no black gap at any edge, or springs back to
+   exactly its normal place – never shifted with black on the left and top.
+7. A photo with **black bars** above and below it (a sideways photo from the camera roll is easiest): zoom in 2×
+   and drag it hard up, down, left and right, also with your fingers on the black bar when you pinch. When you let
+   go, the black bar never comes onto the screen past the photo's edge (while the zoomed photo is still shorter
+   than the screen it just stays in the middle, up and down).
 
 ## Step 50 – Sign up with just a username 👤
 

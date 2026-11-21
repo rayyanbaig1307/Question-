@@ -5,7 +5,7 @@ import type { ReactElement } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { useMe } from '@/lib/auth';
-import { isDropLocked, useMyDropDays, visiblePath } from '@/lib/drop';
+import { isDropLocked, useMyDrops, visiblePath } from '@/lib/drop';
 import { useMediaUrls } from '@/lib/media';
 import type { Post } from '@/lib/types';
 import { colors } from '@/theme';
@@ -25,10 +25,10 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh, hideDare
   const { width } = useWindowDimensions();
   const size = (width - GAP * 2) / 3;
   const { userId } = useMe();
-  // Friends' drops stay blurry until you've posted your own drop that day ("peek to see").
-  const myDropDays = useMyDropDays(userId, posts);
+  // Other people's drops stay blurry until you've posted your drop ("give a peek to get a peek").
+  const myDrops = useMyDrops(userId, posts);
   const urls = useMediaUrls(
-    posts.map((post) => visiblePath(post, userId, myDropDays)).filter((path): path is string => !!path),
+    posts.map((post) => visiblePath(post, userId, myDrops)).filter((path): path is string => !!path),
   );
 
   return (
@@ -42,8 +42,8 @@ export function PostGrid({ posts, header, empty, refreshing, onRefresh, hideDare
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={styles.content}
       renderItem={({ item }) => {
-        const locked = isDropLocked(item, userId, myDropDays);
-        const uri = urls[visiblePath(item, userId, myDropDays) ?? ''];
+        const locked = isDropLocked(item, userId, myDrops);
+        const uri = urls[visiblePath(item, userId, myDrops) ?? ''];
         return (
           <Pressable
             accessibilityLabel="Open photo"

@@ -160,9 +160,60 @@ describe('drop privacy and clock boundaries', () => {
   const drop = loadLibrary('drop');
   it('never loads full-resolution media for locked drops', () => {
     const post = { user_id: 'A', drop_day: '2026-11-04', media_path: 'secret', media_type: 'video', poster_path: 'poster', overlay_path: 'overlay', blur_path: 'blur' };
+    const sameDay = { days: new Set(['2026-11-04']), windows: [] };
     expect(drop.postMedia(post, 'B', null)).toEqual({ locked: true, lock: 'drop', still: 'blur', video: null, overlay: null });
-    expect(drop.postMedia({ ...post, group_hold: true }, 'B', new Set(['2026-11-04'])).lock).toBe('group');
-    expect(drop.postMedia(post, 'B', new Set(['2026-11-04'])).video).toBe('secret');
+    expect(drop.postMedia(post, 'B', drop.NO_DROPS)).toEqual({ locked: true, lock: 'drop', still: 'blur', video: null, overlay: null });
+    expect(drop.postMedia({ ...post, group_hold: true }, 'B', sameDay).lock).toBe('group');
+    expect(drop.postMedia(post, 'B', sameDay).video).toBe('secret');
+  });
+  it('your latest drop opens drops from any day until the next drop goes off (older days: an hour longer), then only same-day drops stay open', () => {
+    const post = { user_id: 'A', drop_day: '2026-11-12', media_path: 'secret', media_type: 'photo', poster_path: null, overlay_path: null, blur_path: 'blur' };
+    const until = drop.nextDropAt('2026-11-20', -300);
+    const hour = drop.OLDER_DROPS_EXTRA_MS;
+    expect(hour).toBe(3_600_000);
+    const mine = { days: new Set(['2026-11-20']), windows: [{ day: '2026-11-20', until }] };
+    const locked = { locked: true, lock: 'drop', still: 'blur', video: null, overlay: null };
+    // An older drop: open until the next drop goes off, and for an hour after.
+    expect(drop.postMedia(post, 'B', mine, until - 1)).toMatchObject({ locked: false, still: 'secret' });
+    expect(drop.postMedia(post, 'B', mine, until + hour - 1)).toMatchObject({ locked: false, still: 'secret' });
+    expect(drop.postMedia(post, 'B', mine, until + hour)).toEqual(locked);
+    // A drop from the NEW day (a friend in a time zone ahead of yours): locks right when the next drop goes off.
+    const newer = { ...post, drop_day: '2026-11-21' };
+    expect(drop.postMedia(newer, 'B', mine, until - 1).locked).toBe(false);
+    expect(drop.postMedia(newer, 'B', mine, until)).toEqual(locked);
+    // A day you posted: open for good.
+    expect(drop.postMedia({ ...post, drop_day: '2026-11-20' }, 'B', mine, until + 86_400_000).locked).toBe(false);
+    expect(drop.postMedia({ ...post, group_hold: true }, 'B', mine, until - 1).lock).toBe('group');
+    expect(drop.dropKeyOpen(mine, until - 1)).toBe(true);
+    expect(drop.dropKeyOpen(mine, until)).toBe(false);
+    expect(drop.dropKeyOpen(null, 0)).toBe(false);
+    // The screens redraw at each moment a drop locks: when the next drop goes off, then an hour later, then never.
+    expect(drop.nextDropLockAt(mine, until - 5)).toBe(until);
+    expect(drop.nextDropLockAt(mine, until)).toBe(until + hour);
+    expect(drop.nextDropLockAt(mine, until + hour)).toBe(null);
+    expect(drop.nextDropLockAt(null, 0)).toBe(null);
+  });
+  it('the clocks going back (New York, 7 Nov 2027): older drops stay open until the new drop has gone off', () => {
+    // Saturday's drop was posted in summer time (4 hours behind UTC); on Sunday New York is 5 hours behind.
+    const until = drop.nextDropAt('2027-11-06', -240);
+    const sundaysDrop = drop.nextDropAt('2027-11-06', -300); // when Sunday's drop really goes off on the phone
+    expect(sundaysDrop - until).toBe(3_600_000);
+    const mine = { days: new Set(['2027-11-06']), windows: [{ day: '2027-11-06', until }] };
+    const older = { user_id: 'A', drop_day: '2027-11-01', blur_path: 'blur', media_path: 'secret', media_type: 'photo' };
+    for (const now of [until, until + 30 * 60_000, sundaysDrop - 1]) {
+      expect(drop.dropLock(older, 'B', mine, now)).toBe(null);
+    }
+  });
+  it('works out when the next drop goes off across month, year and leap-day ends', () => {
+    // The day after, at that day's drop time in the poster's own time zone.
+    for (const [day, next] of [['2026-11-30', '2026-12-01'], ['2026-12-31', '2027-01-01'], ['2028-02-28', '2028-02-29'], ['2028-02-29', '2028-03-01']]) {
+      const at = drop.nextDropAt(day, 0);
+      expect(new Date(at).toISOString().slice(0, 10)).toBe(next);
+      expect(new Date(at).getUTCHours() * 60 + new Date(at).getUTCMinutes()).toBe(drop.dropMinute(next));
+      // 5 hours behind UTC (New York in winter): 5 hours later; 14 hours ahead: 14 hours earlier.
+      expect(drop.nextDropAt(day, -300) - at).toBe(5 * 3_600_000);
+      expect(drop.nextDropAt(day, 840) - at).toBe(-14 * 3_600_000);
+    }
   });
   it('keeps the generated drop time inside the advertised 10am–10pm window for 10,000 days', () => {
     const first = Date.parse('2020-01-01T00:00:00Z');
