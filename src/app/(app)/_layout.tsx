@@ -50,8 +50,11 @@ export default function AppLayout() {
   // never the app, and never an empty setup form.
   const [needsSetup, setupDone, setupCheck] = useNeedsSetup();
   // A brand-new account: "How did you hear about Peekaboo?" once, after the name and username (never blocks:
-  // a slow or failed check just skips it).
-  const [needsHeardAbout, heardAboutDone] = useNeedsHeardAbout(needsSetup === false ? userId : null);
+  // a slow or failed check just skips it, and an account older than 3 days isn't checked at all).
+  const [needsHeardAbout, heardAboutDone] = useNeedsHeardAbout(
+    needsSetup === false ? userId : null,
+    profile?.created_at,
+  );
   if (needsSetup === null) return null;
   if (setupCheck.failed || (needsSetup && !profile)) {
     return <CouldNotCheck onRetry={setupCheck.retry} checking={setupCheck.checking} />;

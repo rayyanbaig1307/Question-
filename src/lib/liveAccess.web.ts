@@ -6,6 +6,7 @@ import type * as Native from './liveAccess';
 // ---------------------------------------------------------------------------
 
 export const LIVE_ENABLED = true;
+export const LIVE_FOR_EVERYONE = false;
 export const LIVE_ON_ANDROID = false;
 export const HEARTS_ENABLED = true;
 export const LIVE_MIN_APP_VERSION = '1.2.0';
@@ -45,6 +46,9 @@ export function liveBroken(): boolean {
 export function markLiveBroken(_why?: unknown): void {}
 export function subscribeLiveBroken(_listener: () => void): () => void {
   return () => {};
+}
+export function liveSwitchedOn(channel?: string | null): boolean {
+  return LIVE_FOR_EVERYONE || channel === 'testing';
 }
 export function liveMaybeAvailable(): boolean {
   return false;
@@ -101,10 +105,10 @@ export function releaseCameraFromLive(_hold?: number | null): void {}
 // Type check only: the web version must have every name the phone version has, with the same shapes.
 type Same = { [K in keyof typeof Native]: (typeof Native)[K] };
 const _same: Same = {
-  LIVE_ENABLED, LIVE_ON_ANDROID, HEARTS_ENABLED, LIVE_MIN_APP_VERSION, LIVE_NATIVE_MODULES, CAMERA_RELEASE_MIN_MS,
-  CAMERA_RELEASE_MAX_MS, LEAVE_WAIT_MS, LIVE_UNAVAILABLE_WORDS, versionAtLeast, liveBroken, markLiveBroken,
-  subscribeLiveBroken, liveMaybeAvailable, isLiveAvailable, liveUnavailableReason, loadLiveStage, setLiveNow,
-  liveNowRole, isLiveNow, useLiveNow, onLiveEnded, runAfterLive, whileLeaving, holdCameraForLive,
-  useCameraHeldByLive, isCameraHeldByLive, markCameraReleased, waitForCameraRelease, releaseCameraFromLive,
+  LIVE_ENABLED, LIVE_FOR_EVERYONE, LIVE_ON_ANDROID, HEARTS_ENABLED, LIVE_MIN_APP_VERSION, LIVE_NATIVE_MODULES,
+  CAMERA_RELEASE_MIN_MS, CAMERA_RELEASE_MAX_MS, LEAVE_WAIT_MS, LIVE_UNAVAILABLE_WORDS, versionAtLeast, liveBroken,
+  markLiveBroken, subscribeLiveBroken, liveSwitchedOn, liveMaybeAvailable, isLiveAvailable, liveUnavailableReason,
+  loadLiveStage, setLiveNow, liveNowRole, isLiveNow, useLiveNow, onLiveEnded, runAfterLive, whileLeaving,
+  holdCameraForLive, useCameraHeldByLive, isCameraHeldByLive, markCameraReleased, waitForCameraRelease, releaseCameraFromLive,
 };
 void _same;

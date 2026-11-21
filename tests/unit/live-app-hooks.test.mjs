@@ -16,9 +16,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// The phone: an iPhone with the 1.2.0 download (lives work) unless `version` says otherwise.
-function phoneMocks({ version = '1.2.0', alerts = [] } = {}) {
+// The phone: an iPhone with the 1.2.0 download on the `testing` update channel (lives work: TestFlight build 13)
+// unless `version` or `channel` says otherwise (the App Store app listens on `production`).
+function phoneMocks({ version = '1.2.0', alerts = [], channel = 'testing' } = {}) {
   return {
+    'expo-updates': { channel },
     expo: {
       requireOptionalNativeModule: (name) => {
         if (name === 'ExpoApplication') return { nativeApplicationVersion: version };
@@ -159,12 +161,12 @@ it('the "Match phone" theme restart waits for the live to end, then runs once', 
 // Notifications
 // ---------------------------------------------------------------------------
 
-function loadNotifications({ version = '1.2.0' } = {}) {
+function loadNotifications({ version = '1.2.0', channel = 'testing' } = {}) {
   const alerts = [];
   const routes = [];
   const rpcs = [];
   const handlers = {};
-  const mocks = phoneMocks({ version, alerts });
+  const mocks = phoneMocks({ version, alerts, channel });
   const live = loadLibrary('liveAccess', { mocks });
   const exit = loadLibrary('liveExit', { mocks: { ...mocks, './liveAccess': live } });
   const notifications = {
@@ -213,6 +215,11 @@ it('"… is live" opens the live – only on a phone that can show lives, and ne
 
   // An older download (App Store 1.1): never opens a live.
   phone = loadNotifications({ version: '1.1.0' });
+  phone.lib.openFor({ type: 'live', live: LIVE });
+  expect(phone.routes).toEqual([]);
+
+  // The App Store app (channel production), even a 1.2 one: lives stay on the TestFlight build only.
+  phone = loadNotifications({ channel: 'production' });
   phone.lib.openFor({ type: 'live', live: LIVE });
   expect(phone.routes).toEqual([]);
 });
@@ -291,6 +298,12 @@ it('after registering for pushes, the phone tells the server whether it can open
 
   // An older download says "no", so the server never sends it "… is live".
   phone = loadNotifications({ version: '1.1.0' });
+  await phone.lib.registerForPush();
+  await flush();
+  expect(phone.rpcs.find(([name]) => name === 'set_push_capability')[1]).toEqual({ push_token: 'ExponentPushToken[phone]', live_ok: false });
+
+  // The App Store app (channel production) says "no" too: lives are only on the TestFlight build for now.
+  phone = loadNotifications({ channel: 'production' });
   await phone.lib.registerForPush();
   await flush();
   expect(phone.rpcs.find(([name]) => name === 'set_push_capability')[1]).toEqual({ push_token: 'ExponentPushToken[phone]', live_ok: false });

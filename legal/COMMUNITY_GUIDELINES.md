@@ -23,7 +23,7 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 - **No spam, scams or fake accounts.** No bots, no impersonation, no mass friend-requesting, no selling, no phishing.
 - **Be honest in Guess Who and hit ups.** Don't pretend to be someone else or use someone else's photos.
 
-## Going live 🔴
+## Going live 🔴 (being tested – not in the App Store app yet)
 
 - **Lives are for friends only.** Only your friends can watch. We check this every time someone joins, and we take people out of a live when a friendship ends or someone is blocked.
 - **The limits:** a live lasts up to 60 minutes, and you can go live up to 3 times a day. To go live (or come on someone's live) you need a saved birthday and you must accept the Live rules. We can end a live or stop someone going live.

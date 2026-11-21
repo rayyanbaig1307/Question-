@@ -10,6 +10,7 @@ function load() {
   const awake = [];
   const subscribed = [];
   const access = loadTs('src/lib/liveAccess.ts', {
+    './lensDiagnostics': { updateChannel: () => 'testing' },
     expo: {
       requireOptionalNativeModule: (name) => (name === 'ExpoKeepAwake'
         ? { activate: async (tag) => { awake.push(['on', tag]); }, deactivate: async (tag) => { awake.push(['off', tag]); } }

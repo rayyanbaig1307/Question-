@@ -107,6 +107,9 @@ and the owner's standing preferences.
   group). Lives start testers-only (`private.live_settings.who_can_go_live = 'testers'`: the owner, and @ayaan while
   he's the owner's friend). `testing` publishes must come from `5f67df1` or later (older bundles hide lives on 1.2).
   Nothing from lives goes to `production` until 1.2 passes App Review and the owner says "publish".
+  **Channel switch (21 Nov):** `LIVE_FOR_EVERYONE = false` in `src/lib/liveAccess.ts` – lives only show on the
+  `testing` channel (TestFlight build 13), like the public chat, so a `production` OTA keeps them hidden; set it to
+  true to open lives to everyone (also drop "(being tested – not in the App Store app yet)" from the Guidelines).
 - **v2, owner-approved for right after v1 works (20 Nov):** dares during a live, stickers in the comment box,
   viewers can "ask to join" (host says yes/no), up to 5 people on screen (host + 4). Watch rule: anyone who is friends
   with the host; for each guest who is under 18 (or has no birthday), viewers must also be friends with that guest.

@@ -5,15 +5,17 @@ import { NativeModules, Platform } from 'react-native';
 
 import type * as LiveStageModuleNS from '@/components/live/LiveStage';
 
+import { updateChannel } from './lensDiagnostics';
+
 // ---------------------------------------------------------------------------
 // Lives 🔴: can this phone go live or watch a live, and what is happening right now?
 //
 // Every app update reaches every download (App Store 1.0/1.1, old TestFlight builds, old Android APKs, Expo
 // Go). Only downloads from version 1.2.0 on carry LiveKit's native parts, and on the others just LOADING
 // LiveKit closes the app. So the check comes in two steps:
-// 1) liveMaybeAvailable(): the cheap check. It creates nothing (the switches below, the platform, not Expo Go,
-//    and the download's own version number). Used for everything you can SEE: the 🔴 bubble, the live circles
-//    on Home, the settings switch and the "can get live notifications" flag.
+// 1) liveMaybeAvailable(): the cheap check. It creates nothing (the switches below, the update channel, the
+//    platform, not Expo Go, and the download's own version number). Used for everything you can SEE: the 🔴
+//    bubble, the live circles on Home, the settings switch and the "can get live notifications" flag.
 // 2) isLiveAvailable(): the real check. It asks the phone for LiveKit's two native parts, and asking CREATES
 //    them (that starts the phone's WebRTC sound engine). So it only runs right before a live is used (the Go
 //    live button, or opening a live), never when the app starts.
@@ -24,6 +26,9 @@ import type * as LiveStageModuleNS from '@/components/live/LiveStage';
 
 // The off switch for all of lives (can be changed by an app update, no new download needed).
 export const LIVE_ENABLED = true;
+// 🔒 Lives are being tried out: they only show on the `testing` update channel – the owner's TestFlight build 13.
+// One line switches them on for everyone later (set this to true).
+export const LIVE_FOR_EVERYONE = false;
 // Android has the code too, but it stays off until an Android phone with LiveKit passes the phone checks.
 export const LIVE_ON_ANDROID = false;
 // The off switch for hearts only (phone check G2: if hidden viewers can't send hearts, switch this off).
@@ -111,6 +116,12 @@ function isExpoGo(): boolean {
   }
 }
 
+// Are lives switched on for this download's update channel (see LIVE_FOR_EVERYONE)? Like the public chat's
+// switch. `channel` is for the tests; the app leaves it out.
+export function liveSwitchedOn(channel?: string | null): boolean {
+  return LIVE_FOR_EVERYONE || (channel === undefined ? updateChannel() : channel) === 'testing';
+}
+
 // 1) The cheap check (creates nothing; remembered for this app start).
 let maybe: boolean | undefined;
 export function liveMaybeAvailable(): boolean {
@@ -118,6 +129,7 @@ export function liveMaybeAvailable(): boolean {
     try {
       maybe =
         LIVE_ENABLED &&
+        liveSwitchedOn() &&
         (Platform.OS === 'ios' || (Platform.OS === 'android' && LIVE_ON_ANDROID)) &&
         !isExpoGo() &&
         versionAtLeast(downloadVersion(), LIVE_MIN_APP_VERSION);
@@ -149,6 +161,8 @@ export function isLiveAvailable(): boolean {
 export type LiveUnavailableReason = 'off' | 'android' | 'update' | 'broken';
 export function liveUnavailableReason(): LiveUnavailableReason | null {
   if (!LIVE_ENABLED) return 'off';
+  // Not on this channel (the App Store app): "switched off for now", never "update" (no update has lives yet).
+  if (!liveSwitchedOn()) return 'off';
   if (Platform.OS === 'android' && !LIVE_ON_ANDROID) return 'android';
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'broken';
   if (isExpoGo()) return 'broken';

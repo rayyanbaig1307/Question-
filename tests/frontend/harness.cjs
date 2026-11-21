@@ -72,7 +72,7 @@ function liveAccessMock(available = false, { stage = null } = {}) {
   const calls = { isLiveAvailable: 0, holds: 0, releases: 0, released: 0, roles: [], loads: 0, afterLive: [] };
   const tell = (set) => [...set].forEach((listener) => listener());
   const mock = {
-    LIVE_ENABLED: true, LIVE_ON_ANDROID: false, HEARTS_ENABLED: true, LIVE_MIN_APP_VERSION: '1.2.0',
+    LIVE_ENABLED: true, LIVE_FOR_EVERYONE: false, LIVE_ON_ANDROID: false, HEARTS_ENABLED: true, LIVE_MIN_APP_VERSION: '1.2.0',
     LIVE_NATIVE_MODULES: ['WebRTCModule', 'LivekitReactNativeModule'], CAMERA_RELEASE_MIN_MS: 500, CAMERA_RELEASE_MAX_MS: 1200, LEAVE_WAIT_MS: 8000,
     LIVE_UNAVAILABLE_WORDS: {
       update: 'Update Peekaboo to watch lives 🔴',
@@ -86,6 +86,7 @@ function liveAccessMock(available = false, { stage = null } = {}) {
     whileLeaving(work) { const tracked = Promise.resolve(work).catch(() => {}).finally(() => leaving.delete(tracked)); leaving.add(tracked); },
     versionAtLeast: () => true,
     liveBroken: () => false, markLiveBroken() {}, subscribeLiveBroken: () => () => {},
+    liveSwitchedOn: () => available,
     liveMaybeAvailable: () => available,
     isLiveAvailable: () => { calls.isLiveAvailable++; return available; },
     liveUnavailableReason: () => (available ? null : 'update'),

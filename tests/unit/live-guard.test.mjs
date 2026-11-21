@@ -219,7 +219,9 @@ it('the web twins have the same names and load nothing of LiveKit (LiveKit never
 // The guard itself, on pretend phones (one app start each).
 // ---------------------------------------------------------------------------
 
-function phone({ os = 'ios', version = '1.2.0', expoGo = false, modules = ['WebRTCModule', 'LivekitReactNativeModule'], stage = { createStage() {} }, appThrows = false } = {}) {
+// `channel`: the download's update channel. Lives only show on `testing` (the owner's TestFlight build 13) while
+// LIVE_FOR_EVERYONE is off, so the pretend phones below are on `testing` unless a test says otherwise.
+function phone({ os = 'ios', version = '1.2.0', expoGo = false, modules = ['WebRTCModule', 'LivekitReactNativeModule'], stage = { createStage() {} }, appThrows = false, channel = 'testing', updates = channel instanceof Error ? channel : { channel } } = {}) {
   const reads = [];
   const asked = [];
   const required = [];
@@ -229,7 +231,10 @@ function phone({ os = 'ios', version = '1.2.0', expoGo = false, modules = ['WebR
       return modules.includes(name) ? {} : undefined;
     },
   });
+  // The real channel helper (lib/lensDiagnostics.ts), reading a pretend expo-updates (`updates`).
+  const diagnostics = loadTs('src/lib/lensDiagnostics.ts', { 'expo-updates': updates }, { required });
   const access = loadTs('src/lib/liveAccess.ts', {
+    './lensDiagnostics': diagnostics,
     expo: {
       requireOptionalNativeModule: (name) => {
         asked.push(name);
@@ -322,9 +327,53 @@ it('if loading LiveStage fails, lives switch off for this app start instead of c
   expect(p.required.filter((id) => id.includes('LiveStage'))).toHaveLength(1);
 });
 
-it('the switches ship as planned: lives on, Android off, hearts on, from 1.2.0', () => {
+it('lives only show on the testing channel (the TestFlight build), never in the App Store app', () => {
+  // The App Store app (channel production), old installs (preview), no channel, and expo-updates missing: off.
+  const noChannel = [{ updates: {} }, { updates: new Error('no expo-updates here') }];
+  for (const options of [...['production', 'preview', null, '', 'Testing'].map((channel) => ({ channel })), ...noChannel]) {
+    const p = phone(options);
+    const what = JSON.stringify(options) ?? String(options);
+    expect(p.access.liveSwitchedOn(), what).toBe(false);
+    expect(p.access.liveMaybeAvailable(), what).toBe(false);
+    expect(p.access.isLiveAvailable(), what).toBe(false);
+    expect(p.access.loadLiveStage(), what).toBe(null);
+    // Never "Update Peekaboo": no App Store update has lives yet.
+    expect(p.access.liveUnavailableReason(), what).toBe('off');
+    expect(p.reads, what).toEqual([]);
+    expect(p.required.filter((id) => id.includes('LiveStage')), what).toEqual([]);
+    // Off by the switch is not "broken": nothing is told to hide itself.
+    expect(p.access.liveBroken(), what).toBe(false);
+  }
+  // testing + 1.2.0 (TestFlight build 13): maybe on – and the real check only runs when a live is used.
+  const testing = phone({ channel: 'testing', version: '1.2.0' });
+  expect(testing.access.liveSwitchedOn()).toBe(true);
+  expect(testing.access.liveMaybeAvailable()).toBe(true);
+  expect(testing.reads).toEqual([]);
+  expect(testing.access.liveUnavailableReason()).toBe(null);
+  // testing + 1.1.0 (TestFlight build 11, no LiveKit inside): off, and LiveKit is never asked for.
+  const old = phone({ channel: 'testing', version: '1.1.0' });
+  expect(old.access.liveSwitchedOn()).toBe(true);
+  expect(old.access.liveMaybeAvailable()).toBe(false);
+  expect(old.access.isLiveAvailable()).toBe(false);
+  expect(old.reads).toEqual([]);
+  expect(old.access.liveUnavailableReason()).toBe('update');
+  // production + 1.2.0 (a 1.2 download that listens on production, once one exists): still off.
+  const store12 = phone({ channel: 'production', version: '1.2.0' });
+  expect(store12.access.liveMaybeAvailable()).toBe(false);
+  expect(store12.access.isLiveAvailable()).toBe(false);
+  expect(store12.reads).toEqual([]);
+  // The `channel` argument (for checks without a pretend phone) follows the same rule.
+  const { liveSwitchedOn } = phone().access;
+  expect(liveSwitchedOn('testing')).toBe(true);
+  expect(liveSwitchedOn('production')).toBe(false);
+  expect(liveSwitchedOn(null)).toBe(false);
+});
+
+it('the switches ship as planned: lives on (testing channel only), Android off, hearts on, from 1.2.0', () => {
   const { access } = phone();
   expect(access.LIVE_ENABLED).toBe(true);
+  // 🔒 The owner hasn't okayed lives for the App Store app: this stays false until they say so.
+  expect(access.LIVE_FOR_EVERYONE).toBe(false);
   expect(access.LIVE_ON_ANDROID).toBe(false);
   expect(access.HEARTS_ENABLED).toBe(true);
   expect(access.LIVE_MIN_APP_VERSION).toBe('1.2.0');

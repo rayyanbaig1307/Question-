@@ -24,13 +24,29 @@ export const HEARD_ABOUT_OPTIONS: { source: HeardAboutSource; emoji: string; lab
 
 // Never hold anyone up: if the server is slow or says no, the question is just skipped.
 const CHECK_TIME_LIMIT_MS = 4000;
+// The phone remembers 'yes' (answered or skipped here) or 'no' (the server said this account isn't asked).
 const askedKey = (me: string) => `peekaboo-heard-about:${me}`;
+// The server only asks accounts made in the last 3 days (needs_heard_about). The same rule here means an older
+// account never waits for the server when the app opens.
+export const NEW_ACCOUNT_MS = 3 * 24 * 60 * 60 * 1000;
 
-// Should we ask this person? null while checking, then true or false.
-export function useNeedsHeardAbout(userId: string | null | undefined): [boolean | null, () => void] {
+// True when the account was clearly made more than 3 days ago (unknown dates count as "not sure": false).
+export function accountIsOld(createdAt: string | null | undefined, now = Date.now()): boolean {
+  if (typeof createdAt !== 'string') return false;
+  const made = Date.parse(createdAt);
+  return Number.isFinite(made) && now - made > NEW_ACCOUNT_MS;
+}
+
+// Should we ask this person? null while checking, then true or false. `createdAt` is the profile's created_at
+// (leave it out while the profile is loading).
+export function useNeedsHeardAbout(
+  userId: string | null | undefined,
+  createdAt?: string | null,
+): [boolean | null, () => void] {
   const [answer, setAnswer] = useState<{ user: string; needed: boolean } | null>(null);
+  const old = accountIsOld(createdAt);
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || old) return;
     let done = false;
     const finish = (needed: boolean) => {
       if (done) return;
@@ -39,9 +55,12 @@ export function useNeedsHeardAbout(userId: string | null | undefined): [boolean 
     };
     const timer = setTimeout(() => finish(false), CHECK_TIME_LIMIT_MS);
     (async () => {
-      // Answered or skipped on this phone already: don't even ask the server.
-      if ((await AsyncStorage.getItem(askedKey(userId)).catch(() => null)) === 'yes') return false;
+      // Answered or skipped on this phone already, or the server said no before: don't even ask the server.
+      const remembered = await AsyncStorage.getItem(askedKey(userId)).catch(() => null);
+      if (remembered === 'yes' || remembered === 'no') return false;
       const { data, error } = await supabase.rpc('needs_heard_about');
+      // A "no" never turns into a "yes" (the account only gets older, and an answer stays), so remember it.
+      if (!error && data === false) AsyncStorage.setItem(askedKey(userId), 'no').catch(() => {});
       return !error && data === true;
     })()
       .catch(() => false)
@@ -53,8 +72,8 @@ export function useNeedsHeardAbout(userId: string | null | undefined): [boolean 
       done = true;
       clearTimeout(timer);
     };
-  }, [userId]);
-  const needed = !userId ? false : answer?.user === userId ? answer.needed : null;
+  }, [userId, old]);
+  const needed = !userId || old ? false : answer?.user === userId ? answer.needed : null;
   const close = () => {
     if (userId) setAnswer({ user: userId, needed: false });
   };
