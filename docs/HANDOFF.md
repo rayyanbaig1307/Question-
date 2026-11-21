@@ -75,8 +75,11 @@ and the owner's standing preferences.
   `wss://peekaboo-0i4j4n84.livekit.cloud`; the owner put LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET into
   Supabase Edge Function secrets (20 Nov). Finished in `5f67df1` (two review rounds, all tests pass). Edge Functions
   `live-token` and `live-admin` deployed 20 Nov (Verify JWT off). Migration `20261226000000_livestreams.sql` (sha256
-  starts `f752a6bef2fe`) – copy page https://claude.ai/artifact/H5yvPwsq6aYEeKwtEYeHC9 – **waiting for the owner to
-  paste it**; then run `select private.live_selftest();` and check `private.live_jobs` (room 'live_selftest').
+  starts `f752a6bef2fe`) – copy page https://claude.ai/artifact/H5yvPwsq6aYEeKwtEYeHC9 – **LIVE** (owner pasted it 21 Nov;
+  all 59 live functions match local by md5, 15 tables, 9 triggers, pg_cron `peekaboo-live-sweep`, Vault key, prepare_report
+  patch keeps public_photo). `private.live_selftest()` passed 21 Nov 06:44 UTC (done_at set, no error) = the LiveKit
+  secrets work. Testers: only the owner (@ayaan no longer exists); add a friend tester in `private.live_testers` to
+  test bringing someone on. `20261228000000_drop_unlock.sql` is live too (applied 21 Nov via the Allow pop-up).
   **TestFlight build 13** (version 1.2.0) = EAS `9cb52cf4-1122-4adb-a197-051664a63cc2`, profile `testflight-testing`,
   channel `testing`, uploaded by the Plus session (ASC build `606d7b53-1990-4ae8-afc8-92503b429980`, VALID, internal
   group). Lives start testers-only (`private.live_settings.who_can_go_live = 'testers'`: the owner, and @ayaan while
