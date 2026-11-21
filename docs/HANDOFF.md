@@ -37,7 +37,24 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Two iPhone bugs (owner, 20–21 Nov): photo zoom + "only one drop opens" – built, not shipped yet
+## LIVE on the App Store app (21 Nov, owner's "push everything to the live app except livestreams")
+
+- **Production OTA `e04182a6-e4a2-4ecf-b879-80ea519a8e81`** (iOS, branch `production`) from `93b8bb4`; the same
+  commit is on `testing` as `74c9e32a-e058-46a4-96ea-a2632a02e9a4`. Before it, `testing` had `919a643c` (`1a1ff07`).
+  Strings check: the project URL is in every bundle. App Store Connect checked by the Plus session just before: 1.1.0
+  (build 12) PREPARE_FOR_SUBMISSION, nothing in review. Build 12 will load this OTA once 1.1 is released.
+- New for App Store users (everything since `fa7efb5`): group snaps + save in chat, camera-roll photos as full photos,
+  group snap screenshots, delete/leave a group, new groups open their chat, upload retry, the zoom fix, "posting your
+  drop opens every drop", the chat text box, invite links, "How did you hear about Peekaboo?" (new accounts only; an
+  account older than 3 days is never checked, a server "no" is remembered) and the 5 overlay face filters.
+- **Still held off `production`:** lives (`LIVE_FOR_EVERYONE = false` – testing channel only, plus version 1.2.0) and
+  the public chat (`PUBLIC_CHAT_FOR_EVERYONE = false`). The Guidelines heading says lives are being tested.
+- Live database: everything through `20261229000000_group_snaps.sql` (applied 21 Nov via apply_migration, 24
+  functions md5-checked against the local database); `cleanup-media` v7.
+- The group features were checked by the automated suites and a release review, not yet on a phone: Step 70 of
+  `docs/TESTING.md` is still to do with two phones.
+
+## Two iPhone bugs (owner, 20–21 Nov): photo zoom + "only one drop opens" – LIVE (testing + production)
 
 - **Zoom (JS only, OTA):** pinching a friend's post and letting go left the photo at normal size but pushed half
   off the screen (black on the left and top). Two fingers lifting a moment apart counted as a double tap (zoom out),
@@ -69,7 +86,7 @@ and the owner's standing preferences.
     `tests/unit/drop-unlock-parity.test.mjs` (app and database agree on the moment to the millisecond, and on the
     whole open/locked rule around it, the extra hour included).
 
-## Group snaps, delete a group, new group opens its chat (owner, 21 Nov) – built, not shipped yet
+## Group snaps, delete a group, new group opens its chat (owner, 21 Nov) – LIVE (testing + production)
 
 - Migration `20261229000000_group_snaps.sql` (safe to run twice), app changes in `src/lib/groupChat.ts`,
   `src/lib/groups.ts`, `src/lib/chat.ts`, the snap viewer and the group chat. Phone checks: `docs/TESTING.md` Step 70.
