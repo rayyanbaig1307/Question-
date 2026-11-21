@@ -22,7 +22,8 @@ import { colors, font, radius, space } from '@/theme';
 
 const MAX_PEOPLE = 12;
 
-// Make a new group (name + pick friends) – or, with `group`, rename a group and add more friends to it.
+// Make a new group (name + pick friends), then open its chat – or, with `group`, rename a group and add more
+// friends to it (then go back to where you were).
 export default function NewGroup() {
   const { group: groupId } = useLocalSearchParams<{ group?: string }>();
   const editing = !!groupId;
@@ -89,7 +90,10 @@ export default function NewGroup() {
       } else {
         const id = await createGroup(name, [...picked]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace(`/groups/${id}`);
+        // Straight into the new group's chat. `replace` takes this form away, so Back goes to where you started
+        // (the Chat list, or Settings → Group Peek), never back to the form. Drops and members are one tap away
+        // (tap the group's name at the top of the chat).
+        router.replace(`/groups/chat/${id}`);
       }
     } catch (error) {
       Alert.alert(editing ? 'Could not save' : 'Could not make the group', friendlyError(error));

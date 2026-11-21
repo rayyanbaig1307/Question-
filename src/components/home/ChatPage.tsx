@@ -14,7 +14,7 @@ import { PersonRow } from '@/components/PersonRow';
 import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { MAX_PINS, pinKeyForFriend, pinKeyForGroup, sortByPins, useChatPins } from '@/lib/chatPins';
-import { clearChat, fetchRecentMessages, subscribeToMyMessages, type Message } from '@/lib/chat';
+import { clearChat, fetchRecentMessages, isChatPhoto, subscribeToMyMessages, type Message } from '@/lib/chat';
 import { fetchCloseFriendIds, setCloseFriend } from '@/lib/closeFriends';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends, fetchMyFriendLinks, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
@@ -36,6 +36,8 @@ type ChatRow = {
   friend: Profile;
   last: Message | null;
   newSnaps: number;
+  // How many of those new peeks are photos picked from Photos (they never disappear).
+  newPhotos: number;
   newChats: number;
 };
 
@@ -511,6 +513,7 @@ function buildRows(friends: Profile[], messages: Message[]): ChatRow[] {
       friend,
       last: withFriend[0] ?? null,
       newSnaps: unopened.filter((m) => m.kind === 'snap').length,
+      newPhotos: unopened.filter((m) => m.kind === 'snap' && isChatPhoto(m)).length,
       newChats: unopened.filter((m) => m.kind === 'text' || m.kind === 'voice' || m.kind === 'reaction' || m.kind === 'dare').length,
     };
   });
@@ -525,7 +528,11 @@ function describe(row: ChatRow, me: string): {
   bold: boolean;
 } {
   const { last } = row;
-  if (row.newSnaps > 0) return { icon: 'square', color: colors.accent, label: 'New Peek', bold: true };
+  if (row.newSnaps > 0) {
+    // Only photos picked from Photos are new: say so (they don't disappear like a peek).
+    const onlyPhotos = row.newPhotos === row.newSnaps;
+    return { icon: onlyPhotos ? 'image' : 'square', color: colors.accent, label: onlyPhotos ? 'New Photo' : 'New Peek', bold: true };
+  }
   if (row.newChats > 0) return { icon: 'chatbubble', color: colors.blue, label: 'New Chat', bold: true };
   if (!last) return { icon: 'chatbubble-outline', color: colors.textFaint, label: 'Tap to chat', bold: false };
   if (last.kind === 'screenshot') {

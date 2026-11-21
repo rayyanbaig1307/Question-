@@ -5,7 +5,7 @@ const { React, loadScreen, renderScreen, act, unmount, host, textOf } = require(
 // params: more route params (e.g. groupGuess). groupGuess: what postGroupGuess does (by default it works).
 // overrides: other stand-ins (e.g. gestures that remember their settings).
 function fixture({ group = false, chatDare = false, failClaim = false, claimError = 'Simulated dare update failure', send, params = {}, groupGuess, overrides = {} } = {}) {
-  const calls = { snaps: 0, groups: 0, claimed: 0, dismissedTo: [], groupGuesses: [], mysteries: [], pushed: [] };
+  const calls = { snaps: 0, chatPhotos: [], groups: 0, groupSnaps: [], publicPhotos: 0, claimed: 0, dismissedTo: [], groupGuesses: [], mysteries: [], pushed: [] };
   const passthrough = Object.fromEntries(['CropTool', 'DraggableItem', 'StickerPicker', 'TextComposer'].map(name => [`@/components/editor/${name}`, { [name]: host(name) }]));
   const shared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
   const screen = loadScreen('src/app/(app)/editor.tsx', {
@@ -21,8 +21,16 @@ function fixture({ group = false, chatDare = false, failClaim = false, claimErro
     '@/components/editor/stickers': { TEXT_COLORS: ['white'], randomOffset: () => 0 },
     '@/components/IconButton': { IconButton: host('IconButton') },
     '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
-    '@/lib/chat': { sendSnap: async () => { calls.snaps++; if (send) await send(); }, claimChatDare: async () => { if (++calls.claimed === 1 && failClaim) throw new Error(claimError); } },
-    '@/lib/groupChat': { sendGroupCapture: async () => { calls.groups++; if (send) await send(); } },
+    '@/lib/chat': {
+      sendSnap: async () => { calls.snaps++; if (send) await send(); },
+      sendChatPhoto: async (...args) => { calls.chatPhotos.push(args); if (send) await send(); },
+      claimChatDare: async () => { if (++calls.claimed === 1 && failClaim) throw new Error(claimError); },
+    },
+    '@/lib/groupChat': {
+      sendGroupCapture: async () => { calls.groups++; if (send) await send(); },
+      sendGroupSnap: async (...args) => { calls.groupSnaps.push(args); if (send) await send(); },
+    },
+    '@/lib/publicChat': { PUBLIC_CHAT: 'public', sendPublicPhoto: async () => { calls.publicPhotos++; } },
     '@/lib/groupGuess': { postGroupGuess: async (...args) => { calls.groupGuesses.push(args); if (groupGuess) await groupGuess(...args); } },
     '@/lib/guess': { postMystery: async (...args) => { calls.mysteries.push(args); } },
     '@/lib/eyeTrack': { CAN_TRACK_EYES: false },
@@ -36,7 +44,7 @@ const sendButton = tree => tree.root.findAllByType('Pressable').find(node => nod
 test('repeated editor presses send one group photo', async () => {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
-  const { screen, calls } = fixture({ group: true, send: () => pending });
+  const { screen, calls } = fixture({ group: true, send: () => pending, params: { roll: '1' } });
   const tree = await renderScreen(screen);
   try {
     const press = sendButton(tree).props.onPress;
@@ -135,15 +143,114 @@ test('a group dare proof is never a Guess Who, even with groupGuess=1', async ()
   } finally { await unmount(tree); }
 });
 
-test('a normal group photo still goes to the group as before', async () => {
-  const { screen, calls } = fixture({ group: true });
+test('a photo picked from Photos (roll=1) still goes to the group as a normal photo, as before', async () => {
+  const { screen, calls } = fixture({ group: true, params: { roll: '1' } });
   const tree = await renderScreen(screen);
   try {
     assert.equal(textOf(sendButton(tree)), 'Send to group');
     await act(() => sendButton(tree).props.onPress());
     assert.equal(calls.groups, 1);
+    assert.equal(calls.groupSnaps.length, 0, 'never a snap');
     assert.equal(calls.groupGuesses.length, 0);
     assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 👀 Group snaps (the owner, 21 Nov): a picture taken with a group chat's CAMERA goes as a snap (view once, then
+// gone, unless someone saves it in the chat). Only pictures picked from Photos go as normal photos. Group dare
+// proofs, group Guess Who and the public chat stay exactly as they were.
+// ---------------------------------------------------------------------------
+test('a picture taken with the group chat camera goes as a snap (never as a normal photo)', async () => {
+  const { screen, calls } = fixture({ group: true });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send snap');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groups, 0, 'not a normal (permanent) group photo');
+    assert.equal(calls.groupSnaps.length, 1);
+    const [me, group, capture] = calls.groupSnaps[0];
+    assert.deepEqual([me, group, capture.kind, capture.uri], ['alice', 'squad', 'photo', 'file:///qa-finished.jpg']);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Snap sent 👀']);
+    assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+    // Pressing again on the way out sends nothing more.
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupSnaps.length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a video taken with the group chat camera goes as a snap too', async () => {
+  const { screen, calls } = fixture({ group: true, params: { video: '1', uri: 'file:///qa-clip.mp4' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupSnaps.length, 1);
+    assert.equal(calls.groupSnaps[0][2].kind, 'video');
+    assert.equal(calls.groups, 0);
+  } finally { await unmount(tree); }
+});
+
+test('repeated presses send one group snap', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const { screen, calls } = fixture({ group: true, send: () => pending });
+  const tree = await renderScreen(screen);
+  try {
+    const press = sendButton(tree).props.onPress;
+    let a, b;
+    await act(async () => { a = press(); b = press(); await Promise.resolve(); });
+    release(); await act(() => Promise.all([a, b]));
+    assert.equal(calls.groupSnaps.length, 1);
+  } finally { release(); await unmount(tree); }
+});
+
+test('a group snap that could not be sent says why, and Send can be tried again', async () => {
+  let fail = true;
+  const { screen, calls } = fixture({ group: true, send: async () => { if (fail) throw new Error('Simulated upload failure'); } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not send', 'Simulated upload failure']);
+    assert.deepEqual(calls.dismissedTo, []);
+    fail = false;
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupSnaps.length, 2);
+    assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+  } finally { await unmount(tree); }
+});
+
+test('a group dare proof from the camera stays a normal proof (the group votes on it), never a snap', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupDare: 'dare1' } });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send to group');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groups, 1);
+    assert.equal(calls.groupSnaps.length, 0);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Proof posted in the group 🎯']);
+  } finally { await unmount(tree); }
+});
+
+test('the public chat camera still posts a public photo, never a snap', async () => {
+  const { screen, calls } = fixture({ group: true, params: { group: 'public' } });
+  const tree = await renderScreen(screen);
+  const postButton = () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'button' && textOf(node) === 'Post in public chat');
+  try {
+    assert.ok(postButton(), 'the button says Post in public chat');
+    await act(() => postButton().props.onPress());
+    assert.equal(calls.publicPhotos, 1);
+    assert.equal(calls.groupSnaps.length, 0);
+    assert.equal(calls.groups, 0);
+  } finally { await unmount(tree); }
+});
+
+test('a group Guess Who is never a snap', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.groupGuesses.length, 1);
+    assert.equal(calls.groupSnaps.length, 0);
   } finally { await unmount(tree); }
 });
 
@@ -226,4 +333,48 @@ test('in group Guess Who mode the bin sits at the bottom of the 3:4 box (a stick
   // Any other mode: the whole screen, exactly as before.
   const normal = await binOf({});
   assert.deepEqual({ ...normal.zone }, { top: 568 - 150, left: 160 - 70, right: 160 + 70 });
+});
+
+// ---------------------------------------------------------------------------
+// 📷 One-on-one chats: a picture from the chat's camera is a peek (as before); one picked from Photos (roll=1) goes
+// as a photo that never disappears (a peek saved from the start, see sendChatPhoto). A dare proof is always a peek.
+// ---------------------------------------------------------------------------
+test('a one-on-one chat camera picture is still a peek', async () => {
+  const { screen, calls } = fixture();
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send');
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.snaps, 1);
+    assert.equal(calls.chatPhotos.length, 0);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Peek sent 👀']);
+    assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
+  } finally { await unmount(tree); }
+});
+
+test('a photo picked from Photos in a one-on-one chat goes as a photo (never as a peek), once', async () => {
+  const { screen, calls } = fixture({ params: { roll: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.snaps, 0, 'not a disappearing peek');
+    assert.equal(calls.chatPhotos.length, 1);
+    const [me, friend, capture] = calls.chatPhotos[0];
+    assert.deepEqual([me, friend, capture.kind], ['alice', 'bob', 'photo']);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Photo sent 📷']);
+    assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.chatPhotos.length, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a dare proof picked from Photos is still a peek (your friend confirms it)', async () => {
+  const { screen, calls } = fixture({ chatDare: true, params: { roll: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.snaps, 1);
+    assert.equal(calls.chatPhotos.length, 0);
+    assert.equal(calls.claimed, 1);
+  } finally { await unmount(tree); }
 });

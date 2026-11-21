@@ -431,9 +431,12 @@ Where it works:
 ## Step 23 – Group Peek 👯
 
 You need 2 friends on Peekaboo (or 2 test accounts) for this.
-1. **Make a group:** Discover → tap **👯 Make a Group Peek** at the top (or Settings → Group Peek → ＋).
+1. **Make a group:** Chat → 👯 Groups → **＋ New** (or Settings → Group Peek → ＋).
    Type a name, tick your friends, tap **Make group**. Your friends get "… added you to a group 👯".
-2. The group page shows **"Waiting on …" 👀**, a progress bar, and everyone's status (✅ Posted / ⏳ Not yet).
+   The new **group chat** opens straight away ("Say hi to the group!"). **Back** goes to where you started (the
+   Chat list, or the Group Peek list) – never back to the form.
+2. Tap the group's name at the top of the chat (or ••• → **👯 Group info & drops**): the group page shows
+   **"Waiting on …" 👀**, a progress bar, and everyone's status (✅ Posted / ⏳ Not yet).
 3. After the daily drop alert, post your drop. Back in the group: you're ✅, the others are still ⏳.
 4. Your friends' drops stay blurred with 🙈 – in the group **and** in Discover ("Waiting on your group 👀") –
    even though you posted yours.
@@ -951,8 +954,9 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
 
 ## Step 60 – Group chats: photos, voice, group dares, typing, Seen, search
 
-1. **Photos/videos:** in a group chat tap 📷 → take a photo or video → **Send to group** → it shows in the chat
-   for everyone in the group (stays there). Others get "👯 Squad · Ray: 📷 Photo".
+1. **Photos/videos:** in a group chat tap 📷 → the gallery button → pick a photo or video → **Send to group** → it
+   shows in the chat for everyone in the group (stays there). Others get "👯 Squad · Ray: 📷 Photo". (A picture
+   **taken** with the camera goes as a snap that disappears – see Step 70.)
 2. **Voice notes:** with nothing typed, hold 🎤, talk, let go → a voice note in the group chat.
 3. **Group dares:** tap 🚩 → write a dare → "🎯 Ray dared the group". Each person taps **Do it · post proof** →
    camera → their photo/video appears as "⏳ Legit or cap? Vote!" for everyone else ("⏳ Waiting for votes" for
@@ -1343,3 +1347,78 @@ one-minute check removes it again). G13 (review round 3): while a friend is on s
 reconnects with an old ticket (airplane mode for 20 s, then back) sees only the host, never the person on stage –
 LiveKit refuses them the stage's camera (subscription permissions from `live_stage_allowlist`); a friend of both who
 joins mid-stage sees the person on stage within about 5 seconds. Plan B for each gate is in the design.
+
+## Step 70 – Snaps in group chats, photos from your camera roll, deleting a group 👀🗑️ (21 Nov)
+
+Needs the database update `20261229000000_group_snaps.sql` first (the developer does this), then the app update.
+You need 3 phones or test accounts in one group: **A** (you, who made the group), **B** and **C**.
+
+**A. Snaps in a group chat**
+1. A: open the group chat → 📷 → **take** a photo → the button says **Send snap** → tap it → "Snap sent 👀".
+   In the chat A sees **"You sent a snap · ✓ Delivered"** – not the photo. B and C get "👯 Squad · A: 📸 Sent a snap".
+2. B: the chat shows a pink **"New snap · tap to view"** pill (no photo in the chat). Tap it → the photo shows for
+   10 seconds (a video plays to its end), then closes. The pill now says **"Tap to replay"** → tap → it shows once
+   more → now **"Snap opened"** and can't be tapped.
+3. A (within 15 seconds): under the snap **"👁 Opened by B"**; once C opens it too: **"👁 Opened by everyone"**.
+   Before anyone taps it, it says only "✓ Delivered" – never "Seen by" as well, even after B and C opened the chat.
+   **Screenshot:** B opens a new snap and takes a screenshot while it's on screen → B sees "📸 They'll see you took
+   a screenshot"; A gets "👯 Squad · B: 📸 Took a screenshot of your snap" and the line under the snap adds
+   "📸 Screenshot by B". A second screenshot of the same snap sends nothing more. A saved snap sends no notice
+   (it's a normal photo). (On Android 13 and older, screenshots can't be noticed – same as one-on-one peeks.)
+4. **Save in chat:** C opens a new snap, then holds it in the chat → **Save in chat 📌** (or taps **Save** while
+   it's open) → "Saved in chat 📌 Everyone in the group can open it again". Now everyone sees it **as a normal photo**
+   in the chat with "📌 Saved by C", and can open it full screen any time. C (or A, who sent it) can hold it →
+   **Unsave** → it's a snap again (gone if it's over a day old).
+5. Someone who hasn't opened a snap can't save it (no Save in chat when you hold a new one).
+6. **A day later** a snap nobody saved says "Snap expired" (and "Expired · opened by …" for A).
+7. **Someone added later:** add D to the group → D sees older snaps as "Sent before you joined" and can't open them.
+8. **Report:** B opens a snap → ••• → **Report snap** → the snap is hidden while you report.
+   **Bad signal:** B turns on airplane mode and taps a new snap → "Couldn't load the snap … tap it again in the next
+   few minutes – that still counts as your first look". Back in the chat the pill says **"Tap to view"**. Airplane
+   mode off, tap it within 4 minutes → it shows, and afterwards the pill says "Tap to replay" (the replay is still
+   there). Wait longer than 4 minutes (or close the app) instead → the pill says "Tap to replay" and a tap uses the
+   replay.
+9. **Picked from Photos:** 📷 → gallery button → pick a photo → **Send to group** → it's a normal photo that stays.
+10. **Still the same:** a group dare proof (**Do it · post proof**), a group 🕵️ Guess Who and the Public chat send
+    exactly as before (never as a snap).
+11. **An old app version** (a phone that hasn't updated yet) in the group: a snap shows as an empty grey box –
+    never the photo. A saved snap shows as a normal photo there too. Also when one person is signed in on two
+    devices: B opens a snap on the updated phone while an iPad (or second phone) with an older app is signed in to
+    the same account and open in the group chat → the iPad still shows only the grey box (opening it only lets the
+    phone that opened it download it). Known limit: if a snap is saved and later unsaved, a device that already
+    showed it as a photo (an old app) can keep showing it for up to an hour, because a download link lasts an hour.
+
+**B. Photos from your camera roll in a one-on-one chat**
+1. A → a chat with B → 📷 → **take** a photo → **Send** → "Peek sent 👀" (a normal peek, as before).
+2. A → 📷 → gallery button → pick a photo → **Send** → "Photo sent 📷". B's Chat list says **New Photo**; in the
+   chat **"New photo · tap to view"** → it opens with no timer, label "Photo 📷", no Save/Unsave button, and ••• says
+   **Report photo** (never "peek"). Afterwards it says "Photo · tap to view" and opens any time. B gets "Sent you a
+   photo 📷".
+3. An old app version shows it as "New peek · tap to view" → it opens and stays (a saved peek).
+
+**C. Delete or leave a group**
+1. A (who made it): group chat → ••• → at the bottom **🚪 Leave group** and **🗑️ Delete group**. Delete → the
+   message says it deletes the group and its chat for everyone and can't be undone → **Delete group** → "Group
+   deleted 🗑️" and you're on the **Chat list**. B and C: the group is gone from their Chat list.
+2. B (didn't make it): ••• → only **🚪 Leave group** → **Leave** → "You left Squad" → Chat list.
+3. Make a group with B, then B leaves: A is the **only one left** → ••• shows only **🗑️ Delete group** (the message
+   says you're the only one left). The same works for someone who didn't make the group.
+4. Make a group with B only, then add C later from the group page (✏️ Change name & people). Now A (the maker)
+   leaves → B, who has been in it longest, now has **🗑️ Delete group** (and C only **🚪 Leave group**). (If B and C
+   were both picked when the group was made, they joined at the same moment: then one of them gets Delete group –
+   always the same one on every phone, and it's the one the server lets delete it.)
+5. The last person in a group only sees **🗑️ Delete group** (see 3) – nobody is left to leave it to. (Only if two
+   people leave at the very same moment does the second one's **Leave** delete the group: "nobody was left, so it's
+   deleted".)
+6. The same options are on the group page (tap the group's name → •••).
+7. A deleted group's picture disappears within a day (the daily cleanup deletes it). Nothing to check on the phone:
+   groups that everybody had left before this update (an old app's "Leave group" left them behind empty) are
+   deleted when the database update runs, and their files go to the daily cleanup.
+
+**D. Make a group → its chat opens** (see Step 23): Chat → ＋ New → pick friends → **Make group** → the new group chat
+opens; Back goes to the Chat list.
+
+**E. Uploads try again by themselves:** send several photos in a row in a group chat (also on bad signal, e.g.
+walking out of Wi-Fi). A one-off hiccup no longer shows "server error": the app quietly tries again (up to 2 more
+times) and the photo is sent **once**.
+

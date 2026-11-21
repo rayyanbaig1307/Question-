@@ -21,8 +21,8 @@ import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
-import { claimChatDare, sendSnap } from '@/lib/chat';
-import { sendGroupCapture } from '@/lib/groupChat';
+import { claimChatDare, sendChatPhoto, sendSnap } from '@/lib/chat';
+import { sendGroupCapture, sendGroupSnap } from '@/lib/groupChat';
 import { PUBLIC_CHAT, sendPublicPhoto } from '@/lib/publicChat';
 import { postGroupGuess } from '@/lib/groupGuess';
 import { postMystery } from '@/lib/guess';
@@ -44,7 +44,7 @@ const PICTURE_NOT_ON_WEB = "Sending and saving from the web isn't ready yet. Ple
 // Decorate your photo or video: swipe left/right for a color filter (photos), add text and stickers, move them
 // around, then send it.
 export default function Editor() {
-  const { uri, fit, video, to, chatDare, group, groupDare, groupGuess, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
+  const { uri, fit, video, roll, to, chatDare, group, groupDare, groupGuess, dare, drop, guess, forfeit, eyes, lens, filter: startFilter } = useLocalSearchParams<{
     // A peek from a chat camera that's the proof for the friend's dare (marks the dare as done for you).
     chatDare?: string;
     // From a group chat's camera: send it to that group (as proof for `groupDare` if set).
@@ -56,6 +56,9 @@ export default function Editor() {
     fit?: 'cover' | 'contain';
     // '1' when it's a video
     video?: string;
+    // '1' when it was picked from the phone's Photos (camera roll), not taken with the camera just now. In a group
+    // chat, a picture from the camera goes as a snap (view once); one from Photos goes as a normal photo.
+    roll?: string;
     to?: string;
     dare?: string;
     drop?: string;
@@ -136,6 +139,9 @@ export default function Editor() {
   const { showToast } = useOverlays();
   // Opened from a chat's camera: the peek goes straight to that one friend – no "Send to…" list.
   const straightToChat = !!to && !dare && !drop && !guess && !forfeit;
+  // 📷 Picked from Photos in a one-on-one chat: it goes as a normal photo (it never disappears). A picture taken with
+  // the camera goes as a peek. A dare proof is always a peek (your friend confirms it).
+  const straightToChatPhoto = straightToChat && roll === '1' && !chatDare;
   // Opened from the Guess Who camera: it posts straight to Guess Who (the 🕵️ circle on Home) with no name on it.
   // Never to your story or your profile grid, so there's no "Send to…" choice. Never from a group chat's camera
   // either (that would show it to all your friends instead of the group).
@@ -145,6 +151,10 @@ export default function Editor() {
   const straightToGroupGuess = !!group && groupGuess === '1' && !groupDare && !to && !dare && !drop && !forfeit;
   // Opened from a group chat's camera: it goes straight back to that group chat.
   const straightToGroup = !!group && groupGuess !== '1' && !to && !dare && !drop && !guess && !forfeit;
+  // 👀 Taken with a group chat's camera: it goes as a snap – each person can open it once (and replay it once),
+  // then it's gone, unless someone saves it in the chat. Picked from Photos, it goes as a normal photo instead.
+  // Never for a group dare proof (the group votes on those, so they stay) or the public chat (photos only).
+  const straightToGroupSnap = straightToGroup && group !== PUBLIC_CHAT && !groupDare && roll !== '1';
   const straightAway = straightToChat || straightToGuess || straightToGroupGuess || straightToGroup;
   // The picture that gets sent is everything inside this box. Normally it's the whole screen. A group Guess Who is
   // always posted as a 3:4 photo, so then the box is 3:4 (as wide as the screen, in the middle, black above and
@@ -352,6 +362,14 @@ export default function Editor() {
           router.dismissTo('/public-chat');
           return;
         }
+        if (straightToGroupSnap && group) {
+          await sendGroupSnap(userId, group, photo);
+          finishedDirect.current = true;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast('Snap sent 👀');
+          router.dismissTo(`/groups/chat/${group}`);
+          return;
+        }
         if (straightToGroup && group) {
           await sendGroupCapture(userId, group, photo, groupDare);
           finishedDirect.current = true;
@@ -369,14 +387,15 @@ export default function Editor() {
           return;
         }
         if (!sentToChat.current) {
-          await sendSnap(userId, [to ?? ''], photo);
+          if (straightToChatPhoto) await sendChatPhoto(userId, to ?? '', photo);
+          else await sendSnap(userId, [to ?? ''], photo);
           sentToChat.current = true;
         }
         // The proof for their dare: tell them you did it (they confirm it in the chat).
         if (chatDare) await claimChatDare(chatDare);
         finishedDirect.current = true;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(chatDare ? 'Proof sent 🎯 Now they confirm it' : 'Peek sent 👀');
+        showToast(chatDare ? 'Proof sent 🎯 Now they confirm it' : straightToChatPhoto ? (isVideo ? 'Video sent 🎬' : 'Photo sent 📷') : 'Peek sent 👀');
         router.dismissTo(`/chat/${to}`);
         return;
       }
@@ -531,6 +550,8 @@ export default function Editor() {
                           ? 'Send Guess Who'
                           : straightToGroup && group === PUBLIC_CHAT
                             ? 'Post in public chat'
+                            : straightToGroupSnap
+                              ? 'Send snap'
                             : straightToGroup
                               ? 'Send to group'
                             : 'Send to'}

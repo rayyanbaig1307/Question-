@@ -51,6 +51,7 @@ import {
   fetchConversation,
   fetchDareStreak,
   hideMessage,
+  isChatPhoto,
   markChatRead,
   type Message,
   searchConversation,
@@ -306,8 +307,9 @@ export default function ChatScreen() {
   function openMenu(message: Message) {
     // Screenshot notices can't be unsent or reported.
     if (message.kind === 'screenshot') return;
+    // A photo picked from Photos is kept for good: no Unsave (that would make it disappear).
     const saveOptions =
-      message.kind !== 'snap'
+      message.kind !== 'snap' || isChatPhoto(message)
         ? []
         : message.saved_at
           ? [{ label: 'Unsave', onPress: () => toggleSaved(message, false) }]
@@ -381,7 +383,11 @@ export default function ChatScreen() {
     m.kind === 'text' || m.kind === 'dare'
       ? (m.body ?? '')
       : m.kind === 'snap'
-        ? '👀 Peek'
+        ? isChatPhoto(m)
+          ? m.media_type === 'video'
+            ? '🎬 Video'
+            : '📷 Photo'
+          : '👀 Peek'
         : m.kind === 'voice'
           ? '🎤 Voice note'
           : m.kind === 'reaction'
@@ -844,7 +850,14 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
     const isNew = !mine && message.opened_at === null;
     const saved = message.saved_at !== null;
     const replay = canReplay(message, me);
-    const look: { icon: keyof typeof Ionicons.glyphMap; text: string } = isNew
+    // 📷 A photo picked from Photos (a peek saved from the start): it never disappears.
+    const photo = isChatPhoto(message);
+    const what = message.media_type === 'video' ? 'video' : 'photo';
+    const look: { icon: keyof typeof Ionicons.glyphMap; text: string } = photo
+      ? isNew
+        ? { icon: 'image', text: `New ${what} · tap to view` }
+        : { icon: 'image-outline', text: mine ? `You sent a ${what} · tap to view` : `${what === 'video' ? 'Video' : 'Photo'} · tap to view` }
+      : isNew
       ? { icon: 'square', text: 'New peek · tap to view' }
       : saved
         ? { icon: 'bookmark', text: 'Saved peek · tap to view' }

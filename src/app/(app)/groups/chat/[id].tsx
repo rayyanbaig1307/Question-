@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,7 @@ import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@
 import { EmptyState } from '@/components/EmptyState';
 import { GroupFaces } from '@/components/GroupFaces';
 import { GroupGuessCard } from '@/components/groups/GroupGuessCard';
+import { leaveOrDeleteOptions } from '@/components/groups/leaveOrDelete';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays, type SheetOption } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
@@ -42,13 +43,19 @@ import { groupChatKey, useChatBackground } from '@/lib/chatBackgrounds';
 import { canSendSticker, isKnownSticker, stickerText, wordStickerId } from '@/lib/chatStickers';
 import { friendlyError } from '@/lib/errors';
 import {
+  canSaveGroupSnap,
+  canUnsaveGroupSnap,
   canVoteOnProof,
   deleteGroupMessage,
   fetchGroupChats,
   fetchGroupMessages,
   fetchGroupReads,
+  fetchGroupSnapOpens,
   fetchMyGroupJoin,
   fetchMyProofVotes,
+  groupSnapLook,
+  groupSnapUnshown,
+  GROUP_SNAP_LIFETIME_MS,
   markGroupChatRead,
   pinGroupMessage,
   proofCounts,
@@ -60,11 +67,14 @@ import {
   sendGroupVoice,
   setGroupChatMuted,
   setGroupPhoto,
+  setGroupSnapSaved,
   subscribeToGroup,
   subscribeToGroupChat,
   voteGroupProof,
   type GroupChatChange,
   type GroupMessage,
+  type GroupSnapLook,
+  type GroupSnapOpen,
 } from '@/lib/groupChat';
 import { fetchGroup, type PeekGroup } from '@/lib/groups';
 import { fetchGroupGuesses, subscribeToGroupGuesses, type GroupGuess, type GroupGuessFeed } from '@/lib/groupGuess';
@@ -91,6 +101,29 @@ type ChatItem = { message: GroupMessage; guess?: undefined } | { guess: GroupGue
 // Guess Who ids are a different kind of id, so they get their own prefix (they can never clash with a message).
 const itemKey = (item: ChatItem) => (item.guess ? `guess:${item.guess.id}` : item.message.id);
 const itemTime = (item: ChatItem) => Date.parse(item.guess ? item.guess.created_at : item.message.created_at);
+// 👀 How a snap (not saved) looks in the chat, from your side.
+const SNAP_WORDS: Record<GroupSnapLook, string> = {
+  new: 'New snap · tap to view',
+  // Opened a moment ago on this phone but it didn't load: a tap still shows it as your first look.
+  retry: 'Tap to view',
+  replay: 'Tap to replay',
+  opened: 'Snap opened',
+  expired: 'Snap expired',
+  'before-joined': 'Sent before you joined',
+  sent: 'You sent a snap',
+  saved: 'Saved snap',
+};
+const SNAP_ICONS: Record<GroupSnapLook, keyof typeof Ionicons.glyphMap> = {
+  new: 'square',
+  retry: 'square',
+  replay: 'refresh',
+  opened: 'square-outline',
+  expired: 'square-outline',
+  'before-joined': 'square-outline',
+  sent: 'paper-plane',
+  saved: 'bookmark',
+};
+
 // What the full-screen viewer needs: just the picture's files.
 type ViewerMedia = {
   media_path: string | null;
@@ -161,6 +194,34 @@ export default function GroupChat() {
   // answer that set off before the latest change can be older than what's shown, so it doesn't replace it.
   const totalsChanges = useRef(new Map<string, number>());
   const { typing, onTextChange, clearTyping } = useGroupTyping(userId, groupId, group !== null);
+
+  // 👀 Snaps in this chat: who opened which (snap id → opens). You get your own opens, and everyone's on the snaps
+  // you sent ("Opened by …"). Loaded with the chat, again every 15 seconds and when you come back to the chat.
+  // An answer that set off before a newer one is dropped; if loading fails, what's shown stays.
+  const [snapOpens, setSnapOpens] = useState<Map<string, GroupSnapOpen[]>>(new Map());
+  const opensRequest = useRef(0);
+  const snapKey = (messages ?? [])
+    .filter((m) => m.kind === 'snap')
+    .map((m) => m.id)
+    .join('|');
+  const loadOpens = useCallback(() => {
+    if (!snapKey) return;
+    const request = ++opensRequest.current;
+    fetchGroupSnapOpens(snapKey.split('|'))
+      .then((found) => {
+        if (request === opensRequest.current) setSnapOpens(found);
+      })
+      .catch(() => {});
+  }, [snapKey]);
+  // A new snap arrived (or one went): load who opened them.
+  useEffect(() => {
+    loadOpens();
+  }, [loadOpens]);
+  // The 15-second check and coming back to the chat use the newest list of snaps.
+  const loadOpensNow = useRef(loadOpens);
+  useEffect(() => {
+    loadOpensNow.current = loadOpens;
+  }, [loadOpens]);
 
   // 🕵️ The group Guess Whos in this chat. null = none yet, or a server that doesn't have them yet (then the chat
   // works just like before). If loading fails for another reason, the ones on screen stay.
@@ -242,7 +303,14 @@ export default function GroupChat() {
           (current) =>
             current?.map((m) =>
               m.id === row.id
-                ? { ...m, proof_legit: row.proof_legit ?? m.proof_legit, proof_cap: row.proof_cap ?? m.proof_cap, proof_legacy: row.proof_legacy ?? m.proof_legacy }
+                ? {
+                    ...m,
+                    proof_legit: row.proof_legit ?? m.proof_legit,
+                    proof_cap: row.proof_cap ?? m.proof_cap,
+                    proof_legacy: row.proof_legacy ?? m.proof_legacy,
+                    // A snap was saved or unsaved in the chat.
+                    ...('saved_at' in row ? { saved_at: row.saved_at ?? null, saved_by: row.saved_by ?? null } : {}),
+                  }
                 : m,
             ) ?? current,
         );
@@ -265,6 +333,8 @@ export default function GroupChat() {
         .then((chats) => setMuted(chats.get(groupId)?.muted ?? false))
         .catch(() => {});
       load();
+      // Back from a snap: it shows as opened now.
+      loadOpensNow.current();
       const stop = subscribeToGroupChat(groupId, onChatChange);
       const stopReactions = subscribeToReactions(true, load);
       const stopGroup = subscribeToGroup(groupId, () => {
@@ -280,6 +350,7 @@ export default function GroupChat() {
           .then(setReads)
           .catch(() => {});
         loadGuesses();
+        loadOpensNow.current();
         setNow(Date.now());
       }, READS_EVERY_MS);
       return () => {
@@ -309,9 +380,10 @@ export default function GroupChat() {
           (a, b) => itemTime(b) - itemTime(a),
         );
 
-  // Photos, videos, proofs and Guess Whos need their links.
+  // Photos, videos, proofs and Guess Whos need their links. A snap's never do (unless it's saved in the chat): the
+  // snap viewer opens it first and then gets a one-minute link of its own. (The server wouldn't give one anyway.)
   const paths = [
-    ...(messages ?? []).flatMap((m) => [m.media_path, m.poster_path, m.overlay_path]),
+    ...(messages ?? []).filter((m) => m.kind !== 'snap' || !!m.saved_at).flatMap((m) => [m.media_path, m.poster_path, m.overlay_path]),
     ...shownGuesses.flatMap((post) => [post.media_path, post.poster_path, post.overlay_path]),
   ].filter((p): p is string => !!p && !p.includes('/voice/'));
   const urls = useMediaUrls(paths);
@@ -640,6 +712,47 @@ export default function GroupChat() {
     showOptions({ options });
   }
 
+  // Your own open of a snap (undefined = you haven't opened it).
+  const myOpenOf = (id: string) => snapOpens.get(id)?.find((open) => open.user_id === userId);
+  // Under a snap you sent: ✓ Delivered → 👁 Opened by Ana, Ben (or everyone) → Expired after 24 hours. And, like a
+  // one-on-one peek, who took a screenshot of it: "📸 Screenshot by Ana".
+  const sentSnapStatus = (snap: GroupMessage) => {
+    const opens = (snapOpens.get(snap.id) ?? []).filter((open) => open.user_id !== userId);
+    const openedBy = opens.map((open) => nameOf(open.user_id));
+    const shotBy = opens.filter((open) => open.screenshot_at).map((open) => nameOf(open.user_id));
+    const shots = shotBy.length > 0 ? ` · 📸 Screenshot by ${shotBy.join(', ')}` : '';
+    const over = !(now - Date.parse(snap.created_at) < GROUP_SNAP_LIFETIME_MS);
+    if (openedBy.length === 0) return over ? 'Expired' : '✓ Delivered';
+    const who = memberCount > 1 && openedBy.length >= memberCount - 1 ? 'everyone' : openedBy.join(', ');
+    return `${over ? 'Expired · opened' : '👁 Opened'} by ${who}${shots}`;
+  };
+
+  // 📌 Save a snap in the chat: it becomes a normal photo everyone in the group can open again. Or unsave it.
+  async function saveSnap(message: GroupMessage, save: boolean) {
+    try {
+      const done = await setGroupSnapSaved(message.id, save);
+      if (!done) {
+        Alert.alert(
+          save ? "Can't save this one" : "Can't unsave this one",
+          save
+            ? 'Snaps can only be saved up to a day after they were sent, by whoever sent it or someone who opened it.'
+            : 'Only whoever saved it, or whoever sent it, can unsave it.',
+        );
+        load();
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(save ? 'Saved in chat 📌 Everyone in the group can open it again' : 'Unsaved – it will disappear');
+      const savedAt = save ? new Date().toISOString() : null;
+      setMessages(
+        (current) =>
+          current?.map((m) => (m.id === message.id ? { ...m, saved_at: savedAt, saved_by: save ? userId : null } : m)) ?? current,
+      );
+    } catch (error) {
+      Alert.alert('Something went wrong', friendlyError(error));
+    }
+  }
+
   function openMessageMenu(message: GroupMessage) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const sender = people.get(message.sender_id);
@@ -649,6 +762,13 @@ export default function GroupChat() {
         ? { label: '📌 Unpin', onPress: () => pin(null) }
         : { label: '📌 Pin to the top', onPress: () => pin(message) },
     ];
+    // 👀 A snap: save it in the chat (whoever sent it, or anyone who opened it, within its 24 hours), or unsave it
+    // (whoever saved it, or whoever sent it).
+    if (canSaveGroupSnap(message, userId, myOpenOf(message.id), now)) {
+      actions.push({ label: 'Save in chat 📌', onPress: () => saveSnap(message, true) });
+    } else if (canUnsaveGroupSnap(message, userId)) {
+      actions.push({ label: 'Unsave', onPress: () => saveSnap(message, false) });
+    }
     if (message.sender_id === userId) {
       actions.push({
         label: 'Delete for everyone',
@@ -719,7 +839,11 @@ export default function GroupChat() {
               ? `🎯 ${m.body ?? ''}`
               : m.kind === 'sticker'
                 ? '🏷️ Sticker'
-                : '📸 Dare proof';
+                : m.kind === 'snap'
+                  ? m.saved_at
+                    ? '📌 Saved snap'
+                    : '👀 Snap'
+                  : '📸 Dare proof';
 
   function openGroupMenu() {
     showOptions({
@@ -743,6 +867,8 @@ export default function GroupChat() {
             }
           },
         },
+        // 🚪 Leave / 🗑️ Delete (who may delete: the person who made it, or whoever is the only one left).
+        ...(group ? leaveOrDeleteOptions(group, userId, showToast) : []),
       ],
     });
   }
@@ -935,6 +1061,15 @@ export default function GroupChat() {
                   const proofs = item.kind === 'dare' ? proofsByDare.get(item.id) ?? new Set<string>() : null;
                   const myProof = item.kind === 'dare' ? myProofByDare.get(item.id) : undefined;
                   const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
+                  // 👀 A snap that isn't saved: a pill to tap (it opens in the snap viewer), never the picture itself.
+                  // A saved snap shows like a normal photo (below).
+                  const snapLook =
+                    item.kind === 'snap' && !item.saved_at
+                      ? groupSnapLook(item, userId, myOpenOf(item.id), joinedAt, now, groupSnapUnshown(userId, item.id, now) !== null)
+                      : null;
+                  const freshSnap = snapLook === 'new' || snapLook === 'retry';
+                  const openSnap = freshSnap || snapLook === 'replay' ? () => router.push(`/snap/${item.id}?group=1`) : undefined;
+                  const showMedia = !snapLook && !!item.media_path && item.kind !== 'voice';
                   return (
                     <View style={[styles.row, mine ? styles.right : styles.left]}>
                       {!mine ? (
@@ -949,9 +1084,11 @@ export default function GroupChat() {
                         ) : null}
                         <Pressable
                           onLongPress={() => openMessageMenu(item)}
-                          onPress={item.media_path && item.kind !== 'voice' ? () => setViewing({ key: item.id, media: item }) : undefined}
-                          accessibilityRole={item.media_path && item.kind !== 'voice' ? 'button' : undefined}
-                          accessibilityLabel={item.media_path && item.kind !== 'voice' ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined}
+                          onPress={snapLook ? openSnap : showMedia ? () => setViewing({ key: item.id, media: item }) : undefined}
+                          accessibilityRole={openSnap || showMedia ? 'button' : undefined}
+                          accessibilityLabel={
+                            snapLook ? SNAP_WORDS[snapLook] : showMedia ? `Open ${item.media_type === 'video' ? 'video' : 'photo'}` : undefined
+                          }
                           style={styles.stretch}>
                           {item.kind === 'sticker' && item.sticker && isKnownSticker(item.sticker) ? (
                             <ChatSticker id={item.sticker} />
@@ -990,8 +1127,20 @@ export default function GroupChat() {
                                 </Pressable>
                               )}
                             </View>
+                          ) : snapLook ? (
+                            <View style={[styles.snap, freshSnap && styles.snapNew]}>
+                              <Ionicons name={SNAP_ICONS[snapLook]} size={16} color={freshSnap ? colors.white : colors.accent} />
+                              <Text style={[styles.snapText, freshSnap && styles.snapTextNew]} numberOfLines={1}>
+                                {SNAP_WORDS[snapLook]}
+                              </Text>
+                            </View>
                           ) : item.media_path ? (
                             <View>
+                              {item.kind === 'snap' ? (
+                                <Text style={[styles.proofTag, styles.savedTag]}>
+                                  📌 {item.saved_by === userId ? 'Saved by you' : item.saved_by && people.has(item.saved_by) ? `Saved by ${nameOf(item.saved_by)}` : 'Saved snap'}
+                                </Text>
+                              ) : null}
                               {item.kind === 'proof' ? (
                                 <Text style={[styles.proofTag, !proofCounts(item) && (proofOutcome(item) === 'cap' ? styles.proofTagCap : styles.proofTagOpen)]}>
                                   {proofLabel(item)}
@@ -1049,9 +1198,11 @@ export default function GroupChat() {
                         <Text style={[styles.time, ink]}>
                           {pinnedId === item.id ? '📌 ' : ''}
                           {timeAgo(item.created_at)}
-                          {mine && item.id === myLatest?.id && seenBy.length > 0
+                          {/* (A snap you sent says Delivered / Opened by instead, like a one-on-one peek.) */}
+                          {mine && item.id === myLatest?.id && snapLook !== 'sent' && seenBy.length > 0
                             ? ` · 👁 Seen by ${seenBy.length === memberCount - 1 ? 'everyone' : seenBy.join(', ')}`
                             : ''}
+                          {snapLook === 'sent' ? ` · ${sentSnapStatus(item)}` : ''}
                         </Text>
                       </View>
                     </View>
@@ -1356,6 +1507,30 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontWeight: '900',
     marginBottom: 4,
+  },
+  // 👀 A snap pill (like a peek in a one-on-one chat), and the tag on a saved snap.
+  snap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+  },
+  snapNew: {
+    backgroundColor: colors.accent,
+  },
+  snapText: {
+    ...font.small,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  snapTextNew: {
+    color: colors.white,
+  },
+  savedTag: {
+    color: colors.purple,
   },
   proofTagOpen: {
     color: colors.textMuted,

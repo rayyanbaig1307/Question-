@@ -176,19 +176,64 @@ export async function uploadMedia(
   const bytes = await readBytes(localUri);
   // The store takes files up to 30 MB. Say so kindly before uploading, instead of failing halfway.
   if (type === 'video' && bytes.byteLength > MAX_VIDEO_BYTES) throw new Error(TOO_BIG_VIDEO);
-  const { error } = await supabase.storage.from('media').upload(path, bytes, { contentType });
-  if (error) throw error;
+  await uploadWithRetries('media', path, bytes, contentType);
   return path;
 }
 
 // Uploads a profile picture to the public "avatars" bucket.
 export async function uploadAvatar(userId: string, localUri: string): Promise<string> {
   const path = `${userId}/${randomUUID()}.jpg`;
-  const { error } = await supabase.storage
-    .from('avatars')
-    .upload(path, await readBytes(localUri), { contentType: 'image/jpeg' });
-  if (error) throw error;
+  await uploadWithRetries('avatars', path, await readBytes(localUri), 'image/jpeg');
   return path;
+}
+
+// ---------------------------------------------------------------------------
+// Uploads try again by themselves after a hiccup.
+// Now and then an upload fails for a moment for no reason on your side: the signal drops, or the storage
+// server's front door answers "server error" (a 5xx, like the 520 the owner saw on a second photo in a row).
+// Then it waits a moment and tries again, up to 2 more times. A clear "no" from the store (400–499: not allowed,
+// too big, …) is never tried again – it would only say no again.
+// Only the file upload is tried again, never the chat message: the message is saved once, after the file is in.
+// ---------------------------------------------------------------------------
+export const UPLOAD_RETRY_WAITS_MS = [700, 1800];
+
+async function uploadWithRetries(bucket: 'media' | 'avatars', path: string, bytes: ArrayBuffer, contentType: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    const { error } = await supabase.storage.from(bucket).upload(path, bytes, { contentType });
+    if (!error) return;
+    // Trying again after a hiccup, the store says the file is already there: the hiccup came AFTER the earlier
+    // try had saved it. The file name is brand new and only this upload uses it, so the file is ours and done.
+    if (attempt > 0 && alreadyThere(error)) return;
+    if (attempt >= UPLOAD_RETRY_WAITS_MS.length || !worthTryingAgain(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, UPLOAD_RETRY_WAITS_MS[attempt]));
+  }
+}
+
+type StoreError = { name?: unknown; status?: unknown; statusCode?: unknown; message?: unknown };
+
+// The HTTP number the store answered with (0 when no answer came back at all).
+function answerNumber(error: StoreError): number {
+  const status = Number(error.status);
+  return Number.isFinite(status) ? status : 0;
+}
+
+// A hiccup worth another try: no answer at all (no signal, the connection dropped), or a "server error" (500 and
+// up, like 502, 503, 504 or 520). Never a 400–499 answer (the store clearly said no).
+export function worthTryingAgain(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const failure = error as StoreError;
+  const status = answerNumber(failure);
+  if (status >= 500) return true;
+  if (status >= 400) return false;
+  // No answer from the store: the storage library calls that a "StorageUnknownError" (the request itself failed).
+  return failure.name === 'StorageUnknownError';
+}
+
+// "The resource already exists" (409, sometimes sent inside a 400 answer).
+function alreadyThere(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const failure = error as StoreError;
+  return answerNumber(failure) === 409 || String(failure.statusCode ?? '') === '409' || /already exists/i.test(String(failure.message ?? ''));
 }
 
 export async function deleteMedia(paths: string[]): Promise<void> {

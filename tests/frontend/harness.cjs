@@ -184,7 +184,7 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/dares': { todayDareDay: () => '2026-11-04', useDare: () => ({ text: 'QA dare' }) },
     '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }) },
     '@/lib/legal': { useDareRulesAccepted: () => ({ accepted: true }) },
-    '@/lib/chat': { sendSnap: async () => {} },
+    '@/lib/chat': { sendSnap: async () => {}, sendChatPhoto: async () => {}, isChatPhoto: () => false },
     '@/lib/posts': { createPost: async () => ({ id: 'qa-post', drop_late_seconds: 0 }) },
     '@/lib/stories': { createStory: async () => {} },
     '@/lib/storyRings': { refreshStoryBadges: async () => {}, setStoryRings: () => {}, useStoryBadge: () => null },
@@ -192,6 +192,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     // 🕵️ Guess Who in group chats: a server without it (nothing to show, nothing to listen to).
     '@/lib/groupGuess': { fetchGroupGuesses: async () => null, subscribeToGroupGuesses: () => () => {}, postGroupGuess: async () => {} },
     '@/components/groups/GroupGuessCard': { GroupGuessCard: host('GroupGuessCard') },
+    // 🚪 Leave / 🗑️ Delete in a group's ⋯ menu: nothing by default (tests/frontend/group-delete.test.cjs loads the real one).
+    '@/components/groups/leaveOrDelete': { leaveOrDeleteOptions: () => [] },
     '@/components/SocialSignIn': { SOCIAL_SIGN_IN_AVAILABLE: false, SocialSignInButtons: host('SocialSignInButtons') },
     // Peekaboo+ (payments, chat backgrounds, pinned chats): off by default, so screens look like they do without it.
     '@/lib/plus': {

@@ -105,6 +105,14 @@ Database (PGlite, part of `npm test`):
   once nobody can post that day's drop; Who Peeked and report evidence follow the same rule; the three patched
   functions keep their public chat lines, the new helpers are private, a second run changes nothing, and a
   changed function stops the migration instead of being skipped.
+- `group-snaps.test.mjs` and `group-delete.test.mjs` (`20261229000000_group_snaps.sql`, the owner, 21 Nov): a group
+  snap's file can only be downloaded for 5 minutes after opening (or the one replay), only by the login (phone or
+  tablet) that opened it, never by old apps; saving makes it a normal photo for the group; a screenshot tells the
+  sender once; old snaps go to the daily cleanup. The maker (or the last one left) can delete a group, the last one
+  out deletes it, the maker's job passes to whoever has been in it longest (same order in the app's members list);
+  a deleted group's chat files and picture go to the daily cleanup (reported ones stay); groups that everyone left
+  with the old app are deleted when the migration runs. `tests/api/cleanup-media.test.mjs` covers the group
+  pictures in the daily cleanup.
 
 API and library (Vitest, part of `npm test`):
 

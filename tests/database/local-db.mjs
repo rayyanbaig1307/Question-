@@ -51,6 +51,11 @@ export async function initializeDatabase(db,{includeFixes=true}={}) {
       select coalesce(nullif(current_setting('request.jwt.claim.role', true),''),
         nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role');
     $$;
+    -- The whole login (all its claims, e.g. session_id: each signed-in phone has its own), like Supabase's auth.jwt().
+    create function auth.jwt() returns jsonb language sql stable as $$
+      select coalesce(nullif(current_setting('request.jwt.claim', true), ''),
+        nullif(current_setting('request.jwt.claims', true), ''))::jsonb;
+    $$;
     create table storage.buckets (
       id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]
     );

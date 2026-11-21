@@ -548,8 +548,12 @@ test('Reports start open even if a client attempts to mark them reviewed',async(
 });
 test('Message sender cannot pre-forge the saved/replayed state',async()=>{
   await friend(db,users[0],users[1]);
-  const message=(await rpc(0,"insert into messages(sender_id,recipient_id,kind,media_path,saved_at,saved_by,replayed_at) values($1,$2,'snap',$3,now(),$2,now()) returning *",[users[0],users[1],`${users[0]}/snaps/a.jpg`])).rows[0];
-  assert.equal(message.saved_at,null);assert.equal(message.saved_by,null);assert.equal(message.replayed_at,null);
+  const message=(await rpc(0,"insert into messages(sender_id,recipient_id,kind,media_path,saved_at,saved_by,replayed_at) values($1,$2,'snap',$3,'2000-01-01',$2,now()) returning *",[users[0],users[1],`${users[0]}/snaps/a.jpg`])).rows[0];
+  // Since 20261229000000_group_snaps.sql a peek you send yourself may arrive saved (a photo from the camera roll),
+  // but only as saved by YOU, right now: never as saved by the other person, at another time, or as replayed.
+  assert.equal(message.saved_by,users[0]);assert.equal(message.saved_at.getTime(),message.created_at.getTime());assert.equal(message.replayed_at,null);
+  const text=(await rpc(0,"insert into messages(sender_id,recipient_id,kind,body,saved_at,saved_by,replayed_at) values($1,$2,'text','hi',now(),$2,now()) returning *",[users[0],users[1]])).rows[0];
+  assert.equal(text.saved_at,null);assert.equal(text.saved_by,null);assert.equal(text.replayed_at,null);
 });
 test('Message sender cannot forge its timestamp or recipient read time',async()=>{
   await friend(db,users[0],users[1]);

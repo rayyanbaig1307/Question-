@@ -684,7 +684,8 @@ test('Deleting a guesser\'s or the poster\'s account works; the poster\'s group 
   assert.deepEqual(await feed(0, grp), []);
   assert.equal(await count('peek_groups where id = $1', [grp]), 1);
   assert.ok((await one('select changed_at from group_guess_pings where group_id = $1', [grp])).changed_at.getTime() > before);
-  // The group's maker goes too: the group stays without a maker, and Guess Whos by others stay
+  // The group's maker goes too: the group stays (since 20261229000000 whoever has been in it longest becomes its maker),
+  // and Guess Whos by others stay
   // (users[4] still has 2 names to pick from: users[3] and users[5]).
   const third = await postGuess(grp, 3);
   await db.query('delete from auth.users where id = $1', [users[0]]);

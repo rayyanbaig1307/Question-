@@ -282,13 +282,16 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     return () => clearTimeout(timer);
   }, [plusLookOn, plusAnswer, active]);
 
-  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = []) =>
+  // `fromRoll`: picked from the phone's Photos (camera roll), not taken with the camera just now. In a chat, a
+  // picture taken with the camera goes as a peek (view once); one picked from Photos goes as a normal photo.
+  const openEditor = (uri: string, fit: 'cover' | 'contain', video = false, lens: LensItem[] = [], fromRoll = false) =>
     router.push({
       pathname: '/editor',
       params: {
         uri,
         fit,
         ...(video ? { video: '1' } : {}),
+        ...(fromRoll ? { roll: '1' } : {}),
         // Face lens: where the drawings were, so they're on the photo as stickers you can still move.
         ...(lens.length > 0 ? { lens: JSON.stringify(lens) } : {}),
         ...(sendTo ? { to: sendTo } : {}),
@@ -509,10 +512,10 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
         Alert.alert('Too big', TOO_BIG_VIDEO);
         return;
       }
-      openEditor(asset.uri, 'cover', true);
+      openEditor(asset.uri, 'cover', true, [], true);
       return;
     }
-    openEditor(asset.uri, 'contain');
+    openEditor(asset.uri, 'contain', false, [], true);
   }
 
   return (

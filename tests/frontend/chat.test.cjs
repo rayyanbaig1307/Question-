@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { React, loadScreen, renderScreen, act, unmount, host } = require('./harness.cjs');
 const message = changes => ({ id: 'message1', sender_id: 'bob', recipient_id: 'alice', kind: 'text', body: 'Hello 👋', opened_at: null, saved_at: null, media_path: null, created_at: '2026-11-04T12:00:00Z', ...changes });
 
-function fixture({ send, search, mine = false, plus = false } = {}) {
+// messages: what the chat loads (by default one text message from Bob, or from you with `mine`).
+function fixture({ send, search, mine = false, plus = false, messages } = {}) {
   const calls = { sent: [], hidden: [], deleted: [], reacted: [], options: [], stickers: [], pushed: [] };
   const noop = () => {};
   const screen = loadScreen('src/app/(app)/chat/[id].tsx', {
@@ -17,11 +18,14 @@ function fixture({ send, search, mine = false, plus = false } = {}) {
     '@/components/VoiceNote': { MicButton: host('MicButton'), VoiceBubble: host('VoiceBubble') },
     '@/components/Overlays': { useOverlays: () => ({ showToast: noop, showOptions: value => calls.options.push(value) }) },
     '@/lib/chat': {
-      fetchConversation: async () => [message(mine ? { sender_id: 'alice', recipient_id: 'bob' } : {})], fetchDareStreak: async () => 0, markChatRead: async () => {}, cleanUpOpenedSnaps() {}, subscribeToMyMessages: () => noop,
+      fetchConversation: async () => messages ?? [message(mine ? { sender_id: 'alice', recipient_id: 'bob' } : {})], fetchDareStreak: async () => 0, markChatRead: async () => {}, cleanUpOpenedSnaps() {}, subscribeToMyMessages: () => noop,
       sendText: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[2] }); },
       sendSticker: async (...args) => { calls.stickers.push(args); return message({ id: 'sticker1', sender_id: 'alice', kind: 'sticker', sticker: args[2], body: `Sticker: ${args[2]}` }); },
       hideMessage: async id => calls.hidden.push(id), deleteMessage: async value => calls.deleted.push(value.id),
       searchConversation: async (_me, _friend, query) => search ? search(query) : [],
+      // 📷 A peek saved by its sender at the moment it was sent = a photo picked from Photos.
+      isChatPhoto: m => m.kind === 'snap' && !!m.saved_at && m.saved_by === m.sender_id && m.saved_at === m.created_at,
+      canReplay: () => false, canSave: () => false,
     },
     '@/lib/media': { useMediaUrl: () => null },
     '@/lib/friends': { fetchRelation: async () => ({ kind: 'friends' }) },
@@ -165,4 +169,53 @@ test('an emoji from the sticker picker goes as a normal message', async () => {
   const { calls } = await stickerFlow({ plus: false, pick: picker => picker.onPickEmoji('🔥') });
   assert.deepEqual(calls.sent.map(args => args[2]), ['🔥']);
   assert.deepEqual(calls.stickers, []);
+});
+
+// ---------------------------------------------------------------------------
+// 📷 A photo picked from Photos (a peek saved by its sender at the moment it was sent): it says photo, opens any
+// time, and can't be unsaved (that would make it disappear). A normal peek and a peek saved later are unchanged.
+// ---------------------------------------------------------------------------
+const texts = tree => tree.root.findAllByType('Text').map(node => require('./harness.cjs').textOf(node));
+const photo = changes => message({ kind: 'snap', body: null, media_type: 'photo', media_path: 'bob/snaps/p.jpg', saved_at: '2026-11-04T12:00:00Z', saved_by: 'bob', replayed_at: null, ...changes });
+
+test('a new photo from Photos says "New photo · tap to view" and opens in the viewer; no Unsave', async () => {
+  const { screen, calls } = fixture({ messages: [photo()] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('New photo · tap to view'), JSON.stringify(texts(tree)));
+    const bubble = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'New photo · tap to view');
+    await act(() => bubble.props.onPress());
+    assert.deepEqual(calls.pushed, ['/snap/message1']);
+    await act(() => openMenu(tree));
+    const labels = [...tree.root.findByType('MessageActions').props.actions.map(action => action.label)];
+    assert.ok(!labels.includes('Unsave'), JSON.stringify(labels));
+  } finally { await unmount(tree); }
+});
+
+test('an opened photo, and one you sent, can still be opened any time', async () => {
+  const seen = fixture({ messages: [photo({ opened_at: '2026-11-04T12:05:00Z' })] });
+  const tree = await renderScreen(seen.screen);
+  try {
+    assert.ok(texts(tree).includes('Photo · tap to view'));
+  } finally { await unmount(tree); }
+  const sent = fixture({ messages: [photo({ sender_id: 'alice', recipient_id: 'bob', saved_by: 'alice' })] });
+  const tree2 = await renderScreen(sent.screen);
+  try {
+    assert.ok(texts(tree2).includes('You sent a photo · tap to view'));
+  } finally { await unmount(tree2); }
+});
+
+test('a peek and a peek saved later still look like peeks', async () => {
+  const peek = fixture({ messages: [photo({ saved_at: null, saved_by: null })] });
+  const tree = await renderScreen(peek.screen);
+  try {
+    assert.ok(texts(tree).includes('New peek · tap to view'));
+  } finally { await unmount(tree); }
+  const later = fixture({ messages: [photo({ opened_at: '2026-11-04T12:05:00Z', saved_at: '2026-11-04T12:06:00Z', saved_by: 'alice' })] });
+  const tree2 = await renderScreen(later.screen);
+  try {
+    assert.ok(texts(tree2).includes('Saved peek · tap to view'));
+    await act(() => openMenu(tree2));
+    assert.ok(tree2.root.findByType('MessageActions').props.actions.some(action => action.label === 'Unsave'));
+  } finally { await unmount(tree2); }
 });

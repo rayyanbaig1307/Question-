@@ -10,14 +10,28 @@ function realProofRules() {
   const compiled = ts.transpileModule(readSource('src/lib/groupChat.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(compiled, { module, exports: module.exports, require: id => ({ './media': {}, './supabase': { supabase: {} } })[id] });
-  return { proofOutcome: module.exports.proofOutcome, proofCounts: module.exports.proofCounts, canVoteOnProof: module.exports.canVoteOnProof };
+  const real = module.exports;
+  return {
+    proofOutcome: real.proofOutcome, proofCounts: real.proofCounts, canVoteOnProof: real.canVoteOnProof,
+    // 👀 The real snap rules too (how a snap looks for you, who may save / unsave it).
+    groupSnapLook: real.groupSnapLook, canSaveGroupSnap: real.canSaveGroupSnap, canUnsaveGroupSnap: real.canUnsaveGroupSnap,
+    groupSnapLive: real.groupSnapLive, GROUP_SNAP_LIFETIME_MS: real.GROUP_SNAP_LIFETIME_MS,
+    // Snaps opened on this phone but not shown yet ("Tap to view").
+    groupSnapUnshown: real.groupSnapUnshown, noteGroupSnapUnshown: real.noteGroupSnapUnshown,
+  };
 }
 // joinedAt: when the person on screen (alice) joined the group – by default before every message here.
 // guesses: what fetchGroupGuesses returns (null = a server without group Guess Who); fetchGuesses(n) instead
 // answers the n-th load. card: a GroupGuessCard to use instead of the stand-in (e.g. the real one).
-function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false, guesses = null, fetchGuesses, guessAnswer = async () => 'bob', card } = {}) {
+// snapOpens: what fetchGroupSnapOpens returns (snap id → opens), or a function of the n-th load. saveSnap: what
+// setGroupSnapSaved answers. reads: when each member last read the chat (member id → time). unshown: snaps alice
+// opened on this phone that didn't load (snap ids).
+function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false, guesses = null, fetchGuesses, guessAnswer = async () => 'bob', card, snapOpens = new Map(), saveSnap = async () => true, reads = new Map(), unshown = [] } = {}) {
+  const rules = realProofRules();
+  for (const id of unshown) rules.noteGroupSnapUnshown('alice', id, 'first');
   const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null,
-    reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [], haptics: [], refocus: null };
+    reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [], haptics: [], refocus: null, exitMenus: [],
+    opensFetches: [], snapSaves: [], mediaPaths: [], alerts: [] };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
@@ -43,8 +57,8 @@ function fixture({ messages = [message()], send, search, missing = false, member
     '@/components/ZoomableImage': { ZoomableImage: host('ZoomableImage') },
     '@/components/Overlays': { useOverlays: () => ({ showToast: value => calls.toasts.push(value), showOptions: value => calls.options.push(value) }) },
     '@/lib/groupChat': {
-      ...realProofRules(),
-      fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => { calls.reads++; },
+      ...rules,
+      fetchGroupMessages: async () => { calls.loads++; return fetchMessages ? fetchMessages(calls.loads) : messages; }, fetchGroupReads: async () => new Map(reads), fetchGroupChats: async () => new Map(), markGroupChatRead: async () => { calls.reads++; },
       subscribeToGroupChat: (_group, onChange) => { calls.onChange = onChange; return stop; }, subscribeToGroup: () => stop,
       fetchMyProofVotes: async (...args) => { calls.voteFetches.push(args); return fetchVotes ? fetchVotes(...args) : new Map(myVotes); },
       fetchMyGroupJoin: async (...args) => { calls.joinFetches.push(args); return joinedAt(...args); },
@@ -53,6 +67,8 @@ function fixture({ messages = [message()], send, search, missing = false, member
       sendGroupMessage: async (...args) => { calls.sent.push(args); if (send) await send(...args); return message({ id: 'sent', sender_id: 'alice', body: args[1] }); },
       deleteGroupMessage: async value => { calls.deleted.push(value.id); },
       pinGroupMessage: async (...args) => { calls.pinned.push(args); }, searchGroupMessages: async (_group, query) => search ? search(query) : [],
+      fetchGroupSnapOpens: async ids => { calls.opensFetches.push([...ids]); return typeof snapOpens === 'function' ? snapOpens(calls.opensFetches.length) : snapOpens; },
+      setGroupSnapSaved: async (...args) => { calls.snapSaves.push(args); return saveSnap(...args); },
     },
     '@/lib/groups': { fetchGroup: async () => missing ? null : group },
     // 🕵️ Group Guess Who: the list, its live listener, and the Guess Who calls the chat uses.
@@ -68,7 +84,10 @@ function fixture({ messages = [message()], send, search, missing = false, member
     },
     '@/lib/safety': { REPORT_REASONS: [{ code: 'spam', label: 'Spam 🗑️' }, { code: 'other', label: 'Something else 🤔' }] },
     ...(card ? { '@/components/groups/GroupGuessCard': { GroupGuessCard: card } } : {}),
-    '@/lib/media': { useMediaUrls: paths => Object.fromEntries(paths.map(path => [path, `file:///qa/${path}`])) },
+    // 🚪 Leave / 🗑️ Delete: a stand-in that notes what it was given (the real one: tests/frontend/group-delete.test.cjs).
+    '@/components/groups/leaveOrDelete': { leaveOrDeleteOptions: (g, me) => { calls.exitMenus.push([g.id, me]); return [{ label: '🚪 Leave group', onPress() {} }, { label: '🗑️ Delete group', onPress() {} }]; } },
+    // Every path the chat asks a link for (a snap's must never be here unless it's saved).
+    '@/lib/media': { useMediaUrls: paths => { calls.mediaPaths.push(...paths); return Object.fromEntries(paths.map(path => [path, `file:///qa/${path}`])); } },
     '@/lib/reactions': { fetchReactions: async () => new Map(), subscribeToReactions: () => stop, toggleReaction: async (...args) => calls.reacted.push(args) },
     '@/lib/time': { timeAgo: () => 'now' },
     '@/lib/typing': { useGroupTyping: () => ({ typing: [], onTextChange: noop, clearTyping: noop }) },
@@ -167,6 +186,20 @@ test('a removed group hides the composer and every message', async () => {
   try {
     assert.equal(tree.root.findAllByType('TextInput').length, 0);
     assert.equal(tree.root.findByType('EmptyState').props.title, 'This group is gone');
+  } finally { await unmount(tree); }
+});
+
+test('the group chat ••• menu has Leave group and Delete group at the end', async () => {
+  const { screen, calls } = fixture();
+  const tree = await renderScreen(screen);
+  try {
+    const more = tree.root.findByType('ScreenHeader').props.right;
+    assert.equal(more.props.label, 'Group chat options');
+    await act(() => more.props.onPress());
+    const labels = [...calls.options.at(-1).options.map(option => option.label)];
+    assert.deepEqual([...labels.slice(-2)], ['🚪 Leave group', '🗑️ Delete group']);
+    assert.ok(labels.indexOf('🔕 Mute group chat') < labels.indexOf('🚪 Leave group'));
+    assert.deepEqual(calls.exitMenus, [['squad', 'alice']]);
   } finally { await unmount(tree); }
 });
 
@@ -1019,5 +1052,207 @@ test('the Guess Who bubble is offered even while the Guess Whos are still loadin
   try {
     await act(() => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a photo or video').props.onPress());
     assert.deepEqual(plain(calls.pushed.map(to => to.params)), [{ group: 'squad', groupGuessOk: '1' }]);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 👀 Group snaps (the owner, 21 Nov): a picture from the group chat's camera is a snap. It shows as a pill to tap –
+// never the picture itself (the server only lets you download it for a few minutes after you open it, in the snap
+// viewer) – until someone saves it in the chat; then it's a normal photo for everyone.
+// ---------------------------------------------------------------------------
+const ago = ms => new Date(Date.now() - ms).toISOString();
+const snap = (id, sender, changes = {}) => message({ id, sender_id: sender, kind: 'snap', body: null, media_type: 'photo', media_path: `${sender}/snaps/${id}.jpg`, saved_at: null, saved_by: null, created_at: ago(60_000), ...changes });
+const opened = (id, user, replayed = false) => ({ message_id: id, user_id: user, opened_at: ago(30_000), replayed_at: replayed ? ago(20_000) : null });
+const snapPill = (tree, label) => tree.root.findAllByType('Pressable').find(node => node.props.onLongPress && node.props.accessibilityLabel === label);
+
+test('a new snap from someone is a "New snap · tap to view" pill: no picture, no link, and a tap opens the snap viewer', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob')] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('New snap · tap to view'), JSON.stringify(texts(tree)));
+    assert.equal(tree.root.findAllByType('ExpoImage').length, 0, 'the picture is never in the chat');
+    assert.equal(tree.root.findAllByType('VideoClip').length, 0);
+    assert.ok(!calls.mediaPaths.includes('bob/snaps/s1.jpg'), 'no link is asked for (it would be kept for an hour)');
+    await act(() => snapPill(tree, 'New snap · tap to view').props.onPress());
+    assert.deepEqual(calls.pushed, ['/snap/s1?group=1']);
+    assert.deepEqual(calls.opensFetches.at(-1), ['s1'], 'who opened it is loaded');
+  } finally { await unmount(tree); }
+});
+
+test('after opening: "Tap to replay" (one replay), then "Snap opened" (nothing to tap)', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob'), snap('s2', 'bob', { created_at: ago(120_000) })], snapOpens: new Map([['s1', [opened('s1', 'alice')]], ['s2', [opened('s2', 'alice', true)]]]) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('Tap to replay'));
+    assert.ok(texts(tree).includes('Snap opened'));
+    await act(() => snapPill(tree, 'Tap to replay').props.onPress());
+    assert.deepEqual(calls.pushed, ['/snap/s1?group=1']);
+    assert.equal(snapPill(tree, 'Snap opened').props.onPress, undefined);
+  } finally { await unmount(tree); }
+});
+
+test('a snap over a day old that you never opened has expired; one sent before you joined says so', async () => {
+  const { screen } = fixture({ messages: [snap('old', 'bob', { created_at: ago(25 * 60 * 60 * 1000) })] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('Snap expired'));
+    assert.equal(snapPill(tree, 'Snap expired').props.onPress, undefined);
+  } finally { await unmount(tree); }
+  // Sent 3 hours ago, but you were added 1 hour ago: you can't open it (the server says no too).
+  const late = fixture({ messages: [snap('s3', 'bob', { created_at: ago(3 * 60 * 60 * 1000) })], joinedAt: async () => ago(60 * 60 * 1000) });
+  const tree2 = await renderScreen(late.screen);
+  try {
+    assert.ok(texts(tree2).includes('Sent before you joined'));
+    assert.equal(snapPill(tree2, 'Sent before you joined').props.onPress, undefined);
+  } finally { await unmount(tree2); }
+});
+
+test('your own snap: "You sent a snap · ✓ Delivered", then who opened it, then "everyone"', async () => {
+  const mine = snap('m1', 'alice');
+  const delivered = fixture({ messages: [mine], members: ['alice', 'bob', 'cara'] });
+  const tree = await renderScreen(delivered.screen);
+  try {
+    assert.ok(texts(tree).includes('You sent a snap'));
+    assert.ok(texts(tree).some(text => text.endsWith(' · ✓ Delivered')), JSON.stringify(texts(tree)));
+    assert.equal(snapPill(tree, 'You sent a snap').props.onPress, undefined, 'you do not open your own snap again');
+  } finally { await unmount(tree); }
+
+  const some = fixture({ messages: [mine], members: ['alice', 'bob', 'cara'], snapOpens: new Map([['m1', [opened('m1', 'bob')]]]) });
+  const tree2 = await renderScreen(some.screen);
+  try {
+    assert.ok(texts(tree2).some(text => text.endsWith(' · 👁 Opened by bob')), JSON.stringify(texts(tree2)));
+  } finally { await unmount(tree2); }
+
+  const all = fixture({ messages: [mine], members: ['alice', 'bob', 'cara'], snapOpens: new Map([['m1', [opened('m1', 'bob'), opened('m1', 'cara')]]]) });
+  const tree3 = await renderScreen(all.screen);
+  try {
+    assert.ok(texts(tree3).some(text => text.endsWith(' · 👁 Opened by everyone')), JSON.stringify(texts(tree3)));
+  } finally { await unmount(tree3); }
+});
+
+test('who opened your snap is checked again every 15 seconds', async () => {
+  let opens = new Map();
+  const { screen, calls } = fixture({ messages: [snap('m1', 'alice')], snapOpens: () => opens });
+  const tree = await renderScreen(screen);
+  try {
+    const before = calls.opensFetches.length;
+    opens = new Map([['m1', [opened('m1', 'bob')]]]);
+    await act(async () => { [...screen.calls.intervals.values()].forEach(tick => tick()); await new Promise(r => setTimeout(r, 0)); });
+    assert.ok(calls.opensFetches.length > before);
+    assert.ok(texts(tree).some(text => text.endsWith(' · 👁 Opened by everyone')), JSON.stringify(texts(tree)));
+  } finally { await unmount(tree); }
+});
+
+test('a saved snap is a normal photo in the chat for everyone, with who saved it', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob', { saved_at: ago(10_000), saved_by: 'bob' })] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(calls.mediaPaths.includes('bob/snaps/s1.jpg'));
+    assert.equal(tree.root.findAllByType('ExpoImage').length, 1);
+    assert.ok(texts(tree).includes('📌 Saved by bob'), JSON.stringify(texts(tree)));
+    const photo = tree.root.findAllByType('Pressable').find(node => node.props.onLongPress && node.props.accessibilityLabel === 'Open photo');
+    await act(() => photo.props.onPress());
+    assert.equal(tree.root.findAllByType('ZoomableImage').length, 1, 'opens full screen like any photo');
+    assert.deepEqual(calls.pushed, [], 'not through the snap viewer');
+  } finally { await unmount(tree); }
+});
+
+test('hold a snap you opened → Save in chat 📌 (it becomes a photo); hold one you saved → Unsave; a new one has no Save', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob'), snap('s2', 'bob', { created_at: ago(90_000) })], snapOpens: new Map([['s1', [opened('s1', 'alice')]]]) });
+  const tree = await renderScreen(screen);
+  try {
+    const labels = () => [...tree.root.findByType('MessageActions').props.actions.map(action => action.label)];
+    await act(() => snapPill(tree, 'Tap to replay').props.onLongPress());
+    assert.ok(labels().includes('Save in chat 📌'));
+    await act(() => tree.root.findByType('MessageActions').props.actions.find(action => action.label === 'Save in chat 📌').onPress());
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.snapSaves)), [['s1', true]]);
+    assert.equal(calls.toasts.at(-1), 'Saved in chat 📌 Everyone in the group can open it again');
+    assert.ok(texts(tree).includes('📌 Saved by you'), 'it shows as a photo now');
+    await act(() => snapPill(tree, 'New snap · tap to view').props.onLongPress());
+    assert.ok(!labels().includes('Save in chat 📌'), 'open it before you can save it');
+    const photo = tree.root.findAllByType('Pressable').find(node => node.props.onLongPress && node.props.accessibilityLabel === 'Open photo');
+    await act(() => photo.props.onLongPress());
+    assert.ok(labels().includes('Unsave'));
+  } finally { await unmount(tree); }
+});
+
+test('a save the server refuses says why and changes nothing', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob')], snapOpens: new Map([['s1', [opened('s1', 'alice')]]]), saveSnap: async () => false });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => snapPill(tree, 'Tap to replay').props.onLongPress());
+    await act(() => tree.root.findByType('MessageActions').props.actions.find(action => action.label === 'Save in chat 📌').onPress());
+    assert.equal(screen.calls.alerts.at(-1)[0], "Can't save this one");
+    assert.ok(texts(tree).includes('Tap to replay'));
+    assert.ok(!calls.mediaPaths.includes('bob/snaps/s1.jpg'));
+  } finally { await unmount(tree); }
+});
+
+test('someone else saving a snap (a live update) turns it into a photo; unsaving turns it back', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob')], snapOpens: new Map([['s1', [opened('s1', 'alice')]]]) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => { calls.onChange({ event: 'UPDATE', message: { id: 's1', saved_at: ago(1000), saved_by: 'bob' } }); });
+    assert.ok(texts(tree).includes('📌 Saved by bob'));
+    await act(async () => { calls.onChange({ event: 'UPDATE', message: { id: 's1', saved_at: null, saved_by: null } }); });
+    assert.ok(texts(tree).includes('Tap to replay'));
+  } finally { await unmount(tree); }
+});
+
+test('a reply to a snap and a pinned snap say "👀 Snap"', async () => {
+  const { screen } = fixture({ messages: [message({ id: 'r1', reply_to: 's1' }), snap('s1', 'bob')], pinned: 's1' });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(tree.root.findByType('ReplyQuote').props.text, '👀 Snap');
+    assert.ok(texts(tree).some(text => text.endsWith('👀 Snap')));
+  } finally { await unmount(tree); }
+});
+
+test('normal photos, videos and proofs still show in the chat as before', async () => {
+  const { screen, calls } = fixture({ messages: [message({ id: 'p1', kind: 'photo', media_type: 'photo', media_path: 'bob/group/p1.jpg' }), message({ id: 'v1', kind: 'proof', dare_id: 'd1', media_type: 'photo', media_path: 'bob/group/v1.jpg' })] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(calls.mediaPaths.includes('bob/group/p1.jpg'));
+    assert.ok(calls.mediaPaths.includes('bob/group/v1.jpg'));
+    assert.equal(tree.root.findAllByType('ExpoImage').length, 2);
+  } finally { await unmount(tree); }
+});
+
+test('your newest message is a snap nobody opened yet: it says ✓ Delivered, never "Seen by" as well', async () => {
+  const mine = snap('m1', 'alice', { created_at: ago(60_000) });
+  // Bob read the chat after the snap arrived, but didn't tap it.
+  const { screen } = fixture({ messages: [mine], members: ['alice', 'bob', 'cara'], reads: new Map([['bob', ago(1_000)]]) });
+  const tree = await renderScreen(screen);
+  try {
+    const all = texts(tree).join('\n');
+    assert.match(all, /✓ Delivered/);
+    assert.doesNotMatch(all, /Seen by/);
+  } finally { await unmount(tree); }
+  // A normal message still says who saw it.
+  const text = fixture({ messages: [message({ id: 't1', sender_id: 'alice', created_at: ago(60_000) })], members: ['alice', 'bob', 'cara'], reads: new Map([['bob', ago(1_000)]]) });
+  const tree2 = await renderScreen(text.screen);
+  try {
+    assert.match(texts(tree2).join('\n'), /👁 Seen by bob/);
+  } finally { await unmount(tree2); }
+});
+
+test('your snap says who took a screenshot of it, like a one-on-one peek', async () => {
+  const mine = snap('m1', 'alice');
+  const shot = { ...opened('m1', 'bob'), screenshot_at: ago(10_000) };
+  const { screen } = fixture({ messages: [mine], members: ['alice', 'bob', 'cara'], snapOpens: new Map([['m1', [shot, opened('m1', 'cara')]]]) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).some(text => text.endsWith(' · 👁 Opened by everyone · 📸 Screenshot by bob')), JSON.stringify(texts(tree)));
+  } finally { await unmount(tree); }
+});
+
+test('a snap you opened on this phone that didn\'t load says "Tap to view" (not "Tap to replay"), and a tap opens it', async () => {
+  const { screen, calls } = fixture({ messages: [snap('s1', 'bob')], snapOpens: new Map([['s1', [opened('s1', 'alice')]]]), unshown: ['s1'] });
+  const tree = await renderScreen(screen);
+  try {
+    assert.ok(texts(tree).includes('Tap to view'), JSON.stringify(texts(tree)));
+    assert.ok(!texts(tree).includes('Tap to replay'));
+    await act(() => snapPill(tree, 'Tap to view').props.onPress());
+    assert.deepEqual(calls.pushed, ['/snap/s1?group=1']);
   } finally { await unmount(tree); }
 });

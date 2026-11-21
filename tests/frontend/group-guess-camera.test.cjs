@@ -8,7 +8,8 @@ const { React, renderer, loadScreen, act, unmount, host } = require('./harness.c
 // the friends' Guess Who (guess=1). A group dare proof camera has no Guess Who.
 const plain = value => JSON.parse(JSON.stringify(value));
 
-function loadCamera() {
+// picked: what the phone's Photos picker gives back (by default you cancel it).
+function loadCamera({ picked = null } = {}) {
   const calls = { pushed: [], pickers: [], shots: 0 };
   const noop = () => {};
   class CameraView extends React.Component {
@@ -18,7 +19,7 @@ function loadCamera() {
   const shared = initial => React.useRef({ value: initial, get() { return this.value; }, set(value) { this.value = value; } }).current;
   const screen = loadScreen('src/components/home/CameraPage.tsx', {
     'expo-camera': { CameraView, useCameraPermissions: () => [{ granted: true }, noop], useMicrophonePermissions: () => [{ granted: true }, noop] },
-    'expo-image-picker': { launchImageLibraryAsync: async options => { calls.pickers.push(options); return { canceled: true, assets: [] }; } },
+    'expo-image-picker': { launchImageLibraryAsync: async options => { calls.pickers.push(options); return picked ? { canceled: false, assets: [picked] } : { canceled: true, assets: [] }; } },
     'expo-router': { router: { push: to => calls.pushed.push(to), back: noop } },
     'react-native-reanimated': {
       __esModule: true, default: { View: host('AnimatedView') },
@@ -45,8 +46,8 @@ function loadCamera() {
   return { CameraPage: screen.exports.CameraPage, calls };
 }
 
-async function renderCamera(props) {
-  const { CameraPage, calls } = loadCamera();
+async function renderCamera(props, options) {
+  const { CameraPage, calls } = loadCamera(options);
   let tree;
   await act(async () => { tree = renderer.create(React.createElement(CameraPage, { active: true, ...props })); });
   const shutter = () => tree.root.findByType('Bouncy');
@@ -143,4 +144,36 @@ test('the camera screen passes on what the group chat said (groupGuessOk=1 only)
     } finally { await unmount(tree); }
   }
   assert.deepEqual(seen, [['squad', true], ['squad', false], ['squad', false]]);
+});
+
+// ---------------------------------------------------------------------------
+// 👀 Where the picture came from. In a chat, a picture taken with the camera goes as a peek (view once); one picked
+// from Photos (the camera roll) goes as a normal photo. The camera tells the editor with roll=1.
+// ---------------------------------------------------------------------------
+const gallery = tree => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Pick from gallery');
+
+test('a photo picked from Photos in a group chat camera tells the editor it came from the camera roll (roll=1)', async () => {
+  const { tree, calls } = await renderCamera({ sendToGroup: 'squad' }, { picked: { uri: 'file:///qa-roll.jpg', type: 'image' } });
+  try {
+    await act(() => gallery(tree).props.onPress());
+    assert.deepEqual(plain(calls.pushed[0].params), { uri: 'file:///qa-roll.jpg', fit: 'contain', roll: '1', group: 'squad' });
+  } finally { await unmount(tree); }
+});
+
+test('a video picked from Photos says roll=1 too; a 1:1 chat camera does the same', async () => {
+  const { tree, calls } = await renderCamera({ sendTo: 'bob' }, { picked: { uri: 'file:///qa-roll.mp4', type: 'video', duration: 3000, fileSize: 1000 } });
+  try {
+    await act(() => gallery(tree).props.onPress());
+    assert.deepEqual(plain(calls.pushed[0].params), { uri: 'file:///qa-roll.mp4', fit: 'cover', video: '1', roll: '1', to: 'bob' });
+  } finally { await unmount(tree); }
+});
+
+test('a picture taken with the shutter never says roll=1 (it goes as a peek in a chat)', async () => {
+  for (const props of [{ sendToGroup: 'squad' }, { sendTo: 'bob' }, { sendToGroup: 'squad', groupDare: 'dare1' }]) {
+    const { tree, calls, shutter } = await renderCamera(props);
+    try {
+      await act(() => shutter().props.onPress());
+      assert.equal(calls.pushed[0].params.roll, undefined);
+    } finally { await unmount(tree); }
+  }
 });

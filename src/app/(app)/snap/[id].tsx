@@ -23,10 +23,22 @@ import { SafeEdge, SafeScreen } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { ZoomableImage } from '@/components/ZoomableImage';
 import { useMe } from '@/lib/auth';
-import { canReplay, fetchMessage, getSnapUrl, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
+import { canReplay, fetchMessage, getSnapUrl, isChatPhoto, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
+import {
+  canUnsaveGroupSnap,
+  fetchGroupMessage,
+  fetchGroupSnapOpens,
+  forgetGroupSnapUnshown,
+  groupSnapScreenshot,
+  groupSnapUnshown,
+  noteGroupSnapUnshown,
+  openGroupSnap,
+  replayGroupSnap,
+  setGroupSnapSaved,
+} from '@/lib/groupChat';
 import { fetchProfile } from '@/lib/profiles';
-import { useScreenshotNotice } from '@/lib/screenshots';
+import { useScreenshotDetector, useScreenshotNotice } from '@/lib/screenshots';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { colors, font, space } from '@/theme';
@@ -42,6 +54,13 @@ const MIN_LEFT_MS = 1000;
 // first = opening it for the first time, replay = your one replay, saved = saved in the chat (no time limit).
 type Mode = 'first' | 'replay' | 'saved';
 
+// 👀 Group snaps are opened FIRST (the server then lets you download them for 5 minutes, on this phone) and downloaded
+// after – the other way round from a one-on-one peek. If the download fails, or you go back while it's downloading,
+// the view isn't wasted: tapping it again within a few minutes shows it without using up your replay (the chat then
+// says "Tap to view"; see UNSHOWN_RETRY_MS in src/lib/groupChat.ts). The chat's clock moves every 15 seconds, so a
+// tap here gets half a minute more than the chat shows – still well inside the server's 5 minutes.
+const UNSHOWN_EXTRA_MS = 30 * 1000;
+
 type State =
   | { kind: 'loading' }
   | { kind: 'gone' }
@@ -54,13 +73,22 @@ type State =
       video: { posterUrl: string | null; overlayUrl: string | null } | null;
       sender: Profile | null;
       mode: Mode;
-      other: string;
+      // The other person in a one-on-one chat (told about screenshots); null in a group chat.
+      other: string | null;
+      // A photo picked from Photos in a one-on-one chat (it never disappears: no timer, no Save button).
+      photo: boolean;
+      // Whether the Save / Saved button shows (a group snap someone else saved: only they or the sender can unsave).
+      canToggleSave: boolean;
     };
 
 // Shows a peek (a photo sent in chat) for 10 seconds. You get one replay afterwards,
 // and a peek that's saved in the chat can be opened any time.
 export default function SnapViewer() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `group=1`: a snap in a group chat (a group_messages row); otherwise a peek in a one-on-one chat.
+  const { id, group } = useLocalSearchParams<{ id: string; group?: string }>();
+  const inGroup = group === '1';
+  // What it's called on screen (once it's loaded, a photo picked from Photos is called a photo: see shownWord).
+  const word = inGroup ? 'snap' : 'peek';
   const { userId } = useMe();
   const { showToast, showOptions } = useOverlays();
   const { report } = useSafetyActions();
@@ -79,8 +107,81 @@ export default function SnapViewer() {
 
   useEffect(() => {
     let cancelled = false;
+    // 👀 A snap in a group chat.
+    async function loadGroupSnap() {
+      const message = await fetchGroupMessage(id);
+      if (cancelled) return;
+      if (!message || message.kind !== 'snap' || !message.media_path) {
+        setState({ kind: 'gone' });
+        return;
+      }
+      let mode: Mode;
+      if (message.saved_at) {
+        // Saved in the chat: a normal photo for everyone in the group (and always yours to see if you sent it).
+        // Opening it only notes that you've seen it; whether you may see it is up to the download below.
+        mode = 'saved';
+        if (message.sender_id !== userId) await openGroupSnap(message.id).catch(() => false);
+      } else if (message.sender_id === userId) {
+        // Your own snap (not saved): like a peek you sent, you don't open it again.
+        setState({ kind: 'gone' });
+        return;
+      } else {
+        const unshown = groupSnapUnshown(userId, message.id, Date.now(), UNSHOWN_EXTRA_MS);
+        if (unshown) {
+          // Opened a moment ago on this phone but never shown: the server still lets you download it.
+          mode = unshown;
+        } else {
+          const opens = await fetchGroupSnapOpens([message.id]);
+          const mine = opens.get(message.id)?.find((open) => open.user_id === userId);
+          if (cancelled) return;
+          if (mine && mine.replayed_at) {
+            setState({ kind: 'gone' });
+            return;
+          }
+          mode = mine ? 'replay' : 'first';
+          // The server decides (24 hours, joined after it was sent, removed from the group…).
+          const allowed = mode === 'first' ? await openGroupSnap(message.id) : await replayGroupSnap(message.id);
+          if (!allowed) {
+            if (!cancelled) setState({ kind: 'gone' });
+            return;
+          }
+          noteGroupSnapUnshown(userId, message.id, mode);
+        }
+      }
+      // You may have gone back meanwhile: it stays ready for a few minutes (see UNSHOWN_RETRY_MS).
+      if (cancelled) return;
+      // A one-minute link, never the chat's longer-lasting ones.
+      const url = await getSnapUrl(message.media_path);
+      const isVideo = message.media_type === 'video';
+      const posterUrl = isVideo && message.poster_path ? await getSnapUrl(message.poster_path) : null;
+      const overlayUrl = isVideo && message.overlay_path ? await getSnapUrl(message.overlay_path) : null;
+      const ready = isVideo ? !!url && (!posterUrl || (await Image.prefetch(posterUrl, 'memory'))) : !!url && (await Image.prefetch(url, 'memory'));
+      if (cancelled) return;
+      if (!url || !ready) {
+        setState({ kind: 'error' });
+        return;
+      }
+      forgetGroupSnapUnshown(userId, message.id);
+      const sender = await fetchProfile(message.sender_id).catch(() => null);
+      if (cancelled) return;
+      setSaved(mode === 'saved');
+      setState({
+        kind: 'showing',
+        url,
+        video: isVideo ? { posterUrl, overlayUrl } : null,
+        sender,
+        mode,
+        other: null,
+        photo: false,
+        canToggleSave: mode !== 'saved' || canUnsaveGroupSnap(message, userId),
+      });
+    }
     (async () => {
       try {
+        if (inGroup) {
+          await loadGroupSnap();
+          return;
+        }
         const message = await fetchMessage(id);
         if (cancelled) return;
         if (!message || message.kind !== 'snap' || !message.media_path) {
@@ -123,7 +224,8 @@ export default function SnapViewer() {
         if (!cancelled) {
           setSaved(mode === 'saved');
           const other = message.sender_id === userId ? message.recipient_id : message.sender_id;
-          setState({ kind: 'showing', url, video: isVideo ? { posterUrl, overlayUrl } : null, sender, mode, other });
+          const photo = mode === 'saved' && isChatPhoto(message);
+          setState({ kind: 'showing', url, video: isVideo ? { posterUrl, overlayUrl } : null, sender, mode, other, photo, canToggleSave: !photo });
         }
       } catch {
         if (!cancelled) setState({ kind: 'error' });
@@ -132,7 +234,7 @@ export default function SnapViewer() {
     return () => {
       cancelled = true;
     };
-  }, [id, userId]);
+  }, [id, userId, inGroup]);
 
   // The timer runs unless the peek is saved (saving it stops the timer): 10 seconds for a photo, the video's
   // length for a video (it starts once the video has loaded). It waits while the ⋯ menu is open (the peek is
@@ -161,23 +263,38 @@ export default function SnapViewer() {
     return () => cancelAnimation(progress);
   }, [timed, progress, seconds]);
 
-  // Screenshot it → they'll know.
+  // Screenshot it → they'll know. One-on-one: the other person in the chat (`other`; null in a group chat).
   useScreenshotNotice(userId, state.kind === 'showing' ? state.other : null, 'peek', state.kind === 'showing', () =>
     showToast('📸 They’ll see you took a screenshot'),
   );
+  // 📸 A group snap: whoever sent it is told (once per snap). Not for a saved snap – that's a normal photo now.
+  useScreenshotDetector(state.kind === 'showing' && inGroup && state.mode !== 'saved' && !saved, () => {
+    groupSnapScreenshot(id)
+      .then((told) => {
+        if (told) showToast('📸 They’ll see you took a screenshot');
+      })
+      .catch((error) => console.warn('Could not send screenshot notice', error));
+  });
 
   const barStyle = useAnimatedStyle(() => ({ width: `${(1 - progress.get()) * 100}%` }));
 
   async function toggleSaved() {
     setSaving(true);
     try {
-      const done = await setSnapSaved(id, !saved);
+      const done = inGroup ? await setGroupSnapSaved(id, !saved) : await setSnapSaved(id, !saved);
       if (!done) {
-        Alert.alert("Can't save this one", 'Peeks can only be saved up to a day after they were opened.');
+        Alert.alert(
+          saved ? "Can't unsave this one" : "Can't save this one",
+          inGroup
+            ? saved
+              ? 'Only whoever saved it, or whoever sent it, can unsave it.'
+              : 'Snaps can only be saved up to a day after they were sent.'
+            : 'Peeks can only be saved up to a day after they were opened.',
+        );
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(saved ? 'Unsaved – it will disappear' : 'Saved in chat 📌');
+      showToast(saved ? 'Unsaved – it will disappear' : inGroup ? 'Saved in chat 📌 Everyone in the group can open it again' : 'Saved in chat 📌');
       setSaved(!saved);
     } catch (error) {
       Alert.alert('Something went wrong', friendlyError(error));
@@ -192,17 +309,22 @@ export default function SnapViewer() {
         {state.kind === 'loading' ? (
           <>
             <ActivityIndicator color={colors.accent} size="large" />
-            <Text style={styles.loadingText}>Opening peek…</Text>
+            {/* One-on-one it could be a peek or a photo: that's only known once it's loaded. */}
+            <Text style={styles.loadingText}>{inGroup ? 'Opening snap…' : 'Opening…'}</Text>
           </>
         ) : (
           <>
             <EmptyState
               emoji={state.kind === 'gone' ? '💨' : '📶'}
-              title={state.kind === 'gone' ? 'This peek is gone' : "Couldn't load the peek"}
+              title={state.kind === 'gone' ? `This ${word} is gone` : `Couldn't load the ${word}`}
               message={
-                state.kind === 'gone'
-                  ? 'Peeks disappear after you open and replay them. Tip: press and hold a peek in the chat to save it.'
-                  : "Check your connection and try again – it hasn't been used up."
+                inGroup
+                  ? state.kind === 'gone'
+                    ? 'Snaps disappear after you open and replay them, or a day after they were sent. Tip: press and hold a snap in the chat to save it.'
+                    : 'Check your connection and tap it again in the next few minutes – that still counts as your first look. After that (or if you close the app) it counts as your replay.'
+                  : state.kind === 'gone'
+                    ? 'Peeks disappear after you open and replay them. Tip: press and hold a peek in the chat to save it.'
+                    : "Check your connection and try again – it hasn't been used up."
               }
             />
             <Button title="Back" variant="secondary" onPress={close} />
@@ -213,6 +335,10 @@ export default function SnapViewer() {
   }
 
   const name = state.sender ? state.sender.display_name || state.sender.username : '';
+  // What it's called now that it's loaded: a photo (or video) picked from Photos in a one-on-one chat is a normal
+  // photo, not a peek – calling it a peek would say it disappears.
+  const shownWord = state.photo ? (state.video ? 'video' : 'photo') : word;
+  const ShownWord = shownWord.charAt(0).toUpperCase() + shownWord.slice(1);
   // Peeks from someone else can be reported (then you're offered to block them), like a message in the chat.
   const sender = state.sender && state.sender.id !== userId ? state.sender : null;
   // A tap closes the peek – but not while you're zoomed in, or right after pinching.
@@ -230,19 +356,19 @@ export default function SnapViewer() {
       onClose: () => setPaused(false),
       options: [
         {
-          label: 'Report peek',
+          label: `Report ${shownWord}`,
           onPress: () => {
             setReporting(true);
-            report({ user: sender, contentType: 'message', contentId: id });
+            report({ user: sender, contentType: inGroup ? 'group_message' : 'message', contentId: id });
           },
         },
       ],
     });
   }
-  const label = saved ? 'Saved in chat 📌' : state.mode === 'replay' ? 'Replay 🔁' : null;
+  const label = state.photo ? (state.video ? 'Video 🎬' : 'Photo 📷') : saved ? 'Saved in chat 📌' : state.mode === 'replay' ? 'Replay 🔁' : null;
 
   return (
-    <Pressable style={styles.fill} onPress={tapToClose} accessibilityLabel="Close peek">
+    <Pressable style={styles.fill} onPress={tapToClose} accessibilityLabel={`Close ${shownWord}`}>
       <StatusBar style="light" />
       {reporting ? null : state.video ? (
         <VideoClip
@@ -269,7 +395,7 @@ export default function SnapViewer() {
         // screen. (While the menu is open the photo or video stays underneath, paused, so it carries on after.)
         <View style={[StyleSheet.absoluteFill, styles.center, styles.cover]}>
           <Text style={styles.coverTitle}>
-            {reporting ? 'Peek hidden while you report it 🚩' : 'Peek hidden while the menu is open 🙈'}
+            {reporting ? `${ShownWord} hidden while you report it 🚩` : `${ShownWord} hidden while the menu is open 🙈`}
           </Text>
           {reporting ? <Text style={styles.loadingText}>Tap anywhere to close.</Text> : null}
         </View>
@@ -287,16 +413,18 @@ export default function SnapViewer() {
             </View>
           </View>
           <View style={styles.actions}>
-            <Bouncy
-              style={[styles.save, saved && styles.saveOn]}
-              pressScale={0.85}
-              disabled={saving}
-              onPress={toggleSaved}
-              accessibilityRole="button"
-              accessibilityLabel={saved ? 'Unsave' : 'Save in chat'}>
-              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.white} />
-              <Text style={styles.saveText}>{saved ? 'Saved' : 'Save'}</Text>
-            </Bouncy>
+            {state.canToggleSave ? (
+              <Bouncy
+                style={[styles.save, saved && styles.saveOn]}
+                pressScale={0.85}
+                disabled={saving}
+                onPress={toggleSaved}
+                accessibilityRole="button"
+                accessibilityLabel={saved ? 'Unsave' : 'Save in chat'}>
+                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.white} />
+                <Text style={styles.saveText}>{saved ? 'Saved' : 'Save'}</Text>
+              </Bouncy>
+            ) : null}
             {sender && !reporting ? (
               <Bouncy style={styles.more} pressScale={0.85} onPress={openMenu} accessibilityRole="button" accessibilityLabel="More options">
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.white} />

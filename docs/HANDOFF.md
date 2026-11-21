@@ -69,6 +69,28 @@ and the owner's standing preferences.
     `tests/unit/drop-unlock-parity.test.mjs` (app and database agree on the moment to the millisecond, and on the
     whole open/locked rule around it, the extra hour included).
 
+## Group snaps, delete a group, new group opens its chat (owner, 21 Nov) – built, not shipped yet
+
+- Migration `20261229000000_group_snaps.sql` (safe to run twice), app changes in `src/lib/groupChat.ts`,
+  `src/lib/groups.ts`, `src/lib/chat.ts`, the snap viewer and the group chat. Phone checks: `docs/TESTING.md` Step 70.
+- **Ship order:** 1) the migration; 2) redeploy the `cleanup-media` Edge Function (it now also deletes old group
+  pictures from the "avatars" storage via `claim_avatar_cleanup`; the old function keeps working, it just doesn't
+  delete those pictures, and the new one skips that step on a database without the migration); 3) the OTA
+  (`testing` first).
+- A group snap can only be downloaded by the **login (phone or tablet) that opened it**, for 5 minutes
+  (`group_snap_opens.session_id`, read from the login's `session_id` claim; the app can't read that column). So an
+  old app on a second device of the same account never shows it. A request with no `session_id` claim at all
+  (not something a signed-in app sends) falls back to the 5 minutes alone.
+- Screenshots of a group snap tell its sender (`group_snap_screenshot`: push + "📸 Screenshot by …" under the snap),
+  once per person per snap; not for saved snaps.
+- Groups everyone had left with the old app are deleted when the migration runs (their files go to the daily
+  cleanup); groups whose maker had left get the longest-standing member as maker; `peek_group_status` now sorts
+  people who joined at the same moment by user id, so the app and the server agree on who may delete.
+- Known limits (accepted): a snap that was saved and then unsaved can stay visible for up to an hour on a device
+  that already showed it as a photo (an old app; a download link lasts an hour). Old apps leaving at the very same
+  moment as the other last members can still leave an empty group behind (rare; running the last `delete` of the
+  migration again removes it).
+
 ## Livestreams (owner, 19–20 Nov) – in progress
 - v1 (version 1.2 native build, LiveKit): friends-only lives, comments + hearts, host brings 1 friend on, push to
   friends. Design: session scratchpad `live/DESIGN.md` (summarised in the migration header). LiveKit URL

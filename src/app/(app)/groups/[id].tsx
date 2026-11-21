@@ -21,12 +21,12 @@ import { EmptyState } from '@/components/EmptyState';
 import { useOverlays } from '@/components/Overlays';
 import { RoundIconButton, ScreenHeader } from '@/components/ScreenHeader';
 import { StoryAvatar } from '@/components/StoryAvatar';
+import { leaveOrDeleteOptions } from '@/components/groups/leaveOrDelete';
 import { useMe } from '@/lib/auth';
 import { postMedia, useDropStatus, useMyDrops } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import {
   counting,
-  deleteGroup,
   fetchGroup,
   fetchGroupDrops,
   memberName,
@@ -138,32 +138,13 @@ export default function GroupScreen() {
 
   function openMenu() {
     if (!group) return;
-    const options = [
-      { label: 'Edit group (name, add friends)', onPress: () => router.push({ pathname: '/groups/new', params: { group: id } }) },
-      {
-        label: 'Leave group',
-        destructive: true,
-        onPress: () =>
-          confirm(`Leave ${group.name}?`, "Your drops won't be held back for this group any more.", 'Leave', async () => {
-            await removeFromGroup(id, userId);
-            showToast(`You left ${group.name}`);
-            router.back();
-          }),
-      },
-    ];
-    if (group.created_by === userId) {
-      options.push({
-        label: 'Delete group',
-        destructive: true,
-        onPress: () =>
-          confirm(`Delete ${group.name}?`, 'The group is gone for everyone. Nobody’s posts are deleted.', 'Delete', async () => {
-            await deleteGroup(id);
-            showToast('Group deleted');
-            router.back();
-          }),
-      });
-    }
-    showOptions({ options });
+    showOptions({
+      options: [
+        { label: 'Edit group (name, add friends)', onPress: () => router.push({ pathname: '/groups/new', params: { group: id } }) },
+        // 🚪 Leave / 🗑️ Delete (who may delete: the person who made it, or whoever is the only one left).
+        ...leaveOrDeleteOptions(group, userId, showToast),
+      ],
+    });
   }
 
   // The person who made the group can take people out of it (hold down on them).

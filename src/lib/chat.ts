@@ -265,6 +265,41 @@ export async function sendSnap(me: string, friendIds: string[], capture: Capture
   }
 }
 
+// 📷 A photo (or video) picked from your Photos, sent in a one-on-one chat: a peek that is SAVED in the chat from the
+// start, so it never disappears and opens like a normal photo any time. (A picture taken with the chat's camera
+// goes with sendSnap and disappears.) Old copies of the app already know saved peeks, so they show it too.
+// The server marks it as saved by you, at the moment it was sent (see isChatPhoto). A server from before this
+// clears saved_at on a new message: then it's saved straight after, the normal way.
+export async function sendChatPhoto(me: string, friend: string, capture: Capture): Promise<void> {
+  const { fields } = await uploadCapture(me, 'snaps', capture);
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ sender_id: me, recipient_id: friend, kind: 'snap', ...fields, saved_at: new Date().toISOString() })
+    .select('id,saved_at')
+    .single();
+  if (error) {
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    throw error;
+  }
+  const row = data as { id: string; saved_at: string | null } | null;
+  if (row && !row.saved_at) {
+    // The photo is sent either way. If saving fails, it's a normal peek – never sent twice.
+    await setSnapSaved(row.id, true).catch((saveError) => console.warn('Could not save the photo in the chat', saveError));
+  }
+}
+
+// Was this sent as a photo (picked from Photos), not as a peek? It's a peek saved by whoever sent it, at the very
+// moment it was sent. (A peek someone saved later is a "saved peek".)
+export function isChatPhoto(message: Pick<Message, 'kind' | 'sender_id' | 'created_at' | 'saved_at' | 'saved_by'>): boolean {
+  return (
+    message.kind === 'snap' &&
+    !!message.saved_at &&
+    message.saved_by === message.sender_id &&
+    Date.parse(message.saved_at) === Date.parse(message.created_at)
+  );
+}
+
 // Marks a peek as opened. After this you only have your one replay left (unless it's saved).
 export async function openSnap(messageId: string): Promise<void> {
   const { error } = await supabase.rpc('open_snap', { message_id: messageId });

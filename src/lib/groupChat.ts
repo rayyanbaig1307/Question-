@@ -7,12 +7,13 @@ import { supabase } from './supabase';
 // ---------------------------------------------------------------------------
 
 // 'text' · 'photo' / 'video' (stay in the chat) · 'voice' · 'dare' (a dare for the whole group) ·
-// 'sticker' (body is a short text version) · 'proof' (someone's photo/video for a group dare – dare_id says which).
+// 'sticker' (body is a short text version) · 'proof' (someone's photo/video for a group dare – dare_id says which) ·
+// 'snap' (a photo/video from the chat's camera: each person opens it once, then it's gone unless it's saved).
 export type GroupMessage = {
   id: string;
   group_id: string;
   sender_id: string;
-  kind: 'text' | 'photo' | 'video' | 'voice' | 'dare' | 'proof' | 'sticker';
+  kind: 'text' | 'photo' | 'video' | 'voice' | 'dare' | 'proof' | 'sticker' | 'snap';
   body: string | null;
   // Stickers: which one (see lib/chatStickers.ts).
   sticker?: string | null;
@@ -25,6 +26,10 @@ export type GroupMessage = {
   dare_id: string | null;
   // The earlier message in this group chat that this one replies to.
   reply_to?: string | null;
+  // A snap: when it was saved in the chat and by whom (null = not saved). A saved snap is a normal photo everyone in
+  // the group can open again. Missing on a server without group snaps yet.
+  saved_at?: string | null;
+  saved_by?: string | null;
   // A proof: the group's votes (anonymous totals, see voteGroupProof), and whether it was posted before voting
   // existed (those keep counting while nobody has a vote on them). Missing on a server without votes yet.
   proof_legit?: number;
@@ -122,6 +127,179 @@ export async function sendGroupCapture(me: string, groupId: string, capture: Cap
     await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
+}
+
+// 👀 A snap for the group chat: a photo or video taken with the chat's camera. Everyone else in the group can open it
+// once (and replay it once); then it's gone for them – unless someone saves it in the chat (see setGroupSnapSaved),
+// then it stays as a normal photo everyone can open. The file goes in your "snaps" folder: the server only lets
+// someone download it for a few minutes after they open it, so an older copy of the app (which doesn't know snaps)
+// can never show it as a normal photo. Pictures picked from Photos go with sendGroupCapture instead.
+export async function sendGroupSnap(me: string, groupId: string, capture: Capture): Promise<void> {
+  const { fields } = await uploadCapture(me, 'snaps', capture);
+  const { error } = await supabase.from('group_messages').insert({ group_id: groupId, kind: 'snap', ...fields });
+  if (error) {
+    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
+    await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    throw snapsNotReady(error) ? new Error(SNAPS_NOT_READY) : error;
+  }
+}
+
+// The server doesn't take group snaps yet (its list of message kinds doesn't have 'snap'). Then the snap isn't
+// sent as a normal photo instead – it was meant to disappear – and you're told what you can do.
+export const SNAPS_NOT_READY =
+  "Snaps in group chats aren't switched on yet. Try again a bit later, or pick the photo from your camera roll to send it as a normal photo.";
+function snapsNotReady(error: { code?: string | null; message?: string | null }): boolean {
+  return error.code === '23514' && /group_messages_(kind_check|content)/.test(error.message ?? '');
+}
+
+// ---------------------------------------------------------------------------
+// 👀 Group snaps: who opened what, and opening / replaying / saving one.
+// (Server: supabase/migrations/20261229000000_group_snaps.sql.)
+// ---------------------------------------------------------------------------
+
+// A group snap can be opened (and replayed) for 24 hours after it was sent. Then it's gone – unless it's saved.
+export const GROUP_SNAP_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+// Someone opened a snap: when, when they used their one replay (null = not yet), and when they took a screenshot of
+// it (null = they didn't – or a server that doesn't say).
+export type GroupSnapOpen = {
+  message_id: string;
+  user_id: string;
+  opened_at: string;
+  replayed_at: string | null;
+  screenshot_at?: string | null;
+};
+
+// Who opened these snaps. You only get your own opens – and, for snaps YOU sent, everyone's (so you can see
+// "Opened by …"). Snap id → its opens. A server without group snaps yet gives an error (the screen keeps what it has).
+export async function fetchGroupSnapOpens(messageIds: string[]): Promise<Map<string, GroupSnapOpen[]>> {
+  const opens = new Map<string, GroupSnapOpen[]>();
+  if (messageIds.length === 0) return opens;
+  const { data, error } = await supabase
+    .from('group_snap_opens')
+    .select('message_id,user_id,opened_at,replayed_at,screenshot_at')
+    .in('message_id', messageIds);
+  if (error) throw error;
+  for (const row of (data ?? []) as GroupSnapOpen[]) opens.set(row.message_id, [...(opens.get(row.message_id) ?? []), row]);
+  return opens;
+}
+
+// One group message (null if it's gone, or you can't see it).
+export async function fetchGroupMessage(messageId: string): Promise<GroupMessage | null> {
+  const { data, error } = await supabase.from('group_messages').select('*').eq('id', messageId).maybeSingle();
+  if (error) throw error;
+  return (data as GroupMessage | null) ?? null;
+}
+
+// Opens a snap: true = go, you may download it for the next 5 minutes (it's now marked as opened by you). A saved
+// snap always says true while you're in the group. false = no view left (you already opened it – replay it – or
+// it's over 24 hours old, or you joined the group after it was sent).
+export async function openGroupSnap(messageId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('open_group_snap', { message: messageId });
+  if (error) throw error;
+  return data === true;
+}
+
+// Your one replay of a snap you opened: true = go (download it within 5 minutes); false = already used, or too late.
+export async function replayGroupSnap(messageId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('replay_group_snap', { message: messageId });
+  if (error) throw error;
+  return data === true;
+}
+
+// Saves a snap in the chat (it becomes a normal photo everyone in the group can open again), or unsaves it.
+// Saving: whoever sent it, or anyone who opened it, within 24 hours of it being sent. Unsaving: whoever saved it,
+// or whoever sent it. false = not allowed (or nothing changed).
+export async function setGroupSnapSaved(messageId: string, save: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc('set_group_snap_saved', { message: messageId, save });
+  if (error) throw error;
+  return data === true;
+}
+
+// 📸 You took a screenshot of a group snap you opened: its sender is told (a push, and "📸 Screenshot by …" under the
+// snap in their chat), like with a 1:1 peek. Once per snap. true = they were told; false = nothing to tell (it's
+// saved, it's yours, you didn't open it, or you already took one).
+export async function groupSnapScreenshot(messageId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('group_snap_screenshot', { message: messageId });
+  if (error) throw error;
+  return data === true;
+}
+
+// 👀 A group snap is opened first and downloaded after (the server only lets you download it for 5 minutes after you
+// open it, on this phone). If the download fails, or you go back while it's still downloading, you never saw it: for
+// the next few minutes, tapping it again shows it without using up your replay. This phone remembers which ones –
+// only while the app is open (after that, the chat says "Tap to replay" and that's what a tap does).
+export const UNSHOWN_RETRY_MS = 4 * 60 * 1000;
+type UnshownMode = 'first' | 'replay';
+// (Per login: someone else signing in on this phone has their own.)
+const unshownGroupSnaps = new Map<string, { at: number; mode: UnshownMode }>();
+const unshownKey = (me: string, messageId: string) => `${me}:${messageId}`;
+
+// You opened (or replayed) it just now, and it isn't shown yet.
+export function noteGroupSnapUnshown(me: string, messageId: string, mode: UnshownMode, now = Date.now()): void {
+  unshownGroupSnaps.set(unshownKey(me, messageId), { at: now, mode });
+}
+
+// It was shown: nothing to try again.
+export function forgetGroupSnapUnshown(me: string, messageId: string): void {
+  unshownGroupSnaps.delete(unshownKey(me, messageId));
+}
+
+// Opened on this phone a moment ago but never shown: which view it was ('first' or 'replay'), or null. `extraMs`: the
+// snap viewer allows half a minute more than the chat shows "Tap to view" (the chat's clock moves every 15 seconds),
+// still well inside the server's 5 minutes.
+export function groupSnapUnshown(me: string, messageId: string, now = Date.now(), extraMs = 0): UnshownMode | null {
+  const unshown = unshownGroupSnaps.get(unshownKey(me, messageId));
+  return unshown && now - unshown.at < UNSHOWN_RETRY_MS + extraMs ? unshown.mode : null;
+}
+
+// How a snap in the group chat looks for you:
+// 'saved' – saved in the chat: a normal photo for everyone · 'sent' – you sent it (not saved) ·
+// 'new' – you haven't opened it yet · 'retry' – you opened it on this phone a moment ago but it didn't load, so a tap
+// shows it without using your replay (see UNSHOWN_RETRY_MS) · 'replay' – opened, your one replay is left ·
+// 'opened' – opened and replayed · 'expired' – over 24 hours old and you never opened it ·
+// 'before-joined' – sent before you joined the group.
+export type GroupSnapLook = 'saved' | 'sent' | 'new' | 'retry' | 'replay' | 'opened' | 'expired' | 'before-joined';
+
+export function groupSnapLook(
+  snap: Pick<GroupMessage, 'sender_id' | 'created_at' | 'saved_at'>,
+  me: string,
+  myOpen: Pick<GroupSnapOpen, 'replayed_at'> | undefined,
+  joinedAt: string | null,
+  now: number,
+  // Opened on this phone but not shown yet (groupSnapUnshown).
+  unshown = false,
+): GroupSnapLook {
+  if (snap.saved_at) return 'saved';
+  if (snap.sender_id === me) return 'sent';
+  if (unshown) return 'retry';
+  const over = !(now - Date.parse(snap.created_at) < GROUP_SNAP_LIFETIME_MS);
+  if (myOpen) return !over && myOpen.replayed_at === null ? 'replay' : 'opened';
+  if (over) return 'expired';
+  // Someone added after it was sent can't open it (the server says no too). A join time that isn't known yet
+  // (or can't be read) lets you try: the server decides.
+  if (joinedAt && Date.parse(joinedAt) > Date.parse(snap.created_at)) return 'before-joined';
+  return 'new';
+}
+
+// Is a snap still in its 24 hours?
+export function groupSnapLive(snap: Pick<GroupMessage, 'created_at'>, now: number): boolean {
+  return now - Date.parse(snap.created_at) < GROUP_SNAP_LIFETIME_MS;
+}
+
+// Can you save this snap in the chat? Whoever sent it, or anyone who opened it, within its 24 hours.
+export function canSaveGroupSnap(
+  snap: Pick<GroupMessage, 'kind' | 'sender_id' | 'created_at' | 'saved_at'>,
+  me: string,
+  myOpen: unknown,
+  now: number,
+): boolean {
+  return snap.kind === 'snap' && !snap.saved_at && groupSnapLive(snap, now) && (snap.sender_id === me || !!myOpen);
+}
+
+// Can you unsave it? Whoever saved it, or whoever sent it.
+export function canUnsaveGroupSnap(snap: Pick<GroupMessage, 'kind' | 'sender_id' | 'saved_at' | 'saved_by'>, me: string): boolean {
+  return snap.kind === 'snap' && !!snap.saved_at && (snap.saved_by === me || snap.sender_id === me);
 }
 
 // A voice note for the group chat.

@@ -215,3 +215,40 @@ test('a group Guess Who posted or deleted in any of your groups reloads the grou
   } finally { await unmount(tree); }
   assert.deepEqual(stopped, [null]);
 });
+
+// ---------------------------------------------------------------------------
+// 📷 A photo picked from Photos (a peek saved by its sender from the start) shows as "New Photo", not "New Peek".
+// ---------------------------------------------------------------------------
+async function rowLabels(messages) {
+  const noop = () => {};
+  const isChatPhoto = m => m.kind === 'snap' && !!m.saved_at && m.saved_by === m.sender_id && m.saved_at === m.created_at;
+  const screen = loadScreen('src/components/home/ChatPage.tsx', {
+    '@/components/FriendButton': { FriendButton: host('FriendButton') }, '@/components/GroupFaces': { GroupFaces: host('GroupFaces') }, '@/components/PersonRow': { PersonRow: host('PersonRow') },
+    '@/components/Overlays': { useOverlays: () => ({ showOptions: noop, showToast: noop }) },
+    '@/lib/chat': { fetchRecentMessages: async () => messages, subscribeToMyMessages: () => noop, clearChat: async () => {}, isChatPhoto },
+    '@/lib/friends': { fetchFriends: async () => [{ id: 'bob', username: 'bob', display_name: 'Bob' }] },
+    '@/lib/closeFriends': { fetchCloseFriendIds: async () => new Set() },
+    '@/lib/friendSettings': { fetchFriendSettings: async () => new Map() },
+    '@/lib/groupChat': { fetchGroupChats: async () => new Map(), subscribeToGroupChat: () => noop },
+    '@/lib/groups': { fetchGroups: async () => [] },
+    '@/lib/invite': { inviteFriends: noop }, '@/lib/time': { timeAgo: () => 'now' },
+    '@/lib/useSafetyActions': { useSafetyActions: () => ({ confirmBlock: noop }) },
+    './HomeTabBar': { useTabBarSpace: () => 60 }, './PageHeader': { PageHeader: host('PageHeader') },
+  });
+  screen.Component = () => React.createElement(screen.exports.ChatPage, { visible: true, inboxCount: 0, onRefreshInbox: noop });
+  const tree = await renderScreen(screen);
+  try {
+    return tree.root.findAllByType('Text').map(textOf);
+  } finally { await unmount(tree); }
+}
+const fromBob = changes => ({ id: 'm1', sender_id: 'bob', recipient_id: 'alice', kind: 'snap', body: null, opened_at: null, saved_at: null, saved_by: null, created_at: '2026-11-21T07:00:00Z', ...changes });
+
+test('a new photo from Photos says "New Photo"; a new peek still says "New Peek"', async () => {
+  const photo = await rowLabels([fromBob({ saved_at: '2026-11-21T07:00:00Z', saved_by: 'bob' })]);
+  assert.ok(photo.includes('New Photo · now'), JSON.stringify(photo));
+  const peek = await rowLabels([fromBob()]);
+  assert.ok(peek.includes('New Peek · now'), JSON.stringify(peek));
+  // A new peek and a new photo together: "New Peek" (the peek will disappear).
+  const both = await rowLabels([fromBob({ id: 'm2', saved_at: '2026-11-21T07:00:00Z', saved_by: 'bob' }), fromBob()]);
+  assert.ok(both.includes('New Peek · now'), JSON.stringify(both));
+});
