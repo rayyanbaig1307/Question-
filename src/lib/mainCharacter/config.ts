@@ -8,9 +8,10 @@
 
 // The off switch for the whole mode.
 export const MAIN_CHARACTER_ENABLED = true;
-// 🔒 false = only on the `testing` update channel (the owner's TestFlight build 13), like lives. Set true only
-// when App Store 1.1 is approved and released AND the owner said yes in writing to the open legal questions.
-export const MAIN_CHARACTER_FOR_EVERYONE = false;
+// true = on for everyone with the face mesh (App Store app and TestFlight). The owner switched it on for
+// everyone on 22 Nov ("make sure public chats, main character mode and invite fix all go up today").
+// false = only on the `testing` update channel (the owner's TestFlight builds).
+export const MAIN_CHARACTER_FOR_EVERYONE = true;
 // Android stays off, even once an Android download has the face mesh, until an Android phone passes the checks.
 export const MAIN_CHARACTER_ON_ANDROID = false;
 // true = Peekaboo+ only (planned: free).
@@ -43,8 +44,7 @@ export const PHOTO_MAX_SIDE = 1600;                // photo path: the photo is m
 export const LIVE_WORDMARK = true;                 // small wordmark on the live and result screens
 export const LIVE_COMIC_GENTLE = true;             // live only: softer banding and ink (less shimmer on camera noise)
 
-// The banner words: the owner's own words. The owner gives a final yes on them before
-// MAIN_CHARACTER_FOR_EVERYONE is turned on.
+// The banner words: the owner's own words (they chose to keep them when the mode went to everyone, 22 Nov).
 export const MISSION_TITLE = 'MISSION PASSED';
 export const MISSION_REWARD = '+RESPECT';
 export const MISSION_INTRO_MS = 1100;              // result may show after this

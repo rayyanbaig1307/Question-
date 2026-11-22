@@ -50,14 +50,12 @@ it('your place in the room: the server\'s answer, or "unavailable" when it can\'
   expect(await load({ status: 'something else' }).lib.fetchPublicChatStatus()).toBe('unavailable');
 });
 
-it('the public chat is only switched on for the testing channel: everywhere else the server is not even asked', async () => {
-  for (const channel of ['production', 'preview', null]) {
+it('the public chat is on for everyone since 22 Nov: every channel asks the server (which still checks 18+)', async () => {
+  for (const channel of ['production', 'testing', 'preview', null]) {
     const { lib } = load({ channel, status: 'ok' });
-    expect(lib.PUBLIC_CHAT_FOR_EVERYONE).toBe(false);
-    expect(lib.publicChatSwitchedOn()).toBe(false);
-    expect(await lib.fetchPublicChatStatus()).toBe('unavailable');
+    expect(lib.PUBLIC_CHAT_FOR_EVERYONE).toBe(true);
+    expect(lib.publicChatSwitchedOn()).toBe(true);
+    expect(await lib.fetchPublicChatStatus()).toBe('ok');
+    expect(await load({ channel, status: 'under_18' }).lib.fetchPublicChatStatus()).toBe('under_18');
   }
-  const { lib } = load({ channel: 'testing', status: 'ok' });
-  expect(lib.publicChatSwitchedOn()).toBe(true);
-  expect(await lib.fetchPublicChatStatus()).toBe('ok');
 });

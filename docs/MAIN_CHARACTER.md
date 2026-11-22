@@ -4,19 +4,18 @@ Your face in a comic poster. You pick a character (a painted person standing in 
 into the character's face, and it follows you live. Tap the shutter, a banner pops up, and you get a finished
 poster you can share, save, post to your story or send to a friend.
 
-Status (22 Nov 2026): **you approved all 12 pictures, and Phase 1 is going out by app update to the `testing`
-channel only** (your TestFlight build 13). You check it with `docs/TESTING.md` Step 71. The developer notes are in `docs/FACE_MESH.md`, "Main Character Mode".
+Status (22 Nov 2026): **you approved all 12 pictures, and Phase 1 goes to everyone with an iPhone** – first your
+TestFlight build (you check it with `docs/TESTING.md` Step 71), then the App Store app. The developer notes are in `docs/FACE_MESH.md`, "Main Character Mode".
 
 ## Who sees it
 
 - **iPhone app downloads with face tracking only** (App Store build 10 and newer, TestFlight 7 and newer). Not on
   Android, in Expo Go or on the website: there is no 🌆 bubble there, and the page says "Main Character Mode needs
   the newest Peekaboo app on an iPhone."
-- **For now only on the `testing` channel** (your TestFlight build 13), like lives. The switch
-  `MAIN_CHARACTER_FOR_EVERYONE` in `src/lib/mainCharacter/config.ts` stays `false` until all of these are true:
-  App Store 1.1 is approved and released, you gave the final yes on the banner words (below) in writing, and Step 71
-  passed. Turning it on is its own app update (testing first, then the App Store app, never while Apple is
-  reviewing).
+- **On for everyone since 22 Nov** (you: "make sure public chats, main character mode and invite fix all go up
+  today"): the switch `MAIN_CHARACTER_FOR_EVERYONE` in `src/lib/mainCharacter/config.ts` is `true`, so the App
+  Store app shows it too (testing first, then the App Store app). Set it back to `false` (a one-line update) to
+  show it only on the `testing` channel again. You kept the banner words MISSION PASSED / +RESPECT.
 - **Free.** One switch (`MAIN_CHARACTER_PLUS`) makes it Peekaboo+ only.
 
 Two ways it runs, picked by the phone by itself:

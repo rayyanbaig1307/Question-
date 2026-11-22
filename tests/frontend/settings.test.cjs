@@ -19,7 +19,7 @@ function settingsHarness({ delayWrite = false, delayLocation = false, signOut = 
     '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => state.options.push(value) }) },
     '@/lib/auth': { useMe: () => { const [profile, set] = React.useState(state.profile); return { userId: 'alice', profile, setProfile: value => { state.profile = value; set(value); }, signOut, currentUserId: () => state.signedIn, refreshProfile: refreshProfile ? () => refreshProfile(state, saved) : async () => { state.refreshes++; return { ...saved }; } }; } },
     '@/lib/birthday': { fetchMyBirthday: async () => null },
-    // Your invite link: Settings loads it early and "Invite friends" opens the invite screen.
+    // "Invite friends" opens the invite screen. Settings no longer loads an invite code early.
     '@/lib/invite': { prefetchInviteCode: me => state.prefetched.push(me) },
     '@/lib/legal': { contactEmail: () => null }, '@/lib/legalDocs': { LEGAL_DOCS: { terms: '' } },
     '@/lib/location': { setLocationSharing: async (_id, share) => { if (share && delayLocation) await pending; return { ...saved, location_sharing: share }; } },
@@ -42,11 +42,12 @@ function settingsHarness({ delayWrite = false, delayLocation = false, signOut = 
   return { screen, state, saved, release };
 }
 
-test('"Invite friends" opens your invite link screen, and Settings loads your link early', async () => {
+test('"Invite friends" opens the invite screen, and Settings no longer loads an invite code', async () => {
   const fixture = settingsHarness();
   const tree = await renderScreen(fixture.screen);
   try {
-    assert.deepEqual(fixture.state.prefetched, ['alice']);
+    assert.deepEqual(fixture.state.prefetched, [], 'nothing to load: invites are just your username now');
+    assert.match(textOf(tree.root), /Share your username, or add a friend with their code/);
     await act(() => option(tree, 'Invite friends').props.onPress());
     assert.deepEqual(fixture.state.routes, ['/invite']);
   } finally { await unmount(tree); }

@@ -415,14 +415,24 @@ test('🌆 on an iPhone with face tracking on the testing channel: right after G
   } finally { await unmount(newest.tree); }
 });
 
-test('no 🌆 on Android, without face tracking, on the App Store channel, in Expo Go, or when switched off', async () => {
+// The real switch as it was before 22 Nov (testing channel only), to check the dial still follows it.
+const TESTING_ONLY = mainCharacterConfig({ mainCharacterHere: (os, faceMesh, channel) => faceMesh === true && os === 'ios' && channel === 'testing' });
+
+test('🌆 is on for everyone now: an iPhone with face tracking on the App Store channel (and any channel) has it', async () => {
+  for (const channel of ['production', 'testing', 'preview', null]) {
+    const { exports } = loadPlacedDial({ channel });
+    assert.equal(exports.homeModes(true).some((m) => m.key === 'mainCharacter'), true, `channel ${channel}`);
+  }
+});
+
+test('no 🌆 on Android, without face tracking, or when switched off (or back to testing only, off the testing channel)', async () => {
   const places = [
     { os: 'android' },
     { os: 'web' },
     { faceMesh: false },
-    { channel: 'production' },
-    { channel: 'preview' },
-    { channel: null },
+    { channel: 'production', config: TESTING_ONLY },
+    { channel: 'preview', config: TESTING_ONLY },
+    { channel: null, config: TESTING_ONLY },
     { config: mainCharacterConfig({ mainCharacterHere: () => false }) },
   ];
   for (const place of places) {

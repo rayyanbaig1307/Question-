@@ -53,7 +53,7 @@ and the owner's standing preferences.
   `invite_card` database function was stopped. A custom domain is still optional.
 - Phone check: `docs/TESTING.md` Step 66 (rewritten).
 
-## Main Character Mode 🌆 Phase 1 – art approved, committed, testing channel only (22 Nov)
+## Main Character Mode 🌆 Phase 1 – art approved, ON FOR EVERYONE (22 Nov)
 
 - **What:** your face in a comic poster. Home camera → 🌆 bubble (after 🤪 Googly) → its own screen
   (`/main-character`): 6 characters + 6 scenes in the iPhone update, swipe for characters, 🌴 for scenes, shutter →
@@ -68,7 +68,10 @@ and the owner's standing preferences.
   typecheck, lint and the web export pass (`tests/README.md`, "Latest results"). The masters live outside the repo
   (~80 MB); re-making the app art needs the `bundle` step with mediapipe (not on the system Python – use a separate
   venv).
-- **Testing channel only:** `MAIN_CHARACTER_FOR_EVERYONE = false` (`src/lib/mainCharacter/config.ts`), like lives.
+- **On for everyone (22 Nov, owner: "make sure public chats, main character mode and invite fix all go up
+  today"):** `MAIN_CHARACTER_FOR_EVERYONE = true` (`src/lib/mainCharacter/config.ts`). Set it back to `false` for
+  testing-channel only. The lines below about waiting for 1.1 and the banner words are history: the owner kept
+  their words and asked for it live today.
   Turn it on (its own OTA, testing first, then `production`, never during an Apple review) only when App Store 1.1
   (build 12) is approved and released, the owner gave the final yes in writing on the banner words, and Step 71
   passed.
@@ -96,8 +99,9 @@ and the owner's standing preferences.
   group snap screenshots, delete/leave a group, new groups open their chat, upload retry, the zoom fix, "posting your
   drop opens every drop", the chat text box, invite links, "How did you hear about Peekaboo?" (new accounts only; an
   account older than 3 days is never checked, a server "no" is remembered) and the 5 overlay face filters.
-- **Still held off `production`:** lives (`LIVE_FOR_EVERYONE = false` – testing channel only, plus version 1.2.0) and
-  the public chat (`PUBLIC_CHAT_FOR_EVERYONE = false`). The Guidelines heading says lives are being tested.
+- **Still held off `production`:** lives (`LIVE_FOR_EVERYONE = false` – testing channel only, plus version 1.2.0).
+  The Guidelines heading says lives are being tested. (The public chat was held here too until 22 Nov – now on for
+  everyone, see the public chat section.)
 - Live database: everything through `20261229000000_group_snaps.sql` (applied 21 Nov via apply_migration, 24
   functions md5-checked against the local database); `cleanup-media` v7.
 - The group features were checked by the automated suites and a release review, not yet on a phone: Step 70 of
@@ -196,10 +200,11 @@ and the owner's standing preferences.
 - **Locked to `testing` in the app itself:** `publicChatSwitchedOn()` in `src/lib/publicChat.ts` hides the row and the
   room everywhere except the `testing` update channel, so a production OTA or a new native build (1.2) is safe by
   default. To open it to everyone once the scanner exists: set `PUBLIC_CHAT_FOR_EVERYONE = true` (one line).
-- **Production hold:** there is no AI image scanner yet (the owner: "we'll create the scanner after"). A `production`
-  OTA from `71faea9` or later turns the public chat on for App Store users (the row shows as soon as the server
-  answers). So: no `production` publish from `71faea9` or later unless the owner OKs the public chat going live too –
-  tell them it is included when they say "publish". `testing`: group `9fca0573` (from `71faea9`).
+- **ON FOR EVERYONE since 22 Nov** (owner: "make sure public chats, main character mode and invite fix all go up
+  today"): `PUBLIC_CHAT_FOR_EVERYONE = true`. There is still no AI image scanner – 3 reports hide a photo and the
+  owner was told to check the Reports screen every day. Set it back to `false` (one line, an OTA) to limit it to the
+  `testing` channel again. Legal text for the public chat was added the same day (Privacy Policy, Guidelines,
+  Terms). (Before 22 Nov it was locked to `testing`; `testing` group `9fca0573` from `71faea9`.)
 - **Next:** the AI scanner (the owner picks the service and adds its key in Supabase – never in chat). Planned to
   cover public things: public chat photos, public posts, Guess Who posts and profile pictures.
 

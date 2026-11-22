@@ -334,7 +334,7 @@ test('the real share from this screen: your username, then the App Store link la
 });
 
 test('the plain line about who can add you follows your own privacy and birthday', async () => {
-  const OPEN = 'Anyone who searches your username can add you as a friend – only share it with people you know.';
+  const OPEN = 'Your account is public, so anyone on Peekaboo can add you as a friend straight away. Want to say yes first? Turn on Private account in Settings.';
   const REQUEST = 'People who search your username send you a friend request.';
   const cases = [
     [{ is_private: false }, async () => '1990-05-01', OPEN],
@@ -519,12 +519,12 @@ function friendsScreen(links) {
   return { screen, state, calls };
 }
 
-test('Friends: the top "Invite friends" button opens your invite link, and the link is loaded early', async () => {
+test('Friends: the top "Invite friends" button opens the invite screen, and no invite code is loaded', async () => {
   const link = { id: 'l1', status: 'accepted', requester_id: 'alice', addressee_id: 'bob', addressee: BOB, requester: { id: 'alice' } };
   const { screen, state, calls } = friendsScreen([link]);
   const tree = await renderScreen(screen);
   try {
-    assert.deepEqual(state.prefetched, ['alice']);
+    assert.deepEqual(state.prefetched, [], 'nothing to load: invites are just your username now');
     await act(() => button(tree, 'Invite friends').props.onPress());
     assert.deepEqual(calls.routes, [['push', '/invite']]);
     assert.deepEqual(state.shared, []);

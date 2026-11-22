@@ -59,8 +59,8 @@ export function rememberedInviteCode(me: string): string | null {
 }
 
 // Your invite code (made the first time you ask). `me` is who is logged in.
-// `fresh: true` always asks the server (the "Your invite link" screen does this), instead of using the code
-// remembered from the last 10 minutes.
+// `fresh: true` always asks the server, instead of using the code remembered from the last 10 minutes.
+// (Nothing in the app shows or shares your code any more; this stays for the tests and for later.)
 export function fetchMyInviteCode(me: string, options: { fresh?: boolean } = {}): Promise<string> {
   if (!options.fresh) {
     const remembered = rememberedInviteCode(me);
@@ -86,15 +86,15 @@ export function fetchMyInviteCode(me: string, options: { fresh?: boolean } = {})
   return request;
 }
 
-// Loads your code in the background (Home, Friends and Settings do this), so sharing is instant later.
+// Loads your code in the background. No screen calls this any more (invites are just your username now).
 export function prefetchInviteCode(me: string | null | undefined): void {
   if (!me) return;
   fetchMyInviteCode(me).catch(() => {
-    // No problem: sharing tries again, and falls back to the old message.
+    // No problem: nothing needs it straight away.
   });
 }
 
-// "Get a new link": the old link and code stop working, and you get a new code.
+// "Turn off my old invite link": the old link and code stop working (a new code is made but never shown).
 export async function resetInviteCode(me: string): Promise<string> {
   generation++;
   cached = null;

@@ -12,7 +12,7 @@ import { fetchMyDrops, NO_DROPS, postMedia, useDropKeyOpen, type MyDrops } from 
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { countUnguessed } from '@/lib/guess';
-import { inviteFriends, prefetchInviteCode } from '@/lib/invite';
+import { inviteFriends } from '@/lib/invite';
 import { liveMaybeAvailable } from '@/lib/liveAccess';
 import { fetchFriendsLiveNow, type FriendLive } from '@/lib/lives';
 import { onNotificationArrived } from '@/lib/notifications';
@@ -67,11 +67,6 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
     },
     [],
   );
-
-  // Get your invite link ready, so "Invite friends" can share it straight away.
-  useEffect(() => {
-    prefetchInviteCode(userId);
-  }, [userId]);
 
   const loadAll = useCallback(async () => {
     const ticket = storyRingsTicket();

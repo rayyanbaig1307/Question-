@@ -72,11 +72,11 @@ export default function InviteFriendsScreen() {
     router.push(`/invite/${friendCode}`);
   }
 
-  // Who can add you once they search your username. Only you see this.
+  // Who can add you (the same rule as adding anyone by username). Only you see this.
   const whoCanAdd =
     profile && birthday
       ? !profile.is_private && isAdultBirthday(birthday.value)
-        ? 'Anyone who searches your username can add you as a friend – only share it with people you know.'
+        ? 'Your account is public, so anyone on Peekaboo can add you as a friend straight away. Want to say yes first? Turn on Private account in Settings.'
         : 'People who search your username send you a friend request.'
       : null;
 

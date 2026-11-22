@@ -28,11 +28,11 @@ export type PublicPhoto = {
 // The name the camera and editor use for "send it to the public chat" (in place of a group's id).
 export const PUBLIC_CHAT = 'public';
 
-// 🔒 The public chat is being tried out: it only shows in downloads on the `testing` update channel (the
-// owner's TestFlight builds). In the App Store build, on every other channel and in any new build it stays
-// hidden – whatever commit that build was made from – until the AI photo scanner exists. To open it to
-// everyone then, set this to true (a one-line update).
-export const PUBLIC_CHAT_FOR_EVERYONE = false;
+// The public chat is on for everyone (18+ by the server's check) since 22 Nov – the owner: "make sure public
+// chats … all go up today". There is no automatic photo scanner yet: 3 reports hide a photo, and the owner
+// checks the Reports screen every day. Set this to false to show it only on the `testing` update channel again
+// (the owner's TestFlight builds) – a one-line update.
+export const PUBLIC_CHAT_FOR_EVERYONE = true;
 
 // Is the public chat switched on in this download? `channel` is for the tests; the app leaves it out.
 export function publicChatSwitchedOn(channel?: string | null): boolean {

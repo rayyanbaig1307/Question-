@@ -250,8 +250,7 @@ You need **two accounts that are friends**, ideally on two phones.
    "Crickets…" on the feed, and a lonely-grid message on the profile – each with big buttons. The emoji bobs.
 6. **Invite friends:** tap **Invite friends** (Friends screen, Settings, the dashed **＋ Invite** circle in the
    stories row, or an empty screen). Your phone's share sheet opens with a message – send it by text, WhatsApp, etc.
-   It includes the **Android download link** (installs Peekaboo directly). iPhone friends see "coming to the App
-   Store soon" – when Peekaboo is on TestFlight / the App Store, put that link in `src/lib/invite.ts`.
+   It's your username and the App Store link (since 22 Nov – see Step 66).
 7. **Animations:** buttons squish and bounce when tapped; the shutter squishes, the screen flashes white and the
    phone buzzes when you take a photo; swiping between Chat, Camera and Stories gently shrinks and dims the page
    you're leaving.
@@ -1431,7 +1430,7 @@ times) and the photo is sent **once**.
 
 ## Step 71 – Main Character Mode 🌆 (your face in a comic poster)
 
-TestFlight **build 13** on the `testing` channel first (the mode shows only there for now). Also have an older
+TestFlight **build 13** on the `testing` channel first, then the App Store app (on for everyone since 22 Nov). Also have an older
 download handy for step 18 (Android or Expo Go). Write down the number of any step that goes wrong – most fixes go
 out by update. What the mode is and how to add new characters: `docs/MAIN_CHARACTER.md`.
 

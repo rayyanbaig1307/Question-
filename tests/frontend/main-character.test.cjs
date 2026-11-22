@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const { loadScreen, loadPure, renderScreen, act, button, host, textOf, unmount } = require('./harness.cjs');
 
 // Main Character Mode 🌆, the route (src/app/(app)/main-character.tsx). It only checks the phone can do it:
-// - Android, no face tracking (Expo Go, older downloads, the website), or an iPhone on the App Store channel while
-//   the mode is still only for the owner's test channel → the "needs the newest Peekaboo app on an iPhone" page
-//   with a Back button, and the real screen is never loaded;
-// - an iPhone with face tracking on the `testing` channel → the real screen (MainCharacterStudio);
+// - Android, no face tracking (Expo Go, older downloads, the website), or – if the mode is ever set back to the
+//   owner's test channel only – an iPhone on another channel → the "needs the newest Peekaboo app on an iPhone"
+//   page with a Back button, and the real screen is never loaded;
+// - an iPhone with face tracking (on for everyone since 22 Nov, any channel) → the real screen (MainCharacterStudio);
 // - if it ever becomes Peekaboo+ only: people we're sure don't have Plus go to the Peekaboo+ page; while Plus is
 //   still being checked the screen shows.
 
@@ -51,12 +51,23 @@ test('an iPhone with face tracking on the testing channel gets the Main Characte
   } finally { await unmount(tree); }
 });
 
+test('on for everyone: an iPhone with face tracking on the App Store channel gets the Main Character screen', async () => {
+  const { tree, loads } = await show({ channel: 'production' });
+  try {
+    assert.equal(tree.root.findAllByType('MainCharacterStudio').length, 1);
+    assert.equal(loads.studio, 1);
+  } finally { await unmount(tree); }
+});
+
+// The real switch as it was before 22 Nov (testing channel only).
+const TESTING_ONLY = { mainCharacterHere: (os, faceMesh, channel) => faceMesh === true && os === 'ios' && channel === 'testing' };
+
 for (const [name, options] of [
   ['Android (even with face tracking and the testing channel)', { os: 'android' }],
   ['the website', { os: 'web' }],
   ['an iPhone download without face tracking (Expo Go, older builds)', { faceMesh: false }],
-  ['an iPhone on the App Store channel while the mode is still only for testing', { channel: 'production' }],
-  ['an iPhone with no update channel (Expo Go, developing)', { channel: null }],
+  ['an iPhone on the App Store channel if the mode is set back to testing only', { channel: 'production', configChanges: TESTING_ONLY }],
+  ['an iPhone with no update channel if the mode is set back to testing only', { channel: null, configChanges: TESTING_ONLY }],
 ]) {
   test(`${name} gets the "needs the iPhone app" page with a Back button`, async () => {
     const { tree, screen, loads } = await show(options);
