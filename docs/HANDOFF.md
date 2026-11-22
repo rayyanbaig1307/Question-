@@ -50,6 +50,8 @@ and the owner's standing preferences.
 - **Follow-up (same day):** deleting your own public chat photo now deletes its file too (it used to stay until
   account deletion); the public chat line no longer states ages as fact; Terms 6.5, the Privacy Policy and the
   Guidelines warn that a public account can be friended at once by anyone in the room.
+  Commit `16f4227`: `testing` `61d83ed3-88fe-4e71-b0e2-895421060463`, then **production
+  `cbcb8c8e-f6a1-48be-a0fc-3cbd0c834a88`** (iOS `01a20493-6701-7180-ab5e-61934dc40703`); strings checks passed.
 - **Owner to do:** re-upload `website/` (Terms, Privacy, Guidelines changed); tap Allow for
   `20261231000000_main_character.sql` (online characters – optional). Open question: bump TERMS_VERSION so
   everyone sees the new Terms once (the release check recommended it).
