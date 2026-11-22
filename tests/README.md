@@ -676,6 +676,13 @@ passed. Type check and lint: no errors. The web export (`node tests/browser/buil
 the fixes and failed there. Browser, REST, rehearsal and concurrency runs were not repeated (no database or website
 change).
 
+Re-run on 2026-11-22, after invites became just your username + the App Store link (no TestFlight, APK or
+website link; `tests/frontend/invite.test.cjs` checks every phone and channel, the link last and alone, no server
+call, a second tap and a failing share sheet; `tests/frontend/invite-screens.test.cjs` checks the new Invite friends
+screen, the real share from it, the who-can-add line, "Turn off my old invite link" and the friend-code box):
+`npm test` node part 1042 passed, 0 failed, 0 skipped, and the Vitest part 79 files, 1201 passed. Type check and
+lint: no errors. `node scripts/build-website.mjs` leaves `website/` unchanged.
+
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,
 lint, the HTTP check and one browser run were repeated after it.

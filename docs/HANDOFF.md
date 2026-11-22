@@ -37,6 +37,22 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Invites are now just your username + the App Store link (22 Nov, owner's ask)
+
+- **Why:** the owner's TestFlight phone sent "…Tap my link to add me: <pages.dev link>" followed by "🍎 iPhone:
+  <TestFlight link>", so iMessage showed a TestFlight card. The owner: "just send your username, and that's it" – no
+  website, no extra buttons or clicks.
+- **Now:** every invite (all **Invite friends** buttons, Settings → Invite friends, Dare someone who isn't on
+  Peekaboo) is "Add me on Peekaboo 👀 My username is @name" with `APP_STORE_LINK` as the **last line, alone**
+  (`src/lib/invite.ts` `inviteMessage` / `withAppLink`). No TestFlight link (removed from the app), no Android APK
+  link, no `pages.dev` link, on every channel and phone. Nothing is loaded before the share sheet opens.
+- **Settings → Invite friends** shows your @username and the share button; it keeps **Got a code from a friend?**
+  and **Turn off my old invite link** (`reset_invite_code`) because invite links sent before 22 Nov keep working
+  (website `invite.html`, unchanged). Codes are still made in the background (`prefetchInviteCode`) but never shared.
+- **Not done (owner said no):** the bigger plan with a personalised website page, preview card and a new
+  `invite_card` database function was stopped. A custom domain is still optional.
+- Phone check: `docs/TESTING.md` Step 66 (rewritten).
+
 ## Main Character Mode 🌆 Phase 1 – art approved, committed, testing channel only (22 Nov)
 
 - **What:** your face in a comic poster. Home camera → 🌆 bubble (after 🤪 Googly) → its own screen

@@ -1,48 +1,45 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Updates from 'expo-updates';
-import { Platform, Share } from 'react-native';
+import { Share } from 'react-native';
 
 import { runAfterSignOut } from './auth';
-import { inviteLink, normalizeInviteCode, PENDING_INVITE_KEY, pendingInviteCode } from './inviteCode';
+import { normalizeInviteCode, PENDING_INVITE_KEY, pendingInviteCode } from './inviteCode';
 import { supabase } from './supabase';
 
 export { formatInviteCode, INVITE_SITE, inviteLink, normalizeInviteCode } from './inviteCode';
 
-// Where friends can get Peekaboo.
-// Android: this download installs the app directly (and it keeps updating itself after that). When there's a
-// newer Android download, change this one line. It's only added to invites sent from an Android phone.
-// iPhone: the App Store app (it gets its updates on the "production" channel) sends the App Store link. Test
-// copies (TestFlight, Expo Go) still send the TestFlight link: friends install the free TestFlight app, then
-// Peekaboo from there.
-// The website's invite page (scripts/build-website.mjs) reads ANDROID_LINK and APP_STORE_LINK from these lines.
+// Where friends get Peekaboo.
+// Every invite the app sends is just your username and the App Store link (the owner, 22 Nov: "just send your
+// username, and that's it"). The App Store link is always the LAST line, on its own, so Messages shows the App
+// Store card with the Peekaboo icon. There is no TestFlight link and no Android download link in any message.
+// Your friend gets the app, searches your username and adds you.
+// The website's invite page (scripts/build-website.mjs) still reads ANDROID_LINK and APP_STORE_LINK from these
+// lines, for invite links people already sent. When there's a newer Android download, change ANDROID_LINK.
 export const ANDROID_LINK: string | null = 'https://expo.dev/artifacts/eas/7-FSOjuqu58hI0bg_-BNsih5vi4Sv6DIjqKIz9n8jvg.apk';
 export const APP_STORE_LINK = 'https://apps.apple.com/app/id6829561855';
-export const TESTFLIGHT_LINK = 'https://testflight.apple.com/join/3DWqzxhS';
-const isStoreApp = Updates.channel === 'production';
-export const IPHONE_LINK: string | null = isStoreApp ? APP_STORE_LINK : TESTFLIGHT_LINK;
 
-// Adds the download links to a message.
+// Adds the App Store link to a message, as the last line with nothing after it.
 export function withAppLink(message: string): string {
-  const lines = [message, ''];
-  if (ANDROID_LINK && Platform.OS === 'android') lines.push(`📱 Android: ${ANDROID_LINK}`);
-  lines.push(IPHONE_LINK ? `🍎 iPhone: ${IPHONE_LINK}` : '🍎 iPhone: coming to the App Store soon 🔜');
-  return lines.join('\n');
+  return `${message.trimEnd()}\n${APP_STORE_LINK}`;
+}
+
+// A username ready to show after "@" (null if there isn't one).
+function cleanUsername(username?: string | null): string | null {
+  const name = typeof username === 'string' ? username.trim().replace(/^@+/, '') : '';
+  return name ? name : null;
+}
+
+// The invite message: your username, then the App Store link.
+//   Add me on Peekaboo 👀 My username is @alice
+//   https://apps.apple.com/app/id6829561855
+export function inviteMessage(username?: string | null): string {
+  const name = cleanUsername(username);
+  return withAppLink(name ? `Add me on Peekaboo 👀 My username is @${name}` : 'Come hang out with me on Peekaboo 👀');
 }
 
 // ---------------------------------------------------------------------------
-// Your personal invite link
+// Invite codes (from invite links people sent before 22 Nov – they still work, and "Got a code from a friend?"
+// still opens them). The app doesn't put codes or links in new invites any more.
 // ---------------------------------------------------------------------------
-
-// The invite message with your personal link (and the download links).
-export function inviteMessage(link: string): string {
-  return withAppLink(`Come hang out with me on Peekaboo 👀 Tap my link to add me: ${link}`);
-}
-
-// The old invite message: used when your link can't be loaded (no internet, or an older server).
-function plainInviteMessage(username?: string | null): string {
-  const me = username ? ` I'm @${username} – add me!` : '';
-  return withAppLink(`Come hang out with me on Peekaboo 👀 Photos, stories and daily dares.${me}`);
-}
 
 // Your code, remembered for a short while – only for the account that loaded it. loadedAt is when (in ms).
 let cached: { userId: string; code: string; loadedAt: number } | null = null;
@@ -166,56 +163,20 @@ export function isAdultBirthday(birthday: string | null | undefined, now: Date =
 // Sharing
 // ---------------------------------------------------------------------------
 
-// Shares your personal link (the "Share my link" button).
-export async function shareInviteLink(code: string): Promise<void> {
-  try {
-    await Share.share({ message: inviteMessage(inviteLink(code)) });
-  } catch (error) {
-    console.warn('Could not open the share sheet', error);
-  }
-}
-
 let sharing = false;
 
-// Opens the phone's share sheet (Messages, WhatsApp, Instagram, copy…) with an invite to the app.
-// It puts your personal link in the message. If the link takes more than 3 seconds (or can't be loaded),
-// it sends the old message instead, so the button always works. A second tap while it's busy does nothing.
+// Opens the phone's share sheet (Messages, WhatsApp, Instagram, copy…) with an invite: your username and the
+// App Store link. It opens straight away (nothing to load). A second tap while it's open does nothing.
 export async function inviteFriends(username?: string | null): Promise<void> {
   if (sharing) return;
   sharing = true;
   try {
-    const code = await withTimeLimit(myCodeForSharing(), 3000);
-    const message = code ? inviteMessage(inviteLink(code)) : plainInviteMessage(username);
-    await Share.share({ message });
+    await Share.share({ message: inviteMessage(username) });
   } catch (error) {
     console.warn('Could not open the share sheet', error);
   } finally {
     sharing = false;
   }
-}
-
-// Your code for an invite, for whoever is logged in right now (never a code from an earlier login).
-async function myCodeForSharing(): Promise<string | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const me = data.session?.user.id;
-    if (!me) return null;
-    const code = await fetchMyInviteCode(me);
-    const { data: after } = await supabase.auth.getSession();
-    return after.session?.user.id === me ? code : null;
-  } catch {
-    return null;
-  }
-}
-
-function withTimeLimit<T>(work: Promise<T | null>, ms: number): Promise<T | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), ms);
-    work.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      () => { clearTimeout(timer); resolve(null); },
-    );
-  });
 }
 
 // ---------------------------------------------------------------------------

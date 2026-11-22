@@ -1157,21 +1157,27 @@ You need a group chat with **at least 3 people** (you + 2 test accounts or frien
    (deleting one doesn't give it back).
 7. After 24 hours the card is gone from the chat.
 
-## Step 66 – Invite links 🔗
+## Step 66 – Invite friends 🔗 (changed 22 Nov: just your username and the App Store link)
 
-1. Settings → **Invite friends** (or the **Invite friends** button at the top of Friends) → "Invite friends" screen:
-   your link `peekaboo-4gz.pages.dev/invite?c=XXXXX-XXXXX`, **Share my link**, **Get a new link** (asks first; the old
-   link stops working), and **Got a code from a friend?**. Public adults see "Anyone with this link can add you…";
-   private or under-18 accounts see "People who use your link send you a friend request."
-2. Share the link to a second phone that already has Peekaboo (with this update). Open it → the website says "You're
-   invited to Peekaboo 👀" with the code and buttons → **Open in Peekaboo** → the invite screen: avatar, name,
-   @username, "Only add people you know in real life.", **Add <name>**, **Not now**, ⋯ (Report / Block).
-3. Tap **Add** → "You and @x are friends! 🎉" (public adult inviter) or "Friend request sent 💌" (private or under-18
-   inviter). The inviter gets the usual "You have a new friend 🎉" or "New friend request 👋" push.
-4. Your own link → "That's your own invite 😄". An old link after **Get a new link** → "This invite link doesn't work
-   any more".
-5. Logged out on the second phone: open the link → Open in Peekaboo → log in → the invite screen opens by itself.
-6. Type the code instead: Settings → Invite friends → Got a code from a friend? → enter it → the same invite screen.
+1. Tap any **Invite friends** button (Home, Chat, Friends, Close friends, a new group, Dare a friend) → the share
+   sheet opens straight away with exactly:
+   "Add me on Peekaboo 👀 My username is @yourname" and, on its own last line,
+   `https://apps.apple.com/app/id6829561855`. **No** TestFlight link, **no** Android download link and **no**
+   `pages.dev` link – on the TestFlight build and on the App Store app alike.
+2. Send it to yourself in iMessage → the message shows your words, then an **App Store card** with the Peekaboo icon
+   (it can take a second to appear).
+3. Settings → **Invite friends** (or the **Invite friends** button at the top of Friends when you have friends) →
+   the "Invite friends" screen: **Your username @yourname**, "Friends get the Peekaboo App Store link and your
+   username…", **Invite friends** (the same share as step 1), **Got a code from a friend?** and **Turn off my old
+   invite link**. Public adults see "Anyone who searches your username can add you…"; private or under-18 accounts
+   see "People who search your username send you a friend request." No website link or code is shown.
+4. On a second phone, search the username → **Add** works as usual.
+5. **Old invite links still work** (people sent them before 22 Nov): open one → the website page → **Open in
+   Peekaboo** → the invite screen with **Add**. Typing its code in **Got a code from a friend?** opens the same
+   screen. **Turn off my old invite link** (asks first) → "Done ✨ Your old invite link doesn't work any more", and
+   that old link now says "This invite link doesn't work any more".
+6. Dare chain → **Dare someone who isn't on Peekaboo** → the message has the dare, "Get Peekaboo and add me – my username
+   is @yourname" and the App Store link as the last line.
 
 ## Step 67 – Peekaboo+ face filters 🎭
 

@@ -68,13 +68,14 @@ export async function dareFriends(targets: string[], sourcePost: string | null):
   return (data as number) ?? 0;
 }
 
-// Dare someone who isn't on Peekaboo yet: a message with today's dare and the download links.
+// Dare someone who isn't on Peekaboo yet: today's dare, your username, and the App Store link as the last line.
 export async function inviteToDare(username?: string | null): Promise<void> {
   const dare = dareFor(todayDareDay());
-  const who = username ? `@${username}` : 'a friend';
-  await Share.share({
-    message: withAppLink(`🎯 ${who} dares you: "${dare.text}"\nYou have 24 hours 😈 Do it on Peekaboo:`),
-  });
+  const name = typeof username === 'string' ? username.trim().replace(/^@+/, '') : '';
+  const text = name
+    ? `🎯 @${name} dares you: "${dare.text}"\nYou have 24 hours 😈 Get Peekaboo and add me – my username is @${name}`
+    : `🎯 A friend dares you: "${dare.text}"\nYou have 24 hours 😈 Do it on Peekaboo:`;
+  await Share.share({ message: withAppLink(text) });
 }
 
 // Open dares waiting for you today (for the little nudge on the camera). `null` = still checking.

@@ -3,8 +3,7 @@ const assert = require('node:assert/strict');
 const { loadScreen } = require('./harness.cjs');
 
 const APP_STORE = 'https://apps.apple.com/app/id6829561855';
-const TESTFLIGHT = 'https://testflight.apple.com/join/3DWqzxhS';
-const OLD_MESSAGE = `Come hang out with me on Peekaboo 👀 Photos, stories and daily dares. I'm @alice – add me!\n\n🍎 iPhone: ${APP_STORE}`;
+const ALICE_MESSAGE = `Add me on Peekaboo 👀 My username is @alice\n${APP_STORE}`;
 const inviteCode = loadScreen('src/lib/inviteCode.ts').exports;
 
 // Loads lib/invite.ts as if it ran on a phone (`os`) with an update channel (`channel`, null = Expo Go).
@@ -42,128 +41,65 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const setClock = (screen, ms) => { screen.getBinding('Date').now = () => ms; };
 const MINUTE = 60 * 1000;
 
-test('the App Store app invites with the App Store link and no Android download', () => {
+// Every invite is just your username and the App Store link (owner, 22 Nov). The link is the last line, alone.
+test('every phone and every channel sends the same invite: your username, then the App Store link last', async () => {
+  for (const os of ['ios', 'android']) {
+    for (const channel of ['production', 'testing', 'preview', null]) {
+      const { invite, state } = loadInvite({ os, channel, session: 'alice', rpc: () => ({ data: 'BCDFGHJKLM', error: null }) });
+      await invite.inviteFriends('alice');
+      assert.equal(state.shared.length, 1);
+      const { message } = state.shared[0];
+      assert.equal(message, ALICE_MESSAGE, `${os} ${channel}`);
+      assert.equal(message.split('\n').at(-1), APP_STORE, 'the App Store link is the last line, with nothing after it');
+      assert.doesNotMatch(message, /testflight|\.apk|expo\.dev|pages\.dev|invite\?c=|Android|iPhone:/i);
+      assert.equal(state.shared[0].url, undefined, 'only a message, so every app (Messages, WhatsApp, Instagram) keeps the link');
+      assert.deepEqual(state.rpcCalls, [], 'nothing to load: the share sheet opens straight away');
+    }
+  }
+});
+
+test('the invite works without a username, and an @ or spaces in the username are tidied', async () => {
   const { invite } = loadInvite({ os: 'ios', channel: 'production' });
-  const message = invite.withAppLink('Come hang out');
-  assert.equal(invite.IPHONE_LINK, APP_STORE);
-  assert.match(message, /🍎 iPhone: https:\/\/apps\.apple\.com\/app\/id6829561855/);
-  assert.doesNotMatch(message, /testflight/i);
-  assert.doesNotMatch(message, /Android|\.apk/, 'an iPhone invite never points to the Android download');
+  assert.equal(invite.inviteMessage(null), `Come hang out with me on Peekaboo 👀\n${APP_STORE}`);
+  assert.equal(invite.inviteMessage(''), `Come hang out with me on Peekaboo 👀\n${APP_STORE}`);
+  assert.equal(invite.inviteMessage('  @alice '), ALICE_MESSAGE);
+  assert.equal(invite.withAppLink('Hello  \n'), `Hello\n${APP_STORE}`);
+  assert.equal(invite.TESTFLIGHT_LINK, undefined, 'the TestFlight link is gone from the app');
+  assert.equal(invite.IPHONE_LINK, undefined);
 });
 
-test('test copies of the iPhone app (TestFlight, Expo Go) keep the TestFlight link', () => {
-  for (const channel of ['preview', 'testing', null]) {
-    const { invite } = loadInvite({ os: 'ios', channel });
-    const message = invite.withAppLink('Come hang out');
-    assert.equal(invite.IPHONE_LINK, TESTFLIGHT, `channel ${channel}`);
-    assert.match(message, /🍎 iPhone: https:\/\/testflight\.apple\.com\/join\/3DWqzxhS/);
-    assert.doesNotMatch(message, /Android|\.apk/);
-  }
-});
-
-test('an Android phone adds the Android download line', () => {
-  const { invite } = loadInvite({ os: 'android', channel: 'preview' });
-  const lines = invite.withAppLink('Come hang out').split('\n');
-  assert.equal(lines[0], 'Come hang out');
-  assert.equal(lines[2], `📱 Android: ${invite.ANDROID_LINK}`);
-  assert.equal(lines[3], `🍎 iPhone: ${TESTFLIGHT}`);
-});
-
-test('without a personal link, inviteFriends shares exactly the old message with your username and the links', async () => {
-  const { invite, state } = loadInvite({ os: 'ios', channel: 'production' });
-  await invite.inviteFriends('alice');
-  assert.equal(state.shared.length, 1);
-  assert.equal(state.shared[0].message, OLD_MESSAGE);
-});
-
-test('inviteFriends shares your personal invite link when the server has it', async () => {
-  const { invite, state } = loadInvite({
-    os: 'ios', channel: 'production', session: 'alice',
-    rpc: name => (name === 'my_invite_code' ? { data: 'bcdfghjklm', error: null } : { data: null, error: { message: 'unexpected' } }),
-  });
-  await invite.inviteFriends('alice');
-  assert.equal(state.shared.length, 1);
-  assert.equal(
-    state.shared[0].message,
-    `Come hang out with me on Peekaboo 👀 Tap my link to add me: https://peekaboo-4gz.pages.dev/invite?c=BCDFGHJKLM\n\n🍎 iPhone: ${APP_STORE}`,
-  );
-  assert.deepEqual(state.rpcCalls.map(([name]) => name), ['my_invite_code']);
-  // The code is remembered: the next share doesn't ask the server again.
-  await invite.inviteFriends('alice');
-  assert.equal(state.shared.length, 2);
-  assert.equal(state.rpcCalls.length, 1);
-});
-
-test('a server error, or a wrong answer, falls back to the old message', async () => {
-  for (const answer of [{ data: null, error: { message: 'Could not find the function' } }, { data: 'not a code', error: null }]) {
-    const { invite, state } = loadInvite({ os: 'ios', channel: 'production', session: 'alice', rpc: () => answer });
-    await invite.inviteFriends('alice');
-    assert.equal(state.shared[0].message, OLD_MESSAGE);
-  }
-});
-
-test('a slow server: after 3 seconds the old message is shared, and the code is still remembered for next time', async () => {
-  let answer;
-  const { invite, state, calls } = loadInvite({
-    os: 'ios', channel: 'production', session: 'alice',
-    rpc: () => new Promise(resolve => { answer = resolve; }),
-  });
-  const sharing = invite.inviteFriends('alice');
-  await flush();
-  assert.equal(state.shared.length, 0, 'it waits for the link first');
-  assert.equal(calls.timers.length, 1, 'there is a time limit');
-  calls.timers[0]();
-  await sharing;
-  assert.equal(state.shared[0].message, OLD_MESSAGE);
-  answer({ data: 'BCDFGHJKLM', error: null });
-  await flush();
-  await invite.inviteFriends('alice');
-  assert.match(state.shared[1].message, /invite\?c=BCDFGHJKLM/);
-});
-
-test('a second tap while the first invite is still loading does nothing', async () => {
-  let answer;
-  const { invite, state } = loadInvite({
-    os: 'ios', channel: 'production', session: 'alice',
-    rpc: () => new Promise(resolve => { answer = resolve; }),
-  });
-  const first = invite.inviteFriends('alice');
-  await invite.inviteFriends('alice');
-  answer({ data: 'BCDFGHJKLM', error: null });
+test('a second tap while the share sheet is open does nothing', async () => {
+  let close;
+  const shared = [];
+  // The share sheet stays open until `close` is called.
+  const loaded = loadScreen('src/lib/invite.ts', {
+    'react-native': { Platform: { OS: 'ios' }, Share: { share: content => { shared.push(content); return new Promise(resolve => { close = resolve; }); } } },
+    '@react-native-async-storage/async-storage': { __esModule: true, default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} } },
+    './auth': { runAfterSignOut: () => () => {} },
+    './inviteCode': inviteCode,
+    './supabase': { supabase: { rpc: async () => ({ data: null, error: null }), auth: { getSession: async () => ({ data: { session: null } }) } } },
+  }).exports;
+  const first = loaded.inviteFriends('alice');
+  await loaded.inviteFriends('alice');
+  assert.equal(shared.length, 1);
+  close();
   await first;
-  assert.equal(state.shared.length, 1);
-  assert.equal(state.rpcCalls.length, 1);
-  await invite.inviteFriends('alice');
-  assert.equal(state.shared.length, 2, 'once it is done, the button works again');
+  const third = loaded.inviteFriends('alice');
+  assert.equal(shared.length, 2, 'once it is closed, the button works again');
+  close();
+  await third;
 });
 
-test('a code loaded for one account is never shared by the next account', async () => {
-  const codes = { alice: 'BCDFGHJKLM', bob: 'NPQRSTVWXZ' };
-  const { invite, state } = loadInvite({
-    os: 'ios', channel: 'production', session: 'alice',
-    rpc: (_name, _args, current) => ({ data: codes[current.session], error: null }),
+test('a share sheet that fails to open never throws', async () => {
+  const loaded = loadScreen('src/lib/invite.ts', {
+    'react-native': { Platform: { OS: 'ios' }, Share: { share: async () => { throw new Error('no share sheet'); } } },
+    '@react-native-async-storage/async-storage': { __esModule: true, default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} } },
+    './auth': { runAfterSignOut: () => () => {} },
+    './inviteCode': inviteCode,
+    './supabase': { supabase: { rpc: async () => ({ data: null, error: null }), auth: { getSession: async () => ({ data: { session: null } }) } } },
   });
-  invite.prefetchInviteCode('alice');
-  await flush();
-  // Alice's login ends without "Log out" (for example it expired) and Bob logs in.
-  state.session = 'bob';
-  await invite.inviteFriends('bob');
-  assert.match(state.shared[0].message, /invite\?c=NPQRSTVWXZ/);
-  assert.doesNotMatch(state.shared[0].message, /BCDFGHJKLM/);
-});
-
-test('if the account changes while the link loads, the old message is shared instead', async () => {
-  let answer;
-  const { invite, state } = loadInvite({
-    os: 'ios', channel: 'production', session: 'alice',
-    rpc: () => new Promise(resolve => { answer = resolve; }),
-  });
-  const sharing = invite.inviteFriends('alice');
-  await flush();
-  state.session = 'bob';
-  answer({ data: 'BCDFGHJKLM', error: null });
-  await sharing;
-  assert.doesNotMatch(state.shared[0].message, /BCDFGHJKLM/);
+  await loaded.exports.inviteFriends('alice');
+  await loaded.exports.inviteFriends('alice');
 });
 
 test('logging out forgets your code and any invite waiting on this phone', async () => {
@@ -257,7 +193,7 @@ test('"busy" (the link was used a lot today) comes back as busy – never as fri
   assert.equal(await other.invite.acceptInvite('BCDFGHJKLM', 'alice'), 'requested');
 });
 
-test('a new link made on another phone: asking fresh shows it, and the next share uses it', async () => {
+test('a new link made on another phone: asking fresh shows it', async () => {
   // The server's code for Alice. "Get a new link" on her tablet changes it.
   const server = { code: 'BCDFGHJKLM' };
   const { invite, state } = loadInvite({
@@ -271,10 +207,6 @@ test('a new link made on another phone: asking fresh shows it, and the next shar
   // "Your invite link" asks the server again (fresh), even though a code is remembered.
   assert.equal(await invite.fetchMyInviteCode('alice', { fresh: true }), 'NPQRSTVWXZ');
   assert.equal(invite.rememberedInviteCode('alice'), 'NPQRSTVWXZ');
-  // ... and the next share uses the new code, without asking again.
-  await invite.inviteFriends('alice');
-  assert.match(state.shared[0].message, /invite\?c=NPQRSTVWXZ/);
-  assert.doesNotMatch(state.shared[0].message, /BCDFGHJKLM/);
   assert.equal(state.rpcCalls.length, 2);
 });
 
@@ -295,14 +227,13 @@ test('a remembered code is only used for 10 minutes, so a new link made on anoth
   await flush();
   assert.equal(state.rpcCalls.length, 1);
   assert.equal(invite.rememberedInviteCode('alice'), 'BCDFGHJKLM');
-  // 11 minutes later: Home loads it again, and sharing uses the new code.
+  // 11 minutes later: Home loads it again.
   setClock(screen, start + 11 * MINUTE);
   assert.equal(invite.rememberedInviteCode('alice'), null, 'too old to use');
   invite.prefetchInviteCode('alice');
   await flush();
   assert.equal(state.rpcCalls.length, 2);
-  await invite.inviteFriends('alice');
-  assert.match(state.shared[0].message, /invite\?c=NPQRSTVWXZ/);
+  assert.equal(invite.rememberedInviteCode('alice'), 'NPQRSTVWXZ');
   // A clock that jumped back doesn't keep an old code either.
   setClock(screen, start);
   assert.equal(invite.rememberedInviteCode('alice'), null);

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { KeyboardSafeView } from '@/components/KeyboardSafeView';
@@ -10,33 +10,21 @@ import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { fetchMyBirthday } from '@/lib/birthday';
 import { friendlyError } from '@/lib/errors';
-import {
-  fetchMyInviteCode,
-  formatInviteCode,
-  inviteLink,
-  isAdultBirthday,
-  normalizeInviteCode,
-  rememberedInviteCode,
-  resetInviteCode,
-  shareInviteLink,
-} from '@/lib/invite';
+import { inviteFriends, isAdultBirthday, normalizeInviteCode, resetInviteCode } from '@/lib/invite';
 import { colors, font, radius, space } from '@/theme';
 
-// "Your invite link": your personal link to share, a way to swap it for a new one, and a box for a code a
-// friend gave you.
-export default function YourInviteLink() {
+// "Invite friends": your username and a button that shares it with the App Store link (that's all an invite is
+// now). Below: a box for a code from an invite link a friend sent before, and a way to turn off an invite link you
+// sent before.
+export default function InviteFriendsScreen() {
   const { userId, profile } = useMe();
   const { showToast } = useOverlays();
-  // Your code: null while loading.
-  const [code, setCode] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
   const [resetting, setResetting] = useState(false);
   // Your birthday, once it's loaded ({ value: null } = you haven't added one).
   const [birthday, setBirthday] = useState<{ value: string | null } | null>(null);
   const [typed, setTyped] = useState('');
   const [typedError, setTypedError] = useState<string | null>(null);
   const active = useRef(true);
-  const sharing = useRef(false);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -44,58 +32,19 @@ export default function YourInviteLink() {
     };
   }, []);
 
-  // Always asks the server, so a new link made on another phone shows up here. If the server can't be reached,
-  // the code loaded in the last few minutes is shown instead.
-  const loadCode = useCallback(() => {
-    fetchMyInviteCode(userId, { fresh: true })
-      .catch((error) => {
-        const remembered = rememberedInviteCode(userId);
-        if (remembered) return remembered;
-        throw error;
-      })
-      .then((loaded) => {
-        if (!active.current) return;
-        setCode(loaded);
-        setFailed(false);
-      })
-      .catch((error) => {
-        console.warn('Could not load your invite link', error);
-        if (active.current) setFailed(true);
-      });
-  }, [userId]);
-
-  useEffect(() => {
-    loadCode();
-  }, [loadCode]);
-
   useEffect(() => {
     fetchMyBirthday(userId)
       .then((value) => active.current && setBirthday({ value }))
       .catch(() => {});
   }, [userId]);
 
-  function retry() {
-    setFailed(false);
-    loadCode();
-  }
-
-  async function share() {
-    if (!code || sharing.current) return;
-    sharing.current = true;
-    try {
-      await shareInviteLink(code);
-    } finally {
-      sharing.current = false;
-    }
-  }
-
   function confirmReset() {
     Alert.alert(
-      'Get a new link?',
-      'Your old link and code stop working straight away. Friends you already have stay your friends.',
+      'Turn off your old invite link?',
+      'An invite link you sent before stops working straight away. Friends you already have stay your friends.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Get a new link', style: 'destructive', onPress: reset },
+        { text: 'Turn it off', style: 'destructive', onPress: reset },
       ],
     );
   }
@@ -104,13 +53,10 @@ export default function YourInviteLink() {
     if (!active.current || resetting) return;
     setResetting(true);
     try {
-      const fresh = await resetInviteCode(userId);
-      if (!active.current) return;
-      setCode(fresh);
-      setFailed(false);
-      showToast("New link ready ✨ The old one doesn't work any more");
+      await resetInviteCode(userId);
+      if (active.current) showToast("Done ✨ Your old invite link doesn't work any more");
     } catch (error) {
-      if (active.current) Alert.alert('Could not get a new link', friendlyError(error));
+      if (active.current) Alert.alert("Couldn't turn it off", friendlyError(error));
     } finally {
       if (active.current) setResetting(false);
     }
@@ -126,12 +72,12 @@ export default function YourInviteLink() {
     router.push(`/invite/${friendCode}`);
   }
 
-  // Who can use your link to add you – the same rule as adding you by username. Only you see this.
+  // Who can add you once they search your username. Only you see this.
   const whoCanAdd =
     profile && birthday
       ? !profile.is_private && isAdultBirthday(birthday.value)
-        ? 'Anyone with this link can add you as a friend – only share it with people you know.'
-        : 'People who use your link send you a friend request.'
+        ? 'Anyone who searches your username can add you as a friend – only share it with people you know.'
+        : 'People who search your username send you a friend request.'
       : null;
 
   return (
@@ -140,38 +86,21 @@ export default function YourInviteLink() {
       <KeyboardSafeView style={styles.fill}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <Text style={styles.label}>Your invite link</Text>
-            {code ? (
-              <>
-                <Text style={styles.link} selectable>
-                  {inviteLink(code)}
-                </Text>
-                <Text style={styles.code} selectable accessibilityLabel={`Your code: ${code.split('').join(' ')}`}>
-                  {formatInviteCode(code)}
-                </Text>
-              </>
-            ) : failed ? (
-              <>
-                <Text style={styles.note}>Couldn&apos;t load your link – check your internet and try again.</Text>
-                <Button title="Try again" icon="refresh" variant="secondary" small onPress={retry} />
-              </>
-            ) : (
-              <ActivityIndicator color={colors.accent} style={styles.loading} />
-            )}
+            <Text style={styles.label}>Your username</Text>
+            {profile?.username ? (
+              <Text style={styles.username} selectable>
+                @{profile.username}
+              </Text>
+            ) : null}
+            <Text style={styles.note}>
+              Friends get the Peekaboo App Store link and your username. Once they have the app, they search your
+              username and add you.
+            </Text>
           </View>
 
           {whoCanAdd ? <Text style={styles.note}>{whoCanAdd}</Text> : null}
 
-          <Button title="Share my link" icon="share-outline" disabled={!code} onPress={share} />
-          <Button
-            title="Get a new link"
-            icon="refresh"
-            variant="secondary"
-            disabled={!code}
-            loading={resetting}
-            onPress={confirmReset}
-          />
-          <Text style={styles.small}>Shared it with the wrong people? Get a new link – the old one stops working.</Text>
+          <Button title="Invite friends" icon="share-outline" onPress={() => inviteFriends(profile?.username)} />
 
           <View style={styles.friendCode}>
             <TextField
@@ -190,6 +119,16 @@ export default function YourInviteLink() {
             />
             <Button title="Open invite" icon="person-add" variant="secondary" disabled={!typed.trim()} onPress={openTypedCode} />
           </View>
+
+          <Button
+            title="Turn off my old invite link"
+            icon="close-circle-outline"
+            variant="secondary"
+            small
+            loading={resetting}
+            onPress={confirmReset}
+          />
+          <Text style={styles.small}>Sent an invite link to the wrong people before? This stops it working.</Text>
         </ScrollView>
       </KeyboardSafeView>
     </View>
@@ -216,18 +155,9 @@ const styles = StyleSheet.create({
     ...font.label,
     textTransform: 'uppercase',
   },
-  link: {
-    ...font.body,
-    color: colors.accent,
-    textAlign: 'center',
-  },
-  code: {
+  username: {
     ...font.title,
-    letterSpacing: 3,
     textAlign: 'center',
-  },
-  loading: {
-    marginVertical: space.lg,
   },
   note: {
     ...font.body,

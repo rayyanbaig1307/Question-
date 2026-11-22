@@ -286,10 +286,10 @@ test('the ⋯ menu reports or blocks the person, and a block ends the invite', a
 });
 
 // ---------------------------------------------------------------------------
-// /invite: your invite link
+// /invite: Invite friends (your username + the App Store link; no link or code of your own any more)
 // ---------------------------------------------------------------------------
 
-function yourLink({ profile = { id: 'alice', username: 'alice', display_name: 'Alice', is_private: false }, birthday = async () => '1990-05-01', code = async () => 'BCDFGHJKLM', reset = async () => 'NPQRSTVWXZ', canGoBack = true, remembered = () => null, lib = null } = {}) {
+function yourLink({ profile = { id: 'alice', username: 'alice', display_name: 'Alice', is_private: false }, birthday = async () => '1990-05-01', reset = async () => 'NPQRSTVWXZ', canGoBack = true, lib = null } = {}) {
   const state = { shares: [], resets: [], toasts: [], loads: 0 };
   const calls = { routes: [] };
   const screen = loadScreen('src/app/(app)/invite/index.tsx', {
@@ -299,87 +299,82 @@ function yourLink({ profile = { id: 'alice', username: 'alice', display_name: 'A
     '@/lib/birthday': { fetchMyBirthday: birthday },
     // `lib`: the real lib/invite.ts (realInviteWithStore). Otherwise stand-ins.
     '@/lib/invite': lib ?? {
-      fetchMyInviteCode: async (me, options) => {
-        state.loads++;
-        assert.equal(me, 'alice');
-        assert.equal(options?.fresh, true, 'this screen always asks the server');
-        return code();
-      },
-      rememberedInviteCode: me => (me === 'alice' ? remembered() : null),
-      formatInviteCode: inviteCode.formatInviteCode,
-      inviteLink: inviteCode.inviteLink,
+      inviteFriends: async username => { state.shares.push(username); },
       isAdultBirthday: realInvite.isAdultBirthday,
       normalizeInviteCode: inviteCode.normalizeInviteCode,
       resetInviteCode: async me => { state.resets.push(me); return reset(); },
-      shareInviteLink: async value => { state.shares.push(value); },
     },
   });
   return { screen, state, calls };
 }
 
-test('"Your invite link" shows your link and code, and Share my link shares it', async () => {
+test('"Invite friends" shows your username, never a website link or code, and the button shares your username', async () => {
   const { screen, state } = yourLink();
   const tree = await renderScreen(screen);
   try {
     const text = allText(tree);
-    assert.match(text, /https:\/\/peekaboo-4gz\.pages\.dev\/invite\?c=BCDFGHJKLM/);
-    assert.match(text, /BCDFG-HJKLM/);
-    await act(() => button(tree, 'Share my link').props.onPress());
-    assert.deepEqual(state.shares, ['BCDFGHJKLM']);
+    assert.match(text, /@alice/);
+    assert.match(text, /App Store link and your username/);
+    assert.doesNotMatch(text, /pages\.dev|invite\?c=|testflight/i);
+    await act(() => button(tree, 'Invite friends').props.onPress());
+    assert.deepEqual(state.shares, ['alice']);
   } finally { await unmount(tree); }
 });
 
-test('the plain line about who can use your link follows your own privacy and birthday', async () => {
-  const OPEN = 'Anyone with this link can add you as a friend – only share it with people you know.';
-  const REQUEST = 'People who use your link send you a friend request.';
+test('the real share from this screen: your username, then the App Store link last', async () => {
+  const lib = realInviteWithStore();
+  const { screen } = yourLink({ lib: lib.invite });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => button(tree, 'Invite friends').props.onPress());
+    assert.equal(lib.shared.length, 1);
+    assert.equal(lib.shared[0].message, 'Add me on Peekaboo 👀 My username is @alice\nhttps://apps.apple.com/app/id6829561855');
+    assert.deepEqual(lib.rpcCalls, [], 'nothing is loaded from the server');
+  } finally { await unmount(tree); }
+});
+
+test('the plain line about who can add you follows your own privacy and birthday', async () => {
+  const OPEN = 'Anyone who searches your username can add you as a friend – only share it with people you know.';
+  const REQUEST = 'People who search your username send you a friend request.';
   const cases = [
     [{ is_private: false }, async () => '1990-05-01', OPEN],
     [{ is_private: true }, async () => '1990-05-01', REQUEST],
     [{ is_private: false }, async () => `${new Date().getUTCFullYear() - 15}-01-01`, REQUEST],
     [{ is_private: false }, async () => null, REQUEST],
   ];
-  for (const [privacy, birthday, line] of cases) {
-    const { screen } = yourLink({ profile: { id: 'alice', username: 'alice', display_name: 'Alice', ...privacy }, birthday });
+  for (const [extra, birthday, expected] of cases) {
+    const { screen } = yourLink({ profile: { id: 'alice', username: 'alice', display_name: 'Alice', ...extra }, birthday });
     const tree = await renderScreen(screen);
     try {
-      const text = allText(tree);
-      assert.ok(text.includes(line), `${JSON.stringify(privacy)} → ${line}`);
-      assert.ok(!text.includes(line === OPEN ? REQUEST : OPEN));
+      await act(flush);
+      assert.match(allText(tree), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     } finally { await unmount(tree); }
   }
-  // Birthday couldn't be loaded: say nothing rather than guess.
-  const { screen } = yourLink({ birthday: async () => { throw new Error('offline'); } });
-  const tree = await renderScreen(screen);
-  try {
-    const text = allText(tree);
-    assert.ok(!text.includes(OPEN) && !text.includes(REQUEST));
-  } finally { await unmount(tree); }
 });
 
-test('Get a new link asks first, then shows the new link', async () => {
+test('"Turn off my old invite link" asks first, then turns it off', async () => {
   const { screen, state } = yourLink();
   const tree = await renderScreen(screen);
   try {
-    await act(() => button(tree, 'Get a new link').props.onPress());
-    assert.equal(state.resets.length, 0, 'nothing changes before you confirm');
+    await act(() => button(tree, 'Turn off my old invite link').props.onPress());
     const [title, , choices] = screen.calls.alerts[0];
-    assert.equal(title, 'Get a new link?');
-    assert.deepEqual([...choices.map(choice => choice.text)], ['Cancel', 'Get a new link']);
-    await act(() => choices[1].onPress());
+    assert.equal(title, 'Turn off your old invite link?');
+    assert.deepEqual(state.resets, [], 'nothing happens before you say yes');
+    await act(() => choices.find(choice => choice.text === 'Turn it off').onPress());
+    await act(flush);
     assert.deepEqual(state.resets, ['alice']);
-    assert.match(allText(tree), /invite\?c=NPQRSTVWXZ/);
-    assert.equal(state.toasts.length, 1);
+    assert.deepEqual(state.toasts, ["Done ✨ Your old invite link doesn't work any more"]);
   } finally { await unmount(tree); }
 });
 
-test('a failed "Get a new link" keeps the old link and explains', async () => {
+test('a failed "Turn off" explains', async () => {
   const { screen } = yourLink({ reset: async () => { throw new Error('Network request failed'); } });
   const tree = await renderScreen(screen);
   try {
-    await act(() => button(tree, 'Get a new link').props.onPress());
-    await act(() => screen.calls.alerts[0][2][1].onPress());
-    assert.equal(screen.calls.alerts[1][0], 'Could not get a new link');
-    assert.match(allText(tree), /invite\?c=BCDFGHJKLM/);
+    await act(() => button(tree, 'Turn off my old invite link').props.onPress());
+    await act(() => screen.calls.alerts[0][2].find(choice => choice.text === 'Turn it off').onPress());
+    await act(flush);
+    assert.equal(screen.calls.alerts[1][0], "Couldn't turn it off");
   } finally { await unmount(tree); }
 });
 
@@ -388,64 +383,14 @@ test('a code from a friend opens their invite; a wrong one is explained', async 
   const tree = await renderScreen(screen);
   try {
     const field = () => tree.root.findByType('TextField');
-    assert.equal(field().props.label, 'Got a code from a friend?');
-    await act(() => field().props.onChangeText('hello'));
+    await act(() => field().props.onChangeText('bcdfg-hjklm'));
+    await act(() => button(tree, 'Open invite').props.onPress());
+    assert.deepEqual(calls.routes, [['push', '/invite/BCDFGHJKLM']]);
+    await act(() => field().props.onChangeText('nope'));
     await act(() => button(tree, 'Open invite').props.onPress());
     assert.match(field().props.error, /doesn't look like an invite code/);
-    assert.deepEqual(calls.routes, []);
-    await act(() => field().props.onChangeText(' npqrs-tvwxz '));
-    await act(() => button(tree, 'Open invite').props.onPress());
-    assert.deepEqual(calls.routes, [['push', '/invite/NPQRSTVWXZ']]);
+    assert.equal(calls.routes.length, 1);
   } finally { await unmount(tree); }
-});
-
-test('if your link cannot be loaded, Try again loads it again (the friend code box still works)', async () => {
-  let fail = true;
-  const { screen, state } = yourLink({ code: async () => { if (fail) throw new Error('offline'); return 'BCDFGHJKLM'; } });
-  const tree = await renderScreen(screen);
-  try {
-    assert.match(allText(tree), /Couldn't load your link/);
-    assert.equal(button(tree, 'Share my link').props.disabled, true);
-    assert.ok(tree.root.findByType('TextField'));
-    fail = false;
-    await act(() => button(tree, 'Try again').props.onPress());
-    assert.equal(state.loads, 2);
-    assert.match(allText(tree), /BCDFG-HJKLM/);
-  } finally { await unmount(tree); }
-});
-
-test('if the server cannot be reached, the code loaded in the last few minutes is shown', async () => {
-  const { screen, state } = yourLink({ code: async () => { throw new Error('Network request failed'); }, remembered: () => 'NPQRSTVWXZ' });
-  const tree = await renderScreen(screen);
-  try {
-    assert.match(allText(tree), /invite\?c=NPQRSTVWXZ/);
-    assert.doesNotMatch(allText(tree), /Couldn't load your link/);
-    await act(() => button(tree, 'Share my link').props.onPress());
-    assert.deepEqual(state.shares, ['NPQRSTVWXZ']);
-  } finally { await unmount(tree); }
-});
-
-test('a new link made on another phone: "Your invite link" shows it, and the next share sends it', async () => {
-  // The real lib/invite.ts. The server's code for Alice changes when she gets a new link on her tablet.
-  const server = { code: 'BCDFGHJKLM' };
-  const lib = realInviteWithStore({ rpc: name => (name === 'my_invite_code' ? { data: server.code, error: null } : { data: null, error: { message: 'unexpected' } }) });
-  lib.invite.prefetchInviteCode('alice');
-  await flush();
-  assert.equal(lib.invite.rememberedInviteCode('alice'), 'BCDFGHJKLM');
-  server.code = 'NPQRSTVWXZ';
-  const { screen } = yourLink({ lib: lib.invite });
-  const tree = await renderScreen(screen);
-  try {
-    await act(flush);
-    assert.match(allText(tree), /invite\?c=NPQRSTVWXZ/);
-    assert.match(allText(tree), /NPQRS-TVWXZ/);
-    assert.doesNotMatch(allText(tree), /BCDFGHJKLM|BCDFG-HJKLM/);
-  } finally { await unmount(tree); }
-  // An "Invite friends" share somewhere else afterwards sends the new link too.
-  await lib.invite.inviteFriends('alice');
-  assert.match(lib.shared[0].message, /invite\?c=NPQRSTVWXZ/);
-  assert.doesNotMatch(lib.shared[0].message, /BCDFGHJKLM/);
-  assert.deepEqual(lib.rpcCalls, ['my_invite_code', 'my_invite_code']);
 });
 
 test('the back button goes Home when there is nothing to go back to', async () => {
