@@ -1,6 +1,7 @@
 # Peekaboo – Terms of Service
 
 **Effective date:** 6 November 2026
+**Last updated:** 22 November 2026 (new section 6.5, the public chat)
 **Operator:** 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net ("Peekaboo", "we", "us")
 
 Please read these Terms carefully. They are a legal agreement between you and the operator of the Peekaboo app. By creating an account or using Peekaboo you agree to them, to our [Privacy Policy](PRIVACY_POLICY.md), our [Community Guidelines](COMMUNITY_GUIDELINES.md) and our [Dare Safety Rules](DARE_SAFETY_RULES.md), which are all part of these Terms. If you do not agree, do not use Peekaboo.
@@ -9,7 +10,7 @@ Please read these Terms carefully. They are a legal agreement between you and th
 
 1.1 You must be **at least 13 years old**. If you are under 13, you may not create an account, and we delete accounts we learn belong to children under 13.
 
-1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app, including any purchase (see section 9). Hit ups are not available to you (see section 6).
+1.2 If you are **under 18**, you may only use Peekaboo with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the app, including any purchase (see section 9). Hit ups and the public chat are not available to you (see section 6).
 
 1.3 **Hit ups are only for adults (18+)**: people under 18 cannot hit anyone up and cannot be hit up. This is based on the birthday you give us (section 6).
 
@@ -69,7 +70,7 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 
 5.3 We may report serious matters (for example threats, child-safety concerns or imminent danger) to the police or other authorities.
 
-## 6. Hit ups and your birthday
+## 6. Hit ups, the public chat and your birthday
 
 6.1 A **hit up** lets you reach out to someone you are not friends with yet, with an optional short message. They can **hit back** (you become friends and can chat) or **ignore** it (we do not tell you). You cannot send them anything else until they hit back.
 
@@ -78,6 +79,8 @@ Peekaboo suggests light-hearted dares, daily "drops", forfeits and friend challe
 6.3 You can send up to **10 hit ups a day**, and one per person. You choose who can hit you up in **Settings → Who can hit me up** (everyone, friends of friends, or nobody). Blocking someone stops all hit ups between you, and every hit up can be reported.
 
 6.4 Hit ups are for making friends. Do not use them to harass, spam, pressure or flirt with anyone who has not shown interest, or to send sexual content. **We do not check identities or ages beyond the birthday people give us**, and people online may not be who they say they are. Never send money, never share private information with someone you don't know, and if you meet someone in person, meet in a public place and tell someone you trust. We are not responsible for what other users do, online or offline.
+
+6.5 The **public chat** is one room for everyone on Peekaboo who is 18 or over, going by the birthday they saved (see 6.2). It is photos only, and **most people in it are strangers**: everyone in the room sees your name, username and profile photo with your photos, and anyone could take a screenshot of them. **We do not check identities or ages beyond the birthday people give us**, and we do not check photos before they are posted. Your photos must follow the [Community Guidelines](COMMUNITY_GUIDELINES.md). You can delete your own photos at any time. A photo that 3 different people report is hidden from everyone except the person who posted it. **We may remove any photo, and suspend or ban any account, without notice.** Giving a false birthday to get into the public chat leads to a permanent ban. We are not responsible for what other users post in the public chat.
 
 ## 7. Location, notifications and device features
 

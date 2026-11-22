@@ -30,7 +30,7 @@ export const PUBLIC_CHAT = 'public';
 
 // The public chat is on for everyone (18+ by the server's check) since 22 Nov – the owner: "make sure public
 // chats … all go up today". There is no automatic photo scanner yet: 3 reports hide a photo, and the owner
-// checks the Reports screen every day. Set this to false to show it only on the `testing` update channel again
+// checks new reports every day (a 🚩 push for each; Supabase → Table Editor → reports). Set this to false to show it only on the `testing` update channel again
 // (the owner's TestFlight builds) – a one-line update.
 export const PUBLIC_CHAT_FOR_EVERYONE = true;
 

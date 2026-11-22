@@ -202,7 +202,8 @@ and the owner's standing preferences.
   default. To open it to everyone once the scanner exists: set `PUBLIC_CHAT_FOR_EVERYONE = true` (one line).
 - **ON FOR EVERYONE since 22 Nov** (owner: "make sure public chats, main character mode and invite fix all go up
   today"): `PUBLIC_CHAT_FOR_EVERYONE = true`. There is still no AI image scanner – 3 reports hide a photo and the
-  owner was told to check the Reports screen every day. Set it back to `false` (one line, an OTA) to limit it to the
+  owner was told to check new reports every day (🚩 push; Supabase → Table Editor → reports – there is no in-app
+  Reports screen). Set it back to `false` (one line, an OTA) to limit it to the
   `testing` channel again. Legal text for the public chat was added the same day (Privacy Policy, Guidelines,
   Terms). (Before 22 Nov it was locked to `testing`; `testing` group `9fca0573` from `71faea9`.)
 - **Next:** the AI scanner (the owner picks the service and adds its key in Supabase – never in chat). Planned to

@@ -215,8 +215,9 @@ describe('legal documents', () => {
     expect(file('src/lib/legal.ts')).toContain("LIVE_RULES_VERSION = '2026-11-20'");
     expect(file('src/lib/legal.ts')).toContain("DARE_RULES_VERSION = '2026-10-31'");
 
-    // Privacy: the new date, LiveKit as a provider and in the short version, and how long live data is kept.
-    expect(effectiveDate(privacy)).toBe('2026-11-20');
+    // Privacy: the new date (22 Nov: the public chat), LiveKit as a provider and in the short version, and how long
+    // live data is kept.
+    expect(effectiveDate(privacy)).toBe('2026-11-22');
     const livekit = privacy.split('\n').find((line) => line.startsWith('| **LiveKit, Inc.**'));
     expect(livekit).toContain("doesn't keep the video or sound");
     expect(livekit).toContain('your Peekaboo user ID (a random code)');
@@ -253,6 +254,43 @@ describe('legal documents', () => {
     const camera = app.expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-camera')[1];
     expect(checklist).toContain(camera.cameraPermission);
     expect(checklist).toContain(camera.microphonePermission);
+  });
+
+  // The public chat 📸 (live for everyone 22 Nov): the documents must say what the server really does
+  // (supabase/migrations/20261225000000_public_chat.sql). No re-accept was wanted, so TERMS_VERSION stays.
+  it('public chat: the documents match the server rules, and the Terms keep their version', () => {
+    const sql = file('supabase/migrations/20261225000000_public_chat.sql');
+    expect(sql).toContain("private.age_group(person) = 'adult'");
+    expect(sql).toContain("f.created_at > now() - interval '30 seconds'");
+    expect(sql).toContain(">= 40 then");
+    expect(sql).toMatch(/count\(distinct r\.reporter_id\)[\s\S]{0,200}>= 3 then/);
+    expect(sql).toContain('create policy "You can delete your own public photos"');
+    expect(sql).toContain('references public.profiles (id) on delete cascade');
+
+    expect(privacy).toContain('- **Public chat:** a photo you post in the public chat is seen by everyone on Peekaboo who is 18 or over');
+    expect(privacy).toContain('Each photo shows your name, username and profile photo');
+    expect(privacy).toContain('If 3 different people report a photo, it is hidden from everyone except you.');
+    expect(privacy).toContain('| Public chat photos | Shown until you delete them, or your account.');
+    expect(privacy).toContain('The public chat is only for people 18 and over too');
+
+    expect(guidelines).toContain('## Public chat 📸 (18+ only)');
+    expect(guidelines).toContain('one photo every 30 seconds, and up to 40 a day');
+    expect(guidelines).toContain('When 3 different people report a photo');
+    expect(guidelines).toContain('Nobody checks photos before they go up');
+    // The app's menu and report words.
+    const screen = file('src/app/(app)/public-chat.tsx');
+    expect(screen).toContain("label: 'Report photo'");
+    expect(screen).toContain("label: 'Delete'");
+    expect(guidelines).toContain('then **Report photo**');
+
+    expect(terms).toContain('6.5 The **public chat** is one room for everyone on Peekaboo who is 18 or over');
+    expect(terms).toContain('We are not responsible for what other users post in the public chat.');
+    expect(effectiveDate(terms)).toBe('2026-11-06');
+    expect(file('src/lib/legal.ts')).toContain("TERMS_VERSION = '2026-11-06'");
+
+    const ugc = checklist.split('\n').find((line) => line.startsWith('| **1.2 User-generated content**'));
+    expect(ugc).toContain('**Public chat 📸**');
+    expect(ugc).toContain('check reports daily, public chat reports included');
   });
 
   it('the README is up to date for a paid app on Cloudflare Pages', () => {

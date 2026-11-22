@@ -23,6 +23,16 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 - **No spam, scams or fake accounts.** No bots, no impersonation, no mass friend-requesting, no selling, no phishing.
 - **Be honest in Guess Who and hit ups.** Don't pretend to be someone else or use someone else's photos.
 
+## Public chat 📸 (18+ only)
+
+- **One room for everyone on Peekaboo who is 18 or over**, going by the birthday they saved. Most people there are strangers, and they all see your name, username and profile photo with every photo you post. Giving a fake birthday to get in is a permanent ban.
+- **Photos only**, and slow mode is on: one photo every 30 seconds, and up to 40 a day.
+- **What's allowed:** everyday photos you're happy for strangers to see – your view, your food, your pet, your outfit, something funny you spotted. Don't show your address, your school or anything that says where to find you.
+- **No nudity or sexual content**, not even "almost". **No photos of other people without their OK.** **No hate, no violence and nothing illegal.** Everything else in these Guidelines counts here too.
+- **Report anything bad:** tap a photo's **⋯** (or press and hold it), then **Report photo**. Nobody checks photos before they go up, so reports keep the room safe. When 3 different people report a photo, it's hidden from everyone except the person who posted it, and we review every report.
+- **You can delete your own photos** at any time: tap **⋯** on your photo, then **Delete**.
+- **Breaking these rules can get your photos removed and your account banned.**
+
 ## Going live 🔴 (being tested – not in the App Store app yet)
 
 - **Lives are for friends only.** Only your friends can watch. We check this every time someone joins, and we take people out of a live when a friendship ends or someone is blocked.

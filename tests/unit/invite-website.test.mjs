@@ -120,10 +120,10 @@ describe('the Privacy Policy and invite links', () => {
   const privacy = file('legal/PRIVACY_POLICY.md');
 
   it('says what the invite page and the app show, and that a link is never easier than adding by username', () => {
-    expect(privacy).toContain('- **Invite links:** you can share your own invite link (Settings → Invite friends).');
+    expect(privacy).toContain('- **Invites:** when you invite someone to Peekaboo, the app shares only your username and the App Store link');
     expect(privacy).toContain('The invite web page only shows the invite code – never your name or photo.');
     expect(privacy).toContain('straight away only if your account is public and you are 18 or over, otherwise with a friend request.');
-    expect(privacy).toContain('You can get a new link at any time, and the old one stops working.');
+    expect(privacy).toContain('To stop your old link working, tap **Turn off my old invite link** in Settings → Invite friends.');
     expect(privacy).toContain('your invite code, and whose invite links you used and when (to stop misuse)');
     // The old sentence about adding friends is still there, word for word.
     expect(privacy).toContain("If you are under 18 (or haven't saved your birthday), or your account is private, people send a request that you can accept or decline.");
