@@ -78,6 +78,8 @@ export type ReportContentType =
   | 'group_message'
   | 'comment'
   | 'public_photo'
+  // A message or sticker in the public chat (20270102000000_public_chat_text.sql).
+  | 'public_message'
   // Lives 🔴: a live (the host or the co-host, whoever is reported) or one comment in a live.
   | 'live'
   | 'live_comment';

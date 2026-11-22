@@ -155,7 +155,7 @@ function host(name) {
 // test can run them by hand (timer number n is calls.timers[n - 1]; a timer the screen stopped again is in
 // calls.clearedTimers).
 function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
-  const calls = { alerts: [], toasts: [], routes: [], timers: [], clearedTimers: new Set(), intervals: new Map() };
+  const calls = { alerts: [], toasts: [], routes: [], timers: [], clearedTimers: new Set(), intervals: new Map(), appState: new Set() };
   const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText', 'KeyboardSafeView', 'StoryAvatar'];
   const modules = {
     react: React,
@@ -169,6 +169,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
       StyleSheet: { create: value => value, absoluteFill: {} },
       Platform: { OS: 'android' },
       Alert: { alert: (...args) => calls.alerts.push(args) },
+      // Coming back to the app: a test calls each listener in calls.appState with 'active'.
+      AppState: { currentState: 'active', addEventListener: (event, listener) => { calls.appState.add(listener); return { remove: () => calls.appState.delete(listener) }; } },
       useWindowDimensions: () => ({ width: 320, height: 568 }),
     },
     '@expo/vector-icons/Ionicons': host('Ionicons'),
@@ -214,7 +216,13 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     // Dare safety: every dare is fine unless a test says otherwise (the rules themselves: tests/unit/dare-safety.test.mjs).
     '@/lib/dareSafety': { checkDare: () => null, dareProblem: () => null },
     // The public chat (18+): hidden unless a test says who is looking.
-    '@/lib/publicChat': { PUBLIC_CHAT: 'public', usePublicChatStatus: () => 'under_18', fetchPublicChatStatus: async () => 'under_18', sendPublicPhoto: async () => {}, fetchPublicPhotos: async () => [], deletePublicPhoto: async () => {}, subscribeToPublicChat: () => () => {} },
+    '@/lib/publicChat': {
+      PUBLIC_CHAT: 'public', PUBLIC_TEXT_MAX: 300, usePublicChatStatus: () => 'under_18', fetchPublicChatStatus: async () => 'under_18',
+      sendPublicPhoto: async () => {}, fetchPublicPhotos: async () => [], deletePublicPhoto: async () => {}, subscribeToPublicChat: () => () => {},
+      fetchPublicChat: async () => ({ items: [], textOn: false }), sendPublicText: async () => null, sendPublicSticker: async () => null,
+      deletePublicMessage: async () => {}, checkPublicText: () => null, checkPublicName: () => null, hasPublicText: text => text.trim() !== '',
+      publicChatName: author => author?.display_name || author?.username || 'Someone',
+    },
     // "How did you hear about Peekaboo?": not asked unless a test says so.
     '@/lib/heardAbout': { useNeedsHeardAbout: () => [false, () => {}], saveHeardAbout: async () => {}, HEARD_ABOUT_OPTIONS: [] },
     '@/components/HeardAbout': { HeardAbout: host('HeardAbout') },

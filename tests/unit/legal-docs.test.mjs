@@ -267,21 +267,23 @@ describe('legal documents', () => {
     expect(sql).toContain('create policy "You can delete your own public photos"');
     expect(sql).toContain('references public.profiles (id) on delete cascade');
 
-    expect(privacy).toContain('- **Public chat:** a photo you post in the public chat is seen by everyone on Peekaboo who is 18 or over');
-    expect(privacy).toContain('Each photo shows your name, username and profile photo');
-    expect(privacy).toContain('If 3 different people report a photo, it is hidden from everyone except you.');
-    expect(privacy).toContain('| Public chat photos | Shown until you delete them, or your account.');
+    expect(privacy).toContain('- **Public chat:** a photo, message or sticker you post in the public chat is seen by everyone on Peekaboo who is 18 or over');
+    expect(privacy).toContain('Each photo, message and sticker shows your name, username and profile photo');
+    expect(privacy).toContain('If 3 different people report a photo or message, it is hidden from everyone except you.');
+    expect(privacy).toContain('| Public chat photos, messages and stickers | Shown until you delete them, or your account.');
     expect(privacy).toContain('The public chat is only for people 18 and over too');
 
     expect(guidelines).toContain('## Public chat 📸 (18+ only)');
     expect(guidelines).toContain('one photo every 30 seconds, and up to 40 a day');
-    expect(guidelines).toContain('When 3 different people report a photo');
-    expect(guidelines).toContain('Nobody checks photos before they go up');
+    expect(guidelines).toContain('When 3 different people report a photo or message');
+    expect(guidelines).toContain('Nobody checks photos or messages before they go up');
     // The app's menu and report words.
     const screen = file('src/app/(app)/public-chat.tsx');
     expect(screen).toContain("label: 'Report photo'");
+    expect(screen).toContain("label: 'Report message'");
     expect(screen).toContain("label: 'Delete'");
     expect(guidelines).toContain('then **Report photo**');
+    expect(guidelines).toContain('then **Report message**');
 
     expect(terms).toContain('6.5 The **public chat** is one room for everyone on Peekaboo who is 18 or over');
     expect(terms).toContain('We are not responsible for what other users post in the public chat.');
@@ -291,6 +293,70 @@ describe('legal documents', () => {
     const ugc = checklist.split('\n').find((line) => line.startsWith('| **1.2 User-generated content**'));
     expect(ugc).toContain('**Public chat 📸**');
     expect(ugc).toContain('check reports daily, public chat reports included');
+  });
+
+  // Messages and stickers in the public chat 💬 (22 Nov): the documents must say what
+  // supabase/migrations/20270102000000_public_chat_text.sql really does. TERMS_VERSION stays.
+  it('public chat messages: the documents match the server rules', () => {
+    const sql = file('supabase/migrations/20270102000000_public_chat_text.sql');
+    // Slow mode: counted in a private list deleting doesn't change, kept 24 hours.
+    expect(sql).toContain("gap interval := case what when 'message' then interval '5 seconds' else interval '30 seconds' end;");
+    expect(sql).toContain("most integer := case what when 'message' then 300 else 40 end;");
+    expect(sql).toContain("perform private.public_chat_slow_mode(me, 'message');");
+    expect(sql).toContain("perform private.public_chat_slow_mode(me, 'photo');");
+    expect(sql).toContain("delete from private.public_chat_sends s where s.sent_at <= now() - interval '24 hours';");
+    expect(sql).toContain('char_length(clean) not between 1 and 300');
+    expect(sql).toContain("private.blocked_word(clean, 'content')");
+    expect(sql).toContain("'Links aren''t allowed in the public chat.'");
+    expect(sql).toContain("'Phone numbers aren''t allowed in the public chat.'");
+    expect(sql).toContain('execute function private.check_plus_sticker()');
+    expect(sql).toMatch(/count\(distinct r\.reporter_id\)[\s\S]{0,200}>= 3 then/);
+    expect(sql).toContain("'live', 'live_comment', 'public_message'");
+    expect(sql).toContain('create policy "You can delete your own public messages"');
+    expect(sql).toContain('references public.profiles (id) on delete cascade');
+
+    expect(privacy).toContain('slurs, links and phone numbers aren\'t allowed');
+    expect(privacy).toContain('When someone reports a message, its words are kept with the report');
+    expect(guidelines).toContain('one message or sticker every 5 seconds, and up to 300 a day');
+    expect(guidelines).toContain('A message can be up to 300 characters.');
+    expect(guidelines).toContain('**No links and no phone numbers** in messages');
+    expect(terms).toContain('You can post photos, messages and stickers there; links and phone numbers are not allowed in messages, or in the name and username you post with.');
+    expect(terms).toContain('A photo or message that 3 different people report is hidden');
+    const ugc = checklist.split('\n').find((line) => line.startsWith('| **1.2 User-generated content**'));
+    expect(ugc).toContain('**Report message** on every message and sticker');
+    expect(ugc).toContain('messages and stickers: one every 5 seconds, 300 a day');
+    expect(checklist).toContain('| User Content → **Emails or Text Messages** | Yes | Chat, group chat and public chat messages |');
+    expect(checklist).toContain('`public_message` is a public chat message or sticker');
+    // The app shows the very same sentences as the server.
+    const lib = file('src/lib/publicChat.ts');
+    expect(lib).toContain("link: \"Links aren't allowed in the public chat.\"");
+    expect(lib).toContain("phone: \"Phone numbers aren't allowed in the public chat.\"");
+    expect(lib).toContain("size: 'Messages can be 1 to 300 characters.'");
+    expect(sql).toContain("raise exception 'Too many accent marks on one letter.'");
+    expect(lib).toContain("marks: 'Too many accent marks on one letter.'");
+
+    // No link or phone number in your name or username while you post (messages, stickers and photos).
+    const nameWords = 'Your name or username looks like a link or a phone number. Change it in Edit profile to post in the public chat.';
+    expect(sql).toContain(`raise exception '${nameWords}'`);
+    expect(lib).toContain(`name: '${nameWords}'`);
+    expect(sql.match(/perform private\.check_public_chat_name\(me\);/g)).toHaveLength(2);
+    expect(privacy).toContain('Your name and username can\'t hold a link or phone number either while you post there.');
+    expect(guidelines).toContain('and not in your name or username either: change them in **Edit profile** before you post.');
+
+    // The 24-hour note for slow mode, and the 90-day private copy of public chat reports (it outlives an account).
+    expect(privacy).toContain('we note when you post each photo, message or sticker and keep that note for 24 hours, even if you delete what you posted.');
+    expect(sql).toContain("now() + interval '90 days'");
+    expect(sql).toContain("for each row when (new.content_type in ('public_photo', 'public_message'))\n  execute function private.keep_public_chat_report();");
+    expect(sql).toContain('create table if not exists private.public_chat_report_copies');
+    expect(sql).not.toMatch(/public_chat_report_copies \([^)]*references/);
+    expect(privacy).toContain('| Reported public chat photos and messages | When a public chat photo or message is reported, we keep a private copy of the report');
+    expect(privacy).toContain('for 90 days – **even if the message, the photo or an account is deleted**');
+    expect(privacy).toContain('copies of reports about public chat photos and messages (kept 90 days, see above)');
+    expect(privacy).toContain('(reports about lives and the public chat: see below)');
+    expect(checklist).toContain('`public_chat_report_copies`');
+    // A repeat report does nothing.
+    expect(sql).toContain('create trigger reports_once_public_chat before insert on public.reports');
+    expect(ugc).toContain("reporting the same thing twice doesn't count (or push) twice");
   });
 
   it('the README is up to date for a paid app on Cloudflare Pages', () => {

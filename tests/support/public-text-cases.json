@@ -1,0 +1,565 @@
+{
+ "_about": "Public chat link and phone-number cases (\"cases\": [text, problem]) and whole-message cases (\"messages\": [typed, problem, saved]): run against the app (tests/unit/public-text.test.mjs) and the database (tests/database/public-chat-text.test.mjs), so both always agree. null = allowed.",
+ "cases": [
+  [
+   "hey everyone 👋",
+   null
+  ],
+  [
+   "what's everyone doing tonight?",
+   null
+  ],
+  [
+   "lol same",
+   null
+  ],
+  [
+   "ok.so tired",
+   null
+  ],
+  [
+   "that's crazy.lol",
+   null
+  ],
+  [
+   "i.e. the best one",
+   null
+  ],
+  [
+   "e.g. pizza",
+   null
+  ],
+  [
+   "3.14 is pi",
+   null
+  ],
+  [
+   "it costs $12.99",
+   null
+  ],
+  [
+   "see you at 10:30",
+   null
+  ],
+  [
+   "my score was 123456",
+   null
+  ],
+  [
+   "call me maybe (the song)",
+   null
+  ],
+  [
+   "1,000,000 views!!",
+   null
+  ],
+  [
+   "see you 12/25/2026",
+   null
+  ],
+  [
+   "@sam hi!",
+   null
+  ],
+  [
+   "add me on peekaboo @coolname",
+   null
+  ],
+  [
+   "noooooooooooo",
+   null
+  ],
+  [
+   "hahahahaha",
+   null
+  ],
+  [
+   "Mr.Smith was here",
+   null
+  ],
+  [
+   "dot dot dot",
+   null
+  ],
+  [
+   "the www is old",
+   null
+  ],
+  [
+   "https://example.com",
+   "link"
+  ],
+  [
+   "check http://x.y",
+   "link"
+  ],
+  [
+   "ftp://files",
+   "link"
+  ],
+  [
+   "go to www.example",
+   "link"
+  ],
+  [
+   "WWW.EXAMPLE.ORG",
+   "link"
+  ],
+  [
+   "example.com",
+   "link"
+  ],
+  [
+   "visit example.com!",
+   "link"
+  ],
+  [
+   "visit example.com.",
+   "link"
+  ],
+  [
+   "bit.ly/abc",
+   "link"
+  ],
+  [
+   "t.me/someone",
+   "link"
+  ],
+  [
+   "wa.me/15551234",
+   "link"
+  ],
+  [
+   "linktr.ee/me",
+   "link"
+  ],
+  [
+   "youtu.be/abc",
+   "link"
+  ],
+  [
+   "site.co.uk",
+   "link"
+  ],
+  [
+   "mysite .com",
+   "link"
+  ],
+  [
+   "mysite dot com",
+   "link"
+  ],
+  [
+   "mysite (dot) com",
+   "link"
+  ],
+  [
+   "mysite [.] net",
+   "link"
+  ],
+  [
+   "mysite[dot]io",
+   "link"
+  ],
+  [
+   "ｅｘａｍｐｌｅ．ｃｏｍ",
+   "link"
+  ],
+  [
+   "example。com",
+   "link"
+  ],
+  [
+   "exa\u200Bmple.com",
+   "link"
+  ],
+  [
+   "ехаmple.com",
+   "link"
+  ],
+  [
+   "name@example.zz",
+   "link"
+  ],
+  [
+   "mail me name@gmail",
+   "link"
+  ],
+  [
+   "name @ hotmail",
+   "link"
+  ],
+  [
+   "192.168.0.1",
+   "link"
+  ],
+  [
+   "onlyfans.com/me",
+   "link"
+  ],
+  [
+   "555 123 4567",
+   "phone"
+  ],
+  [
+   "(555) 123-4567",
+   "phone"
+  ],
+  [
+   "+44 20 7946 0958",
+   "phone"
+  ],
+  [
+   "555.123.4567",
+   "phone"
+  ],
+  [
+   "text me 5551234",
+   "phone"
+  ],
+  [
+   "５５５１２３４５６７",
+   "phone"
+  ],
+  [
+   "2026-11-22",
+   "phone"
+  ],
+  [
+   "Love it. Me too",
+   null
+  ],
+  [
+   "good game. gg",
+   null
+  ],
+  [
+   "yes/no and/or maybe",
+   null
+  ],
+  [
+   "see you at 10:30 - 11:45",
+   null
+  ],
+  [
+   "prices: $12.99, $15.50, $20",
+   null
+  ],
+  [
+   "50%, 25%, 10%, 5%",
+   null
+  ],
+  [
+   "it was 1,000,000,000 views",
+   null
+  ],
+  [
+   "moc.elpmaxe",
+   null
+  ],
+  [
+   "the score was 3:2",
+   null
+  ],
+  [
+   "Tiếng Việt",
+   null
+  ],
+  [
+   "shorturl.at/abc12",
+   "link"
+  ],
+  [
+   "is.gd/abc12",
+   "link"
+  ],
+  [
+   "v.gd/abc12",
+   "link"
+  ],
+  [
+   "rb.gy/abc12",
+   "link"
+  ],
+  [
+   "s.id/abc12",
+   "link"
+  ],
+  [
+   "amzn.to/abc12",
+   "link"
+  ],
+  [
+   "telegra.ph/abc12",
+   "link"
+  ],
+  [
+   "zoom.us/j/123",
+   "link"
+  ],
+  [
+   "signal.group/#abc",
+   "link"
+  ],
+  [
+   "mysite.top/me",
+   "link"
+  ],
+  [
+   "mysite.fun/me",
+   "link"
+  ],
+  [
+   "mysite.world/x",
+   "link"
+  ],
+  [
+   "x.to/abc123",
+   "link"
+  ],
+  [
+   "go to rb.gy/k2j3",
+   "link"
+  ],
+  [
+   "bit.do/abc",
+   "link"
+  ],
+  [
+   "snap.lol/me",
+   "link"
+  ],
+  [
+   "site.us/abc",
+   "link"
+  ],
+  [
+   "join free-money.top",
+   "link"
+  ],
+  [
+   "scam.top/win",
+   "link"
+  ],
+  [
+   "promo.cyou",
+   "link"
+  ],
+  [
+   "my-onlyfans.mobi",
+   "link"
+  ],
+  [
+   "telegra.ph",
+   "link"
+  ],
+  [
+   "example. com",
+   "link"
+  ],
+  [
+   "example . com",
+   "link"
+  ],
+  [
+   "bit. ly/abc",
+   "link"
+  ],
+  [
+   "example\u00B7com",
+   "link"
+  ],
+  [
+   "example\u2027com",
+   "link"
+  ],
+  [
+   "example\u2E31com",
+   "link"
+  ],
+  [
+   "example\u30FBcom",
+   "link"
+  ],
+  [
+   "example dotcom",
+   "link"
+  ],
+  [
+   "example d0t com",
+   "link"
+  ],
+  [
+   "call 555/123/4567",
+   "phone"
+  ],
+  [
+   "call 555_123_4567",
+   "phone"
+  ],
+  [
+   "555,123,4567",
+   "phone"
+  ],
+  [
+   "555|123|4567",
+   "phone"
+  ],
+  [
+   "555~123~4567",
+   "phone"
+  ],
+  [
+   "555*123*4567",
+   "phone"
+  ],
+  [
+   "555:123:4567",
+   "phone"
+  ],
+  [
+   "call \u0665\u0665\u0665\u0661\u0662\u0663\u0664\u0665\u0666\u0667",
+   "phone"
+  ],
+  [
+   "call \u06F5\u06F5\u06F5\u06F1\u06F2\u06F3\u06F4",
+   "phone"
+  ],
+  [
+   "call \u096B\u096B\u096B\u0967\u0968\u0969\u096A",
+   "phone"
+  ]
+ ],
+ "messages": [
+  [
+   "hey everyone 👋",
+   null,
+   "hey everyone 👋"
+  ],
+  [
+   "  hi   there\n\n\nyou  ",
+   null,
+   "hi there you"
+  ],
+  [
+   "a\u2028b\u2029c\u0085d",
+   null,
+   "a b c d"
+  ],
+  [
+   "a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a\u2028a",
+   null,
+   "a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"
+  ],
+  [
+   "hi\u00A0\u3000\u2003there\u2800!",
+   null,
+   "hi there !"
+  ],
+  [
+   "\u202Emoc.elpmaxe",
+   null,
+   "moc.elpmaxe"
+  ],
+  [
+   "go to \u202Emoc.elpmaxe\u202C now",
+   null,
+   "go to moc.elpmaxe now"
+  ],
+  [
+   "\u2066hi\u2069 \u200Fthere\u200E",
+   null,
+   "hi there"
+  ],
+  [
+   "\u202Dexample.com\u202C",
+   "link",
+   null
+  ],
+  [
+   "\u3164",
+   "size",
+   null
+  ],
+  [
+   "\u200B",
+   "size",
+   null
+  ],
+  [
+   "\u2800",
+   "size",
+   null
+  ],
+  [
+   "\u2002",
+   "size",
+   null
+  ],
+  [
+   "\u3000",
+   "size",
+   null
+  ],
+  [
+   "\u200B\u200B\u200B",
+   "size",
+   null
+  ],
+  [
+   "\u3164\u3164 \u200B\uFFA0",
+   "size",
+   null
+  ],
+  [
+   "\u202E",
+   "size",
+   null
+  ],
+  [
+   "\u0301\u0301",
+   "size",
+   null
+  ],
+  [
+   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "size",
+   null
+  ],
+  [
+   "  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  ",
+   null,
+   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  [
+   "e\u0301\u0302\u0303 ok",
+   null,
+   "e\u0301\u0302\u0303 ok"
+  ],
+  [
+   "e\u0301\u0302\u0303\u0304",
+   "marks",
+   null
+  ],
+  [
+   "a\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301",
+   "marks",
+   null
+  ],
+  [
+   "Tiếng Việt",
+   null,
+   "Tiếng Việt"
+  ],
+  [
+   "go to example.com",
+   "link",
+   null
+  ],
+  [
+   "text me 555 123 4567",
+   "phone",
+   null
+  ]
+ ]
+}

@@ -117,6 +117,22 @@ Database (PGlite, part of `npm test`):
   `main-character` folder is public with the 1.5 MB limit and only webp, png, jpeg and json files; logged-in users
   can list and see it, visitors can't; nobody can upload, change or delete there from the app; the other folders
   work as before; running the migration twice is fine and puts the limits back.
+- `public-chat.test.mjs` (`20261225000000_public_chat.sql`, photos) and `public-chat-text.test.mjs`
+  (`20270102000000_public_chat_text.sql`, messages and stickers, 22 Nov): only people 18 and over (by the saved
+  birthday) see, send, open or report anything; the server fills in who and when; a message is 1–300 characters
+  after tidying (direction characters out, spaces at the ends off, every kind of space and line break made one
+  space) with something you can see in it and no pile of accent marks, slurs are blocked (swearing isn't), and every
+  case in `tests/support/public-text-cases.json` (link / phone / fine, and whole messages with how they are saved)
+  gives the same answer as the app; a sticker is only a name (never words) and Peekaboo+ ones need Peekaboo+ right
+  now; slow mode is one message or sticker every 5 seconds and 300 a day, separate from the photos' 30 seconds and
+  40 a day, and deleting what you posted doesn't reset either (`private.public_chat_sends`); no link or phone number
+  in your name or username while you post; blocks work both ways; a report keeps the message's words (even after
+  it is deleted), 3 different reporters hide it from everyone but its sender, a repeat report does nothing (no
+  second push), and the owner gets the 🚩 push; deleting an account deletes the messages and their reports, but a
+  private copy of each public chat report stays 90 days; the nightly tidy-up job clears old sends and copies. Older
+  apps see the room exactly as before (photos only, same query, same slow mode and reports),
+  `prepare_report` keeps its public photo and live lines, the new helpers can't be run by app users, and running
+  the migration twice changes nothing.
 
 API and library (Vitest, part of `npm test`):
 
@@ -154,6 +170,18 @@ API and library (Vitest, part of `npm test`):
 - `tests/unit/group-proof-parity.test.mjs`: the app's "does this proof count?" rule (`proofCounts`) and the
   database's (`private.group_proof_counts`) give the same answer for every mix of 0–4 Legit, 0–4 Cap votes and
   the old-proof flag (PGlite).
+- `tests/unit/public-text.test.mjs`: the app's "no links, no phone numbers" check (`src/lib/publicText.ts`) gives
+  the same answer as the database for every case in `tests/support/public-text-cases.json` (web addresses also
+  written with full-width letters, look-alike letters or dots, hidden characters, "dot com", a space after the dot,
+  or any `name.xx/…`; emails; phone numbers with any separator or digits from other writing systems; times, dates
+  and big numbers that aren't phone numbers), whole messages are tidied and judged the same way, and its four lists
+  match `private.public_text_lists`.
+- `tests/unit/public-chat.test.mjs` (added to): a message is tidied and sent as `{ kind, body }`; links, phone
+  numbers, slurs and empty or too-long messages are stopped before anything is sent, with the server's own
+  sentences; a direction character is taken out; a link or phone number in your name stops you and isn't shown in
+  the room; a sticker is sent by its name only; the room puts photos and messages newest first and stops where
+  a cut-short list ran out; only "no such table" (or "no permission") gives a photos-only room – a network or
+  server error is thrown; live updates listen to messages only when the server has them.
 - `tests/unit/legal-docs.test.mjs`: the app's copy (`src/lib/legalDocs.ts`) and every website page match
   `legal/*.md` (the operator-only part of the Dare Safety Rules never shows), and TERMS_VERSION is bumped when
   the Terms change. The Terms have the Peekaboo+ wording Apple checks. The documents say what the app and the
@@ -243,6 +271,16 @@ API and library (Vitest, part of `npm test`):
 
 Frontend (rendered screens, part of `npm test`):
 
+- `public-chat.test.cjs`: under 18 and no-birthday screens; photos with ⋯ → Report photo / Delete; a server without
+  messages shows the old photos-only room (big camera button, no message box); messages and known stickers show,
+  unknown stickers are left out; typing and Send adds the message and clears the box (max 300); a "no" from the
+  app or server shows "Message not sent" with the reason and keeps the words; stickers send by name, Peekaboo+
+  ones without Plus open the Peekaboo+ screen, emoji go as messages; holding a message gives Report message (with
+  its id) or, on your own, Delete; your hidden message says why. No signal when the room opens shows "Couldn't
+  load the room" with Try again (not the photos-only room); a later failed load keeps the room and coming back to
+  the app loads again; words typed while a message sends are kept; a box of only invisible characters can't be
+  sent; a link in your name stops Send, stickers and the camera; in the photos-only room the newest photo isn't
+  under the big camera button.
 - `zoomable-image.test.cjs`: pinch-zoom on photos (posts, public chat, group chat). Fingers lifting a moment
   apart at the end of a pinch (looks like a double tap) no longer zoom out; a drag or pinch ending while the photo
   glides never leaves it at normal size but pushed off screen (the owner's screenshot, 21 Nov); a real double tap

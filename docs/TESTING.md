@@ -1493,3 +1493,51 @@ out by update. What the mode is and how to add new characters: `docs/MAIN_CHARAC
     and the shutter says "We can't see a face" (no flash or banner) until it sees you again.
 18. Android, Expo Go: no 🌆 bubble on the home camera. (After it is switched on for everyone: the App Store app,
     build 10, shows the bubble and the LITE look of step 11.)
+
+## Step 72 – Messages and stickers in the public chat 💬 (22 Nov)
+
+Needs the database update `20270102000000_public_chat_text.sql` first, then the update on the `testing` channel
+(TestFlight). Use two adult accounts (A and B, birthdays 18+), one under-18 account (C), and if you can, a phone that
+hasn't updated yet (D, 18+). Write down the number of any step that goes wrong.
+
+1. A: Chat → **Public chat · 18+** → at the bottom there is a message box ("Say something to everyone"), a 📷 on the
+   left and a 😊 sticker button inside the box. The line at the top says "Be kind · no links or phone numbers". The
+   newest things are at the bottom, next to the box, like a normal chat.
+2. A types "hi everyone 👋" → the ↑ button turns blue → tap it → the message shows at the bottom straight away and
+   the box empties. B (in the room) sees it within a couple of seconds, with A's name and picture. The keyboard
+   never covers the box (iPhone and Android).
+3. A sends another message straight away → "Message not sent – Slow mode is on – one message every 5 seconds 🐢",
+   and the words stay in the box. Wait 5 seconds → it sends.
+4. A tries each of these → each one says why and nothing is sent: `example.com` and `see you at site dot com`
+   ("Links aren't allowed in the public chat."), `www.example`, `name@gmail.com`, `555 123 4567` ("Phone numbers
+   aren't allowed in the public chat."), a slur ("That word isn't allowed on Peekaboo."). Swearing like "this is
+   so fucking good" **is** allowed. Typing more than 300 characters stops at 300 ("0 left" shows under the box).
+5. 😊 → the sticker sheet (the same as in chats) → tap 👀 Googly eyes → it shows big in the room, no bubble. Tap a
+   word sticker (LOL) → it shows as the pink word. Tap an emoji → it goes as a normal message. Without Peekaboo+,
+   a ⭐ Peekaboo+ sticker opens the Peekaboo+ screen and nothing is sent; with Peekaboo+ it sends.
+6. B holds A's message → "@A" with **Report message** and **See profile** → Report message → pick a reason →
+   "Thanks for telling us 💛 … Do you also want to block them?" → **Not now**. The owner's phone gets "🚩 New
+   report – Someone reported a public_message for …". In Supabase → Table Editor → `reports`, the newest row's
+   `details` starts with `Message: "` and A's words.
+7. A deletes that message (hold it → **Delete**) → it's gone for A and B. The report in Supabase still has the words.
+8. A sends a new message. B and two more adults on the new app (3 different people) each report that same
+   message → it disappears for everyone except A; A sees "🙈 Hidden: several people reported this message. Only you
+   can see it." (Others see the change the next time the room reloads.) B reporting it a second time does nothing:
+   no second "🚩 New report" on the owner's phone.
+9. B blocks A (from the report question, or A's profile) → A's messages and photos leave B's room, and B's leave A's.
+10. 📷 in the message box → the camera → take a photo → **Post in public chat** → it shows in the room as a big
+    photo card, with ⋯ → Report photo / Delete like before. Photo slow mode is still 30 seconds; a photo right
+    after a message is fine.
+11. C (under 18) has no Public chat row and can't get in. An account with no birthday sees "Add your birthday to join".
+12. D (an older app): the public chat shows only the photos, exactly as before – no empty grey boxes for messages.
+13. Plane mode on → send → "Message not sent – Can't reach the internet…" and the words stay. Plane mode off → send.
+14. Plane mode on → leave the room and open it again → "Couldn't load the room" with **Try again** (not the old
+    photos-only room). Plane mode off → **Try again** → the room with the message box is back.
+15. A sends a message and deletes it straight away, then sends another at once → "Slow mode is on…" (deleting
+    doesn't start the 5 seconds again). Then type a message, tap ↑ and keep typing while it sends → the new words
+    stay in the box.
+16. A sets their name (Edit profile) to `see site.com` → in the public chat, ↑, 😊 and 📷 each say "Change your name
+    first – Your name or username looks like a link or a phone number…" and nothing is sent. Change the name back →
+    sending works again.
+17. Messages that look empty or odd: a message of only spaces can't be sent (↑ stays grey). Paste a word with lots
+    of accent marks piled on one letter (like "z̷̢̛͖̈́a̵l̶g̴o̷") → "Too many accent marks on one letter."

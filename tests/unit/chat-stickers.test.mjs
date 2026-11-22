@@ -36,3 +36,13 @@ it('free stickers for everyone, Peekaboo+ ones only with Peekaboo+, unknown ones
   expect(lib.canSendSticker('plus-made-up', true)).toBe(false);
   expect(lib.isKnownSticker('something-new')).toBe(false);
 });
+
+it('names every object has ("constructor", "toString"…) are not stickers, so a forged one is left out', () => {
+  for (const id of ['constructor', 'toString', 'hasOwnProperty', 'valueOf', '__proto__']) {
+    expect(lib.isKnownSticker(id), id).toBe(false);
+    expect(lib.stickerName(id), id).toBe('Sticker');
+    expect(lib.canSendSticker(id, true), id).toBe(false);
+  }
+  expect(lib.isKnownSticker('googly-eyes')).toBe(true);
+  expect(lib.stickerName('caught')).toBe('Caught');
+});

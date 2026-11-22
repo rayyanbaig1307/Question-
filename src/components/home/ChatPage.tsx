@@ -335,7 +335,7 @@ export function ChatPage({ visible, inboxCount, onRefreshInbox }: {
               matching.length > 0 ? <Text style={styles.sectionTitle}>💬 Chats</Text> : undefined
             ) : (
             <>
-              {/* The public chat (18+, photos only). People under 18 never see this row. */}
+              {/* The public chat (18+: photos, messages and stickers). People under 18 never see this row. */}
               {publicChat === 'ok' || publicChat === 'no_birthday' ? (
                 <Pressable style={styles.inboxRow} onPress={() => router.push('/public-chat')} accessibilityRole="button" accessibilityLabel="Public chat, 18 and over">
                   <Text style={styles.inboxEmoji}>📸</Text>

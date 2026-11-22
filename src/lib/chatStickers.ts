@@ -27,10 +27,14 @@ const ORIGINAL_NAMES: Record<string, string> = {
   caught: 'Caught',
 };
 
+// Only the six names above, not the hidden ones every object has ("constructor", "toString"…), which a changed
+// app could send as a sticker name.
+const isOriginal = (id: string) => Object.prototype.hasOwnProperty.call(ORIGINAL_NAMES, id);
+
 // Is this a sticker this version of the app knows how to draw?
 export function isKnownSticker(id: string): boolean {
   return (
-    id in ORIGINAL_NAMES ||
+    isOriginal(id) ||
     WORDS.has(id) ||
     PLUS_PACKS.some((pack) => pack.stickers.some((s) => s.id === id))
   );
@@ -39,7 +43,7 @@ export function isKnownSticker(id: string): boolean {
 // "SLAY", "Googly eyes 👀" … for the text version and screen readers.
 export function stickerName(id: string): string {
   if (isPlusSticker(id)) return plusStickerLabel(id);
-  return wordOfSticker(id) ?? ORIGINAL_NAMES[id] ?? 'Sticker';
+  return wordOfSticker(id) ?? (isOriginal(id) ? ORIGINAL_NAMES[id] : 'Sticker');
 }
 
 // The text saved with a sticker message.

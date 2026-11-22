@@ -227,6 +227,27 @@ and the owner's standing preferences.
   Terms). (Before 22 Nov it was locked to `testing`; `testing` group `9fca0573` from `71faea9`.)
 - **Next:** the AI scanner (the owner picks the service and adds its key in Supabase – never in chat). Planned to
   cover public things: public chat photos, public posts, Guess Who posts and profile pictures.
+- **Messages and stickers (22 Nov, owner: "add texting to public chats and the ability to send stickers"):** a
+  message box and the chat sticker button in the room. Server: `20270102000000_public_chat_text.sql` – a NEW table
+  `public_messages` (older apps draw every `public_photos` row as a photo, so messages can't go there; older apps
+  simply don't see messages). Same room rules (18+, blocks both ways, delete your own, no pushes) plus: 1–300
+  characters, slurs blocked (`blocked_word` 'content'), no links or phone numbers (`private.public_text_problem` =
+  `src/lib/publicText.ts`, shared cases in `tests/support/public-text-cases.json`), stickers by name only and
+  Peekaboo+ ones need Plus (`check_plus_sticker`), slow mode one every 5 seconds and 300 a day (photos keep 30 s /
+  40). Report kind `public_message`: the words go into `reports.details`, 3 reporters hide it, the 🚩 push as usual.
+  `prepare_report` got one more branch (patched in place like the public chat; keep the `public_photo`,
+  `public_message` and live lines). The app shows photos only (as before) until the server has the table, so the
+  OTA can't break if it lands first (only "no such table" or "no permission" means that; any other load error shows
+  "Couldn't load the room" + Try again). Review fixes: direction characters (U+202E…) are taken out of messages and
+  every kind of space and line break becomes one space (`private.public_text_tidy` = `tidyPublicText`); empty-looking
+  messages and piled-up accent marks are refused; more link forms (any `name.xx/…`, `site. com`, look-alike dots,
+  `dotcom`, 13 more endings) and phone numbers with any separator or Arabic/Persian/Hindi/Bengali/Thai digits are
+  caught; slow mode for photos AND messages now counts `private.public_chat_sends` (deleting doesn't reset it; kept
+  24 h); no link/phone in your name or username while you post (`private.check_public_chat_name`, photos too); a
+  repeat report of the same photo/message is skipped (no second push); a private copy of every public chat report
+  is kept 90 days in `private.public_chat_report_copies` even if the account is deleted; a nightly pg_cron job
+  `peekaboo-public-chat-tidy` clears both. Phone check: `docs/TESTING.md` **Step 72**. Status: (fill in – migration live?
+  testing OTA id? production OTA id?)
 
 ## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who, invite links and face filters
 

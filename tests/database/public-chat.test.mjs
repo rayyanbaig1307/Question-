@@ -23,8 +23,12 @@ const path = (i) => `${users[i]}/public/${randomUUID()}.jpg`;
 const post = (i, file = path(i)) => rpc(i, 'insert into public_photos(media_path) values($1) returning *', [file]);
 const seen = async (i) => (await rpc(i, 'select id from public_photos order by created_at')).rows.map((r) => r.id);
 const status = async (i) => (await rpc(i, 'select public_chat_status() as s')).rows[0].s;
-// Jump over slow mode: make this person's photos look a minute older.
-const wait = (i) => db.query("update public_photos set created_at = created_at - interval '1 minute' where sender_id = $1", [users[i]]);
+// Jump over slow mode: make this person's photos look a minute older, and the private list of when they posted,
+// which slow mode counts (20270102000000_public_chat_text.sql: deleting a photo doesn't start the count again).
+const wait = async (i) => {
+  await db.query("update public_photos set created_at = created_at - interval '1 minute' where sender_id = $1", [users[i]]);
+  await db.query("update private.public_chat_sends set sent_at = sent_at - interval '1 minute' where sender_id = $1", [users[i]]);
+};
 // Could this person open the file? (Asked as the database owner, pretending to be them, like the storage rule does.)
 const canOpen = (i, file) => db.transaction(async (tx) => {
   await tx.query("select set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)", [users[i]]);

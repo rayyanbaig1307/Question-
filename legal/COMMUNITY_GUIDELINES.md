@@ -25,14 +25,15 @@ Peekaboo is for sharing real moments with friends and having fun with dares. The
 
 ## Public chat 📸 (18+ only)
 
-- **One room for everyone on Peekaboo who is 18 or over**, going by the birthday they saved. Most people there are strangers, and they all see your name, username and profile photo with every photo you post. Giving a fake birthday to get in is a permanent ban.
-- **Your account and strangers:** **If your account is public** (the default), anyone who sees your photos can become your friend straight away, with no request (everyone in the public chat is an adult by their saved birthday) – then they can message you, see your stories and, while your location sharing is on, your place on the friend map. Turn on **Private account** (Settings → Privacy & safety) to approve people first.
-- **Photos only**, and slow mode is on: one photo every 30 seconds, and up to 40 a day.
-- **What's allowed:** everyday photos you're happy for strangers to see – your view, your food, your pet, your outfit, something funny you spotted. Don't show your address, your school or anything that says where to find you.
-- **No nudity or sexual content**, not even "almost". **No photos of other people without their OK.** **No hate, no violence and nothing illegal.** Everything else in these Guidelines counts here too.
-- **Report anything bad:** tap a photo's **⋯** (or press and hold it), then **Report photo**. Nobody checks photos before they go up, so reports keep the room safe. When 3 different people report a photo, it's hidden from everyone except the person who posted it, and we review every report.
-- **You can delete your own photos** at any time: tap **⋯** on your photo, then **Delete**.
-- **Breaking these rules can get your photos removed and your account banned.**
+- **One room for everyone on Peekaboo who is 18 or over**, going by the birthday they saved. Most people there are strangers, and they all see your name, username and profile photo with everything you post. Giving a fake birthday to get in is a permanent ban.
+- **Your account and strangers:** **If your account is public** (the default), anyone who sees what you post can become your friend straight away, with no request (everyone in the public chat is an adult by their saved birthday) – then they can message you, see your stories and, while your location sharing is on, your place on the friend map. Turn on **Private account** (Settings → Privacy & safety) to approve people first.
+- **Photos, messages and stickers.** Slow mode is on: one photo every 30 seconds, and up to 40 a day; one message or sticker every 5 seconds, and up to 300 a day. A message can be up to 300 characters.
+- **No links and no phone numbers** in messages – not even written out, like "site dot com" – and not in your name or username either: change them in **Edit profile** before you post. Slurs aren't allowed either. Peekaboo+ stickers need Peekaboo+.
+- **What's allowed:** everyday photos and chat you're happy for strangers to see – your view, your food, your pet, your outfit, something funny you spotted. Don't share your address, your school or anything that says where to find you.
+- **No nudity or sexual content**, not even "almost". **No photos of other people without their OK.** **No hate, no bullying, no spam, no violence and nothing illegal.** Everything else in these Guidelines counts here too.
+- **Report anything bad:** press and hold a message or sticker, then **Report message** – or tap a photo's **⋯** (or press and hold it), then **Report photo**. Nobody checks photos or messages before they go up (apart from the automatic check for slurs, links and phone numbers), so reports keep the room safe. When 3 different people report a photo or message, it's hidden from everyone except the person who posted it, and we review every report.
+- **You can delete your own photos and messages** at any time: tap **⋯** on your photo (or press and hold your message), then **Delete**.
+- **Breaking these rules can get your photos and messages removed and your account banned.**
 
 ## Going live 🔴 (being tested – not in the App Store app yet)
 
