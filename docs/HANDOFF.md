@@ -37,6 +37,23 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## LIVE on the App Store app (22 Nov, owner: "push everything else to the live apple app", lives left out)
+
+- **Production OTA `45214c66-07c5-4373-9199-83172bab19ea`** (iOS `01a20489-c50b-727b-b70e-cc6fa2b70df6`) from
+  `0bcf04c`, after `testing` `8db2eefa-b743-4a04-9150-ac19139a3880` from the same commit. Strings check: project URL
+  present; the bundle has Main Character Mode. A release check found no crash path on App Store build 10 (the
+  lite path; no native module changed since build 10's commit `2ea24d4`).
+- **What went live:** username-only invites; the public chat for everyone 18+ (by saved birthday – the live
+  database's RLS checked on 22 Nov); Main Character Mode for iPhones with the face mesh; the small logo on photos
+  saved or shared out of the app; legal text for the public chat (Terms 6.5 – TERMS_VERSION unchanged, so no
+  re-accept). Lives stay testing-only.
+- **Follow-up (same day):** deleting your own public chat photo now deletes its file too (it used to stay until
+  account deletion); the public chat line no longer states ages as fact; Terms 6.5, the Privacy Policy and the
+  Guidelines warn that a public account can be friended at once by anyone in the room.
+- **Owner to do:** re-upload `website/` (Terms, Privacy, Guidelines changed); tap Allow for
+  `20261231000000_main_character.sql` (online characters – optional). Open question: bump TERMS_VERSION so
+  everyone sees the new Terms once (the release check recommended it).
+
 ## Invites are now just your username + the App Store link (22 Nov, owner's ask)
 
 - **Why:** the owner's TestFlight phone sent "…Tap my link to add me: <pages.dev link>" followed by "🍎 iPhone:
@@ -48,7 +65,7 @@ and the owner's standing preferences.
   link, no `pages.dev` link, on every channel and phone. Nothing is loaded before the share sheet opens.
 - **Settings → Invite friends** shows your @username and the share button; it keeps **Got a code from a friend?**
   and **Turn off my old invite link** (`reset_invite_code`) because invite links sent before 22 Nov keep working
-  (website `invite.html`, unchanged). Codes are still made in the background (`prefetchInviteCode`) but never shared.
+  (website `invite.html`, unchanged). No screen loads or shares your own code any more (`prefetchInviteCode` is unused).
 - **Not done (owner said no):** the bigger plan with a personalised website page, preview card and a new
   `invite_card` database function was stopped. A custom domain is still optional.
 - Phone check: `docs/TESTING.md` Step 66 (rewritten).

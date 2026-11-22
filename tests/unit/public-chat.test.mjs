@@ -59,3 +59,34 @@ it('the public chat is on for everyone since 22 Nov: every channel asks the serv
     expect(await load({ channel, status: 'under_18' }).lib.fetchPublicChatStatus()).toBe('under_18');
   }
 });
+
+it('deleting your own photo removes its row and then its file, without asking can_cleanup_snap (it always says no for public files)', async () => {
+  const done = { deleted: [], rpcs: [], rows: [] };
+  const lib = loadLibrary('publicChat', {
+    supabase: {
+      rpc: async (name) => { done.rpcs.push(name); return { data: false, error: null }; },
+      from: () => ({ delete: () => ({ eq: async (column, value) => { done.rows.push([column, value]); return { error: null }; } }) }),
+    },
+    mocks: {
+      './lensDiagnostics': { updateChannel: () => 'production' },
+      './media': { uploadCapture: async () => ({ fields: {} }), deleteMedia: async (paths) => { done.deleted.push(...paths); } },
+    },
+  });
+  await lib.deletePublicPhoto({ id: 'p1', media_path: 'alice/public/photo.jpg' });
+  expect(done.rows).toEqual([['id', 'p1']]);
+  expect(done.deleted).toEqual(['alice/public/photo.jpg']);
+  expect(done.rpcs).toEqual([]);
+});
+
+it('if the row cannot be deleted, the file is left alone', async () => {
+  const done = { deleted: [] };
+  const lib = loadLibrary('publicChat', {
+    supabase: { rpc: async () => ({ data: true, error: null }), from: () => ({ delete: () => ({ eq: async () => ({ error: new Error('nope') }) }) }) },
+    mocks: {
+      './lensDiagnostics': { updateChannel: () => 'production' },
+      './media': { uploadCapture: async () => ({ fields: {} }), deleteMedia: async (paths) => { done.deleted.push(...paths); } },
+    },
+  });
+  await expect(lib.deletePublicPhoto({ id: 'p1', media_path: 'alice/public/photo.jpg' })).rejects.toThrow('nope');
+  expect(done.deleted).toEqual([]);
+});

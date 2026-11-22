@@ -150,7 +150,9 @@ export default function PublicChatScreen() {
         }
         ListHeaderComponent={
           <Text style={styles.rules}>
-            Everyone here is 18 or over. Photos only · one every 30 seconds · be kind. Hold a photo to report it.
+            For people 18 and over (by the birthday they saved – we can&apos;t check ages). Photos only · one every 30
+            seconds · be kind. Hold a photo to report it. If your account is public, anyone here can become your
+            friend straight away – turn on Private account in Settings to approve people first.
           </Text>
         }
         ListEmptyComponent={

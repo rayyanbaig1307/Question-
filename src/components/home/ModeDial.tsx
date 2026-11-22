@@ -75,7 +75,7 @@ export const CAMERA_MODES: ModeItem[] = [
 export const LIVE_MODE: ModeItem = { key: 'live', emoji: '🔴', label: 'Go live', hint: 'Go live to your friends' };
 
 // 🌆 Main Character Mode: right after Googly on the home camera, only where this phone can use it (an iPhone
-// download with face tracking, and for now only on the `testing` update channel – lib/mainCharacter/config.ts).
+// download with face tracking – on for everyone since 22 Nov, see lib/mainCharacter/config.ts).
 // Never in a chat's camera. Like 🔴, it isn't in CAMERA_MODES: homeModes adds it, worked out each time it's
 // called (not when the app starts).
 export const MAIN_CHARACTER_MODE: ModeItem = { ...MAIN_CHARACTER_BUBBLE, plus: MAIN_CHARACTER_PLUS };

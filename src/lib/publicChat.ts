@@ -84,13 +84,12 @@ export async function sendPublicPhoto(me: string, capture: Capture): Promise<voi
   }
 }
 
-// Deletes your own photo from the room (and its file, once nothing needs it any more).
+// Deletes your own photo from the room, then its file – the same way a deleted post's files go (lib/posts.ts).
+// The storage rules keep the file for now if something still needs it (for example a report about it).
 export async function deletePublicPhoto(photo: PublicPhoto): Promise<void> {
   const { error } = await supabase.from('public_photos').delete().eq('id', photo.id);
   if (error) throw error;
-  const { data: safe, error: checkError } = await supabase.rpc('can_cleanup_snap', { object_name: photo.media_path });
-  if (checkError || safe !== true) return;
-  await deleteMedia([photo.media_path]).catch(() => {});
+  await deleteMedia([photo.media_path]).catch((cleanupError) => console.warn('Photo removed; its file could not be cleaned up yet', cleanupError));
 }
 
 // Calls `onChange` when a photo is posted or deleted. Each listener gets its own channel name.
