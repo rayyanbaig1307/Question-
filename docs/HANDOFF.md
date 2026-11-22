@@ -59,10 +59,14 @@ and the owner's standing preferences.
 - **Banner words:** MISSION PASSED / +RESPECT – the owner's own words (`MISSION_TITLE`, `MISSION_REWARD`); they give
   the final yes on them before it goes to everyone. Mall Cop keeps "SECURITY" on its patch (owner's choice).
 - **Database:** `20261231000000_main_character.sql` (public read-only bucket, 1.5 MB, logged-in users can list) is
-  tested locally only. Apply it with the owner's Allow pop-up (or a copy page) when shipping. Not a blocker:
-  without it the app shows the bundled art only.
-- **Ship order:** commit → OTA to `testing` (load `.env`, `--clear-cache`, strings check) → open the app on build
-  13 → Step 71 → later the switch above.
+  tested locally only so far (see below). Not a blocker: without it the app shows the bundled art only.
+- **Shipped to `testing` (22 Nov):** commit `34346a5`, OTA group `29d6be33-0472-4d2a-80b0-9369a6bb0096` (iOS
+  `01a20442-7907-7122-9d91-dc0069e463f4`, Android `01a20442-7907-765c-b7f9-99b053de39fe`). Strings check: project
+  URL in both bundles; the iOS bundle has the 12 pictures and the banner, Android has none (iOS-only art). Next: the
+  owner opens the app on build 13 → Step 71 → later the switch above.
+- **The `main-character` folder is NOT on the live database yet:** the Allow pop-up for
+  `20261231000000_main_character.sql` timed out on 22 Nov. Ask again (or use a copy page). Until then the app
+  shows only the 6 built-in characters, which is fine.
 - **Still open for the owner:** banner words final yes; logo spot (top left) and the logo on the Main
   Character screen; videos leave without the logo until the Phase 2 download (1.3).
 
