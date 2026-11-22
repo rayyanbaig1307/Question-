@@ -315,3 +315,149 @@ photo get the same size, the readout only on `testing`, and in FrameFeed the tur
 held label, skipped pictures, the 1 s stale rule, `inUse` (paused, everything let go of at once, nothing left in
 the mailbox), the black-picture check's timing, the drop counts and the error rule. Only a phone can check the rest (docs/TESTING.md): that the picture lines up and moves the right
 way, heat over a few minutes, and Android.
+
+## Main Character Mode 🌆 (Phase 1, 22 Nov)
+
+Your face in a comic poster: a scene behind, a painted character in front, your face in the character's face
+hole, live. The owner's page is `docs/MAIN_CHARACTER.md` (who sees it, adding art, the switches); the phone checks
+are `docs/TESTING.md` Step 71. It uses the same face mesh and camera as the filters above, through one new hook in
+`SoftGlowCamera` (`custom`). No new native code: one OTA reaches builds 10, 12 and 13.
+
+### Where the code is
+
+- `src/app/(app)/main-character.tsx`: the thin route. `mainCharacterHere(Platform.OS, FACE_MESH_AVAILABLE,
+  updateChannel())` false → "needs the newest Peekaboo app on an iPhone"; the Peekaboo+ gate (only if
+  `MAIN_CHARACTER_PLUS`); otherwise the screen, loaded with a guarded `require` only when `FACE_MESH_AVAILABLE`
+  (the `CameraPage` way). Nothing with Skia or the camera at its top.
+- `src/lib/mainCharacter/`: `config.ts` (every switch and number, no imports), `types.ts` (shared types),
+  `holeFinder.ts` (finds a see-through face hole in a 270 × 480 copy, checks its shape, guesses the anchors and the
+  skin colour; plain maths, the art script has a Python copy), `library.ts` (bundled art + the online library),
+  `blockedWords.ts` (SHA-256 fingerprints of the owner's banned words; used by the library and the repo test),
+  `art.generated.ios.ts` / `art.generated.ts` (made by `scripts/make-main-character-assets.py`; Metro picks the
+  `.ios.ts` list for iPhone bundles, Android and web get the empty one).
+- `src/components/mainCharacter/`:
+  - `MainCharacterStudio.tsx`: the screen (swipes, 🌴, flip, shutter, banner, result, Share / Save / My story /
+    Send, the lives hand-over, the testing-channel FULL/LITE pill). Characters and scenes are picked by slug, so
+    online art arriving during a visit never moves the one on screen; with nothing in `mc:last` the first character
+    is fixed as soon as the stored value has been read. A 🌴 pick restored from `mc:last` holds only until the first
+    swipe (a pick made on this visit stays). A storage read that times out (600 ms) never writes `mc:last` or
+    `mc:hints` that visit. When the camera goes away (a live takes it) the face state is reset, so the shutter
+    needs a face from the new camera. For VoiceOver the swipe view is an `adjustable` element (increment /
+    decrement = next / previous character, the name as its value).
+  - `MainCharacterCamera.tsx`: `SoftGlowCamera` with the custom look; builds the `LiveScene`, reads the art ahead
+    (`artCache.ts`), and `capture()`: no face in the last second → `NO_FACE` (`'no-face'`, `config.ts`; the photo
+    bake throws the same when the face is gone by the time of the photo, and only this message gives the "look at
+    the camera" toast); the scene is copied and held at the press; full way → `snapPoster` on the drawing thread
+    (`SNAP_TIMEOUT_MS`), else the photo way.
+  - `MainCharacterOverlay.tsx` (the custom `Overlay`) and `CameraFollow.tsx` (the custom `CameraWrap`): both
+    module-level components (React Compiler rule), the screen's values come in `custom.extra`.
+  - `paintScene.ts`: **the one drawing** for live, the snapshot and the photo (full / lite / no face, at most 7
+    draws and 2 blurs). `snapPoster.ts`, `bakeMainCharacter.ts` (+ `encodePoster`), `fit.ts` (the geometry),
+    `comicShader.ts` + `comicEffect.ts` (the comic look, 17 numbers), `free.ts`, `artCache.ts`, `analyseArt.ts`
+    (online art: `normaliseArt` and `analyseCharacter`), `MissionPassed.tsx` (the banner), `ScreenWordmark.tsx`.
+- `src/lib/shareOut.ts` + `src/lib/watermark.ts`: the **only** way a photo or video leaves the app (share sheet,
+  Save to Photos); photos get the wordmark, the file inside the app stays clean. On iOS the wordmark is drawn on a
+  Display P3 surface (`Surface.MakeOffscreen(w, h, { colorSpace: 'display-p3' })`, the plain CPU surface as the
+  fallback): `Surface.Make` has no colour space, so a P3 photo lost its profile and looked duller in Photos.
+- `src/components/home/ModeDial.tsx` / `CameraPage.tsx`: the 🌆 bubble after 🤪 Googly (home camera only, worked
+  out when called, not at load). Settling the row parks there; only a tap (bubble, card or shutter) opens the
+  screen.
+
+### The custom look in SoftGlowCamera
+
+`SoftGlowCamera<E>` takes an optional `custom: CustomLook<E>` (`wantsFrames`, `Overlay`, `CameraWrap`, `extra`,
+`bake`, `onFaces`, `frameWaitMs`). With it:
+- **Its own "no camera pictures" switch** (`customFramesOff`, until the app closes, read with
+  `useSyncExternalStore`). A camera error, FrameFeed failing to render, or FrameFeed's "pictures keep failing"
+  check (its new `onFailing` prop) only set this switch. **Never** `markFramesBroken`: no strike, nothing
+  remembered, the 4 stretchy filters are never switched off by this mode. (FrameFeed's own "the stretchy shaders
+  can't be made → remember" check stays: that is about those filters on this download.)
+- **The camera starts once.** FrameFeed is attached from the first render whenever the look wants it (not tied to
+  `active`, so it stays through the result screen). The camera's `isActive` waits until FrameFeed has handed up its
+  output **for this camera** (each output records which camera it came from); if it hasn't come by `frameWaitMs`
+  (`FRAME_WAIT_MS`, 1 s) – or after a flip, which makes a new FrameFeed – the mode goes on without camera pictures
+  (lite).
+- `custom.Overlay` is drawn instead of `LensOverlay`, `custom.CameraWrap` goes round `<Camera>` only, and
+  `capture(press)` hands the flipped selfie, the faces, the view size and `press` to `custom.bake` (errors are passed
+  on; no plain-photo fallback). Every other look works exactly as before.
+
+### Full and lite
+
+- **Full** (FrameFeed's pictures on, iOS 17+ on builds 12/13): each frame the camera picture is moved into the hole
+  and drawn through the comic shader (`COMIC_LIVE` softer numbers when `LIVE_COMIC_GENTLE`). The saved poster is
+  `snapPoster`: the same drawing once more, off screen at 1080 × 1920, from the same camera picture and face points
+  as the screen, with the still numbers (`COMIC`), handed back as a non-GPU copy.
+- **Lite** (build 10, TestFlight 7–9, iOS 16, `customFramesOff`, the FULL/LITE pill, or while camera pictures
+  pause): the scene is drawn with the hole cut out and `CameraFollow` moves the **native camera view** so your face
+  shows through; a skin ring covers the gap; no comic look live. The saved poster comes from the photo
+  (`bakeMainCharacter`: shrunk to `PHOTO_MAX_SIDE` first, then the full drawing). Known limit: the face points are
+  from the press and the photo comes a moment later.
+- **No face**: the hole is filled with the character's skin colour.
+
+### Coordinate spaces (use these words the same way)
+
+- **view points**: the camera view's own points (`viewSize` from `SoftGlowCamera`'s `onLayout`). Face points are
+  here. A transform on the camera view's parent does **not** change them (VisionCamera's converter works in the
+  preview layer's own bounds), so `CameraFollow` can move the view and the fit still starts from the real face.
+- **poster pixels**: 0…1080 × 0…1920. All Main Character drawing happens here.
+- **art 0–1**: a character picture's own 0–1 space after its centred 9:16 crop. Anchors are stored in this space;
+  `placeArt` turns them into poster pixels through the character's box (`characterRect`: 92 % of the width,
+  standing on the bottom edge).
+- `posterToView(vw, vh)`: poster → view ("cover", centred). The live drawing does `canvas.concat` with it.
+- `faceFit` / `fitMatrix`: view → poster, taking your two **eye middles** (the middle of each eye's two corners,
+  points 33/133 and 263/362 – not the irises, which move with your gaze) onto the character's. Turn + scale +
+  move; the height follows your forehead (point 10, which the jaw doesn't move) within ±15 %; nothing uses the chin,
+  so talking doesn't pump the face. The eye order is matched with the dot product, never by "left/right".
+- `liteTransform(fit, vw, vh)`: the plain RN transform list (translate, rotate, scale) equal to poster → view ∘
+  fit about the view's middle; **null for any broken number, zero view size or scale outside `FIT`**.
+
+### Rules (on top of "Rules for filter code" and the stretchy filters' rules)
+
+- Everything that imports Skia or the camera (`MainCharacterStudio` and below) is reached only through the
+  `FACE_MESH_AVAILABLE` guarded `require`. `config.ts`, `types.ts`, `holeFinder.ts`, `blockedWords.ts` have no
+  imports; `library.ts` uses only Supabase, expo-file-system, expo-crypto and `cleanWords.ts` (the Skia steps come in
+  as arguments). Nothing runs when a file loads: no listing, no decoding, no channel read.
+- `zoom={0}` (a plain number) on `SoftGlowCamera`; never a second `require` of FrameFeed; never Canvas `onSize`.
+- **Never a NaN, an Infinity or a zero size into a native view's transform**: `liteTransform` returns null and
+  `CameraFollow` keeps the last good one (none before the first good one; none when `LITE_CAMERA_MOVE = 'off'`).
+- Drawing: worklets only; every Skia object made for a frame goes on `trash` as soon as it is made and is let go of
+  in a `finally`; each finished drawing is let go of **two drawings later**, the last two on close; the first
+  drawing (JS thread) never uses the camera picture; a failing frame pauses the camera part for
+  `LOOK_COOL_DOWN_MS`; no text and no `Math.random`/`Date.now` inside `paintScene`.
+- Art is read all the way on the JS thread into a plain 1080 × 1920 picture (`MakeImageFromEncoded` only reads the
+  size) before the drawing thread sees it; at most `ART_CACHE_SIZE` kept; a picture is let go of only when it is in
+  neither the current nor the previous poster, no snapshot or bake holds it, and 2 drawings have passed.
+- Online art: names checked (bad words + banned-word fingerprints), `?v=<etag>` download address, size and md5
+  checked, picture size read from the file's first bytes and refused before any decoding, one 1080 × 1920 copy in
+  `Paths.cache/main-character`, at most `ONLINE_PER_VISIT` new pictures per visit. A download that is already
+  1080 × 1920 (the `online` step's size) is kept as it is: no decode, redraw or PNG encode on the JS thread, which
+  is also the thread that hands the face points to the live poster. The folder is listed on the first visit after
+  each app start (the listing time in `list.json` is written but not read back) and then every
+  `LIST_REFRESH_MS`. Keys: characters `app:<slug>` / `online:<slug>`, scenes `app-scene:<slug>` /
+  `online-scene:<slug>`, so a character and a scene with the same file name never share a key.
+- Skin colour (`holeFinder.ts` and the script, keep them in step): skin = more red than green, more green than
+  blue, YCbCr Cr 135–215, Cb 70–135, Y > 40 (wider than the photo range: the painted sunset light makes the faces
+  very red, Cr 190–204). Bundled art: the painted cheeks (points 50, 280, 205, 425) before the hole is cut. Online
+  art without a `.json`: the solid paint in the ring 1.0–1.25 × the hole's size all the way round; with at least
+  200 skin pixels, the per-colour middle value of the brighter half of them (`toneSure` true); otherwise the middle
+  of the whole ring, `toneSure` false (skin plate only, no tone pull).
+- `HOLE` (anchors from the hole's box) and `HOLE_CHECK` (the strict shape check) are calibrated on the 6 bundled
+  holes (width 0.233–0.248 of the picture, aspect 0.900–0.957, fill 0.835–0.868, middle x 0.437–0.493, middle y
+  0.152–0.199) and sit a little outside those ranges; the script prints them again after a `bundle` run.
+- No banned word anywhere (code, comments, file names, copy, docs, commit messages, image text):
+  `tests/unit/banned-words.test.mjs`.
+
+### Tests
+
+Units (Vitest): `main-character-fit` (the fit, cover, `liteTransform` replayed with RN's rule, never a broken
+number), `main-character-shader` (CanvasKit: 17 numbers, warm, ink on edges, smooth banding, the tone pull),
+`main-character-paint` (draw order and counts per case, the even-odd skin clip, everything on `trash`, the snapshot
+and the bake, a real CanvasKit poster), `main-character-hole`, `main-character-parity` (the app's hole finder on the
+6 bundled WebPs agrees with the script's anchors and skin tones), `main-character-assets` (the bundled list, sizes,
+see-through parts, only picture chunks in the WebPs), `main-character-cache` (the art cache's freeing rules,
+`normaliseArt`, `analyseCharacter`), `main-character-library`, `watermark`, `share-out`, `exit-guard`,
+`banned-words`, plus new cases in `compiler-hooks` and `lens-ui-thread`. Screens (`node --test`):
+`main-character`, `main-character-studio`, `main-character-camera`, `main-character-overlay`,
+`camera-main-character`, and new cases in `frame-feed` (one camera set-up, never a strike or "remember"),
+`mode-dial`, `editor` and `share`. Database: `tests/database/main-character.test.mjs`. Only a phone can check the
+rest (Step 71): the face lining up and following, shimmer and heat, the share sheet, skin tones.

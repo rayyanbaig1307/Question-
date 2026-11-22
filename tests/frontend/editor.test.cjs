@@ -378,3 +378,140 @@ test('a dare proof picked from Photos is still a peek (your friend confirms it)'
     assert.equal(calls.claimed, 1);
   } finally { await unmount(tree); }
 });
+
+// ---------------------------------------------------------------------------
+// 📦 Save (Keep): your Keeps in Peekaboo get the clean picture; the copy in the phone's Photos leaves the app, so it
+// goes through lib/shareOut.ts saveOut (which adds the small Peekaboo wordmark to photos). The toasts are the same
+// as before.
+// ---------------------------------------------------------------------------
+function keepFixture({ saveOut, params = {} } = {}) {
+  const log = [];
+  const { screen, calls } = fixture({
+    params,
+    overrides: {
+      '@/lib/keeps': { addKeep: async (...args) => { log.push(['addKeep', ...args]); } },
+      '@/lib/shareOut': {
+        CAN_SHARE_FILES: false,
+        shareOut: async () => { throw new Error('the editor never opens the share sheet'); },
+        saveOut: async (...args) => { log.push(['saveOut', ...args]); return saveOut ? saveOut(...args) : 'saved'; },
+      },
+    },
+  });
+  return { screen, calls, log };
+}
+const keepButton = tree => tree.root.findAllByType('Pressable').find(node => /^Save to Photos/.test(node.props.accessibilityLabel ?? ''));
+
+test('Save: Keeps get the clean picture, and the Photos copy goes out through saveOut', async () => {
+  const { screen, log } = keepFixture();
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => keepButton(tree).props.onPress());
+    assert.deepEqual(JSON.parse(JSON.stringify(log)), [
+      ['addKeep', 'alice', { kind: 'photo', uri: 'file:///qa-finished.jpg' }],
+      ['saveOut', 'file:///qa-finished.jpg', 'photo'],
+    ]);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Saved to Photos and your Keeps 📦']);
+    assert.equal(screen.calls.alerts.length, 0);
+    // Saved once: the button says so, and pressing it again does nothing.
+    const done = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Saved');
+    assert.equal(done.props.disabled, true);
+    await act(() => done.props.onPress());
+    assert.equal(log.length, 2);
+  } finally { await unmount(tree); }
+});
+
+test('Save: when Photos says no (or can\'t), it is still in your Keeps, with the same words as before', async () => {
+  for (const answer of ['no-permission', 'not-possible', 'throws']) {
+    const { screen, log } = keepFixture({ saveOut: async () => { if (answer === 'throws') throw new Error('Photos fell over'); return answer; } });
+    const tree = await renderScreen(screen);
+    try {
+      await act(() => keepButton(tree).props.onPress());
+      assert.deepEqual(log.map(([what]) => what), ['addKeep', 'saveOut'], answer);
+      assert.deepEqual(screen.calls.toasts.at(-1), ['Saved to your Keeps 📦'], answer);
+      assert.equal(screen.calls.alerts.length, 0, answer);
+    } finally { await unmount(tree); }
+  }
+});
+
+test('Save of a video: Keeps get the video and its layer, and Photos gets the video as it is (no wordmark yet)', async () => {
+  const { screen, log } = keepFixture({ params: { video: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => keepButton(tree).props.onPress());
+    assert.deepEqual(JSON.parse(JSON.stringify(log)), [
+      ['addKeep', 'alice', { kind: 'video', uri: 'file:///qa-photo.jpg', overlayUri: null }],
+      ['saveOut', 'file:///qa-photo.jpg', 'video'],
+    ]);
+    assert.deepEqual(screen.calls.toasts.at(-1), ['Saved to Photos and your Keeps 📦']);
+  } finally { await unmount(tree); }
+});
+
+test('Save: if Keeps fails, nothing goes to Photos and it says why', async () => {
+  const { screen, log } = keepFixture();
+  screen.modules['@/lib/keeps'].addKeep = async () => { log.push(['addKeep']); throw new Error('No internet'); };
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => keepButton(tree).props.onPress());
+    assert.deepEqual(log.map(([what]) => what), ['addKeep']);
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not save', 'No internet']);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// 📦 The other Save to Photos: a keep opened from your Keeps (src/app/(app)/keeps/[id].tsx). The file comes back
+// from Peekaboo and goes to Photos through saveOut too (photos get the wordmark there; videos go as they are).
+// ---------------------------------------------------------------------------
+const { button } = require('./harness.cjs');
+
+function keepViewer({ mediaType = 'photo', answer = 'saved' } = {}) {
+  const log = [];
+  const keep = { id: 'k1', user_id: 'alice', media_path: 'alice/keeps/k1', media_type: mediaType, poster_path: null, overlay_path: null, created_at: '2026-11-22T10:00:00Z' };
+  const screen = loadScreen('src/app/(app)/keeps/[id].tsx', {
+    'expo-image': { Image: host('Image') },
+    'expo-router': { router: { back: () => log.push(['back']), push: to => log.push(['push', to]) }, useLocalSearchParams: () => ({ id: 'k1' }) },
+    '@/components/IconButton': { IconButton: host('IconButton') },
+    '@/components/SafeEdge': { SafeEdge: host('SafeEdge') },
+    '@/lib/keeps': {
+      CAN_SAVE_TO_PHOTOS: true,
+      fetchKeeps: async () => [keep],
+      deleteKeep: async () => {},
+      downloadKeepFile: async (url, name) => { log.push(['download', url, name]); return `file:///cache/${name}`; },
+    },
+    '@/lib/media': { useMediaUrls: () => ({ 'alice/keeps/k1': 'https://example.invalid/k1' }) },
+    '@/lib/shareOut': {
+      CAN_SHARE_FILES: false,
+      shareOut: async () => 'not-possible',
+      saveOut: async (...args) => { log.push(['saveOut', ...args]); return answer; },
+    },
+  });
+  return { screen, log };
+}
+
+test('Keeps viewer: Save to Photos sends the photo through saveOut, with the same words as before', async () => {
+  for (const [answer, toast] of [['saved', 'Saved to Photos ✅'], ['no-permission', 'Peekaboo needs permission to save to Photos']]) {
+    const { screen, log } = keepViewer({ answer });
+    const tree = await renderScreen(screen);
+    try {
+      await act(() => button(tree, 'Save to Photos').props.onPress());
+      assert.deepEqual(log, [['download', 'https://example.invalid/k1', 'keep-k1.jpg'], ['saveOut', 'file:///cache/keep-k1.jpg', 'photo']]);
+      assert.deepEqual(screen.calls.toasts.at(-1), [toast]);
+      assert.equal(screen.calls.alerts.length, 0);
+    } finally { await unmount(tree); }
+  }
+});
+
+test('Keeps viewer: a video goes to Photos as a video; Photos failing says so', async () => {
+  const video = keepViewer({ mediaType: 'video' });
+  let tree = await renderScreen(video.screen);
+  try {
+    await act(() => button(tree, 'Save to Photos').props.onPress());
+    assert.deepEqual(video.log.at(-1), ['saveOut', 'file:///cache/keep-k1.mp4', 'video']);
+  } finally { await unmount(tree); }
+  const broken = keepViewer({ answer: 'not-possible' });
+  tree = await renderScreen(broken.screen);
+  try {
+    await act(() => button(tree, 'Save to Photos').props.onPress());
+    assert.equal(broken.screen.calls.toasts.length, 0);
+    assert.equal(broken.screen.calls.alerts.at(-1)[0], 'Could not save');
+  } finally { await unmount(tree); }
+});

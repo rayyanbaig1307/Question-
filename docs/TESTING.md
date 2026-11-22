@@ -1422,3 +1422,69 @@ opens; Back goes to the Chat list.
 walking out of Wi-Fi). A one-off hiccup no longer shows "server error": the app quietly tries again (up to 2 more
 times) and the photo is sent **once**.
 
+
+## Step 71 – Main Character Mode 🌆 (your face in a comic poster)
+
+TestFlight **build 13** on the `testing` channel first (the mode shows only there for now). Also have an older
+download handy for step 18 (Android or Expo Go). Write down the number of any step that goes wrong – most fixes go
+out by update. What the mode is and how to add new characters: `docs/MAIN_CHARACTER.md`.
+
+1. Home camera → swipe the mode row to 🌆 (right after 🤪 Googly) → the row **stays** there, the shutter ring turns
+   orange and a card says "🌆 Main Character · your face in a comic poster · Tap to start". **No page opens.** Swipe
+   between Chat / Camera / Home and back → still no page opens. Tap the card (or the shutter, or 🌆) → the Main
+   Character screen fades in on the selfie camera. Holding the shutter on the home camera opens it too (no video
+   starts). ✕ goes back. (The first time, the camera permission question may show: "Allow camera".)
+2. Your face is in **Street Boss**'s face, in comic colours, and follows you when you move, turn and tilt your head.
+   Talk and open your mouth wide → the face does **not** pump or squash. No room behind you shows round your face.
+   Nothing is upside down or mirrored the wrong way. The small Peekaboo logo is top left.
+3. Opening the screen starts the camera **once** (no second black flash a moment later).
+4. Swipe left and right → each of the 6 characters (Street Boss, Getaway Driver, Beach Hustler, Night Rider, Rich
+   Mogul, Mall Cop), the name pops up big; each one jumps to its own scene. Tap 🌴 → the scene changes (its name
+   pops up under 🌴), the character stays; swipe again → the scene you picked stays. Swiping fast doesn't stutter.
+   The first 3 visits show "Swipe ← → for a new character · 🌴 for a new scene". Close and reopen the screen → it
+   starts on the character and scene you used last; if you had picked a scene with 🌴, your first swipe goes back
+   to each character's own scene. With VoiceOver on (Settings → Accessibility): the screen reads "Character,
+   Street Boss"; swipe up or down with one finger → the next or previous character, and its name is read out.
+5. Flip → back camera on a friend's face → their face goes in.
+6. Cover the camera or turn away → after a couple of seconds "Point the camera at a face 👀" and the face hole is
+   skin coloured. Tap the shutter then → "We can't see a face – look at the camera 👀". Turn your head away **just
+   as** you tap the shutter (try it on LITE too, step 11) → the same "We can't see a face" message, never "Couldn't
+   make your poster". Two people → the bigger face is used.
+7. Tap the shutter and **swipe straight away** → nothing changes; a white flash, then the **MISSION PASSED /
+   +RESPECT** banner (pink-purple tilted band, blocky letters, a happy buzz) pops over the still-moving poster,
+   then the finished poster. It looks like the screen did at the press (same face position, same character, same
+   scene) and the face is sharp, not blurry. 🌴 and flip do nothing while it is being made. On the finished poster
+   the ✕ (top left) sits above the poster, not on its corner.
+8. **Share** → the iPhone share sheet: write down which of Instagram, TikTok and Snapchat show up and where each
+   puts the picture. The shared picture has the small Peekaboo logo top left.
+9. **Save** → "Saved to Photos ✅" → in Photos, with the logo. **My story** → *Send to…* with My Story ticked → post
+   → you're back on Home, and your story has **no** logo. Posting and sending both go back to Home, so open the mode
+   again and take a new poster for each of the next two: **Send** → *Send to…* with My Story **not** ticked → pick a
+   friend → they get it as a peek, **no** logo. **Take another** → back to the live poster.
+10. Hold the shutter on the Main Character screen → "Main Character videos are coming soon 🎬".
+11. Tap the **FULL/LITE** pill (top right, testing channel only) → **LITE**: your real camera face shows through
+    the hole, moving with you (no comic look live); move fast → it may lag a little but never jumps off screen;
+    take a poster → it still has the comic look. This is what App Store build 10 shows. Tap it again → FULL.
+12. **After step 11 (or any camera hiccup), go back to the home camera → the 4 stretchy Plus filters (🫥 🗿 😃 👾)
+    are still there**, also after closing and reopening the app twice.
+13. Editor → **Keep** a photo → the copy in Photos has the logo, the one in Keeps doesn't. Keeps → open it → Save to
+    Photos → the logo is on that copy too. (Videos still go without the logo for now.) Colours: take a very
+    colourful photo (bright pink or orange, or a bright sticker on it), Keep it, then put the copy in Photos next to
+    the same photo inside the app → the colours look the same, not duller or more washed out (on the iPhone).
+14. Plane mode → open the mode → the 6 characters still work. Back online: once the database update
+    `20261231000000_main_character.sql` is done, upload a test character made with the `online` step (both files,
+    `docs/MAIN_CHARACTER.md`) → close the app fully (swipe it away) and open it again, open the mode and wait a few
+    seconds → the poster doesn't change by itself; swipe right from Street Boss → the new character is there, named
+    from its file name, with the face in the right place, and the live face doesn't stall while it arrives. Also
+    upload a scene with the **same name** into `backgrounds` → close and reopen the app, open the mode, tap 🌴 until
+    its name pops up → the new scene shows behind the character (never a copy of the character itself).
+15. Use it for 3 minutes → does the phone get hot, or the picture stutter or shimmer (flickering bands or lines on
+    the face)? Try the oldest iPhone you have.
+16. Friends with very light and very dark skin try it → does the face blend in and **still look like them** (skin
+    not turned orange)?
+17. While on the Main Character screen, start a live from another phone's invite (if lives are on for you) → the
+    screen says "Your camera is busy with a live 🔴" and the camera hands over without an error; afterwards the
+    poster comes back. Point the camera away from faces as the live ends → "Point the camera at a face 👀" shows,
+    and the shutter says "We can't see a face" (no flash or banner) until it sees you again.
+18. Android, Expo Go: no 🌆 bubble on the home camera. (After it is switched on for everyone: the App Store app,
+    build 10, shows the bubble and the LITE look of step 11.)

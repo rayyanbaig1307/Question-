@@ -28,8 +28,9 @@ import { postGroupGuess } from '@/lib/groupGuess';
 import { postMystery } from '@/lib/guess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
-import { addKeep, CAN_SAVE_TO_PHOTOS, saveToPhotos } from '@/lib/keeps';
+import { addKeep } from '@/lib/keeps';
 import { resizePhoto, type Capture } from '@/lib/media';
+import { saveOut } from '@/lib/shareOut';
 import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
 
@@ -302,6 +303,8 @@ export default function Editor() {
   }
 
   // Save it with everything on it: to the phone's Photos and to your Keeps in Peekaboo.
+  // Your Keeps get the clean picture; the copy in Photos leaves the app, so it gets the small Peekaboo wordmark
+  // (lib/shareOut.ts – videos go as they are).
   const [saved, setSaved] = useState(false);
   async function keep() {
     if (working.current || saved) return;
@@ -311,7 +314,7 @@ export default function Editor() {
     try {
       const capture = await finish();
       await addKeep(userId, capture);
-      const inPhotos = CAN_SAVE_TO_PHOTOS ? await saveToPhotos(capture.uri).catch(() => false) : false;
+      const inPhotos = (await saveOut(capture.uri, capture.kind).catch(() => 'not-possible')) === 'saved';
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSaved(true);
       showToast(inPhotos ? 'Saved to Photos and your Keeps 📦' : 'Saved to your Keeps 📦');

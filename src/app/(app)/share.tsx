@@ -41,7 +41,8 @@ export default function Share() {
   // `drop` is set when you're posting your Peekaboo drop: "Today's drop" is already ticked.
   // `guess` is set when you came from Guess Who: "Guess Who" is already ticked.
   // `video` is '1' for a video; `overlay` is its text/sticker layer (if any).
-  const { uri, video, overlay, to, dare, drop, guess, forfeit } = useLocalSearchParams<{
+  // `pick` is 'friends' when you came to pick friends (Main Character Mode's Send): My Story isn't ticked then.
+  const { uri, video, overlay, to, dare, drop, guess, forfeit, pick } = useLocalSearchParams<{
     uri: string;
     video?: string;
     overlay?: string;
@@ -50,6 +51,7 @@ export default function Share() {
     drop?: string;
     guess?: string;
     forfeit?: string;
+    pick?: string;
   }>();
   const isVideo = video === '1';
   const fromDare = dare === '1';
@@ -70,7 +72,7 @@ export default function Share() {
   const dareRules = useDareRulesAccepted(userId);
   const [rulesOpen, setRulesOpen] = useState(false);
 
-  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess && !fromForfeit);
+  const [toStory, setToStory] = useState(!to && !fromDare && !fromDrop && !fromGuess && !fromForfeit && pick !== 'friends');
   const [toForfeit, setToForfeit] = useState(fromForfeit);
   // Guess Who goes nowhere else (otherwise the same photo on your story would give you away).
   const [toGuess, setToGuess] = useState(fromGuess);

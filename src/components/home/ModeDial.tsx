@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   type ScrollViewInstance,
@@ -21,7 +22,9 @@ import { formatClock, lateLabel, type DropStatus } from '@/lib/drop';
 import { FACE_LENS_AVAILABLE } from '@/lib/faceLens';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
 import { FRAME_ACCESS_AVAILABLE, framesBroken, useWarpLooksOn } from '@/lib/frameAccess';
+import { updateChannel } from '@/lib/lensDiagnostics';
 import { isLensLook, isWarpLook, LENS_LOOKS, type LensLook, type LensLookInfo } from '@/lib/lensLooks';
+import { MAIN_CHARACTER_BUBBLE, MAIN_CHARACTER_PLUS, mainCharacterHere } from '@/lib/mainCharacter/config';
 import { colors, gradients, radius, space } from '@/theme';
 
 // What the camera is for right now. 'photo' is the plain camera: nothing selected, nothing on screen.
@@ -31,7 +34,9 @@ import { colors, gradients, radius, space } from '@/theme';
 // Golden Hour are free, the rest are Peekaboo+. The 4 stretchy ones (Tiny Face, Gigachin, Big Mouth, Pixel Panic)
 // also need the camera's own pixels, so they're only on the newest downloads (lib/frameAccess.ts).
 // 'live' 🔴: go live to your friends (only on downloads that can, see LIVE_MODE below).
-export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | 'live' | LensLook;
+// 'mainCharacter' 🌆: your face in a comic poster (home camera only, see homeModes below). The row parks on it;
+// a tap on the bubble, on its card or on the shutter opens the Main Character screen.
+export type CameraMode = 'photo' | 'googly' | 'dare' | 'drop' | 'guess' | 'live' | 'mainCharacter' | LensLook;
 
 type ModeItem = {
   key: Exclude<CameraMode, 'photo'>;
@@ -69,11 +74,23 @@ export const CAMERA_MODES: ModeItem[] = [
 // CAMERA_MODES itself, so nothing about lives runs when the app starts; the row adds it below.
 export const LIVE_MODE: ModeItem = { key: 'live', emoji: '🔴', label: 'Go live', hint: 'Go live to your friends' };
 
-// The home camera's row: CAMERA_MODES with 🔴 after Guess Who when `live` is on.
-export function homeModes(live: boolean): ModeItem[] {
-  if (!live) return CAMERA_MODES;
-  const at = CAMERA_MODES.findIndex((item) => item.key === 'guess') + 1;
-  return [...CAMERA_MODES.slice(0, at), LIVE_MODE, ...CAMERA_MODES.slice(at)];
+// 🌆 Main Character Mode: right after Googly on the home camera, only where this phone can use it (an iPhone
+// download with face tracking, and for now only on the `testing` update channel – lib/mainCharacter/config.ts).
+// Never in a chat's camera. Like 🔴, it isn't in CAMERA_MODES: homeModes adds it, worked out each time it's
+// called (not when the app starts).
+export const MAIN_CHARACTER_MODE: ModeItem = { ...MAIN_CHARACTER_BUBBLE, plus: MAIN_CHARACTER_PLUS };
+
+// The home camera's row: CAMERA_MODES with 🔴 after Guess Who when `live` is on, and 🌆 after Googly when
+// `mainCharacter` is on.
+export function homeModes(
+  live: boolean,
+  mainCharacter: boolean = mainCharacterHere(Platform.OS, FACE_MESH_AVAILABLE, updateChannel()),
+): ModeItem[] {
+  if (!live && !mainCharacter) return CAMERA_MODES;
+  const list = [...CAMERA_MODES];
+  if (live) list.splice(list.findIndex((item) => item.key === 'guess') + 1, 0, LIVE_MODE);
+  if (mainCharacter) list.splice(list.findIndex((item) => item.key === 'googly') + 1, 0, MAIN_CHARACTER_MODE);
+  return list;
 }
 
 // Everything on the row, including the empty spot for the plain camera at the start.
@@ -139,15 +156,23 @@ export function ModeDial({ mode, onChange, dots, lensesOnly = false, withGuess =
       // No words on the camera: tap the chosen bubble again to see what it's about.
       if (next === 'dare') router.push('/dare');
       if (next === 'guess' && !withGuess) router.push('/guess');
+      // 🌆 Tapped again: open the Main Character screen again.
+      if (next === 'mainCharacter') router.push('/main-character');
       return;
     }
     Haptics.selectionAsync();
-    if (onChange(next) === false) recentre();
+    if (onChange(next) === false) {
+      recentre();
+      return;
+    }
+    // 🌆 A tap on the bubble opens the Main Character screen straight away. (Only a tap: the row settling on
+    // it below never does.)
+    if (next === 'mainCharacter') router.push('/main-character');
   }
 
   // When the row stops moving, whichever spot is closest to the middle wins.
   // Only switches modes – it never opens a page (the row also settles after swiping between pages,
-  // and that must not count as a second tap on Dare or Guess Who).
+  // and that must not count as a second tap on Dare or Guess Who). Settling on 🌆 only parks the row there.
   function settled(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const at = Math.round(event.nativeEvent.contentOffset.x / SLOT_WIDTH);
     const next = SLOTS[Math.max(0, Math.min(SLOTS.length - 1, at))];
@@ -212,6 +237,9 @@ export function ModeCaption({ mode, drop, dareNudge }: {
   const pulse = usePulse(mode === 'drop' && drop.kind === 'live');
   const dare = useDare(todayDareDay());
   if (mode === 'photo') return null;
+
+  // 🌆 Main Character: a card that says what it is; a tap opens the screen.
+  if (mode === 'mainCharacter') return <MainCharacterCaption />;
 
   // The face filters explain themselves (no words on the camera), and 🔴 Go live has its own sheet.
   if (isLensLook(mode) || mode === 'live') return null;
@@ -295,6 +323,24 @@ export function GroupGuessCaption() {
         🕵️ No name on it · the group guesses who sent it
       </Text>
     </View>
+  );
+}
+
+// 🌆 The card above the row while the home camera is parked on Main Character. A tap opens the screen (so do a
+// tap on the bubble and the shutter).
+export function MainCharacterCaption() {
+  return (
+    <Bouncy
+      style={[styles.caption, styles.captionQuiet]}
+      pressScale={0.96}
+      onPress={() => router.push('/main-character')}
+      accessibilityRole="button"
+      accessibilityLabel={`${MAIN_CHARACTER_BUBBLE.label}: your face in a comic poster. Opens Main Character Mode`}>
+      <Text style={styles.captionText} numberOfLines={2}>
+        {MAIN_CHARACTER_BUBBLE.emoji} {MAIN_CHARACTER_BUBBLE.label} · your face in a comic poster
+      </Text>
+      <Text style={styles.captionHint}>Tap to start</Text>
+    </Bouncy>
   );
 }
 

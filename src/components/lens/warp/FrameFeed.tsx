@@ -65,6 +65,9 @@ import { warpEffects } from './warpEffects';
 // turn, they would flash upside down. Each picture says itself whether it is mirrored and how it is turned.
 //
 // The readout on the testing channel (WarpDiagnostics.tsx) gets this FrameFeed's counts through `onStats`.
+//
+// Main Character Mode 🌆 uses the same pictures (SoftGlowCamera's `custom`). There, failing pictures are
+// reported through `onFailing`, so that mode only switches off its own use of them (never the stretchy filters).
 // ---------------------------------------------------------------------------
 
 // A picture waiting in the mailbox: the camera's buffer (`ptr`, iPhone) or a copy (`image`, Android), its
@@ -164,7 +167,7 @@ function looksDark(image: SkImage, w: number, h: number): boolean | null {
   }
 }
 
-export function FrameFeed({ shot, onOutput, facing, inUse, onStats, probeDark = false }: {
+export function FrameFeed({ shot, onOutput, facing, inUse, onStats, probeDark = false, onFailing }: {
   // Where the picture to show goes (read by LensOverlay.tsx). null = nothing to show.
   shot: SharedValue<FrameShot | null>;
   // Hands the camera output up to the camera (null when this goes away).
@@ -178,6 +181,9 @@ export function FrameFeed({ shot, onOutput, facing, inUse, onStats, probeDark = 
   onStats?: (stats: WarpStats | null) => void;
   // Testing readout only: check now and then whether the camera's pictures are black.
   probeDark?: boolean;
+  // Main Character Mode only (SoftGlowCamera's `custom`): told instead when most camera pictures keep failing,
+  // so that mode switches its own camera pictures off and the stretchy filters are never switched off by it.
+  onFailing?: (why: unknown) => void;
 }) {
   // The selfie camera's pictures are drawn mirrored, like the normal camera view.
   const front = facing === 'front';
@@ -427,7 +433,8 @@ export function FrameFeed({ shot, onOutput, facing, inUse, onStats, probeDark = 
   }, [box, frames, inUse, ring, shot, lastAt, rate]);
 
   // Main thread: switch the stretchy filters off if the shaders can't be made (for this download), or if most
-  // camera pictures keep failing (only until the app is closed: a few failed pictures are just skipped).
+  // camera pictures keep failing (only until the app is closed: a few failed pictures are just skipped). With
+  // `onFailing` (Main Character Mode), failing pictures are its own business: it is told instead.
   useEffect(() => {
     if (!warpEffects()) markFramesBroken('The stretchy filters’ shaders could not be made', 'remember');
     let seenAttempts = stats.attempts.getDirty();
@@ -438,10 +445,12 @@ export function FrameFeed({ shot, onOutput, facing, inUse, onStats, probeDark = 
       const failing = errorVerdict(attempts - seenAttempts, errors - seenErrors, FRAME_ERROR_MIN, FRAME_ERROR_RATE);
       seenAttempts = attempts;
       seenErrors = errors;
-      if (failing) markFramesBroken('Camera pictures keep failing', 'thisRun');
+      if (!failing) return;
+      if (onFailing) onFailing('Camera pictures keep failing');
+      else markFramesBroken('Camera pictures keep failing', 'thisRun');
     }, FRAME_ERROR_WINDOW_MS);
     return () => clearInterval(timer);
-  }, [stats]);
+  }, [stats, onFailing]);
 
   // Going away: stop taking pictures, let go of the one waiting and of the ones kept on the drawing thread.
   useEffect(

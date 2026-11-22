@@ -38,10 +38,11 @@ import type { SoftGlowHandle } from '@/components/lens/SoftGlowCamera';
 import { FACE_MESH_AVAILABLE } from '@/lib/faceMesh';
 import { subscribeFramesBroken, useWarpLooksOn } from '@/lib/frameAccess';
 import { isLensLook, isPlusMode, isWarpLook, type LensLook } from '@/lib/lensLooks';
+import { MAIN_CHARACTER_PLUS } from '@/lib/mainCharacter/config';
 import { brightenScreen, SCREEN_FLASH_COLOR, SCREEN_FLASH_WARMUP_MS } from '@/lib/screenFlash';
 import { usePlus, usePlusAnswer } from '@/lib/plus';
 import { checkPickedVideo, FREE_VIDEO_SECONDS, maxVideoSeconds, PLUS_VIDEO_SECONDS, TOO_BIG_VIDEO } from '@/lib/videoLimits';
-import { GroupGuessCaption, ModeDial, type CameraMode } from './ModeDial';
+import { GroupGuessCaption, MainCharacterCaption, ModeDial, type CameraMode } from './ModeDial';
 
 // The live googly-eyes lens, only on phones that have face tracking (the app download, not Expo Go).
 const FaceLens: typeof import('./FaceLensCamera').FaceLensCamera | null = FACE_LENS_AVAILABLE
@@ -78,6 +79,8 @@ const MODE_RING: Record<CameraMode, string> = {
   guess: colors.yellow,
   // 🔴 Go live: the live pink (not red – red is for recording).
   live: colors.live,
+  // 🌆 Main Character: sunset orange.
+  mainCharacter: '#FF6B3D',
 };
 
 // How long a Plus filter may stay on while we still can't tell whether you have Peekaboo+ (just after the app
@@ -162,6 +165,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     setBubbleBefore(liveBubble);
     if (!liveBubble && homeMode === 'live') setHomeMode('photo');
   }
+  // 🌆 Main Character (home camera only): the row is parked on it. The camera stays plain; the shutter (tap or
+  // hold), the card above the row and a tap on the bubble open the Main Character screen.
+  const mainCharacterOn = isHome && homeMode === 'mainCharacter';
   // While a live is using the camera, this camera shows nothing at all (two cameras at once fails).
   const cameraHeld = useCameraHeldByLive();
   // 🕵️ Guess Who in this group chat: photos only (no videos), and it goes to the group with no name on it.
@@ -244,6 +250,12 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       router.push('/plus');
       return false;
     }
+    // 🌆 Main Character, if it is ever made Peekaboo+ only: the same, when we're sure you don't have Plus.
+    // (While we're still checking, the Main Character screen itself asks again.)
+    if (next === 'mainCharacter' && MAIN_CHARACTER_PLUS && plusAnswer === 'no') {
+      router.push('/plus');
+      return false;
+    }
     setHomeMode(next);
     // Lenses are for faces, and you go live facing yourself first (you can flip during the live).
     if ((next === 'googly' || next === 'live' || isLensLook(next)) && facing === 'back') setFacing('front');
@@ -313,6 +325,12 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       setGoLiveOpen(true);
       return;
     }
+    // 🌆 Main Character mode: the shutter opens the Main Character screen (no photo here).
+    if (mainCharacterOn) {
+      Haptics.selectionAsync();
+      router.push('/main-character');
+      return;
+    }
     if (busy || (glowOn ? !glowRef.current : lensOn ? !lensRef.current : !cameraRef.current)) return;
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -362,7 +380,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
     });
 
   async function startRecording() {
-    if (liveOn) {
+    // 🔴 and 🌆: holding the shutter does what a tap does (no video starts).
+    if (liveOn || mainCharacterOn) {
       takePhoto();
       return;
     }
@@ -614,6 +633,8 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
       {/* Bottom: gallery · the big shutter button · friend map (on the home screen, just above the tab bar) */}
       <SafeEdge edge="bottom" style={[styles.bottom, isHome && styles.bottomAboveTabs]} pointerEvents="box-none">
         {/* Home camera: what you're posting (Dare · Drop · Googly · Guess Who). Swipe the bubbles or tap one – no words on screen. */}
+        {/* …except 🌆 Main Character: a card says what it is, and a tap on it opens the screen. */}
+        {mainCharacterOn ? <MainCharacterCaption /> : null}
         {isHome ? (
           <ModeDial
             mode={homeMode}
@@ -635,7 +656,7 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
           </View>
         ) : null}
         <View style={styles.shutterRow}>
-          {liveOn ? (
+          {liveOn || mainCharacterOn ? (
             <View style={styles.shutterSpacer} />
           ) : (
             <IconButton icon="images" label="Pick from gallery" onPress={pickFromGallery} />
@@ -652,11 +673,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
             accessibilityLabel={
               liveOn
                 ? 'Go live'
-                : autoDrop
-                  ? 'Take your Peekaboo drop photo'
-                  : groupGuessOn
-                    ? 'Take your Guess Who photo'
-                    : 'Take photo, or hold to record a video'
+                : mainCharacterOn
+                  ? 'Open Main Character Mode'
+                  : autoDrop
+                    ? 'Take your Peekaboo drop photo'
+                    : groupGuessOn
+                      ? 'Take your Guess Who photo'
+                      : 'Take photo, or hold to record a video'
             }
             pressScale={0.82}
             style={[

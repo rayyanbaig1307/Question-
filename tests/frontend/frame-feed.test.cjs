@@ -24,7 +24,8 @@ const { React, renderer, act, loadScreen, loadPure, host, unmount } = require('.
 //   once; the testing readout's black-picture check runs only now and then, never in a frame that makes a picture.
 
 // A stand-in for lib/frameAccess.ts on the new download that notes how each switch-off was asked for.
-function framesStandIn() {
+// `available: false`: a download without the camera's own pictures (App Store build 10, iOS 16).
+function framesStandIn({ available = true } = {}) {
   let broken = false;
   const listeners = new Set();
   const subscribe = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
@@ -32,7 +33,7 @@ function framesStandIn() {
   return {
     marks,
     module: {
-      FRAME_ACCESS_AVAILABLE: true, FRAME_SETUP_MS: 4000, FRAME_PATH: 'share', FRAME_DELAY: 1, STALE_MS: 1000,
+      FRAME_ACCESS_AVAILABLE: available, FRAME_SETUP_MS: 4000, FRAME_PATH: 'share', FRAME_DELAY: 1, STALE_MS: 1000,
       FRAME_PIXEL_FORMAT: 'yuv', FRAME_PLACEMENT: 'rule', FRAME_ERROR_WINDOW_MS: 2000, FRAME_ERROR_MIN: 10, FRAME_ERROR_RATE: 0.5,
       framesBroken: () => broken,
       subscribeFramesBroken: subscribe,
@@ -48,14 +49,25 @@ function framesStandIn() {
 }
 
 // `channel`: the update channel the download listens on (the readout is only on 'testing').
-function loadSoftGlow({ channel = null } = {}) {
-  const frames = framesStandIn();
+// The rest is for Main Character Mode's `custom` look (further down): `available` (this download has the camera's
+// own pictures), `frameAccess` (a whole lib/frameAccess.ts to use instead of the stand-in), `holdOutput` (each
+// FrameFeed hands its output over only when the test calls feed.deliver()), `feedThrows` (FrameFeed fails while it
+// is drawn), `mirrored` (the camera's photo is already mirrored) and `tracked` (the faces trackFaces hands back).
+function loadSoftGlow({ channel = null, available = true, frameAccess = null, holdOutput = false, feedThrows = false, mirrored = true, tracked = [] } = {}) {
+  const frames = framesStandIn({ available });
   // Every FrameFeed shown: which camera it was for, whether it is still there, and its newest props.
   const feeds = [];
   // What the photo was made with (the stand-in for bakeLook).
   const baked = [];
+  // Every drawing of the camera: whether it was running and its outputs (names).
+  const cameraLog = [];
+  // The photo was flipped (a selfie the camera didn't mirror).
+  const flips = [];
+  // The face finder's handler (the test calls it like the camera would).
+  const mesh = { onFaces: null };
   function FrameFeed(props) {
     const { onOutput, facing } = props;
+    if (feedThrows) throw new Error('camera pictures broke while drawing');
     // One record per FrameFeed made (not per drawing), with every camera it was ever told about.
     const ref = React.useRef(null);
     if (!ref.current) {
@@ -67,24 +79,33 @@ function loadSoftGlow({ channel = null } = {}) {
     if (!feed.facings.includes(facing)) feed.facings.push(facing);
     React.useEffect(() => {
       feed.mounted = true;
-      onOutput(feed.output);
+      if (holdOutput) feed.deliver = () => onOutput(feed.output);
+      else onOutput(feed.output);
       return () => { feed.mounted = false; onOutput(null); };
     }, [feed, onOutput]);
     return null;
   }
-  const photo = { flip() { return photo; }, renderAsync: async () => ({ saveAsync: async () => ({ uri: 'file:///saved.jpg' }) }) };
+  function Camera(props) {
+    cameraLog.push({ active: props.isActive, outputs: Array.from(props.outputs, (output) => output.name), device: props.device });
+    return React.createElement('Camera', props);
+  }
+  const photo = { flip(how) { flips.push(how); return photo; }, renderAsync: async () => ({ saveAsync: async () => ({ uri: 'file:///saved.jpg' }) }) };
   const screen = loadScreen('src/components/lens/SoftGlowCamera.tsx', {
     'expo-image-manipulator': { FlipType: { Horizontal: 'h' }, ImageManipulator: { manipulate: () => photo }, SaveFormat: { JPEG: 'jpeg' } },
     'react-native-reanimated': { useSharedValue: (initial) => React.useRef({ value: initial, get() { return this.value; }, set(v) { this.value = v; } }).current },
     'react-native-vision-camera': {
-      Camera: host('Camera'),
-      usePhotoOutput: () => React.useRef({ name: 'photo', capturePhotoToFile: async () => ({ filePath: '/tmp/photo.jpg', isMirrored: true }) }).current,
+      Camera,
+      usePhotoOutput: () => React.useRef({ name: 'photo', capturePhotoToFile: async () => ({ filePath: '/tmp/photo.jpg', isMirrored: mirrored }) }).current,
     },
-    '@/lib/faceMesh': { cameraAxes: () => null, toScreenPointsFrom: () => [], useFaceMeshOutput: () => null },
-    '@/lib/frameAccess': frames.module,
+    '@/lib/faceMesh': {
+      cameraAxes: () => null,
+      toScreenPointsFrom: () => [],
+      useFaceMeshOutput: (options) => { mesh.onFaces = options.onFaces; return null; },
+    },
+    '@/lib/frameAccess': frameAccess ?? frames.module,
     '@/lib/lensDiagnostics': { lensDiagnosticsOn: () => channel === 'testing' },
     './bakeLook': { bakeLook: async (uri, look, faces, view) => { baked.push({ uri, look, view }); return 'file:///baked.jpg'; } },
-    './faceTrack': { newTrackMemory: () => ({}), trackFaces: () => [] },
+    './faceTrack': { newTrackMemory: () => ({}), trackFaces: () => tracked },
     './LensOverlay': { LensOverlay: host('LensOverlay') },
     './lensPaint': { MAX_LENS_FACES: 2 },
     './warp/FrameFeed': { FrameFeed },
@@ -93,14 +114,17 @@ function loadSoftGlow({ channel = null } = {}) {
   // The camera's clock (Date.now inside SoftGlowCamera).
   const clock = { now: 1_000_000 };
   screen.getBinding('Date').now = () => clock.now;
-  return { SoftGlowCamera: screen.exports.SoftGlowCamera, frames, feeds, clock, baked };
+  // The face finder's handler reads the time (seconds) for the face following.
+  screen.getBinding('globalThis').performance = { now: () => clock.now };
+  return { SoftGlowCamera: screen.exports.SoftGlowCamera, frames, feeds, clock, baked, cameraLog, flips, mesh, calls: screen.calls };
 }
 
-async function renderSoftGlow(SoftGlowCamera, props) {
+// `nodeMock`: what the camera view's ref gets (only the Main Character tests need one).
+async function renderSoftGlow(SoftGlowCamera, props, { nodeMock = null } = {}) {
   let tree;
   const ref = React.createRef();
   let current = { ref, active: true, facing: 'front', flash: 'off', ...props };
-  await act(async () => { tree = renderer.create(React.createElement(SoftGlowCamera, current)); });
+  await act(async () => { tree = renderer.create(React.createElement(SoftGlowCamera, current), nodeMock ? { createNodeMock: () => nodeMock } : undefined); });
   return {
     tree,
     ref,
@@ -340,6 +364,395 @@ test('the readout line shows only on the testing channel, with a stretchy filter
     } finally {
       await unmount(tree);
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Main Character Mode 🌆: SoftGlowCamera's `custom` look (components/mainCharacter/MainCharacterCamera.tsx). The
+// same camera, with its own overlay, its own wrapper round the camera view and its own bake. Checked here:
+// - with camera pictures, FrameFeed is there from the first drawing and the camera only starts once FrameFeed's
+//   output is there, so the camera is set up once (not once without it and again a moment later), also after a
+//   flip; it stays through the result screen; without the output in time the camera starts without it;
+// - a camera error, failing camera pictures or a FrameFeed that breaks only switch off this mode's own use of the
+//   camera pictures (until the app closes): never a strike or anything remembered against the 4 paid stretchy
+//   filters, which still show afterwards;
+// - its overlay replaces LensOverlay, its wrapper goes round the camera view, both get the screen's values;
+// - capture(press) hands the photo, the faces, the view size and `press` to its bake and passes its errors on.
+// ---------------------------------------------------------------------------
+
+// A Main Character look as MainCharacterCamera makes it (stand-in parts). `wrap: false`: no CameraWrap.
+function mcLook({ wantsFrames = true, wrap = true, bake, onFaces, frameWaitMs = 1000 } = {}) {
+  const baked = [];
+  const look = {
+    wantsFrames,
+    Overlay: host('McOverlay'),
+    extra: { name: "the screen's own values" },
+    bake: bake ?? (async (uri, faces, view, press) => { baked.push({ uri, faces, view: { ...view }, press }); return 'file:///poster.jpg'; }),
+    onFaces,
+    frameWaitMs,
+  };
+  if (wrap) look.CameraWrap = host('McWrap');
+  return { look, baked };
+}
+
+// lib/frameAccess.ts itself (iPhone, iOS 17, the new download), with the phone's storage and a spy on
+// markFramesBroken.
+function realFrameAccess() {
+  const store = new Map();
+  const writes = [];
+  const marks = [];
+  const loaded = loadScreen('src/lib/frameAccess.ts', {
+    '@react-native-async-storage/async-storage': {
+      __esModule: true,
+      default: { getItem: async (key) => store.get(key) ?? null, setItem: async (key, value) => { writes.push([key, value]); store.set(key, value); } },
+    },
+    expo: { requireOptionalNativeModule: (name) => (name === 'ExpoApplication' ? { nativeBuildVersion: '13' } : null) },
+    'react-native': { Platform: { OS: 'ios', Version: '17.4' }, TurboModuleRegistry: { get: (name) => (name === 'NitroModules' ? {} : null) } },
+    'react-native-nitro-modules': { NitroModules: { hasHybridObject: () => true } },
+  });
+  const real = loaded.exports;
+  assert.equal(real.FRAME_ACCESS_AVAILABLE, true);
+  return { real, writes, marks, module: { ...real, markFramesBroken: (...args) => { marks.push(args); return real.markFramesBroken(...args); } } };
+}
+
+// The timers SoftGlowCamera set and didn't stop.
+const pendingTimers = (calls) => calls.timers.map((run, i) => ({ run, id: i + 1 })).filter((timer) => !calls.clearedTimers.has(timer.id));
+// Every different set-up the camera ran with (camera + outputs), in order.
+const runningSetups = (log) => [...new Set(log.filter((entry) => entry.active).map((entry) => `${entry.device}:${entry.outputs.join(',')}`))];
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const quietly = async (work) => {
+  const { warn, error } = console;
+  console.warn = () => {};
+  console.error = () => {};
+  try {
+    return await work();
+  } finally {
+    console.warn = warn;
+    console.error = error;
+  }
+};
+
+test('Main Character: FrameFeed is there from the first drawing, and the camera starts only once its output came (one set-up)', async () => {
+  const { SoftGlowCamera, feeds, cameraLog, frames, calls } = loadSoftGlow({ holdOutput: true });
+  const { look } = mcLook();
+  const { tree, update } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    assert.equal(feeds.length, 1);
+    assert.equal(feeds[0].mounted, true);
+    assert.equal(feeds[0].props.inUse, true);
+    // Waiting for FrameFeed's output: the camera isn't running yet.
+    assert.ok(cameraLog.length > 0);
+    assert.ok(cameraLog.every((entry) => entry.active === false), 'never running before the output is there');
+    assert.deepEqual(outputNames(tree), ['photo']);
+    assert.equal(pendingTimers(calls).length, 1, 'the wait for the output has started');
+    // The output comes: the camera starts, with every output at once.
+    await act(async () => { feeds[0].deliver(); });
+    assert.equal(camera(tree).props.isActive, true);
+    assert.deepEqual(outputNames(tree), ['photo', 'frames-front-1']);
+    assert.equal(pendingTimers(calls).length, 0, 'the wait is over');
+    // The outputs changed once, and the camera only ever ran with one set-up.
+    assert.deepEqual([...new Set(cameraLog.map((entry) => entry.outputs.join(',')))], ['photo', 'photo,frames-front-1']);
+    assert.deepEqual(runningSetups(cameraLog), ['front:photo,frames-front-1']);
+    // The result screen (camera paused): FrameFeed stays and the outputs don't change; its pictures aren't wanted.
+    await update({ active: false });
+    assert.equal(feeds[0].mounted, true);
+    assert.equal(feeds[0].props.inUse, false);
+    assert.equal(camera(tree).props.isActive, false);
+    assert.deepEqual(outputNames(tree), ['photo', 'frames-front-1']);
+    // Back to the live poster: the same FrameFeed and output, running again straight away.
+    await update({ active: true });
+    assert.equal(feeds.length, 1);
+    assert.equal(feeds[0].props.inUse, true);
+    assert.equal(camera(tree).props.isActive, true);
+    assert.deepEqual(runningSetups(cameraLog), ['front:photo,frames-front-1']);
+    assert.deepEqual(frames.marks, []);
+  } finally {
+    await unmount(tree);
+  }
+});
+
+test('Main Character: even when FrameFeed hands its output over at once, the camera never runs without it first', async () => {
+  const { SoftGlowCamera, cameraLog } = loadSoftGlow();
+  const { look } = mcLook();
+  const { tree } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    assert.equal(cameraLog[0].active, false);
+    assert.deepEqual(runningSetups(cameraLog), ['front:photo,frames-front-1']);
+  } finally {
+    await unmount(tree);
+  }
+  // A face filter's stretchy camera (as before): it runs at once and gets its output a moment later.
+  const before = loadSoftGlow();
+  const plain = await renderSoftGlow(before.SoftGlowCamera, { look: 'bigMouth' });
+  try {
+    assert.equal(before.cameraLog[0].active, true);
+  } finally {
+    await unmount(plain.tree);
+  }
+});
+
+test('Main Character: without FrameFeed\'s output in time, the camera starts without it and FrameFeed goes away (stretchy filters untouched)', async () => {
+  const { SoftGlowCamera, feeds, frames, calls } = loadSoftGlow({ holdOutput: true });
+  const { look } = mcLook();
+  const { tree } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    const timers = pendingTimers(calls);
+    assert.equal(timers.length, 1);
+    await quietly(() => act(async () => { timers[0].run(); }));
+    assert.equal(feeds[0].mounted, false);
+    assert.equal(camera(tree).props.isActive, true);
+    assert.deepEqual(outputNames(tree), ['photo']);
+    assert.equal(tree.root.findByType('McOverlay').props.framesOn, false, 'the overlay draws the lite way');
+    assert.deepEqual(frames.marks, []);
+    assert.equal(frames.module.framesBroken(), false);
+  } finally {
+    await unmount(tree);
+  }
+});
+
+test('Main Character: flipping the camera starts a new FrameFeed, and the camera waits for its output (never runs with the other camera\'s)', async () => {
+  const { SoftGlowCamera, feeds, cameraLog, calls } = loadSoftGlow({ holdOutput: true });
+  const { look } = mcLook();
+  const { tree, update } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    await act(async () => { feeds[0].deliver(); });
+    await update({ facing: 'back' });
+    assert.deepEqual(feeds.map((feed) => [feed.facing, feed.mounted]), [['front', false], ['back', true]]);
+    assert.equal(camera(tree).props.device, 'back');
+    assert.equal(camera(tree).props.isActive, false);
+    assert.deepEqual(outputNames(tree), ['photo']);
+    assert.equal(pendingTimers(calls).length, 1, 'the wait starts again for the new FrameFeed');
+    await act(async () => { feeds[1].deliver(); });
+    assert.equal(camera(tree).props.isActive, true);
+    assert.deepEqual(outputNames(tree), ['photo', 'frames-back-2']);
+    assert.deepEqual(runningSetups(cameraLog), ['front:photo,frames-front-1', 'back:photo,frames-back-2']);
+  } finally {
+    await unmount(tree);
+  }
+});
+
+for (const [when, later] of [['just after the camera pictures started', 1_500], ['long after', 60_000]]) {
+  test(`Main Character: a camera error ${when} never counts against the stretchy filters (nothing remembered, they still show)`, async () => {
+    const access = realFrameAccess();
+    const { SoftGlowCamera, feeds, clock } = loadSoftGlow({ frameAccess: access.module });
+    const { look } = mcLook();
+    const trees = [];
+    try {
+      const { tree } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+      trees.push(tree);
+      assert.deepEqual(outputNames(tree), ['photo', 'frames-front-1']);
+      clock.now += later;
+      await quietly(() => act(async () => { camera(tree).props.onError(new Error('could not add the output')); }));
+      await settle();
+      // Never a strike, a "this run" or anything remembered for the stretchy filters.
+      assert.deepEqual(access.marks, []);
+      assert.deepEqual(access.writes, []);
+      assert.equal(access.real.framesBroken(), false);
+      // This mode goes on the lite way: no FrameFeed, the camera running without its output.
+      assert.equal(feeds[0].mounted, false);
+      assert.deepEqual(outputNames(tree), ['photo']);
+      assert.equal(camera(tree).props.isActive, true);
+      // The stretchy filters still show: a face filter camera with one on still gets the camera pictures.
+      let warpsOn = null;
+      function Probe() { warpsOn = access.module.useWarpLooksOn(); return null; }
+      let probe;
+      await act(async () => { probe = renderer.create(React.createElement(Probe)); });
+      trees.push(probe);
+      assert.equal(warpsOn, true);
+      const stretchy = await renderSoftGlow(SoftGlowCamera, { look: 'bigMouth' });
+      trees.push(stretchy.tree);
+      assert.deepEqual(outputNames(stretchy.tree), ['photo', 'frames-front-2']);
+      // A new Main Character camera in the same app start stays lite.
+      const again = await renderSoftGlow(SoftGlowCamera, { custom: look });
+      trees.push(again.tree);
+      assert.deepEqual(outputNames(again.tree), ['photo']);
+      assert.equal(camera(again.tree).props.isActive, true);
+      await settle();
+      assert.deepEqual(access.writes, []);
+    } finally {
+      for (const tree of trees) await unmount(tree);
+    }
+  });
+}
+
+test('Main Character: failing camera pictures switch off only this mode\'s own use of them; a face filter\'s FrameFeed reports as before', async () => {
+  const { SoftGlowCamera, feeds, frames } = loadSoftGlow();
+  const { look } = mcLook();
+  const { tree } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    assert.equal(typeof feeds[0].props.onFailing, 'function');
+    await quietly(() => act(async () => { feeds[0].props.onFailing('Camera pictures keep failing'); }));
+    assert.equal(feeds[0].mounted, false);
+    assert.deepEqual(outputNames(tree), ['photo']);
+    assert.equal(camera(tree).props.isActive, true);
+    assert.deepEqual(frames.marks, []);
+  } finally {
+    await unmount(tree);
+  }
+  const plain = loadSoftGlow();
+  const other = await renderSoftGlow(plain.SoftGlowCamera, { look: 'pixelPanic' });
+  try {
+    assert.equal(plain.feeds[0].props.onFailing, undefined, 'FrameFeed switches the stretchy filters off itself');
+  } finally {
+    await unmount(other.tree);
+  }
+});
+
+test('Main Character: a FrameFeed that breaks while drawn switches off this mode\'s camera pictures, not the stretchy filters (a face filter\'s: as before)', async () => {
+  {
+    const { SoftGlowCamera, frames, feeds } = loadSoftGlow({ feedThrows: true });
+    const { look } = mcLook();
+    const { tree } = await quietly(() => renderSoftGlow(SoftGlowCamera, { custom: look }));
+    try {
+      assert.deepEqual(frames.marks, []);
+      assert.equal(feeds.length, 0);
+      assert.deepEqual(outputNames(tree), ['photo']);
+      assert.equal(camera(tree).props.isActive, true);
+      assert.equal(tree.root.findByType('McOverlay').props.framesOn, false);
+    } finally {
+      await unmount(tree);
+    }
+  }
+  {
+    const { SoftGlowCamera, frames } = loadSoftGlow({ feedThrows: true });
+    const { tree } = await quietly(() => renderSoftGlow(SoftGlowCamera, { look: 'bigMouth' }));
+    try {
+      assert.deepEqual(frames.marks, [{ why: 'camera pictures broke while drawing', how: 'remember' }]);
+    } finally {
+      await unmount(tree);
+    }
+  }
+});
+
+test('Main Character: its own overlay is drawn instead of LensOverlay, its wrapper goes round the camera view, and both get the screen\'s values', async () => {
+  const { SoftGlowCamera } = loadSoftGlow();
+  const { look } = mcLook();
+  const { tree, update } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    assert.equal(tree.root.findAllByType('LensOverlay').length, 0);
+    const overlay = () => tree.root.findByType('McOverlay');
+    const wrap = tree.root.findByType('McWrap');
+    // The wrapper holds the camera view only (not the overlay).
+    assert.equal(wrap.findAllByType('Camera').length, 1);
+    assert.equal(wrap.findAllByType('McOverlay').length, 0);
+    assert.equal(overlay().props.extra, look.extra);
+    assert.equal(wrap.props.extra, look.extra);
+    for (const key of ['faces', 'shot', 'viewSize', 'axes']) {
+      assert.ok(overlay().props[key], key);
+      assert.equal(overlay().props[key], wrap.props[key], key);
+    }
+    assert.equal(overlay().props.framesOn, true);
+    // The view size comes from onLayout, like the face filters' overlay.
+    const root = tree.root.findAll((node) => typeof node.props.onLayout === 'function' && node.type === 'View')[0];
+    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 844 } } }); });
+    assert.deepEqual({ ...overlay().props.viewSize.value }, { width: 390, height: 844 });
+    // Not shown while the camera is away (the result screen); the wrapper and camera view stay.
+    await update({ active: false });
+    assert.equal(tree.root.findAllByType('McOverlay').length, 0);
+    assert.equal(tree.root.findByType('McWrap').findAllByType('Camera').length, 1);
+  } finally {
+    await unmount(tree);
+  }
+  // Without a wrapper the camera view is drawn as usual.
+  const plain = loadSoftGlow();
+  const { look: bare } = mcLook({ wrap: false });
+  const other = await renderSoftGlow(plain.SoftGlowCamera, { custom: bare });
+  try {
+    assert.equal(other.tree.root.findAllByType('McWrap').length, 0);
+    assert.equal(other.tree.root.findAllByType('Camera').length, 1);
+    assert.equal(other.tree.root.findAllByType('McOverlay').length, 1);
+  } finally {
+    await unmount(other.tree);
+  }
+});
+
+test('Main Character without camera pictures (old download, look without them, or the stretchy filters off): no FrameFeed, the camera follows `active` at once', async () => {
+  const cases = [
+    ['a download without them', { available: false }, {}],
+    ['a look that doesn\'t want them', {}, { wantsFrames: false }],
+    ['the stretchy filters switched off on this phone', {}, {}, (frames) => frames.module.markFramesBroken('broken before')],
+  ];
+  for (const [name, options, lookOptions, before] of cases) {
+    const { SoftGlowCamera, feeds, cameraLog, calls, frames } = loadSoftGlow(options);
+    if (before) await quietly(() => before(frames));
+    const { look } = mcLook(lookOptions);
+    const { tree, update } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+    try {
+      assert.equal(feeds.length, 0, name);
+      assert.equal(cameraLog[0].active, true, name);
+      assert.deepEqual(outputNames(tree), ['photo'], name);
+      assert.equal(pendingTimers(calls).length, 0, name);
+      assert.equal(tree.root.findByType('McOverlay').props.framesOn, false, name);
+      await update({ active: false });
+      assert.equal(camera(tree).props.isActive, false, name);
+      await update({ active: true });
+      assert.equal(camera(tree).props.isActive, true, name);
+    } finally {
+      await unmount(tree);
+    }
+  }
+});
+
+test('Main Character: capture(press) hands the flipped selfie, the faces, the view size and press to the look\'s bake, and passes its error on', async () => {
+  const faces = [{ pts: [10, 20], blinkLeft: 0, blinkRight: 0, smile: 0, light: [], lightAt: 0 }];
+  const { SoftGlowCamera, baked, flips, mesh } = loadSoftGlow({ mirrored: false, tracked: faces });
+  const seen = [];
+  const { look, baked: posters } = mcLook({ onFaces: (next) => seen.push(next) });
+  const { tree, ref } = await renderSoftGlow(SoftGlowCamera, { custom: look }, { nodeMock: { preview: {} } });
+  try {
+    const root = tree.root.findAll((node) => typeof node.props.onLayout === 'function' && node.type === 'View')[0];
+    await act(async () => { root.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 844 } } }); });
+    // The face finder sees a face: the look hears about it on the JS thread.
+    await act(async () => { mesh.onFaces([]); });
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0], faces);
+    const press = { scene: 'the scene copied at the press' };
+    let result;
+    await act(async () => { result = await ref.current.capture(press); });
+    assert.deepEqual({ ...result }, { uri: 'file:///poster.jpg' });
+    // The selfie camera's photo wasn't mirrored by the camera, so it was flipped like the screen.
+    assert.deepEqual(flips, ['h']);
+    assert.equal(posters.length, 1);
+    assert.equal(posters[0].uri, 'file:///saved.jpg');
+    assert.equal(posters[0].faces, faces);
+    assert.deepEqual(posters[0].view, { width: 390, height: 844 });
+    assert.equal(posters[0].press, press);
+    assert.equal(baked.length, 0, 'never the face filters\' bake');
+  } finally {
+    await unmount(tree);
+  }
+  // A bake that fails: the error reaches the screen (no plain photo instead).
+  const failing = loadSoftGlow();
+  const { look: broken } = mcLook({ bake: async () => { throw new Error('no face'); } });
+  const other = await renderSoftGlow(failing.SoftGlowCamera, { custom: broken });
+  try {
+    await assert.rejects(() => other.ref.current.capture({}), /no face/);
+    assert.equal(failing.baked.length, 0);
+  } finally {
+    await unmount(other.tree);
+  }
+  // A look whose face listener throws never stops the faces.
+  const loud = loadSoftGlow({ tracked: faces });
+  const { look: throwing } = mcLook({ onFaces: () => { throw new Error('listener broke'); } });
+  const third = await renderSoftGlow(loud.SoftGlowCamera, { custom: throwing }, { nodeMock: { preview: {} } });
+  try {
+    await quietly(() => act(async () => { loud.mesh.onFaces([]); }));
+    assert.equal(third.tree.root.findByType('McOverlay').props.faces.value, faces);
+  } finally {
+    await unmount(third.tree);
+  }
+});
+
+test('Main Character: the readout line shows on the testing channel while its camera pictures are in use', async () => {
+  const { SoftGlowCamera } = loadSoftGlow({ channel: 'testing' });
+  const { look } = mcLook();
+  const { tree, update } = await renderSoftGlow(SoftGlowCamera, { custom: look });
+  try {
+    assert.equal(tree.root.findAllByType('WarpDiagnostics').length, 1);
+    await update({ active: false });
+    assert.equal(tree.root.findAllByType('WarpDiagnostics').length, 0);
+  } finally {
+    await unmount(tree);
   }
 });
 

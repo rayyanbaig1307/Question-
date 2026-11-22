@@ -48,7 +48,7 @@ const skiaModule = {
   Skia: hostProxy('Skia'),
   BlurStyle: { Normal: 0, Solid: 1, Outer: 2, Inner: 3 }, ClipOp: { Difference: 0, Intersect: 1 }, FillType: { Winding: 0, EvenOdd: 1 },
   PaintStyle: { Fill: 0, Stroke: 1 }, TileMode: { Clamp: 0, Repeat: 1, Mirror: 2, Decal: 3 }, StrokeCap: { Butt: 0, Round: 1, Square: 2 },
-  StrokeJoin: { Miter: 0, Round: 1, Bevel: 2 },
+  StrokeJoin: { Miter: 0, Round: 1, Bevel: 2 }, FilterMode: { Nearest: 0, Linear: 1 }, MipmapMode: { None: 0, Nearest: 1, Linear: 2 },
 };
 
 // Loads a file the way the app's bundle does, following its imports of files next to it.
@@ -61,6 +61,8 @@ function load(file) {
     if (id === '@shopify/react-native-skia') return skiaModule;
     if (id === '@/lib/faceMesh') return load(join(root, 'src/lib/faceMesh.ts'));
     if (id === '@/lib/goldenLight') return load(join(root, 'src/lib/goldenLight.ts'));
+    if (id === '@/lib/mainCharacter/config') return load(join(root, 'src/lib/mainCharacter/config.ts'));
+    if (id === '@/lib/frameAccess') return { FRAME_PLACEMENT: 'rule' };
     if (id === 'react') return { useEffect() {}, useMemo: (f) => f(), useRef: (v) => ({ current: v }) };
     if (id === 'react-native') return { TurboModuleRegistry: { get: () => null } };
     if (id.startsWith('.')) return load(`${join(dirname(file), id)}.ts`);
@@ -230,4 +232,85 @@ it('FrameFeed\'s small sums give the same answers on the drawing thread', () => 
 
 it('an unknown look stops with a clear error on the drawing thread too (not a quiet stand-in)', () => {
   expect(() => paintUI(hostProxy('canvas'), 'nope', [face], 390, 844, 1)).toThrow(/Unknown face filter/);
+});
+
+// Main Character Mode 🌆 (src/components/mainCharacter): the poster is drawn on the drawing thread every frame
+// (paintScene.ts, through MainCharacterOverlay) and the saved poster from the screen is made there too
+// (snapPoster.ts). Both must run there exactly as on the app's main thread (where the photo poster is made), and
+// the sums that place your face must give the same numbers on both threads.
+it('Main Character: the poster drawing, the snapshot and the face fit run on the drawing thread exactly as on the main thread', () => {
+  const fitJS = load(join(root, 'src/components/mainCharacter/fit.ts'));
+  const paintJS = load(join(root, 'src/components/mainCharacter/paintScene.ts'));
+  const snapJS = load(join(root, 'src/components/mainCharacter/snapPoster.ts'));
+  const fitUI = toUI(fitJS);
+  const paintUI2 = toUI(paintJS);
+  const snapUI = toUI(snapJS);
+  // An invented character: the face hole round (0.5, 0.2) of the picture.
+  const hole = [];
+  for (let k = 0; k < 36; k++) {
+    const a = -Math.PI / 2 + (k / 36) * Math.PI * 2;
+    hole.push([0.5 + 0.13 * Math.cos(a), 0.2 + 0.08 * Math.sin(a)]);
+  }
+  const anchors = { eyes: [[0.444, 0.17], [0.556, 0.17]], nose: [0.5, 0.205], chin: [0.5, 0.265], forehead: [0.5, 0.11], hole, faceWidth: 0.25, skinTone: [204, 153, 102], toneSure: true };
+  const art = fitJS.placeArt(anchors);
+  expect(fitUI.placeArt(anchors)).toEqual(art);
+  const fit = fitJS.faceFit(face.pts, art);
+  expect(fit).not.toBeNull();
+  expect(fitUI.faceFit(face.pts, art)).toEqual(fit);
+  expect(fitUI.fitMatrix(fit)).toEqual(fitJS.fitMatrix(fit));
+  expect(fitUI.liteTransform(fit, 390, 844)).toEqual(fitJS.liteTransform(fit, 390, 844));
+  expect(fitUI.liteTransform(fit, 0, 844)).toBeNull();
+  expect(fitUI.posterToView(390, 844)).toEqual(fitJS.posterToView(390, 844));
+  expect(fitUI.coverCrop(1200, 1920, 9 / 16)).toEqual(fitJS.coverCrop(1200, 1920, 9 / 16));
+  expect(fitUI.biggestFace([face])).toEqual(face);
+  expect(fitUI.scaleAround([0, 0, 2, 0, 2, 2], 2)).toEqual(fitJS.scaleAround([0, 0, 2, 0, 2, 2], 2));
+  expect(fitUI.mapPoints([2, 0, 1, 0, 2, 1], [1, 1])).toEqual([3, 3]);
+
+  const crop = { x: 0, y: 0, w: 1080, h: 1920 };
+  const scene = { key: 'app:test|app:test', character: hostProxy('character'), characterCrop: crop, background: hostProxy('background'), backgroundCrop: crop, art };
+  const drawWith = (paint, args) => {
+    calls.length = 0;
+    const trash = [];
+    paint(hostProxy('canvas'), scene, ...args, trash);
+    return { draws: calls.filter((c) => c.startsWith('canvas.')).length, all: [...calls], trash: trash.length };
+  };
+  const camera = { image: hostProxy('camera'), toView: [0.5, 0, 0, 0, 0.5, 0], mipmaps: false };
+  for (const args of [
+    [face, fit, camera, true, hostProxy('fx')], // full, live
+    [face, fit, camera, false, hostProxy('fx')], // full, the saved poster
+    [face, fit, camera, true, null], // full without the comic look
+    [face, fit, null, true, hostProxy('fx')], // lite
+    [null, null, null, true, hostProxy('fx')], // no face
+  ]) {
+    let js;
+    let ui;
+    expect(() => { js = drawWith(paintJS.paintMainCharacter, args); }).not.toThrow();
+    expect(() => { ui = drawWith(paintUI2.paintMainCharacter, args); }).not.toThrow();
+    expect(ui).toEqual(js);
+    expect(ui.draws).toBeGreaterThan(0);
+    expect(ui.trash).toBeGreaterThan(0);
+  }
+  // The full drawing uses the camera picture and the comic look on the drawing thread.
+  const full = drawWith(paintUI2.paintMainCharacter, [face, fit, camera, true, hostProxy('fx')]);
+  expect(full.all).toContain('camera.makeShaderOptions');
+  expect(full.all).toContain('fx.makeShaderWithChildren');
+
+  // The snapshot: drawn off screen, handed back as a plain copy, the same calls on both threads.
+  const shot = { image: hostProxy('shot'), w: 1920, h: 1440, turn: 270, mirror: true, label: 90, front: true };
+  const view = { width: 390, height: 844 };
+  calls.length = 0;
+  const snapJsOut = snapJS.snapPoster(scene, [face], shot, view, null, hostProxy('fx'));
+  const jsCalls = [...calls];
+  calls.length = 0;
+  let snapUiOut;
+  expect(() => { snapUiOut = snapUI.snapPoster(scene, [face], shot, view, null, hostProxy('fx')); }).not.toThrow();
+  expect(snapUiOut).not.toBeNull();
+  expect(snapJsOut).not.toBeNull();
+  expect(calls).toEqual(jsCalls);
+  expect(calls).toContain('Skia.Surface.MakeOffscreen');
+  expect(calls).toContain('Skia.Surface.MakeOffscreen().makeImageSnapshot().makeNonTextureImage');
+  expect(calls).toContain('shot.makeShaderOptions');
+  // No face, no picture: nothing made.
+  expect(snapUI.snapPoster(scene, [], shot, view, null, null)).toBeNull();
+  expect(snapUI.snapPoster(scene, [face], null, view, null, null)).toBeNull();
 });

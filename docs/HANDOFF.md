@@ -37,6 +37,35 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Main Character Mode 🌆 Phase 1 – art approved, committed, testing channel only (22 Nov)
+
+- **What:** your face in a comic poster. Home camera → 🌆 bubble (after 🤪 Googly) → its own screen
+  (`/main-character`): 6 characters + 6 scenes in the iPhone update, swipe for characters, 🌴 for scenes, shutter →
+  the banner → Share / Save / My story / Send. New characters and scenes can be added online (Supabase bucket
+  `main-character`, two files from the art script's `online` step). Photos that **leave** the app (share sheet, Save
+  to Photos – also the editor's Keep and Keeps → Save) now get the small Peekaboo wordmark through
+  `src/lib/shareOut.ts`, the only exit; story and friend sends stay clean. No new native code: one OTA for builds
+  10, 12 and 13. Owner page: `docs/MAIN_CHARACTER.md`; developer notes: `docs/FACE_MESH.md` "Main Character Mode";
+  phone checks: `docs/TESTING.md` **Step 71**.
+- **Status:** the owner approved all 12 pictures on 22 Nov ("approve all"), so code, art, tests and docs are
+  committed. A separate adversarial review found 12 small bugs; all are fixed with tests. The full local suite,
+  typecheck, lint and the web export pass (`tests/README.md`, "Latest results"). The masters live outside the repo
+  (~80 MB); re-making the app art needs the `bundle` step with mediapipe (not on the system Python – use a separate
+  venv).
+- **Testing channel only:** `MAIN_CHARACTER_FOR_EVERYONE = false` (`src/lib/mainCharacter/config.ts`), like lives.
+  Turn it on (its own OTA, testing first, then `production`, never during an Apple review) only when App Store 1.1
+  (build 12) is approved and released, the owner gave the final yes in writing on the banner words, and Step 71
+  passed.
+- **Banner words:** MISSION PASSED / +RESPECT – the owner's own words (`MISSION_TITLE`, `MISSION_REWARD`); they give
+  the final yes on them before it goes to everyone. Mall Cop keeps "SECURITY" on its patch (owner's choice).
+- **Database:** `20261231000000_main_character.sql` (public read-only bucket, 1.5 MB, logged-in users can list) is
+  tested locally only. Apply it with the owner's Allow pop-up (or a copy page) when shipping. Not a blocker:
+  without it the app shows the bundled art only.
+- **Ship order:** commit → OTA to `testing` (load `.env`, `--clear-cache`, strings check) → open the app on build
+  13 → Step 71 → later the switch above.
+- **Still open for the owner:** banner words final yes; logo spot (top left) and the logo on the Main
+  Character screen; videos leave without the logo until the Phase 2 download (1.3).
+
 ## LIVE on the App Store app (21 Nov, owner's "push everything to the live app except livestreams")
 
 - **Production OTA `e04182a6-e4a2-4ecf-b879-80ea519a8e81`** (iOS, branch `production`) from `93b8bb4`; the same

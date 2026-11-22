@@ -98,3 +98,31 @@ test('editing the caption inside the final profile preview cannot bypass the con
     assert.equal(screen.calls.alerts[0][0], 'Caption not allowed');
   } finally { await unmount(tree); }
 });
+
+// 🌆 Main Character Mode's "Send" opens Send to… to pick friends: My Story starts unticked there. Its "My story"
+// (no `pick`) and every other way in stay as they were.
+test('pick=friends starts with My Story not ticked; without it My Story is ticked as before', async () => {
+  const states = {};
+  for (const [name, params] of [['friends', { uri: 'file:///qa-poster.jpg', pick: 'friends' }], ['story', { uri: 'file:///qa-poster.jpg' }], ['other', { uri: 'file:///qa-poster.jpg', pick: 'something-else' }]]) {
+    const sent = { stories: 0, snaps: [] };
+    const screen = loadScreen('src/app/(app)/share.tsx', {
+      'expo-router': { router: { dismissTo() {}, push() {}, back() {} }, useLocalSearchParams: () => params },
+      '@/lib/friends': { fetchFriends: async () => [{ id: 'bob', username: 'bob', display_name: 'Bob' }] },
+      '@/lib/stories': { createStory: async () => { sent.stories++; } },
+      '@/lib/chat': { sendSnap: async (...args) => { sent.snaps.push(args); } },
+    });
+    const tree = await renderScreen(screen);
+    try {
+      states[name] = option(tree, 'My Story').props.accessibilityState.checked;
+      if (name === 'friends') {
+        assert.equal(button(tree, /^Send to|^Pick where/).props.title, 'Pick where it goes');
+        // Pick a friend and send: a peek to Bob, nothing on the story.
+        await act(() => option(tree, 'Bob').props.onPress());
+        await act(() => button(tree, /^Send to/).props.onPress());
+        assert.equal(sent.snaps.length, 1);
+        assert.equal(sent.stories, 0);
+      }
+    } finally { await unmount(tree); }
+  }
+  assert.deepEqual(states, { friends: false, story: true, other: true });
+});

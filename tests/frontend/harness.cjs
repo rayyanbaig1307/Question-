@@ -256,6 +256,12 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     },
     // The list of face filters (no imports, so the real file is used).
     '@/lib/lensLooks': loadPure('src/lib/lensLooks.ts'),
+    // 🌆 Main Character Mode's switches (no imports, so the real file is used), and the update channel: the real
+    // file, which finds no channel here (like Expo Go), so the 🌆 bubble is off unless a test says otherwise.
+    '@/lib/mainCharacter/config': loadPure('src/lib/mainCharacter/config.ts'),
+    '@/lib/lensDiagnostics': loadPure('src/lib/lensDiagnostics.ts'),
+    // Sending pictures out of the app (share sheet, Save to Photos): not possible here unless a test says so.
+    '@/lib/shareOut': { CAN_SHARE_FILES: false, saveOut: async () => 'not-possible', shareOut: async () => 'not-possible' },
     // The camera's own pixels for the 4 stretchy face filters: not on this download by default (like App Store
     // build 10, TestFlight 7–9, old APKs and Expo Go), so every screen looks the way it does there. Tests for the
     // new build pass their own frameAccessMock(true).

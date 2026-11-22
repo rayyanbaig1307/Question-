@@ -76,3 +76,74 @@ it('every hook that only listens to a shared value opts out of the React Compile
   );
   expect(problems).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// Main Character Mode 🌆
+// ---------------------------------------------------------------------------
+
+// The same rule, compiled from text (used below to compile a file with its 'use no memo' taken out).
+function compiledText(code, file) {
+  return babel.transformSync(code, {
+    presets: [['babel-preset-expo', { 'react-compiler': {} }]],
+    filename: file,
+    babelrc: false,
+    configFile: false,
+    caller: { name: 'metro', platform: 'ios', bundler: 'metro', supportsReactCompiler: true },
+  }).code;
+}
+
+// The list of characters and scenes, and the decoded-picture cache, answer from module state that changes behind
+// the scenes (a new online picture is ready, a picture finished decoding). With the compiler's memory the screen
+// would keep the first answer for good. Often these hooks are the only thing in their file the compiler would
+// touch, so this also checks that the compiler WOULD memoise them without the directive – otherwise "not
+// memoised" would prove nothing.
+it.each([
+  ['src/lib/mainCharacter/library.ts', 'useMainCharacterLibrary'],
+  ['src/components/mainCharacter/artCache.ts', 'useArtImages'],
+])('%s %s is not memoised by the React Compiler', (file, name) => {
+  expect(body(compiled(file), name)).not.toMatch(/_compilerRuntime\.c\)\(/);
+  const source = readFileSync(file, 'utf8');
+  expect(source, `${name} has the 'use no memo' line`).toMatch(/^\s*['"]use no memo['"];?\s*$/m);
+  const withoutOptOut = source.replace(/^\s*['"]use no memo['"];?\s*$/m, '');
+  expect(body(compiledText(withoutOptOut, file), name)).toMatch(/_compilerRuntime\.c\)\(/);
+});
+
+// SoftGlowCamera draws a custom look's Overlay and CameraWrap (section "custom" in SoftGlowCamera.tsx). Each must be
+// made once, at the top of its file: a component made inside another component is a brand-new component on every
+// redraw, so React would throw its drawing away and start again each time (and the compiler can't help).
+const ts = require('typescript');
+
+// The top-level names a file declares (function declarations and `const X = …`), and every component-like
+// function (a name starting with a capital letter) that is made inside another function.
+function componentShape(file) {
+  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const topLevel = new Set();
+  for (const statement of source.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) topLevel.add(statement.name.text);
+    if (ts.isVariableStatement(statement)) {
+      for (const d of statement.declarationList.declarations) if (ts.isIdentifier(d.name)) topLevel.add(d.name.text);
+    }
+  }
+  const nested = [];
+  const isFunction = (node) => ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node);
+  const visit = (node, insideFunction) => {
+    if (insideFunction) {
+      const named = ts.isFunctionDeclaration(node) && node.name ? node.name.text
+        : ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && isFunction(node.initializer)
+          ? node.name.text : null;
+      if (named && /^[A-Z]/.test(named)) nested.push(`${named} (line ${source.getLineAndCharacterOfPosition(node.getStart()).line + 1})`);
+    }
+    ts.forEachChild(node, (child) => visit(child, insideFunction || isFunction(node)));
+  };
+  visit(source, false);
+  return { topLevel, nested };
+}
+
+it.each([
+  ['src/components/mainCharacter/MainCharacterOverlay.tsx', 'MainCharacterOverlay'],
+  ['src/components/mainCharacter/CameraFollow.tsx', 'CameraFollow'],
+])('%s: %s is made at the top of its file, and no component is made inside another one', (file, name) => {
+  const { topLevel, nested } = componentShape(file);
+  expect(topLevel.has(name), `${name} is declared at the top level of ${file}`).toBe(true);
+  expect(nested).toEqual([]);
+});

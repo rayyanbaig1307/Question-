@@ -113,6 +113,10 @@ Database (PGlite, part of `npm test`):
   a deleted group's chat files and picture go to the daily cleanup (reported ones stay); groups that everyone left
   with the old app are deleted when the migration runs. `tests/api/cleanup-media.test.mjs` covers the group
   pictures in the daily cleanup.
+- `main-character.test.mjs` (`20261231000000_main_character.sql`, Main Character Mode 🌆, 22 Nov): the
+  `main-character` folder is public with the 1.5 MB limit and only webp, png, jpeg and json files; logged-in users
+  can list and see it, visitors can't; nobody can upload, change or delete there from the app; the other folders
+  work as before; running the migration twice is fine and puts the limits back.
 
 API and library (Vitest, part of `npm test`):
 
@@ -181,6 +185,55 @@ API and library (Vitest, part of `npm test`):
     with the new native part; and `markFramesBroken` remembers a failure only when it says so ('remember'), not
     for a camera error ('thisRun'), and after strikes in two different app starts ('strike').
   - `lens-ui-thread.test.mjs` (added to): the four drawn the drawing-thread way, with their trash list.
+- 🌆 Main Character Mode (22 Nov; `src/lib/mainCharacter/`, `src/components/mainCharacter/`):
+  - `main-character-fit.test.mjs`: your eye middles land exactly on the character's for both cameras at many turns
+    and sizes; mirrored eye order is swapped, never flipped; an open mouth or moving irises change nothing; the
+    forehead stretch stays within ±15 %; "cover" on a 390 × 844 screen; `liteTransform` replayed with React
+    Native's rule lands every point where the drawing puts it, and never gives a broken number (NaN, Infinity,
+    zero or negative sizes, 300 random faces).
+  - `main-character-shader.test.mjs` (CanvasKit): the comic look compiles with exactly 17 numbers in the right
+    slots; warm colours, no ink on flat grey, a dark line on a hard edge, banding with no sudden jumps, alpha 1, the
+    gentle tone pull only when asked; `comicEffect` gives null (one warning) when it can't be made.
+  - `main-character-paint.test.mjs`: the one poster drawing on a recording canvas – draw order and counts for full,
+    lite, no face and the photo; the skin draw clipped to an even-odd path; never more than 7 draws or 2 blurs;
+    every Skia object on the trash list, also when a draw fails halfway; the snapshot and the photo bake (the photo
+    shrunk to 1600 px first, a JPEG 92 in the cache, everything freed on failure, no face → exactly `NO_FACE`
+    from `config.ts`, the words the screen looks for); a real CanvasKit poster with the face in the hole.
+  - `main-character-hole.test.mjs`: the face-hole finder on made-up pictures (the biggest closed gap wins, open
+    notches and solid pictures give nothing), the strict shape check (too small, too wide, square, tall, low, off to
+    the side, star-shaped), anchors from the hole, the skin colour (a red collar, dark hair or shade don't move it;
+    not sure with too few skin pixels), names from file names, one file per name.
+  - `main-character-parity.test.mjs`: the app's own hole finder on the 6 bundled characters agrees with the art
+    script (hole overlap over 90 %, eyes and forehead within 5 % of the hole width, skin colour within 30).
+  - `main-character-assets.test.mjs`: the iPhone list names exactly the 12 bundled pictures and the Android/web
+    list is empty; each is 1080 × 1920 and at most 1.5 MB; characters have see-through parts, scenes don't; only
+    picture data in each WebP (no job id, profile, EXIF or XMP); sensible anchors; every character's scene exists.
+  - `main-character-cache.test.mjs`: the art cache hands out only fully read pictures, never lets go of one on
+    screen, in the poster before, held by a poster being made, or left fewer than 2 drawings ago; keeps at most 5;
+    `normaliseArt` refuses pictures too small, too big or not tall enough before decoding anything, and hands back
+    a picture that is already 1080 × 1920 as it is (nothing drawn, encoded, written or deleted);
+    `analyseCharacter` uses a good `.json`, otherwise guesses only usual face holes.
+  - `main-character-library.test.mjs`: the online library – listing filters (types per folder, 1.5 MB, bad and
+    banned names, newest first), the `?v=<etag>` download address with size and md5 checks (a wrong copy is deleted
+    and tried again later), the picture size read from the file's first bytes, at most 3 new pictures per visit,
+    offline from what the phone has, removed pictures go, an online picture replaces a bundled one only once ready,
+    the `.json` wins, never throws; a character and a scene with the same file name get different keys (scenes
+    are `app-scene:` / `online-scene:`); closing and reopening the app lists the folder again on the first visit
+    (within one app start only every 30 minutes); a download the picture step hands back as it is is kept under
+    the library's own name and found again after an app start.
+  - `watermark.test.mjs`, `share-out.test.mjs`, `exit-guard.test.mjs`: pictures leaving the app get the small
+    wordmark top left (a real CanvasKit pixel check too), always as a new file, never the one given; on an iPhone
+    it is drawn on a Display P3 surface (the plain one when that can't be made; never asked for on Android), and a
+    real CanvasKit check shows a wide-colour photo keeps its colours and its colour profile; the share sheet
+    gets only the file (no text), one at a time, Android says "not possible"; Save falls back to the clean file;
+    videos go as they are; nothing ever throws. The exit guard (TypeScript scan of `src`) allows only
+    `lib/shareOut.ts` to save to Photos, share a file, or use the Photos or sharing packages.
+  - `banned-words.test.mjs`: none of the owner's banned words (only their fingerprints are in the repo) in any file,
+    file or folder name, text inside a picture (PNG, WebP, JPEG text parts, never the picture data) or commit
+    message; a failure names the file and line, never the word.
+  - Added to: `compiler-hooks.test.mjs` (`useMainCharacterLibrary` and `useArtImages` are not memoised;
+    `MainCharacterOverlay` and `CameraFollow` are made at the top of their files) and `lens-ui-thread.test.mjs`
+    (the poster drawing, the snapshot and the fit give the same calls on the drawing thread).
 - Changed: `edge-security.test.mjs` (word filter in username sign-up: a display name may swear, a slur in it
   or swearing in the username is refused before any account is made, with the same message as the app),
   `apple-deletion.test.mjs` (a password-only account that sends an Apple code is now deleted, still without
@@ -296,6 +349,38 @@ Frontend (rendered screens, part of `npm test`):
     once and goes on air, and a viewer connects once (these fail with the code before the third review); Home
     during the 3·2·1 sends nothing until you're back; another screen on top clears "live now"; the camera is
     given back only after LiveKit's camera stopped; a restart waits for "I've left" to reach the server.
+- 🌆 Main Character Mode (22 Nov):
+  - `main-character.test.cjs`: the page says "needs the newest Peekaboo app on an iPhone" on Android, the website,
+    without face tracking, on `production` and with no channel; the screen file is never loaded without face
+    tracking; the Peekaboo+ gate.
+  - `main-character-studio.test.cjs`: swiping (round and round), each character's own scene vs a picked one, 🌴,
+    flip; swipes, 🌴 and flip do nothing while the poster is made and on the result; the camera stays on from the
+    press until the result; the no-face toast (also when the photo bake says `NO_FACE`); capture → banner →
+    result, an error → toast and back to live; hold for "videos are coming soon"; Share and Save get the clean
+    poster; My story / Send open *Send to…*; the logo on the live and finished poster; while a live holds the
+    camera no camera is drawn, and afterwards the face counts as gone until the new camera sees one; the last
+    character is remembered (a 🌴 pick from last time only until the first swipe); with nothing remembered the
+    first character stays when online art arrives in front of it; a storage read that doesn't answer in time
+    writes nothing; VoiceOver's adjustable "Character" element; the close button's room above the finished
+    poster (with the real SafeEdge); the hint for 3 visits; the FULL/LITE pill on `testing` only; the banner's
+    words only from config.
+  - `main-character-camera.test.cjs`: the scene is copied at the press (swiping meanwhile doesn't change the
+    poster), the screen snapshot is used when it answers and the photo when it says nothing or is late, the
+    pictures are held until done, `NO_FACE` ('no-face') without a face in the last second; a character and a
+    scene with the same file name are both read and the scene's own picture is drawn behind.
+  - `main-character-overlay.test.cjs`: each drawing is let go of two drawings later and the last two on close; the
+    first (JS thread) drawing never uses the camera picture; the size comes from `viewSize`; the drawing count goes
+    up; a failing frame pauses the camera part; the lite camera move never gets a broken number.
+  - `camera-main-character.test.cjs` (the real ModeDial in CameraPage): parking on 🌆 gives the orange ring and the
+    card with no page opening; the shutter (tap and hold), the card and the bubble open `/main-character` and take
+    no photo or video; chat cameras never have 🌆; the Peekaboo+ variant.
+  - Added to: `mode-dial.test.cjs` (🌆 after Googly only on iPhone + face tracking + `testing`; never in chat rows;
+    settling never opens a page, a tap does, also a second tap), `frame-feed.test.cjs` (with the Main Character
+    look: FrameFeed from the start, the camera set up once, starting without camera pictures after the wait, a camera
+    error or failing pictures never strike or remember anything against the stretchy filters), `editor.test.cjs`
+    (Keep: Keeps gets the clean picture, Photos gets it through `saveOut`; the Keeps viewer's Save to Photos) and
+    `share.test.cjs` (`pick=friends` starts with My Story not ticked). `harness.cjs` loads the real
+    `lib/mainCharacter/config.ts` and `lib/lensDiagnostics.ts` (no channel, so no 🌆) and a `lib/shareOut` stand-in.
 
 ## Real PostgreSQL and HTTP tests (Windows and Linux)
 
@@ -568,6 +653,28 @@ lint and `npx expo install --check`: no problems. The new checks for the review 
 code before the fixes and failed there (two-face shaders, trash list on a failing frame, camera errors, camera
 flip). Nobody has seen the 4 on a phone yet (TESTING Step 68 needs the new build); the REST, rehearsal,
 concurrency and browser runs were not repeated (no database or server change).
+
+Re-run on 2026-11-22, with Main Character Mode 🌆 Phase 1 in the checkout (the new files are
+listed above under 🌆): `npm test` node part 1043 passed, 0 failed, 0 skipped (frontend 637, database 406), and
+the Vitest part 79 files, 1191 passed. Type check and lint: no errors. The web export (`node tests/browser/build.mjs`)
+passes and the `main-character` page bundles with no character art in it. Browser (`npx playwright test`): 69
+passed, 12 failed – the same 12 fail on a clean copy of the last commit, so they are older than this work: the
+"bottom tabs" check still expects the app to open on the camera (it opens on Home since 7 Nov) and the website's
+index and 404 checks predate the new landing page (13 Nov); they need updating. `npx expo install --check` lists
+newer patch versions published since the versions were pinned; no package file changed in this work. The REST,
+rehearsal and concurrency runs were not repeated (the only database change is the new bucket, covered by
+`tests/database/main-character.test.mjs`).
+
+Re-run on 2026-11-22, after the Main Character review fixes (online art already 1080 × 1920 used as it is; the
+photo bake's "no face" now gives the "look at the camera" message; scenes have their own keys; the folder is
+listed again after each app start; a 🌴 pick from last time only until the first swipe; the first character stays
+when online art arrives; a slow phone storage is never written over; the face counts as gone after a live hands
+the camera back; VoiceOver can change the character; room for ✕ on the finished poster; the wordmark drawn in
+Display P3 on iPhones): `npm test` node part 1050 passed, 0 failed, 0 skipped, and the Vitest part 79 files, 1201
+passed. Type check and lint: no errors. The web export (`node tests/browser/build.mjs`) passes. The new checks in
+`main-character-library`, `main-character-paint` and `main-character-studio` were also run against the code before
+the fixes and failed there. Browser, REST, rehearsal and concurrency runs were not repeated (no database or website
+change).
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

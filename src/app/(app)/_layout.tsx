@@ -95,6 +95,11 @@ export default function AppLayout() {
         name="live/[id]"
         options={{ animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: colors.black } }}
       />
+      {/* Main Character Mode 🌆: fades in, no swipe-back (a sideways swipe there picks the next character). */}
+      <Stack.Screen
+        name="main-character"
+        options={{ animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: colors.black } }}
+      />
     </Stack>
     {/* Everyone must have agreed to the current Terms of Service. */}
     <TermsGate />

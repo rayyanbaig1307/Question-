@@ -10,8 +10,9 @@ import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
-import { CAN_SAVE_TO_PHOTOS, deleteKeep, downloadKeepFile, fetchKeeps, saveToPhotos, type Keep } from '@/lib/keeps';
+import { CAN_SAVE_TO_PHOTOS, deleteKeep, downloadKeepFile, fetchKeeps, type Keep } from '@/lib/keeps';
 import { useMediaUrls } from '@/lib/media';
+import { saveOut } from '@/lib/shareOut';
 import { colors, space } from '@/theme';
 
 // One keep, full screen: save it to Photos, post it again, or delete it.
@@ -31,13 +32,16 @@ export default function KeepViewer() {
 
   const mediaUrl = keep ? urls[keep.media_path] : undefined;
 
+  // The copy in Photos leaves the app, so a photo gets the small Peekaboo wordmark (lib/shareOut.ts). The keep
+  // itself stays clean.
   async function toPhotos() {
     if (!keep || !mediaUrl) return;
     setBusy('photos');
     try {
       const local = await downloadKeepFile(mediaUrl, `keep-${keep.id}.${keep.media_type === 'video' ? 'mp4' : 'jpg'}`);
-      const ok = await saveToPhotos(local);
-      showToast(ok ? 'Saved to Photos ✅' : 'Peekaboo needs permission to save to Photos');
+      const saved = await saveOut(local, keep.media_type === 'video' ? 'video' : 'photo');
+      if (saved === 'not-possible') Alert.alert('Could not save', "Your phone couldn't save it to Photos. Try again!");
+      else showToast(saved === 'saved' ? 'Saved to Photos ✅' : 'Peekaboo needs permission to save to Photos');
     } catch (error) {
       Alert.alert('Could not save', friendlyError(error));
     } finally {
