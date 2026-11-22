@@ -246,8 +246,9 @@ and the owner's standing preferences.
   24 h); no link/phone in your name or username while you post (`private.check_public_chat_name`, photos too); a
   repeat report of the same photo/message is skipped (no second push); a private copy of every public chat report
   is kept 90 days in `private.public_chat_report_copies` even if the account is deleted; a nightly pg_cron job
-  `peekaboo-public-chat-tidy` clears both. Phone check: `docs/TESTING.md` **Step 72**. Status: (fill in – migration live?
-  testing OTA id? production OTA id?)
+  `peekaboo-public-chat-tidy` clears both. Phone check: `docs/TESTING.md` **Step 72**. Status (22 Nov): `testing` update
+  `59a1a95c` from `4e640f9`; the migration is NOT live yet (waiting for the owner's Allow) – until then the app
+  shows the photos-only room. Production only after the owner has run Step 72.
 
 ## Now (9 Nov): Peekaboo 1.0 is LIVE on the App Store; group Guess Who, invite links and face filters
 
