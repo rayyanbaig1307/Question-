@@ -2,9 +2,54 @@ import { randomUUID } from 'expo-crypto';
 
 import { todayDareDay } from './dares';
 import { timeZoneOffsetMinutes } from './drop';
+import { serverFailure } from './errors';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
-import type { Audience, Post, PostWithAuthor, Story } from './types';
+import type { Audience, MediaFields, Post, PostWithAuthor, Story } from './types';
+
+// What a new post row says (the photo or video is already uploaded). Used by createPost and by the outbox
+// (lib/outbox.ts), which gives the post its id on the phone before the first try.
+export type NewPost = {
+  fields: MediaFields;
+  blurPath?: string | null;
+  caption: string;
+  audience?: Audience;
+  dare?: boolean;
+  drop?: boolean;
+  rewind?: boolean;
+  forfeit?: string;
+};
+
+function postRow(userId: string, post: NewPost) {
+  return {
+    user_id: userId,
+    ...post.fields,
+    caption: post.caption.trim(),
+    audience: post.audience ?? 'everyone',
+    ...(post.dare ? { dare_day: todayDareDay() } : {}),
+    ...(post.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: post.blurPath ?? null } : {}),
+    ...(post.drop && post.rewind ? { drop_rewound: true } : {}),
+    ...(post.forfeit ? { forfeit_id: post.forfeit } : {}),
+  };
+}
+
+// Saves a post with the id given. For a drop, the server stamps On time / Late at this very moment.
+export async function insertPost(userId: string, post: NewPost & { id: string }): Promise<Post> {
+  const { data, error, status } = await supabase
+    .from('posts')
+    .insert({ id: post.id, ...postRow(userId, post) })
+    .select('*')
+    .single();
+  if (error) throw serverFailure(error, status);
+  return data as Post;
+}
+
+// One of your posts by id (null if it isn't there).
+export async function findPost(postId: string): Promise<Post | null> {
+  const { data, error, status } = await supabase.from('posts').select('*').eq('id', postId).maybeSingle();
+  if (error) throw serverFailure(error, status);
+  return (data as Post | null) ?? null;
+}
 
 // `dare: true` tags the post as your answer to today's Daily Dare.
 // `drop: true` makes it your Peekaboo drop for today (the database works out if it was on time).
@@ -22,16 +67,7 @@ export async function createPost(
     if (options.drop && stillUri) blurPath = await uploadMedia(userId, 'blurs', await makeBlurPreview(stillUri));
     const { data, error } = await supabase
       .from('posts')
-      .insert({
-        user_id: userId,
-        ...fields,
-        caption: caption.trim(),
-        audience: options.audience ?? 'everyone',
-        ...(options.dare ? { dare_day: todayDareDay() } : {}),
-        ...(options.drop ? { drop_offset_minutes: timeZoneOffsetMinutes(), blur_path: blurPath } : {}),
-        ...(options.drop && options.rewind ? { drop_rewound: true } : {}),
-        ...(options.forfeit ? { forfeit_id: options.forfeit } : {}),
-      })
+      .insert(postRow(userId, { fields, blurPath, caption, ...options }))
       .select('*')
       .single();
     if (error) throw error;

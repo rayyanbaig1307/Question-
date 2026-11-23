@@ -46,8 +46,13 @@ export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
     reloadProfile.current = refreshProfile;
   }, [profile, refreshProfile]);
 
+  // Known on this phone to have agreed to the Terms: they finished making their account, so no waiting – and no
+  // question to the server at all (one less request when the app opens; the Terms page still checks the current
+  // version by itself).
+  const cachedDone = !!userId && knownAgreedAny(userId);
+
   useEffect(() => {
-    if (!userId || !social) return;
+    if (!userId || !social || cachedDone) return;
     let cancelled = false;
     let answered = false;
     // Taking too long counts as "couldn't check" (a request can hang forever on Android). If the real answer
@@ -75,7 +80,7 @@ export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [userId, social, attempt]);
+  }, [userId, social, attempt, cachedDone]);
 
   const current = userId && social && answer?.user === userId ? answer : null;
   const failed = current?.failed ?? false;
@@ -93,8 +98,6 @@ export function useNeedsSetup(): [boolean | null, () => void, SetupCheck] {
     return () => subscription.remove();
   }, [failed, retry]);
 
-  // Known on this phone to have agreed to the Terms: they finished making their account, so no waiting.
-  const cachedDone = !!userId && knownAgreedAny(userId);
   const needed = !userId || !social ? false : current && !(cachedDone && current.failed) ? current.needed : cachedDone ? false : null;
   return [needed, () => userId && setAnswer({ user: userId, needed: false, failed: false }), { failed, checking: retrying, retry }];
 }

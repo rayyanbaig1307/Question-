@@ -144,6 +144,59 @@ function livesMock(overrides = {}) {
   };
 }
 
+// A working stand-in for src/lib/outbox.ts (the sends that go out in the background): sendLater adds a job that
+// screens see through useOutbox, so a test can check what shows while it's "Sending…". `set(key, changes)` moves a
+// job on (for example to { state: 'failed', error: … }); `finish(key, rows)` marks it sent and tells the screens.
+function outboxStore() {
+  let jobs = [];
+  let count = 0;
+  const listeners = new Set();
+  const done = new Set();
+  const calls = { sendLater: [], queueShare: [], retry: [], discard: [], ackSent: [], visible: [] };
+  const emit = () => listeners.forEach((listener) => listener());
+  const subscribe = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
+  const inScope = (job, scope) => job.scope === scope || (scope.startsWith('friend:') && job.what.kind === 'peek' && job.what.friendIds.includes(scope.slice(7)));
+  const store = {
+    calls,
+    jobs: () => jobs,
+    sendLater(owner, scope, what, extra = {}) {
+      calls.sendLater.push([owner, scope, what, extra]);
+      const job = { key: `job-${++count}`, owner, scope, what, state: 'sending', rowIds: [`row-${count}`], maybeSaved: false, attempts: 1, createdAt: 0, ...extra };
+      jobs = [...jobs, job];
+      emit();
+      return job.key;
+    },
+    queueShare(owner, plan, prepared) {
+      calls.queueShare.push([owner, plan, prepared]);
+      return { group: 'group-1', postId: plan.post ? 'post-1' : null, postJob: plan.post ? 'job-post' : null };
+    },
+    set(key, changes) { jobs = jobs.map((job) => (job.key === key ? { ...job, ...changes } : job)); emit(); },
+    finish(key, rows = []) {
+      store.set(key, { state: 'sent', rows });
+      const job = jobs.find((entry) => entry.key === key);
+      done.forEach((listener) => listener(job));
+    },
+    useOutbox(owner, scope) {
+      const all = React.useSyncExternalStore(subscribe, () => jobs);
+      return all.filter((job) => job.owner === owner && (!scope || inScope(job, scope)));
+    },
+    useOutboxJob: (key) => React.useSyncExternalStore(subscribe, () => jobs.find((job) => job.key === key) ?? null),
+    retry: (key) => { calls.retry.push(key); },
+    discard: async (key) => { calls.discard.push(key); jobs = jobs.filter((job) => job.key !== key); emit(); },
+    ackSent: (key) => { calls.ackSent.push(key); jobs = jobs.filter((job) => job.key !== key); emit(); },
+    whenSent: async (key) => ({ key, state: 'sent' }),
+    outboxBusy: () => jobs.some((job) => job.state === 'sending' || job.state === 'waiting'),
+    setVisibleScope: (scope) => { calls.visible.push(scope); },
+    getVisibleScope: () => null,
+    onOutboxDone: (listener) => { done.add(listener); return () => done.delete(listener); },
+    inScope,
+    groupSize: () => 1,
+    restoreOutbox: async () => {},
+    useDropSending: () => null,
+  };
+  return store;
+}
+
 function host(name) {
   return function Host(props) {
     if (name === 'Modal' && !props.visible) return null;
@@ -154,8 +207,10 @@ function host(name) {
 // `timers: 'real'` lets setTimeout really run (after its delay); the default only records the callbacks so a
 // test can run them by hand (timer number n is calls.timers[n - 1]; a timer the screen stopped again is in
 // calls.clearedTimers).
+let pendingBubble = null;
+
 function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
-  const calls = { alerts: [], toasts: [], routes: [], timers: [], clearedTimers: new Set(), intervals: new Map(), appState: new Set() };
+  const calls = { alerts: [], toasts: [], routes: [], timers: [], clearedTimers: new Set(), intervals: new Map(), appState: new Set(), outbox: { sendLater: [], queueShare: [] }, preupload: { prepareUpload: [], discardUpload: [], markUsed: [], prepareAvatar: [], discardAvatar: [] } };
   const componentNames = ['Avatar', 'Button', 'DareRulesSheet', 'PostPreview', 'StoryPreview', 'ScreenHeader', 'VideoClip', 'TextField', 'FormScreen', 'EmptyState', 'LegalText', 'KeyboardSafeView', 'StoryAvatar'];
   const modules = {
     react: React,
@@ -182,10 +237,37 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/auth': { useMe: () => ({ userId: 'alice', profile: { id: 'alice', username: 'alice', display_name: 'Alice' } }) },
     '@/lib/errors': { friendlyError: e => e.message || String(e) },
     '@/lib/cleanWords': { checkClean: () => null },
-    '@/lib/friends': { fetchFriends: async () => [] },
-    '@/lib/media': { resizePhoto: async uri => uri },
+    '@/lib/friends': { fetchFriends: async () => [], cachedFriends: () => null, warmFriends() {} },
+    '@/lib/media': { resizePhoto: async uri => uri, videoTooBig: () => false },
     '@/lib/dares': { todayDareDay: () => '2026-11-04', useDare: () => ({ text: 'QA dare' }) },
-    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }) },
+    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }), useMyDropPosts: () => 0 },
+    // 📤 The outbox (sends go out in the background): sends are only recorded here. Tests that need to see
+    // "Sending…" bubbles pass outboxStore().
+    '@/lib/outbox': {
+      sendLater: (...args) => { calls.outbox.sendLater.push(args); return `job-${calls.outbox.sendLater.length}`; },
+      queueShare: (...args) => { calls.outbox.queueShare.push(args); return { group: 'group-1', postId: args[1].post ? 'post-1' : null, postJob: args[1].post ? 'job-post' : null }; },
+      useOutbox: () => [], useOutboxJob: () => null,
+      retry() {}, discard: async () => {}, ackSent() {},
+      whenSent: async (key) => ({ key, state: 'sent' }),
+      outboxBusy: () => false, setVisibleScope() {}, getVisibleScope: () => null,
+      onOutboxDone: () => () => {}, inScope: () => false, groupSize: () => 1, restoreOutbox: async () => {},
+      useDropSending: () => null,
+    },
+    // 📤 Early uploads: recorded, and never finish by themselves.
+    '@/lib/preupload': {
+      prepareUpload: (...args) => { calls.preupload.prepareUpload.push(args); return { key: `early-${calls.preupload.prepareUpload.length}`, owner: args[0], uri: args[1]?.uri, folder: args[2], done: new Promise(() => {}), state: 'uploading' }; },
+      discardUpload: (...args) => { calls.preupload.discardUpload.push(args); },
+      markUsed: (...args) => { calls.preupload.markUsed.push(args); },
+      prepareAvatar: (...args) => { calls.preupload.prepareAvatar.push(args); return { owner: args[0], uri: args[1], path: `${args[0]}/early-avatar.jpg`, done: Promise.resolve(`${args[0]}/early-avatar.jpg`), state: 'uploading' }; },
+      discardAvatar: (...args) => { calls.preupload.discardAvatar.push(args); },
+      markAvatarUsed() {}, cleanLeftoverUploads: async () => {}, avatarReady: (avatar) => avatar.done,
+    },
+    // ⚡ The extras that wait until Home is drawn (lib/startup.ts): already started in these tests, unless a test
+    // passes its own.
+    '@/lib/startup': { useStartupDone: () => true, startupDone: () => true, afterStartup: async () => {}, noteHomeDrawn() {}, subscribeStartup: () => () => {} },
+    // No restart for a new app version while the editor or "Send to…" is open: nothing to do in tests.
+    '@/lib/appUpdates': { useNoRestartWhileOpen() {}, useStayUpToDate() {} },
+    '@/components/OutboxBanner': { SendingPill: host('SendingPill'), OutboxToasts: host('OutboxToasts') },
     '@/lib/legal': { useDareRulesAccepted: () => ({ accepted: true }) },
     '@/lib/chat': { sendSnap: async () => {}, sendChatPhoto: async () => {}, isChatPhoto: () => false },
     '@/lib/posts': { createPost: async () => ({ id: 'qa-post', drop_late_seconds: 0 }) },
@@ -268,6 +350,8 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     // file, which finds no channel here (like Expo Go), so the 🌆 bubble is off unless a test says otherwise.
     '@/lib/mainCharacter/config': loadPure('src/lib/mainCharacter/config.ts'),
     '@/lib/lensDiagnostics': loadPure('src/lib/lensDiagnostics.ts'),
+    // How long and how big a video can be (no imports, so the real file is used).
+    '@/lib/videoLimits': loadPure('src/lib/videoLimits.ts'),
     // Sending pictures out of the app (share sheet, Save to Photos): not possible here unless a test says so.
     '@/lib/shareOut': { CAN_SHARE_FILES: false, saveOut: async () => 'not-possible', shareOut: async () => 'not-possible' },
     // The camera's own pixels for the 4 stretchy face filters: not on this download by default (like App Store
@@ -292,6 +376,16 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     },
   };
   for (const name of componentNames) modules[`@/components/${name === 'VideoClip' ? 'VideoClipSafe' : name}`] = { [name]: host(name) };
+  // The "Sending…" bubble is the real one (it has no imports but React Native and the theme).
+  // (An older revision without it – QA_ORIGINAL=1 – simply doesn't get it.)
+  if (relative !== 'src/components/chat/PendingBubble.tsx') {
+    try {
+      pendingBubble = pendingBubble ?? loadScreen('src/components/chat/PendingBubble.tsx').exports;
+      modules['@/components/chat/PendingBubble'] = pendingBubble;
+    } catch {
+      pendingBubble = null;
+    }
+  }
   Object.assign(modules, overrides);
   const source = readSource(relative);
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
@@ -323,5 +417,5 @@ function button(tree, title) { return tree.root.findAllByType('Button').find(nod
 function option(tree, title) { return tree.root.findAllByType('Pressable').find(node => textOf(node).startsWith(title) || node.findAllByType('Text').some(child => textOf(child) === title)); }
 async function unmount(tree) { await act(() => tree.unmount()); }
 
-module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host, frameAccessMock, liveAccessMock, livesMock };
+module.exports = { React, renderer, loadScreen, loadPure, renderScreen, act, textOf, button, option, unmount, readSource, host, frameAccessMock, liveAccessMock, livesMock, outboxStore };
 

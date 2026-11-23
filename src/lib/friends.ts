@@ -31,17 +31,60 @@ export function otherPerson(link: FriendLink, me: string): Profile | null {
   return link.requester_id === me ? link.addressee : link.requester;
 }
 
-// Every friend, request you sent, and request you received.
-export async function fetchMyFriendLinks(me: string): Promise<FriendLink[]> {
-  const { data, error } = await supabase
-    .from('friendships')
-    .select(
-      '*, requester:profiles!friendships_requester_id_fkey(*), addressee:profiles!friendships_addressee_id_fkey(*)',
-    )
-    .or(`requester_id.eq.${me},addressee_id.eq.${me}`)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as FriendLink[];
+// Requests for your friends that are on their way right now (per person). When the app opens, Home, Chat and the
+// badges all ask at the same moment: they now share the request that's already going instead of each sending their
+// own (the logs showed the friends list fetched up to 6 times on one app open, each one waiting its turn on a weak
+// signal). As soon as an answer is in, the next ask is a fresh request again.
+const linksOnTheWay = new Map<string, Promise<FriendLink[]>>();
+const idsOnTheWay = new Map<string, Promise<string[]>>();
+
+// You just added, answered or removed someone: a request that started before that may not have it, so don't share it.
+function friendsChanged() {
+  linksOnTheWay.clear();
+  idsOnTheWay.clear();
+}
+
+// Shares `load` with anyone else asking for the same person while it's on its way.
+function shared<T>(onTheWay: Map<string, Promise<T>>, me: string, load: () => Promise<T>): Promise<T> {
+  const already = onTheWay.get(me);
+  if (already) return already;
+  const request = load().finally(() => {
+    if (onTheWay.get(me) === request) onTheWay.delete(me);
+  });
+  onTheWay.set(me, request);
+  return request;
+}
+
+// Every friend, request you sent, and request you received. (Don't change the list you get back: other screens may
+// have been given the very same one.)
+export function fetchMyFriendLinks(me: string): Promise<FriendLink[]> {
+  return shared(linksOnTheWay, me, async () => {
+    const { data, error } = await supabase
+      .from('friendships')
+      .select(
+        '*, requester:profiles!friendships_requester_id_fkey(*), addressee:profiles!friendships_addressee_id_fkey(*)',
+      )
+      .or(`requester_id.eq.${me},addressee_id.eq.${me}`)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as FriendLink[];
+  });
+}
+
+// Just the ids of your friends – a small request with no profiles in it (Home's feed only needs to know whose posts
+// are your friends'). Shared like the one above.
+export function fetchFriendIds(me: string): Promise<string[]> {
+  return shared(idsOnTheWay, me, async () => {
+    const { data, error } = await supabase
+      .from('friendships')
+      .select('requester_id, addressee_id')
+      .eq('status', 'accepted')
+      .or(`requester_id.eq.${me},addressee_id.eq.${me}`);
+    if (error) throw error;
+    return ((data ?? []) as { requester_id: string; addressee_id: string }[]).map((row) =>
+      row.requester_id === me ? row.addressee_id : row.requester_id,
+    );
+  });
 }
 
 export async function fetchRelation(me: string, other: string): Promise<Relation> {
@@ -83,18 +126,21 @@ export async function searchUsers(query: string, me: string): Promise<Profile[]>
 //   accounts and for anyone under 18 or without a birthday saved, even if their account is public.
 // Anything else the server might answer counts as 'pending', so the app never shows "Friends" by mistake.
 export async function sendFriendRequest(target: string): Promise<'pending' | 'accepted'> {
+  friendsChanged();
   const { data, error } = await supabase.rpc('send_friend_request', { target });
   if (error) throw error;
   return data === 'accepted' ? 'accepted' : 'pending';
 }
 
 export async function respondToRequest(linkId: string, accept: boolean): Promise<void> {
+  friendsChanged();
   const { error } = await supabase.rpc('respond_to_friend_request', { request_id: linkId, accept });
   if (error) throw error;
 }
 
 // Cancels a request you sent, or unfriends.
 export async function removeFriendLink(linkId: string): Promise<void> {
+  friendsChanged();
   const { error } = await supabase.from('friendships').delete().eq('id', linkId);
   if (error) throw error;
 }
@@ -151,12 +197,32 @@ export async function fetchIncomingRequests(me: string): Promise<FriendLink[]> {
   return links.filter((link) => link.status === 'pending' && link.addressee_id === me && link.requester);
 }
 
-// Just your friends (not pending requests), sorted by name.
+// Just your friends (not pending requests), sorted by name. The last list is remembered while the app is open, so
+// "Send to…" can show your friends at once while it checks for changes. Only the last person's list is kept: after a
+// different login, the one before is gone.
+let lastFriends: { me: string; list: Profile[] } | null = null;
+
 export async function fetchFriends(me: string): Promise<Profile[]> {
   const links = await fetchMyFriendLinks(me);
-  return links
+  const list = links
     .filter((link) => link.status === 'accepted')
     .map((link) => otherPerson(link, me))
     .filter((person): person is Profile => person !== null)
     .sort((a, b) => (a.display_name || a.username).localeCompare(b.display_name || b.username));
+  lastFriends = { me, list };
+  return list;
+}
+
+// Your friends as last loaded (null if they weren't loaded yet while the app was open, or for someone else).
+export function cachedFriends(me: string): Profile[] | null {
+  return lastFriends?.me === me ? lastFriends.list : null;
+}
+
+// Loads your friends in the background if this phone doesn't have the list yet, so "Send to…" can show them the
+// moment it opens. (Called a moment after the app opens – see src/app/(app)/_layout.tsx.)
+export function warmFriends(me: string): void {
+  if (cachedFriends(me)) return;
+  fetchFriends(me).catch(() => {
+    // No problem: "Send to…" loads them itself.
+  });
 }

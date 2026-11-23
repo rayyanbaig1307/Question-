@@ -1,6 +1,7 @@
+import { serverFailure } from './errors';
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
 import { supabase } from './supabase';
-import type { Profile } from './types';
+import type { MediaFields, Profile } from './types';
 
 // ---------------------------------------------------------------------------
 // Guess Who: a photo or video posted anonymously to your friends for 24 hours. Each friend picks who they
@@ -49,10 +50,12 @@ export async function fetchMysteryFeed(): Promise<MysteryFeed> {
   return { posts, people };
 }
 
-// How many Guess Who posts from friends you haven't guessed yet.
+// How many Guess Who posts from friends you haven't guessed yet. (Just the list: the names to pick from aren't
+// needed for a number, so no profiles are downloaded.)
 export async function countUnguessed(): Promise<number> {
-  const { posts } = await fetchMysteryFeed();
-  return posts.filter((post) => !post.mine && post.poster === null).length;
+  const { data, error } = await supabase.rpc('mystery_feed');
+  if (error) throw error;
+  return ((data ?? []) as MysteryPost[]).filter((post) => !post.mine && post.poster === null).length;
 }
 
 export async function postMystery(userId: string, capture: Capture, caption: string): Promise<void> {
@@ -63,6 +66,30 @@ export async function postMystery(userId: string, capture: Capture, caption: str
     await deleteMedia(mediaFiles(fields)).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
+}
+
+// Saves a Guess Who (already uploaded into the shared mystery/ folder) with the id given – for the outbox
+// (lib/outbox.ts). With `groupId` it's a Guess Who in that group chat (see lib/groupGuess.ts).
+export async function insertMystery(
+  userId: string,
+  post: { id: string; fields: MediaFields; caption: string; groupId?: string | null },
+): Promise<{ id: string }> {
+  const { error, status } = await supabase.from('mystery_posts').insert({
+    id: post.id,
+    user_id: userId,
+    ...(post.groupId ? { group_id: post.groupId } : {}),
+    ...post.fields,
+    caption: post.caption.trim(),
+  });
+  if (error) throw serverFailure(error, status);
+  return { id: post.id };
+}
+
+// Is your Guess Who with this id saved? (You can always see your own.)
+export async function findMystery(postId: string): Promise<{ id: string } | null> {
+  const { data, error, status } = await supabase.from('mystery_posts').select('id').eq('id', postId).maybeSingle();
+  if (error) throw serverFailure(error, status);
+  return (data as { id: string } | null) ?? null;
 }
 
 // Make your guess. Returns who really posted it.

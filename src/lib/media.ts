@@ -33,34 +33,67 @@ export async function makePoster(videoUri: string): Promise<string | null> {
   }
 }
 
+// Where each file of a photo or video goes. The outbox (lib/outbox.ts) and the early upload (lib/preupload.ts)
+// choose these names BEFORE uploading and write them down, so a try that is repeated (after a lost answer, or
+// after the app was closed) uploads to the same names and never leaves a second copy.
+export type CapturePaths = { media: string; poster: string | null; overlay: string | null };
+
+export function planCapturePaths(userId: string, folder: UploadFolderName, capture: Capture): CapturePaths {
+  if (capture.kind === 'photo') return { media: mediaPath(userId, folder, 'jpg'), poster: null, overlay: null };
+  return {
+    media: mediaPath(userId, folder, fileType('video', capture.uri)[0]),
+    poster: mediaPath(userId, folder, 'jpg'),
+    overlay: capture.overlayUri ? mediaPath(userId, folder, 'png') : null,
+  };
+}
+
+type UploadFolderName = 'posts' | 'stories' | 'snaps' | 'mystery' | 'keeps' | 'group' | 'public';
+
 // Uploads a photo or video (plus a video's still picture and text/sticker layer) into one of your folders.
 // Also returns the local still picture, for making a blurry drop preview.
+// A video's still picture is made while the video uploads, then the video, the still picture and the text layer
+// all upload at the same time (they used to go one after another).
+// `paths`: file names chosen beforehand (see planCapturePaths). Then nothing is deleted if a file fails: the
+// next try uploads to the same names, and "already exists" counts as done.
+// `poster`: a video's still picture that's already being made (a drop's blurry preview is made from it at the same
+// time as the video uploads, instead of after).
 export async function uploadCapture(
   userId: string,
-  folder: 'posts' | 'stories' | 'snaps' | 'mystery' | 'keeps' | 'group' | 'public',
+  folder: UploadFolderName,
   capture: Capture,
+  options: { paths?: CapturePaths; poster?: Promise<string | null> } = {},
 ): Promise<{ fields: MediaFields; stillUri: string | null }> {
+  const chosen = options.paths;
   if (capture.kind === 'photo') {
-    const media_path = await uploadMedia(userId, folder, capture.uri);
+    const media_path = await uploadMedia(userId, folder, capture.uri, 'jpg', { path: chosen?.media });
     return { fields: { media_path, media_type: 'photo', poster_path: null, overlay_path: null }, stillUri: capture.uri };
   }
-  const posterUri = await makePoster(capture.uri);
+  const posterMade = options.poster ?? makePoster(capture.uri);
   const uploaded: string[] = [];
-  const save = async (uri: string, type: 'jpg' | 'png' | 'video' = 'jpg') => {
-    const path = await uploadMedia(userId, folder, uri, type);
-    uploaded.push(path);
-    return path;
+  const save = async (uri: string, type: 'jpg' | 'png' | 'video', path: string | null | undefined) => {
+    const saved = await uploadMedia(userId, folder, uri, type, { path: path ?? undefined });
+    uploaded.push(saved);
+    return saved;
   };
-  try {
-    const media_path = await save(capture.uri, 'video');
-    const poster_path = posterUri ? await save(posterUri) : null;
-    const overlay_path = capture.overlayUri ? await save(capture.overlayUri, 'png') : null;
-    return { fields: { media_path, media_type: 'video', poster_path, overlay_path }, stillUri: posterUri };
-  } catch (error) {
-    // A video has several files. If a later file fails, undo the files already saved.
-    await deleteMedia(uploaded).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
-    throw error;
+  const [video, poster, overlay] = await Promise.allSettled([
+    save(capture.uri, 'video', chosen?.media),
+    posterMade.then((posterUri) => (posterUri ? save(posterUri, 'jpg', chosen?.poster) : null)),
+    capture.overlayUri ? save(capture.overlayUri, 'png', chosen?.overlay) : Promise.resolve(null),
+  ]);
+  const failed = [video, poster, overlay].find((result) => result.status === 'rejected');
+  if (failed && failed.status === 'rejected') {
+    // A video has several files. If one fails, undo the files already saved – unless their names were chosen
+    // beforehand: then the next try reuses them.
+    if (!chosen) {
+      await deleteMedia(uploaded).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    }
+    throw failed.reason;
   }
+  const value = <T,>(result: PromiseSettledResult<T>) => (result.status === 'fulfilled' ? result.value : null);
+  return {
+    fields: { media_path: value(video) as string, media_type: 'video', poster_path: value(poster), overlay_path: value(overlay) },
+    stillUri: await posterMade,
+  };
 }
 
 // All the files that belong to one photo or video (to delete them together).
@@ -153,37 +186,58 @@ async function readBytes(uri: string): Promise<ArrayBuffer> {
   return new File(uri).arrayBuffer();
 }
 
+// The file ending and kind of a file.
+function fileType(type: 'jpg' | 'png' | 'video' | 'audio', localUri: string): [string, string] {
+  if (type === 'png') return ['png', 'image/png'];
+  if (type === 'audio') return ['m4a', 'audio/mp4'];
+  if (type === 'video') return /\.mov$/i.test(localUri) ? ['mov', 'video/quicktime'] : ['mp4', 'video/mp4'];
+  return ['jpg', 'image/jpeg'];
+}
+
+// A brand-new file name in one of your folders. Guess Who files go in the shared folder, with no user id in the name.
+export function mediaPath(userId: string, folder: MediaFolder, extension: string): string {
+  return folder === 'mystery' ? `mystery/${randomUUID()}.${extension}` : `${userId}/${folder}/${randomUUID()}.${extension}`;
+}
+
+// A voice note's file name, chosen before it's uploaded (see planCapturePaths for why).
+export function planVoicePath(userId: string): string {
+  return mediaPath(userId, 'voice', 'm4a');
+}
+
 // Uploads a photo (JPEG), see-through picture (PNG), video or voice recording to the private "media" bucket.
-// Returns where it was saved.
+// Returns where it was saved. `path`: a file name chosen beforehand (then "already exists" means an earlier try of
+// ours already saved it, so it counts as done).
 export async function uploadMedia(
   userId: string,
   folder: MediaFolder,
   localUri: string,
   type: 'jpg' | 'png' | 'video' | 'audio' = 'jpg',
+  options: { path?: string } = {},
 ): Promise<string> {
-  const isMov = /\.mov$/i.test(localUri);
-  const [extension, contentType] =
-    type === 'png'
-      ? ['png', 'image/png']
-      : type === 'audio'
-        ? ['m4a', 'audio/mp4']
-        : type === 'video'
-          ? isMov
-            ? ['mov', 'video/quicktime']
-            : ['mp4', 'video/mp4']
-          : ['jpg', 'image/jpeg'];
-  const path = folder === 'mystery' ? `mystery/${randomUUID()}.${extension}` : `${userId}/${folder}/${randomUUID()}.${extension}`;
+  const [extension, contentType] = fileType(type, localUri);
+  const path = options.path ?? mediaPath(userId, folder, extension);
   const bytes = await readBytes(localUri);
   // The store takes files up to 30 MB. Say so kindly before uploading, instead of failing halfway.
   if (type === 'video' && bytes.byteLength > MAX_VIDEO_BYTES) throw new Error(TOO_BIG_VIDEO);
-  await uploadWithRetries('media', path, bytes, contentType);
+  await uploadWithRetries('media', path, bytes, contentType, !!options.path);
   return path;
 }
 
-// Uploads a profile picture to the public "avatars" bucket.
-export async function uploadAvatar(userId: string, localUri: string): Promise<string> {
-  const path = `${userId}/${randomUUID()}.jpg`;
-  await uploadWithRetries('avatars', path, await readBytes(localUri), 'image/jpeg');
+// Is this video over the store's 30 MB? Checked on the phone before sending, so it's said at once (not after the
+// screen has closed). If the size can't be read, it isn't stopped here (the upload checks again).
+export function videoTooBig(uri: string): boolean {
+  try {
+    const size = new File(uri).size;
+    return typeof size === 'number' && size > MAX_VIDEO_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+// Uploads a profile picture to the public "avatars" bucket. `path`: a name chosen beforehand (see uploadMedia).
+export async function uploadAvatar(userId: string, localUri: string, options: { path?: string } = {}): Promise<string> {
+  const path = options.path ?? `${userId}/${randomUUID()}.jpg`;
+  await uploadWithRetries('avatars', path, await readBytes(localUri), 'image/jpeg', !!options.path);
   return path;
 }
 
@@ -193,23 +247,43 @@ export async function uploadAvatar(userId: string, localUri: string): Promise<st
 // server's front door answers "server error" (a 5xx, like the 520 the owner saw on a second photo in a row).
 // Then it waits a moment and tries again, up to 2 more times. A clear "no" from the store (400–499: not allowed,
 // too big, …) is never tried again – it would only say no again.
-// Only the file upload is tried again, never the chat message: the message is saved once, after the file is in.
+// Only the file upload is tried here. Saving the message, post or story afterwards is the outbox's job
+// (lib/outbox.ts): it gives each row its id before the first try, so a row is never saved twice either.
 // ---------------------------------------------------------------------------
 export const UPLOAD_RETRY_WAITS_MS = [700, 1800];
 
-async function uploadWithRetries(bucket: 'media' | 'avatars', path: string, bytes: ArrayBuffer, contentType: string): Promise<void> {
+async function uploadWithRetries(
+  bucket: 'media' | 'avatars',
+  path: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+  // The name was chosen beforehand and written down (the outbox and early uploads do that).
+  chosenName = false,
+): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     const { error } = await supabase.storage.from(bucket).upload(path, bytes, { contentType });
     if (!error) return;
     // Trying again after a hiccup, the store says the file is already there: the hiccup came AFTER the earlier
     // try had saved it. The file name is brand new and only this upload uses it, so the file is ours and done.
-    if (attempt > 0 && alreadyThere(error)) return;
-    if (attempt >= UPLOAD_RETRY_WAITS_MS.length || !worthTryingAgain(error)) throw error;
+    // A name chosen beforehand counts even on the first try here: an earlier try (maybe before the app was
+    // closed) used the same name.
+    if ((attempt > 0 || chosenName) && alreadyThere(error)) return;
+    // An upload that ran out of its time limit (lib/timedFetch.ts) is not tried again straight away: the limit
+    // already allowed for a slow signal, so another go now would most likely run out too (and use more data).
+    // The outbox (lib/outbox.ts) tries again a little later instead.
+    if (attempt >= UPLOAD_RETRY_WAITS_MS.length || !worthTryingAgain(error) || ranOutOfTime(error)) throw error;
     await new Promise((resolve) => setTimeout(resolve, UPLOAD_RETRY_WAITS_MS[attempt]));
   }
 }
 
 type StoreError = { name?: unknown; status?: unknown; statusCode?: unknown; message?: unknown };
+
+// The request was given up after its time limit (the storage library wraps that "AbortError").
+function ranOutOfTime(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const original = (error as { originalError?: { name?: unknown } }).originalError;
+  return original?.name === 'AbortError' || /aborted/i.test(String((error as StoreError).message ?? ''));
+}
 
 // The HTTP number the store answered with (0 when no answer came back at all).
 function answerNumber(error: StoreError): number {

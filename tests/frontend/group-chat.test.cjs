@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const ts = require('typescript');
-const { loadScreen, renderScreen, act, button, unmount, host, textOf, readSource } = require('./harness.cjs');
+const { loadScreen, renderScreen, act, button, unmount, host, textOf, readSource, outboxStore } = require('./harness.cjs');
 
 const message = (changes = {}) => ({ id: 'message1', group_id: 'squad', sender_id: 'bob', kind: 'text', body: 'Hello group 👋', media_path: null, poster_path: null, overlay_path: null, media_type: null, created_at: '2026-11-04T12:00:00Z', ...changes });
 // The app's real "does this proof count?" rule from src/lib/groupChat.ts (the rest of that file is mocked below).
@@ -29,13 +29,17 @@ function realProofRules() {
 function fixture({ messages = [message()], send, search, missing = false, members = ['alice', 'bob'], myVotes = new Map(), vote, fetchVotes, fetchMessages, pinned = null, joinedAt = async () => '2026-11-01T00:00:00Z', plus = false, guesses = null, fetchGuesses, guessAnswer = async () => 'bob', card, snapOpens = new Map(), saveSnap = async () => true, reads = new Map(), unshown = [] } = {}) {
   const rules = realProofRules();
   for (const id of unshown) rules.noteGroupSnapUnshown('alice', id, 'first');
-  const calls = { stickers: [], pushed: [], sent: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null,
+  const calls = { pushed: [], reports: [], pinned: [], deleted: [], options: [], reacted: [], stopped: 0, toasts: [], votes: [], voteFetches: [], joinFetches: [], loads: 0, onChange: null,
     reads: 0, guessFetches: [], guessListeners: [], guessStops: 0, guessed: [], mysteryReports: [], blocked: [], deletedGuesses: [], haptics: [], refocus: null, exitMenus: [],
     opensFetches: [], snapSaves: [], mediaPaths: [], alerts: [] };
   const group = { id: 'squad', name: 'Squad', pinned_message_id: pinned, members: members.map(userId => ({ userId, profile: { id: userId, username: userId, display_name: userId } })) };
   const noop = () => {};
   const stop = () => { calls.stopped++; };
+  // 📤 Texts, stickers, dares and voice notes go through the outbox now (lib/outbox.ts): a working stand-in.
+  const store = outboxStore();
+  calls.store = store;
   const screen = loadScreen('src/app/(app)/groups/chat/[id].tsx', {
+    '@/lib/outbox': store,
     // calls.refocus(): leave the chat and come back to it (the screen stays open underneath, like on a phone).
     'expo-router': { router: { push: to => calls.pushed.push(to) }, useFocusEffect: callback => require('./harness.cjs').React.useEffect(() => {
       let cleanup = callback();
@@ -94,6 +98,9 @@ function fixture({ messages = [message()], send, search, missing = false, member
     '@/lib/useSafetyActions': { useSafetyActions: () => ({ report: value => calls.reports.push(value) }) },
     '@/lib/voice': { Audio: null },
   });
+  // What the chat handed to the outbox, in the old shapes: [group, body, replyTo] and [group, sticker].
+  Object.defineProperty(calls, 'sent', { get: () => store.calls.sendLater.filter(([, , what]) => what.kind === 'groupText').map(([, , what]) => [what.groupId, what.body, what.replyTo ?? undefined]) });
+  Object.defineProperty(calls, 'stickers', { get: () => store.calls.sendLater.filter(([, , what]) => what.kind === 'groupSticker').map(([, , what]) => [what.groupId, what.sticker]) });
   return { screen, calls };
 }
 function messageMenu(tree) { return tree.root.findAllByType('Pressable').find(node => node.props.onLongPress).props.onLongPress(); }
@@ -125,35 +132,61 @@ test('reporting a group message preserves the offending message ID', async () =>
 });
 
 test('rapid group Send presses create only one message', async () => {
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  const { screen, calls } = fixture({ send: () => pending });
+  const { screen, calls } = fixture({ send: () => new Promise(() => {}) });
   const tree = await renderScreen(screen);
   try {
     await act(() => tree.root.findByType('TextInput').props.onChangeText('hello'));
     const press = sendButton(tree).props.onPress;
-    let a, b;
-    await act(async () => { a = press(); b = press(); await Promise.resolve(); });
-    release();
-    await act(() => Promise.all([a, b]));
+    await act(async () => { press(); press(); });
     assert.equal(calls.sent.length, 1);
-  } finally { release(); await unmount(tree); }
+  } finally { await unmount(tree); }
+});
+
+// F11: a group text shows at once and the box empties before the server answers.
+test('a group text shows at once and the box empties before the server answers', async () => {
+  const { screen, calls } = fixture({ send: () => new Promise(() => {}) });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => tree.root.findByType('TextInput').props.onChangeText('hi all'));
+    const press = sendButton(tree).props.onPress;
+    await act(async () => { press(); press(); });
+    assert.equal(tree.root.findByType('TextInput').props.value, '');
+    assert.equal(sendButton(tree).props.disabled, undefined, 'Send is never greyed out while sending');
+    const bubble = tree.root.findByType(screen.modules['@/components/chat/PendingBubble'].PendingBubble);
+    const words = bubble.findAllByType('Text').map(textOf);
+    assert.ok(words.includes('hi all') && words.includes('Sending…'), JSON.stringify(words));
+    assert.equal(calls.store.calls.sendLater.length, 1);
+    assert.deepEqual(plain(calls.store.calls.sendLater[0].slice(0, 3)), ['alice', 'group:squad', { kind: 'groupText', groupId: 'squad', body: 'hi all', replyTo: null }]);
+    // In: the real message takes the bubble's place.
+    const [job] = calls.store.jobs();
+    await act(() => calls.store.finish(job.key, [message({ id: job.rowIds[0], sender_id: 'alice', body: 'hi all', created_at: '2026-11-04T12:05:00Z' })]));
+    assert.equal(tree.root.findAllByType(screen.modules['@/components/chat/PendingBubble'].PendingBubble).length, 0);
+    assert.ok(texts(tree).includes('hi all'));
+  } finally { await unmount(tree); }
+});
+
+test('a group reaction shows before the server answers', async () => {
+  const { screen, calls } = fixture();
+  screen.modules['@/lib/reactions'].toggleReaction = (...args) => { calls.reacted.push(args); return new Promise(() => {}); };
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => messageMenu(tree));
+    await act(() => { tree.root.findByType('MessageActions').props.onReact('😂'); });
+    const chips = tree.root.findAllByType('ReactionChips')[0].props.reactions;
+    assert.deepEqual(plain(chips), [{ message_id: 'message1', user_id: 'alice', emoji: '😂' }]);
+    assert.equal(calls.loads, 1, 'no full reload after a reaction');
+  } finally { await unmount(tree); }
 });
 
 test('the next draft survives while a group message is being sent', async () => {
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  const { screen } = fixture({ send: () => pending });
+  const { screen } = fixture({ send: () => new Promise(() => {}) });
   const tree = await renderScreen(screen);
   try {
     await act(() => tree.root.findByType('TextInput').props.onChangeText('first message'));
-    let sending;
-    await act(async () => { sending = sendButton(tree).props.onPress(); await Promise.resolve(); });
+    await act(() => sendButton(tree).props.onPress());
     await act(() => tree.root.findByType('TextInput').props.onChangeText('my next message'));
-    release();
-    await act(() => sending);
     assert.equal(tree.root.findByType('TextInput').props.value, 'my next message');
-  } finally { release(); await unmount(tree); }
+  } finally { await unmount(tree); }
 });
 
 test('group reply attaches the selected message ID', async () => {
@@ -164,7 +197,7 @@ test('group reply attaches the selected message ID', async () => {
     await act(() => tree.root.findByType('MessageActions').props.actions.find(action => action.label === '↩ Reply').onPress());
     await act(() => tree.root.findByType('TextInput').props.onChangeText('reply 👋'));
     await act(() => sendButton(tree).props.onPress());
-    assert.deepEqual(calls.sent[0], ['squad', 'reply 👋', 'message1']);
+    assert.deepEqual(plain(calls.sent[0]), ['squad', 'reply 👋', 'message1']);
   } finally { await unmount(tree); }
 });
 
@@ -652,7 +685,7 @@ for (const [plus, id, sends] of [[false, 'caught', true], [false, 'plus-bff', fa
     const tree = await renderScreen(screen);
     await act(async () => tree.root.findAllByType('IconButton').find(node => node.props.label === 'Send a sticker').props.onPress());
     await act(async () => tree.root.findByType('StickerPicker').props.onPickSpecial(id));
-    assert.deepEqual(calls.stickers.map(args => args.slice(0, 2)), sends ? [['squad', id]] : []);
+    assert.deepEqual(plain(calls.stickers.map(args => args.slice(0, 2))), sends ? [['squad', id]] : []);
     assert.deepEqual(calls.pushed, sends ? [] : ['/plus']);
     if (sends) assert.deepEqual(tree.root.findAllByType('ChatSticker').map(node => node.props.id), [id]);
     await unmount(tree);

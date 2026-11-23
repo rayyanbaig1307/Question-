@@ -1,7 +1,8 @@
+import { serverFailure } from './errors';
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
 import { fetchHiddenStoryAuthors } from './friendSettings';
 import { supabase } from './supabase';
-import type { Audience, Profile, Story } from './types';
+import type { Audience, MediaFields, Profile, Story } from './types';
 
 export type StoryWithAuthor = Story & { author: Profile | null };
 
@@ -29,6 +30,27 @@ export async function createStory(userId: string, capture: Capture, audience: Au
     throw error;
   }
   return data as Story;
+}
+
+// Saves a story (already uploaded) with the id given – for the outbox (lib/outbox.ts).
+export async function insertStory(
+  userId: string,
+  story: { id: string; fields: MediaFields; audience?: Audience },
+): Promise<Story> {
+  const { data, error, status } = await supabase
+    .from('stories')
+    .insert({ id: story.id, user_id: userId, ...story.fields, audience: story.audience ?? 'everyone' })
+    .select('*')
+    .single();
+  if (error) throw serverFailure(error, status);
+  return data as Story;
+}
+
+// One of your stories by id (null if it isn't there).
+export async function findStory(storyId: string): Promise<Story | null> {
+  const { data, error, status } = await supabase.from('stories').select('*').eq('id', storyId).maybeSingle();
+  if (error) throw serverFailure(error, status);
+  return (data as Story | null) ?? null;
 }
 
 export async function deleteStory(story: Story): Promise<void> {

@@ -15,12 +15,12 @@ test('Send to: the drop rewind choice is hidden when the server does not have it
   } finally { await unmount(tree); }
 });
 
+// Send to… now hands the drop to the outbox and closes at once; the toast comes when the post is saved
+// (src/components/OutboxBanner.tsx postWords), from the saved row.
 test('Send to: a rewound late drop asks the server for it and says so', async () => {
-  const posts = [];
   const screen = loadScreen('src/app/(app)/share.tsx', {
     ...dropParams,
     '@/lib/plusExtras': { fetchPlusAllowances: async () => ALLOWANCES },
-    '@/lib/posts': { createPost: async (...args) => { posts.push(args); return { id: 'qa-post', drop_late_seconds: 0, drop_rewound: true }; } },
   });
   const tree = await renderScreen(screen);
   try {
@@ -28,26 +28,21 @@ test('Send to: a rewound late drop asks the server for it and says so', async ()
     assert.equal(choice.props.selected, false);
     await act(() => choice.props.onChange(true));
     await act(() => button(tree, /^Send to/).props.onPress());
-    assert.equal(posts.length, 1);
-    assert.equal(posts[0][3].drop, true);
-    assert.equal(posts[0][3].rewind, true);
-    assert.match(screen.calls.toasts[0][0], /No 'late' label/);
+    const shares = screen.calls.outbox.queueShare;
+    assert.equal(shares.length, 1);
+    assert.equal(shares[0][1].post.drop, true);
+    assert.equal(shares[0][1].post.rewind, true);
   } finally { await unmount(tree); }
+  const banner = loadScreen('src/components/OutboxBanner.tsx').exports;
+  assert.match(banner.postWords({ what: { kind: 'post', drop: true, rewind: true }, result: { dropLate: 0, dropRewound: true } }), /No 'late' label/);
 });
 
 test('Send to: when the server says no, the drop is posted late and the toast says the rewind was not used', async () => {
-  const screen = loadScreen('src/app/(app)/share.tsx', {
-    ...dropParams,
-    '@/lib/plusExtras': { fetchPlusAllowances: async () => ALLOWANCES },
+  const banner = loadScreen('src/components/OutboxBanner.tsx', {
     '@/lib/drop': { lateLabel: (s) => (s <= 120 ? { onTime: true, text: 'On time' } : { onTime: false, text: 'Late by 3h' }) },
-    '@/lib/posts': { createPost: async () => ({ id: 'qa-post', drop_late_seconds: 11000, drop_rewound: false }) },
-  });
-  const tree = await renderScreen(screen);
-  try {
-    await act(() => tree.root.findByType('DropRewindOption').props.onChange(true));
-    await act(() => button(tree, /^Send to/).props.onPress());
-    assert.match(screen.calls.toasts[0][0], /Late by 3h \(the rewind wasn't available\)/);
-  } finally { await unmount(tree); }
+  }).exports;
+  const words = banner.postWords({ what: { kind: 'post', drop: true, rewind: true }, result: { dropLate: 11000, dropRewound: false } });
+  assert.match(words, /Late by 3h \(the rewind wasn't available\)/);
 });
 
 // `store` = the App Store says you have Plus; `server` = the server knows it (from your plus_members row).

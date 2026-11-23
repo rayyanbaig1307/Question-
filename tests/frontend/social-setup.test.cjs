@@ -18,7 +18,7 @@ function appState() {
 
 const STAND_IN_PROFILE = { id: 'alice', username: 'userabcdef', display_name: 'userabcdef' };
 
-function setupHarness({ hasAccepted = async () => false, update = async () => ({}), signOut = async () => {}, profile = STAND_IN_PROFILE, refreshProfile } = {}) {
+function setupHarness({ hasAccepted = async () => false, update = async () => ({}), signOut = async () => {}, profile = STAND_IN_PROFILE, refreshProfile, termsCache } = {}) {
   const calls = { saved: [], accepted: 0, done: 0, profile: null, refreshes: 0 };
   const screen = loadScreen('src/components/ProfileSetup.tsx', {
     '@/lib/auth': { useAuth: () => ({ userId: 'alice', profile, session: { user: { app_metadata: { provider: 'apple' } } }, setProfile: value => { calls.profile = value; }, signOut,
@@ -27,6 +27,7 @@ function setupHarness({ hasAccepted = async () => false, update = async () => ({
     '@/lib/profiles': { ...validators, isUsernameAvailable: async () => true, updateMyProfile: async (...args) => { calls.saved.push(args); return update(...args); } },
     '@/lib/cleanWords': validators,
     '@/lib/socialAuth': { sharedName: null, madeWithAppleOrGoogle: provider => ['apple', 'google'].includes(provider) },
+    ...(termsCache ? { '@/lib/termsCache': termsCache } : {}),
   });
   screen.appState = appState();
   screen.modules['react-native'].AppState = screen.appState;
@@ -257,5 +258,72 @@ test('a setup check that answers in time is not turned into "Could not check" by
     assert.deepEqual(setupState(tree), { needed: false, failed: false });
     for (const timer of screen.calls.timers.splice(0)) await act(() => timer());
     assert.deepEqual(setupState(tree), { needed: false, failed: false });
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// Speed fix 3: a lighter app open (src/lib/startup.ts)
+// ---------------------------------------------------------------------------
+
+// A stand-in for lib/startup.ts that the test switches on.
+function startupSwitch() {
+  let done = false;
+  const listeners = new Set();
+  const subscribe = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
+  return {
+    start() { done = true; listeners.forEach((listener) => listener()); },
+    mock: {
+      useStartupDone: () => React.useSyncExternalStore(subscribe, () => done),
+      afterStartup: () => (done ? Promise.resolve() : new Promise((resolve) => { const stop = subscribe(() => { stop(); resolve(); }); })),
+      noteHomeDrawn() {}, startupDone: () => done,
+    },
+  };
+}
+
+test('drop alerts, push sign-up, community dares, payments, the map spot and leftover clean-up wait until Home has drawn', async () => {
+  const startup = startupSwitch();
+  const asked = { prefs: 0, push: 0, dares: 0, payments: 0, cleanup: 0, friends: 0, location: [], lapse: [] };
+  const screen = loadScreen('src/app/(app)/_layout.tsx', {
+    'expo-router': { Stack: Object.assign(host('Stack'), { Screen: host('StackScreen') }) },
+    '@/components/ProfileSetup': { useNeedsSetup: () => [false, () => {}, { failed: false, checking: false, retry() {} }], ProfileSetup: host('ProfileSetup') },
+    '@/components/TermsGate': { TermsGate: host('TermsGate'), CouldNotCheck: host('CouldNotCheck') },
+    '@/components/PendingInvite': { PendingInvite: host('PendingInvite') },
+    '@/lib/auth': { useAuth: () => ({ userId: 'alice', profile: { id: 'alice', username: 'alice', location_sharing: true } }) },
+    '@/lib/communityDares': { syncCommunityDares: async () => { asked.dares++; } },
+    '@/lib/friends': { warmFriends: () => { asked.friends++; } },
+    '@/lib/location': { useShareLocationWhileOpen: (me, sharing) => { asked.location.push([me, sharing]); } },
+    '@/lib/notificationPrefs': { fetchNotificationPrefs: async () => { asked.prefs++; return { drops: true }; } },
+    '@/lib/notifications': { registerForPush() { asked.push++; }, scheduleDropNotifications: async () => {}, useNotificationTaps() {} },
+    '@/lib/plus': { configurePurchases: async () => { asked.payments++; } },
+    '@/lib/plusLapse': { usePlusLapse: (on) => { asked.lapse.push(on); } },
+    '@/lib/preupload': { cleanLeftoverUploads: async () => { asked.cleanup++; } },
+    '@/lib/startup': startup.mock,
+  });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.deepEqual({ prefs: asked.prefs, push: asked.push, dares: asked.dares, payments: asked.payments, cleanup: asked.cleanup, friends: asked.friends }, { prefs: 0, push: 0, dares: 0, payments: 0, cleanup: 0, friends: 0 });
+    assert.ok(asked.location.every(([me]) => me === null), 'no map spot yet');
+    assert.ok(asked.lapse.every((on) => on === false));
+    await act(async () => { startup.start(); });
+    await act(async () => {});
+    // (Your friends list too, so "Send to…" shows them the moment it opens.)
+    assert.deepEqual({ prefs: asked.prefs, push: asked.push, dares: asked.dares, payments: asked.payments, cleanup: asked.cleanup, friends: asked.friends }, { prefs: 1, push: 1, dares: 1, payments: 1, cleanup: 1, friends: 1 });
+    assert.deepEqual(asked.location.at(-1), ['alice', true]);
+    assert.equal(asked.lapse.at(-1), true);
+  } finally { await unmount(tree); }
+});
+
+test('an account this phone knows has agreed to the Terms skips the setup check entirely (no request at start-up)', async () => {
+  let checks = 0;
+  const { screen } = setupHarness({
+    hasAccepted: async () => { checks++; return true; },
+    termsCache: { knownAgreed: () => true, knownAgreedAny: () => true, rememberAgreed() {}, forgetAgreed() {} },
+  });
+  checkOnly(screen);
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(setupState(tree), { needed: false, failed: false });
+    assert.equal(checks, 0);
   } finally { await unmount(tree); }
 });

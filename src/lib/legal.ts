@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { supabase } from './supabase';
+import { knownAgreedDoc, rememberAgreedDoc } from './termsCache';
 
 // ---------------------------------------------------------------------------
 // The legal documents (Terms, Privacy, Community Guidelines, Dare Safety Rules) and who has agreed to them.
@@ -70,20 +71,54 @@ export async function hasAcceptedAnyTerms(me: string): Promise<boolean> {
 }
 
 // Has this person agreed to the current Dare Safety Rules? `accepted` is null while checking.
-// `accept()` records it.
+// - It starts as true straight away when this phone remembers they agreed (lib/termsCache.ts), so the drop's Send
+//   never waits for the server. The server is still asked quietly every time, and its answer wins.
+// - `ensure()`: for Send when the answer isn't known yet – waits for the check (it gives up after 20 seconds,
+//   like every request) and says whether they agreed. If the check fails and the phone doesn't know, it says no
+//   (then the "Before your first dare" sheet shows).
+// - `accept()` records it on the server, then remembers it on this phone.
 export function useDareRulesAccepted(me: string) {
-  const [accepted, setAccepted] = useState<boolean | null>(null);
+  const knownHere = () => knownAgreedDoc(me, 'dare_rules', DARE_RULES_VERSION);
+  const [answer, setAnswer] = useState<{ me: string; accepted: boolean | null }>(() => ({ me, accepted: knownHere() ? true : null }));
+  const checking = useRef<{ me: string; request: Promise<boolean> } | null>(null);
+
+  const check = useCallback((): Promise<boolean> => {
+    if (checking.current?.me === me) return checking.current.request;
+    const request = hasAccepted(me, 'dare_rules', DARE_RULES_VERSION).then(
+      (yes) => {
+        if (yes) rememberAgreedDoc(me, 'dare_rules', DARE_RULES_VERSION);
+        setAnswer({ me, accepted: yes });
+        return yes;
+      },
+      () => {
+        // No answer (no internet?): someone this phone knows has agreed just carries on. Asked again next time.
+        checking.current = null;
+        const known = knownAgreedDoc(me, 'dare_rules', DARE_RULES_VERSION);
+        setAnswer({ me, accepted: known });
+        return known;
+      },
+    );
+    checking.current = { me, request };
+    return request;
+  }, [me]);
 
   useEffect(() => {
-    hasAccepted(me, 'dare_rules', DARE_RULES_VERSION)
-      .then(setAccepted)
-      .catch(() => setAccepted(false));
-  }, [me]);
+    check();
+  }, [check]);
+
+  const accepted = answer.me === me ? answer.accepted : knownHere() ? true : null;
+
+  const ensure = useCallback(async (): Promise<boolean> => {
+    if (accepted === true) return true;
+    return check();
+  }, [accepted, check]);
 
   const accept = useCallback(async () => {
     await acceptLegal('dare_rules', DARE_RULES_VERSION);
-    setAccepted(true);
-  }, []);
+    rememberAgreedDoc(me, 'dare_rules', DARE_RULES_VERSION);
+    checking.current = { me, request: Promise.resolve(true) };
+    setAnswer({ me, accepted: true });
+  }, [me]);
 
-  return { accepted, accept };
+  return { accepted, accept, ensure };
 }

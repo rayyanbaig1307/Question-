@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { WORD_NOT_ALLOWED } from './cleanWords';
+import { serverFailure } from './errors';
 import { updateChannel } from './lensDiagnostics';
 import { deleteMedia, uploadCapture, type Capture } from './media';
 import { hasLinkOrPhone, publicMessageProblem, tidyPublicText } from './publicText';
@@ -160,6 +161,22 @@ export async function sendPublicPhoto(me: string, capture: Capture): Promise<voi
     await deleteMedia([fields.media_path]).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
     throw error;
   }
+}
+
+// Saves a photo (already uploaded into your public/ folder) in the room – for the outbox (lib/outbox.ts).
+// The app can't choose the row's id here, so the file name is what makes it unique: trying the same file again
+// is refused with "duplicate key" (23505), which means the first try did save it (findPublicPhoto looks it up).
+export async function insertPublicPhoto(mediaPath: string): Promise<void> {
+  const { error, status } = await supabase.from('public_photos').insert({ media_path: mediaPath });
+  if (error) throw serverFailure(error, status);
+}
+
+// Is your photo with this file in the room? (A retry after a lost answer looks first: the room's slow mode would
+// refuse the second try before it could say "already there".)
+export async function findPublicPhoto(mediaPath: string): Promise<{ id: string } | null> {
+  const { data, error, status } = await supabase.from('public_photos').select('id').eq('media_path', mediaPath).maybeSingle();
+  if (error) throw serverFailure(error, status);
+  return (data as { id: string } | null) ?? null;
 }
 
 // Deletes your own photo from the room, then its file – the same way a deleted post's files go (lib/posts.ts).

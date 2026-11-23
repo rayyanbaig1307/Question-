@@ -1541,3 +1541,102 @@ hasn't updated yet (D, 18+). Write down the number of any step that goes wrong.
     sending works again.
 17. Messages that look empty or odd: a message of only spaces can't be sent (↑ stays grey). Paste a word with lots
     of accent marks piled on one letter (like "z̷̢̛͖̈́a̵l̶g̴o̷") → "Too many accent marks on one letter."
+
+## Step 73 – Instant sends 📤 (Send to…, chat cameras, texts, the drop)
+
+Everything you send now goes out in the background: the screen closes (or the message shows) at once, with
+"Sending…", and a small pill at the top says how it's going. Use two phones (yours and a test friend's) on the
+`testing` update. On an iPhone, **Settings → Developer → Network Link Conditioner** can make the internet bad
+on purpose (turn it on with "Very Bad Network", later "100% Loss"; turn it off at the end).
+
+1. Normal internet. Chat with a friend → camera → take a photo → **Send** → you're back in the chat straight away
+   with a faded "👀 Sending peek…" bubble, which becomes "You sent a peek · Delivered" a moment later. Your friend
+   gets exactly one peek.
+2. Type a text and tap Send twice quickly → the box empties at once, one faded "Sending…" bubble, then one message.
+   Send 3 texts quickly → they arrive in the same order. Send a sticker and a voice note → each shows at once.
+3. Hold a message → react 🔥 → it shows at once.
+4. Camera → photo → Send to… → tick a friend and **My Story** → Send → the screen closes at once; the pill says
+   "Sending…"; then a toast "Shared to … 🎉". The friend gets one peek, your story ring updates.
+5. **The drop** (in the 2 minutes): drop camera → photo → Send to… → no "Before your first dare" sheet if you agreed
+   before → Send → Home at once with "📤 Posting your drop…" at the top → then "Drop posted · On time! 👀🔥" and
+   your friends' drops unlock.
+6. Dare: do the Daily Dare → Send → you land on the Dare page and "Dare your friends" opens → pick a friend → "Dare
+   1 friend" (it may say "Posting your dare…" for a moment) → the friend is dared.
+7. **Very Bad Network**: repeat 1, 4 and 5 → each screen still closes at once and shows "Sending…"; it either gets
+   through or says "Couldn't send · tap to try again" (outside the chat: a short red "⚠️ Not sent · tap" pill just
+   under the top bar).
+8. **100% Loss**: send a peek → it keeps saying "Sending…" while it tries (with no internet at all that can take a
+   few minutes: each try waits up to a minute), then the bubble says "Couldn't send · tap to try again". Turn the
+   internet back on → tap the bubble → **Try again** → exactly ONE peek arrives on the friend's phone (never two).
+9. 100% Loss → send a text → close the app fully (swipe it away) while it says "Sending…" → internet on → open the
+   app → the chat shows it as "Not sent – tap to try again" (it's never sent by itself later) → tap → Try again →
+   one message arrives. Or Delete → it's gone.
+10. Send to… → Edit → back to the editor → change something → Send to… → Send → the friend gets the final picture
+    (with your change).
+11. Go back from Send to… without sending (on a test account), wait 15 minutes, close and reopen the app → after the
+    next daily clean-up, Supabase → Storage → media → your folder has no extra file left from that photo.
+12. Edit profile → pick a new picture → Save → it saves quickly and the new picture shows everywhere.
+
+## Step 74 – Faster loading ⚡ (Home, chats, peeks, the drop camera, Send to…)
+
+Use the `testing` update, two phones, and a weak signal for the last checks (Network Link Conditioner → "Very Bad
+Network", as in Step 73).
+
+1. Close the app fully and open it → Home's posts show first; the story circles, the Guess Who number and the red
+   number on the Chat tab can come a second or two later. Pull down on Home → it refreshes as before.
+2. Scroll Home to the bottom → more posts load ("You're all caught up 🌱" at the very end). Like a post → the heart
+   fills at once and stays filled after a pull-down.
+3. Open a chat, go back, open it again → the messages are there at once (no spinner), and a new message from your
+   friend still pops in.
+4. While a chat with Friend A is open, have Friend B send you a message → Friend A's chat stays still (no flicker);
+   the Chat list still shows Friend B's message.
+5. Delete a message "for me" → it's gone; close and reopen the chat → still gone. Clear a chat from the Chat list →
+   open it → empty.
+6. Tap a new peek → it opens quickly; tap a video peek → it plays with its text and stickers.
+7. **The drop**: during the 2 minutes, swipe to the camera → it's in drop mode at once (countdown at the top). Post
+   your drop → Home → your friends' drops unlock straight away (with "🔓 All drops unlocked!").
+8. Open the app from the drop notification → the drop camera opens → take the photo → Send to… → Send → On time.
+9. Camera → photo → Send to… → your friends' names are there at once (no empty list first).
+10. On "Very Bad Network": repeat 1, 3 and 7 → everything still works, just slower; nothing gets stuck.
+
+## Step 75 – Sends on a bad signal, after leaving the app, and after logging out 📤 (review fixes, 23 Nov)
+
+Use the `testing` update and two phones (yours and a test friend's). As in Step 73, **Settings → Developer → Network
+Link Conditioner** makes the internet bad on purpose ("Very Bad Network" is about 1 bar; "100% Loss" is no internet).
+Airplane mode works too. Turn both off at the end.
+
+1. **Chat camera on 1 bar**: Very Bad Network → open the chat with your friend → camera → photo → **Send** → you're
+   back in the chat at once with "👀 Sending peek…". Wait → it becomes your sent peek. Your friend gets exactly one.
+2. **Chat camera with no internet, then back on**: airplane mode on → chat → camera → photo → Send → "Sending…"
+   while it tries (about 15 seconds) → "Couldn't send · tap to try again". Within 10 minutes, turn airplane mode
+   off from Control Center → back in the app it goes by itself (or tap it → Try again). Your friend gets exactly
+   ONE peek.
+3. **Retry never sends twice**: Very Bad Network → send a peek and 2 texts → if any says "Couldn't send · tap to try
+   again", turn the bad network off → tap it → **Try again** → on your friend's phone every peek and text is there
+   exactly once (never twice), and the texts are in the order you sent them.
+4. **Send to… while the drop's 2 minutes run out**: open the drop alert → take the photo with about 20 seconds left
+   → on Send to… untick "Today's drop" if it's ticked, tick a friend → wait until the 2 minutes are over → tap Send
+   → Send to… closes at once (no spinning button) and the friend gets the peek once. Do it again with "Today's drop"
+   ticked and Very Bad Network on → Send → Home at once with "📤 Posting your drop…" → "Drop posted · …" (Late is
+   fine here). Your profile shows ONE drop.
+5. **The photo uploads while you pick**: drop camera → photo → on Send to… stay 20 seconds (type a caption) with
+   airplane mode on, then turn it off and wait 10 seconds → Send → the drop posts within a second or two.
+6. **Locking the phone mid-send**: 100% Loss → send a peek → lock the phone at once → wait 15 minutes → turn the
+   bad network off → unlock and open Peekaboo → the peek says "Not sent – tap to try again" (it is NOT sent by
+   itself after so long) → tap → Try again → one peek arrives. Then: the same, but turn the bad network off and
+   come back after 1 minute → it simply carries on and arrives by itself (it can take up to a minute).
+7. **The pill**: 100% Loss → send a peek from Send to… → go to the Home camera → the "📤 Sending…" pill sits just
+   under your picture and the flip / flash buttons; tap flip → the camera flips (the pill never takes the tap). When
+   it fails it says "⚠️ Not sent · tap" → tap it → Try again / Delete.
+8. **Send to… with one part refused**: tick My Story and a friend who has blocked the test account (or who isn't
+   a friend any more) → Send → one toast says the peek couldn't be sent, and another says "Shared to your story! 🎉".
+9. **Dare your friends, then leave**: Very Bad Network → do the Daily Dare → Send → on "Dare your friends" pick a
+   friend → "Dare 1 friend" → while it says "Posting your dare…", tap back → open a chat → nothing closes by
+   itself, no message pops up, and the friend is NOT dared.
+10. **Profile picture in a dead spot**: airplane mode on → Edit profile → pick a new picture → wait 10 seconds →
+    airplane mode off → Save → it saves (no "Can't reach the internet"), and the new picture shows everywhere.
+11. **Log out deletes unsent sends**: 100% Loss → send a text → Settings → Log out → turn the bad network off → log
+    back in → the text is gone (no "Not sent") and was never sent.
+12. **First drop ever on this phone**: on a test account that never agreed to the dare rules, tick "Today's drop"
+    and My Story → Send → "I understand" → the rules sheet slides away, then the story preview opens by itself
+    (no second tap needed) → Share → Home.

@@ -109,6 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await checkAccount();
     let tidied = false;
     signingOut.current = target;
+    // You're logging out yourself: things kept on this phone for you alone go now (like sends that didn't go
+    // out). A login that ends by itself keeps them, so they're still there when you log back in.
+    if (target) runStepsBeforeLogOut(target);
     try {
       const { error } = await supabase.auth.signOut();
       // If the server can't be reached, Supabase still removes the login from this phone (and then reports
@@ -164,6 +167,28 @@ export function runAfterSignOut(step: (userId: string) => void): () => void {
   afterSignOut.add(step);
   return () => {
     afterSignOut.delete(step);
+  };
+}
+
+// Things to do only when someone logs out ON PURPOSE (Log out, or deleting the account), just before the login
+// ends. Not when a login ends by itself (it ran out and couldn't be renewed on a weak signal): then nothing of
+// theirs is thrown away. lib/outbox.ts adds one: unsent messages and their copies on the phone are deleted.
+const beforeLogOut = new Set<(userId: string) => void>();
+
+function runStepsBeforeLogOut(userId: string) {
+  beforeLogOut.forEach((step) => {
+    try {
+      step(userId);
+    } catch (error) {
+      console.warn('Could not tidy up before logging out', error);
+    }
+  });
+}
+
+export function runBeforeLogOut(step: (userId: string) => void): () => void {
+  beforeLogOut.add(step);
+  return () => {
+    beforeLogOut.delete(step);
   };
 }
 

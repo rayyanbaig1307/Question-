@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,32 +9,30 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { DareRulesSheet } from '@/components/DareRulesSheet';
 import { DropRewindOption } from '@/components/DropRewindOption';
-import { useOverlays } from '@/components/Overlays';
 import { PostPreview } from '@/components/PostPreview';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { StoryPreview } from '@/components/StoryPreview';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { TextField } from '@/components/TextField';
+import { useNoRestartWhileOpen } from '@/lib/appUpdates';
 import { useMe } from '@/lib/auth';
-import { sendSnap } from '@/lib/chat';
 import { checkClean } from '@/lib/cleanWords';
-import { friendlyError } from '@/lib/errors';
-import { fetchFriends } from '@/lib/friends';
-import { resizePhoto, type Capture } from '@/lib/media';
+import { cachedFriends, fetchFriends } from '@/lib/friends';
+import type { Capture } from '@/lib/media';
 import { todayDareDay, useDare } from '@/lib/dares';
-import { lateLabel } from '@/lib/drop';
 import { useDareRulesAccepted } from '@/lib/legal';
-import { postMystery } from '@/lib/guess';
+import { queueShare, type SharePlan } from '@/lib/outbox';
 import { fetchPlusAllowances, type PlusAllowances } from '@/lib/plusExtras';
-import { createPost } from '@/lib/posts';
-import { createStory } from '@/lib/stories';
-import { refreshStoryBadges } from '@/lib/storyRings';
+import { discardUpload, markUsed, prepareUpload, type Prepared, type UploadFolder } from '@/lib/preupload';
 import type { Audience, Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
 // "Send to…": choose where your photo goes – your story, your profile, and/or friends as a peek.
 // Kept simple: "Post it" (story / profile) and "Send to friends". Dare, drop, forfeit and Guess Who only show up
 // when you took the photo for one of those (from the camera's mode bubbles or the Dare page).
+//
+// Instant: the photo starts uploading the moment this screen opens (lib/preupload.ts), and Send hands everything to
+// the outbox (lib/outbox.ts) and closes the screen at once. A "Sending…" banner and a toast say how it went.
 export default function Share() {
   // `to` is set when you came from a chat: that friend is already ticked.
   // `dare` is set when you're doing the Daily Dare: "Today's dare" is already ticked.
@@ -60,7 +58,8 @@ export default function Share() {
   // `forfeit` is the forfeit you're paying with this photo.
   const fromForfeit = !!forfeit;
   const { userId, profile } = useMe();
-  const { showToast } = useOverlays();
+  // No restart for a new app version while you're choosing where it goes.
+  useNoRestartWhileOpen();
   // "Post to my profile" first shows how the post will look, with the caption still editable.
   const [previewOpen, setPreviewOpen] = useState(false);
   // "My Story" first shows the story full screen, with Edit (back to the editor) or Share to story.
@@ -86,18 +85,40 @@ export default function Share() {
   const [rewind, setRewind] = useState(false);
   const [rewindInfo, setRewindInfo] = useState<PlusAllowances | null>(null);
   const [caption, setCaption] = useState('');
-  const [friends, setFriends] = useState<Profile[] | null>(null);
+  // Your friends: the list from earlier straight away (if there is one), then a fresh one.
+  const [friends, setFriends] = useState<Profile[] | null>(() => cachedFriends(userId));
   const [picked, setPicked] = useState<string[]>(to ? [to] : []);
-  const [busy, setBusy] = useState(false);
-  const sending = useRef(false);
-  // Remember what already worked, so trying again doesn't send twice.
-  const done = useRef({ story: false, profile: false, snaps: false, post: false, guess: false });
+  // Only while the "did you agree to the dare rules?" check is still waiting for the server (at most 20 seconds).
+  const [checkingRules, setCheckingRules] = useState(false);
+  // Sent: Send does nothing more (a second tap can arrive before the screen closes).
+  const sent = useRef(false);
+  // The dare rules were just agreed to (or the server said so) for this send.
+  const rulesOk = useRef(false);
 
   useEffect(() => {
     fetchFriends(userId)
       .then(setFriends)
-      .catch(() => setFriends([]));
+      .catch(() => setFriends((current) => current ?? []));
   }, [userId]);
+
+  // 📤 The early upload: starts now, while you pick where it goes. Into the folder it most likely needs (a drop,
+  // dare or forfeit → posts, with the drop's blurry preview; Guess Who → its own folder; a peek → snaps; else your
+  // story). Leaving without sending throws it away; sending hands it to the outbox.
+  const capture = useMemo<Capture>(
+    () => (isVideo ? { kind: 'video', uri, overlayUri: overlay ?? null } : { kind: 'photo', uri }),
+    [isVideo, uri, overlay],
+  );
+  const folder: UploadFolder =
+    fromDrop || fromDare || fromForfeit ? 'posts' : fromGuess ? 'mystery' : to || pick === 'friends' ? 'snaps' : 'stories';
+  const early = useRef<Prepared | null>(null);
+  useEffect(() => {
+    const upload = prepareUpload(userId, capture, folder, { blur: fromDrop });
+    early.current = upload;
+    return () => {
+      if (!sent.current) discardUpload(upload);
+      if (early.current === upload) early.current = null;
+    };
+  }, [userId, capture, folder, fromDrop]);
 
   useEffect(() => {
     if (!fromDrop) return;
@@ -126,24 +147,39 @@ export default function Share() {
   const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
   async function send(storyOk = storyChecked) {
+    if (sent.current) return;
     const notAllowed = checkClean(caption, 'content');
     if (notAllowed) {
       Alert.alert('Caption not allowed', notAllowed);
       return;
     }
-    if ((toDare || toDrop || toForfeit) && !dareRules.accepted) {
-      setRulesOpen(true);
-      return;
+    // Dares, drops and forfeits need the one-time "Before your first dare" agreement. Someone this phone knows has
+    // agreed goes straight on; otherwise the check is waited for (never the sheet just because it's still asking).
+    if ((toDare || toDrop || toForfeit) && dareRules.accepted !== true && !rulesOk.current) {
+      setCheckingRules(true);
+      let agreed = false;
+      try {
+        agreed = await dareRules.ensure();
+      } catch {
+        agreed = false;
+      } finally {
+        setCheckingRules(false);
+      }
+      if (!agreed) {
+        setRulesOpen(true);
+        return;
+      }
+      rulesOk.current = true;
     }
-    if (toStory && !done.current.story && !storyOk) {
+    if (toStory && !storyOk) {
       setStoryPreviewOpen(true);
       return;
     }
-    if (postToProfile && !done.current.profile) {
+    if (postToProfile) {
       setPreviewOpen(true);
       return;
     }
-    await sendNow();
+    sendNow();
   }
 
   // From the story preview: carry on (the profile-post preview comes next if that's picked too).
@@ -160,90 +196,54 @@ export default function Share() {
     setTimeout(() => router.back(), Platform.OS === 'ios' ? 500 : 250);
   }
 
-  async function sendNow() {
-    // A second tap can arrive before React redraws the disabled button.
-    if (sending.current || nothingPicked) return;
+  // Hands everything to the outbox and leaves at once. The drop, dare or forfeit post is saved first (the server
+  // stamps On time / Late when it's saved); the toasts and the "Sending…" banner say how it went.
+  function sendNow() {
+    // A second tap can arrive before the screen closes.
+    if (sent.current || nothingPicked) return;
     // The caption can change in the preview, so check the final text too.
     const notAllowed = checkClean(caption, 'content');
     if (notAllowed) {
       Alert.alert('Caption not allowed', notAllowed);
       return;
     }
-    sending.current = true;
-    setPreviewOpen(false);
-    setBusy(true);
-    try {
-      // Photos are shrunk first so they upload quickly; videos were already recorded small.
-      const photo: Capture = isVideo
-        ? { kind: 'video', uri, overlayUri: overlay ?? null }
-        : { kind: 'photo', uri: await resizePhoto(uri, 1080) };
-      if (toGuess && !done.current.guess) {
-        await postMystery(userId, photo, caption);
-        done.current.guess = true;
-      }
-      if (picked.length > 0 && !done.current.snaps) {
-        await sendSnap(userId, picked, photo);
-        done.current.snaps = true;
-      }
-      if (toStory && !done.current.story) {
-        await createStory(userId, photo, audience);
-        done.current.story = true;
-        // Your picture gets its story ring straight away.
-        void refreshStoryBadges(userId, true);
-      }
-      if (postToProfile && !done.current.profile) {
-        await createPost(userId, photo, caption, { audience });
-        done.current.profile = true;
-      }
-      // One post can be your drop, your dare answer, or both.
-      let dropLate: number | null = null;
-      let dropRewound = false;
-      let darePostId: string | null = null;
-      if ((toDare || toDrop || toForfeit) && !done.current.post) {
-        const post = await createPost(userId, photo, caption, {
-          dare: toDare,
-          drop: toDrop,
-          rewind: toDrop && rewind,
-          forfeit: toForfeit && forfeit ? forfeit : undefined,
-          audience,
-        });
-        dropLate = post.drop_late_seconds;
-        dropRewound = post.drop_rewound === true;
-        if (toDare) darePostId = post.id;
-        done.current.post = true;
-      }
-      // A happy little buzz: it's sent!
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(
-        toForfeit
-          ? 'Forfeit paid 💀✅ Respect.'
-          : toGuess
-          ? "Guess Who posted 🕵️ Let's see who figures it out!"
-          : toDrop && dropRewound
-          ? "Drop posted ⏰ No 'late' label this time 👀🔥"
-          : toDrop && dropLate !== null && rewind && !lateLabel(dropLate).onTime
-          ? `Drop posted · ${lateLabel(dropLate).text} (the rewind wasn't available)`
-          : toDrop && dropLate !== null
-          ? lateLabel(dropLate).onTime
-            ? 'Drop posted · On time! 👀🔥'
-            : `Drop posted · ${lateLabel(dropLate).text}`
-          : toDare
-            ? 'Dare done! 🎯🔥'
-            : successMessage(picked.length, toStory, postToProfile),
-      );
-      // After your drop: to Home, where your friends' drops just unlocked.
+    const upload = early.current;
+    if (!upload) return;
+    sent.current = true;
+    const names = Object.fromEntries(picked.map((id) => [id, friendName(id)]));
+    const plan: SharePlan = {
+      friendIds: toGuess ? [] : picked,
+      names,
+      story: toStory && !toGuess,
+      profile: postToProfile,
+      guess: toGuess,
+      caption,
+      audience,
+      post:
+        toDare || toDrop || toForfeit
+          ? { dare: toDare, drop: toDrop, rewind: toDrop && rewind, ...(toForfeit && forfeit ? { forfeit } : {}) }
+          : null,
+    };
+    const { postId, postJob } = queueShare(userId, plan, upload);
+    markUsed(upload);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const leave = () => {
+      // After your drop: to Home, where your friends' drops unlock as soon as it's saved.
       // Otherwise back to the Dare screen, the chat you came from, or the camera.
       if (toGuess) router.dismissTo('/guess');
       else if (fromForfeit) router.dismissTo('/dare');
       else if (fromDrop) router.dismissTo({ pathname: '/', params: { page: 'home' } });
       else router.dismissTo(fromDare ? '/dare' : to ? `/chat/${to}` : '/');
-      // You did the dare: now dare your friends (they get 24 hours).
-      if (toDare && darePostId) router.push({ pathname: '/dare-chain', params: { post: darePostId } });
-    } catch (error) {
-      Alert.alert('Could not send', friendlyError(error));
-    } finally {
-      sending.current = false;
-      setBusy(false);
+      // You did the dare: now dare your friends (they get 24 hours). It waits for your post to be saved.
+      if (toDare && postId) router.push({ pathname: '/dare-chain', params: { post: postId, ...(postJob ? { job: postJob } : {}) } });
+    };
+    if (previewOpen || storyPreviewOpen) {
+      // Let the preview slide away first.
+      setPreviewOpen(false);
+      setStoryPreviewOpen(false);
+      setTimeout(leave, 350);
+    } else {
+      leave();
     }
   }
 
@@ -408,7 +408,7 @@ export default function Share() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.lg }]}>
-          <Button title={sendTitle} icon="send" onPress={() => send()} loading={busy} disabled={nothingPicked} />
+          <Button title={sendTitle} icon="send" onPress={() => send()} loading={checkingRules} disabled={nothingPicked} />
         </View>
       </KeyboardAvoidingView>
       <Modal visible={previewOpen} transparent animationType="slide" onRequestClose={() => setPreviewOpen(false)}>
@@ -430,7 +430,7 @@ export default function Share() {
               maxLength={300}
               multiline
             />
-            <Button title="Post" icon="send" onPress={sendNow} loading={busy} />
+            <Button title="Post" icon="send" onPress={sendNow} />
             <Pressable onPress={() => setPreviewOpen(false)} style={styles.keepEditing} accessibilityRole="button">
               <Text style={styles.keepEditingText}>Keep editing</Text>
             </Pressable>
@@ -445,7 +445,7 @@ export default function Share() {
         audience={audience}
         avatarPath={profile?.avatar_path}
         name={profile?.display_name || profile?.username || 'You'}
-        busy={busy}
+        busy={false}
         onEdit={editStory}
         onShare={shareStory}
         onClose={() => setStoryPreviewOpen(false)}
@@ -455,23 +455,15 @@ export default function Share() {
         onClose={() => setRulesOpen(false)}
         onAccept={async () => {
           await dareRules.accept();
+          rulesOk.current = true;
           setRulesOpen(false);
+          // Agreed: the send carries on by itself (no second tap) – once the rules sheet has slid away, because
+          // iPhones won't open the story preview (or close this screen) while another sheet is still closing.
+          setTimeout(() => void send(), Platform.OS === 'ios' ? 500 : 250);
         }}
       />
     </View>
   );
-}
-
-function successMessage(friendCount: number, toStory: boolean, toProfile: boolean): string {
-  const places = [
-    friendCount > 0 ? (friendCount === 1 ? '1 friend' : `${friendCount} friends`) : null,
-    toStory ? 'your story' : null,
-    toProfile ? 'your profile' : null,
-  ].filter((place): place is string => place !== null);
-  if (places.length === 1 && friendCount > 0) return `Peek sent to ${places[0]}! 💌`;
-  // "a", "a and b", "a, b and c"
-  const list = places.length > 1 ? `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}` : places[0];
-  return `Shared to ${list}! 🎉`;
 }
 
 function Option({ emoji, title, subtitle, selected, onPress }: {

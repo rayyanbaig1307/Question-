@@ -28,7 +28,8 @@ import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
-import { addComment, deleteComment, fetchComments, setCommentLiked, type Comment } from '@/lib/feed';
+import { deleteComment, fetchComments, setCommentLiked, type Comment } from '@/lib/feed';
+import { ackSent, discard, getVisibleScope, inScope, onOutboxDone, retry, sendLater, setVisibleScope, useOutbox, type Job } from '@/lib/outbox';
 import { fetchPost } from '@/lib/posts';
 import { timeAgo } from '@/lib/time';
 import { useSafetyActions } from '@/lib/useSafetyActions';
@@ -38,7 +39,7 @@ import { colors, font, keyboardAppearance, space } from '@/theme';
 // one, like them, delete or report. Drag the top of the sheet down, or tap above it, to close.
 export default function Comments() {
   const { postId } = useLocalSearchParams<{ postId: string }>();
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
   const { showOptions, showToast } = useOverlays();
   const { report } = useSafetyActions();
   const insets = useSafeAreaInsets();
@@ -78,9 +79,17 @@ export default function Comments() {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [postOwner, setPostOwner] = useState<string | null>(null);
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  // The words in the box right now (a second tap can come before the screen redraws).
+  const draft = useRef('');
+  const changeText = (value: string) => {
+    draft.current = value;
+    setText(value);
+  };
   // The comment you're replying to (null = a new comment on the post).
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  // 📤 Your comments that aren't in yet (lib/outbox.ts): they show at once with "Sending…".
+  const scope = `post:${postId}` as const;
+  const outbox = useOutbox(userId, scope);
 
   useEffect(() => {
     fetchComments(userId, postId)
@@ -89,6 +98,25 @@ export default function Comments() {
     fetchPost(postId)
       .then((post) => setPostOwner(post?.user_id ?? null))
       .catch(() => {});
+  }, [postId, userId]);
+
+  // While the comments are open, your comments on their way show here (not in the banner at the top). Once one is
+  // in, the real comment takes its place.
+  useEffect(() => {
+    setVisibleScope(`post:${postId}`);
+    const stop = onOutboxDone((job) => {
+      if (job.state !== 'sent' || job.owner !== userId || !inScope(job, `post:${postId}`)) return;
+      const saved = ((job.rows ?? []) as Comment[]).filter((row) => row && typeof row.id === 'string');
+      if (saved.length > 0) {
+        setComments((current) => [...(current ?? []).filter((c) => !saved.some((row) => row.id === c.id)), ...saved]);
+      }
+      ackSent(job.key);
+    });
+    return () => {
+      stop();
+      // Only if another screen hasn't taken over already.
+      if (getVisibleScope() === `post:${postId}`) setVisibleScope(null);
+    };
   }, [postId, userId]);
 
   // Top comments in order, each followed by its replies.
@@ -100,6 +128,11 @@ export default function Comments() {
   }, [comments]);
 
   const nameOf = (comment: Comment) => (comment.author ? comment.author.display_name || comment.author.username : 'Someone');
+  const myName = profile ? profile.display_name || profile.username : 'You';
+  // Your comments on their way (one that already came back in the list isn't shown twice).
+  const pendingComments = outbox.filter(
+    (job) => job.state !== 'sent' && !(comments ?? []).some((comment) => job.rowIds.includes(comment.id)),
+  );
 
   // Opening someone's profile closes the sheet first.
   function openProfile(id: string) {
@@ -109,30 +142,34 @@ export default function Comments() {
 
   function startReply(comment: Comment) {
     setReplyTo(comment);
-    if (comment.author && !text.startsWith(`@${comment.author.username}`)) setText(`@${comment.author.username} `);
+    if (comment.author && !text.startsWith(`@${comment.author.username}`)) changeText(`@${comment.author.username} `);
     input.current?.focus();
   }
 
-  async function send() {
-    const body = text.trim();
-    if (!body || sending) return;
+  // Posts your comment in the background: it shows at once, and the box empties (a double tap finds it empty).
+  function send() {
+    const body = draft.current.trim();
+    if (!body) return;
     const notAllowed = checkClean(body, 'content');
     if (notAllowed) {
       Alert.alert('Comment not posted', notAllowed);
       return;
     }
-    setSending(true);
-    try {
-      // Replies always hang off the top comment (one level deep).
-      const added = await addComment(userId, postId, body, replyTo ? (replyTo.parent_id ?? replyTo.id) : null);
-      setComments((current) => [...(current ?? []), added]);
-      setText('');
-      setReplyTo(null);
-    } catch (error) {
-      Alert.alert('Comment not posted', friendlyError(error));
-    } finally {
-      setSending(false);
-    }
+    // Replies always hang off the top comment (one level deep).
+    sendLater(userId, scope, { kind: 'comment', postId, body, parentId: replyTo ? (replyTo.parent_id ?? replyTo.id) : null });
+    changeText('');
+    setReplyTo(null);
+  }
+
+  // A comment that couldn't be posted: try again, or delete it.
+  function pendingMenu(job: Job) {
+    showOptions({
+      title: job.error ?? "Couldn't post",
+      options: [
+        ...(job.restored && job.final ? [] : [{ label: 'Try again', onPress: () => retry(job.key) }]),
+        { label: 'Delete', destructive: true, onPress: () => void discard(job.key) },
+      ],
+    });
   }
 
   async function like(comment: Comment) {
@@ -207,7 +244,20 @@ export default function Comments() {
               keyExtractor={(comment) => comment.id}
               contentContainerStyle={styles.list}
               keyboardDismissMode="interactive"
-              ListEmptyComponent={<EmptyState emoji="💬" title="No comments yet" message="Be the first to say something nice!" />}
+              ListEmptyComponent={
+                pendingComments.length > 0 ? undefined : (
+                  <EmptyState emoji="💬" title="No comments yet" message="Be the first to say something nice!" />
+                )
+              }
+              ListFooterComponent={
+                pendingComments.length > 0 ? (
+                  <>
+                    {pendingComments.map((job) => (
+                      <PendingComment key={job.key} job={job} name={myName} onPress={() => pendingMenu(job)} />
+                    ))}
+                  </>
+                ) : undefined
+              }
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => {
                 const isReply = !!item.parent_id;
@@ -265,7 +315,7 @@ export default function Comments() {
               <Pressable
                 onPress={() => {
                   setReplyTo(null);
-                  setText('');
+                  changeText('');
                 }}
                 hitSlop={10}
                 accessibilityLabel="Cancel reply">
@@ -277,7 +327,7 @@ export default function Comments() {
             <TextInput
               ref={input}
               value={text}
-              onChangeText={setText}
+              onChangeText={changeText}
               placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
               placeholderTextColor={colors.textFaint}
               keyboardAppearance={keyboardAppearance}
@@ -299,7 +349,38 @@ export default function Comments() {
   );
 }
 
+// Your comment, shown at once while it's on its way (or if it couldn't be posted).
+function PendingComment({ job, name, onPress }: { job: Job; name: string; onPress: () => void }) {
+  const failed = job.state === 'failed';
+  const body = job.what.kind === 'comment' ? job.what.body : '';
+  const status = failed ? (job.restored && job.error ? job.error : "Couldn't post · tap to try again") : 'Sending…';
+  return (
+    <Pressable
+      style={[styles.comment, job.what.kind === 'comment' && job.what.parentId ? styles.reply : null, failed ? null : styles.pending]}
+      onPress={failed ? onPress : undefined}
+      disabled={!failed}
+      accessibilityRole="button"
+      accessibilityLabel={status}>
+      <View style={styles.commentText}>
+        <Text style={styles.body}>
+          <Text style={styles.name}>{name} </Text>
+          {body}
+        </Text>
+        <Text style={[styles.time, failed && styles.failedText]}>{status}</Text>
+        {failed && job.final && job.error && !job.restored ? <Text style={styles.time}>{job.error}</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  pending: {
+    opacity: 0.6,
+  },
+  failedText: {
+    color: colors.red,
+    fontWeight: '700',
+  },
   screen: {
     flex: 1,
   },

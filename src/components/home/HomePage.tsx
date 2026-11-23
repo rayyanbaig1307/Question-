@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FeedCard } from '@/components/FeedCard';
 import { useOverlays } from '@/components/Overlays';
 import { useMe } from '@/lib/auth';
-import { fetchMyDrops, NO_DROPS, postMedia, useDropKeyOpen, type MyDrops } from '@/lib/drop';
+import { fetchMyDrops, NO_DROPS, postMedia, useDropKeyOpen, useMyDropPosts, useWithMyNewDrop, type MyDrops } from '@/lib/drop';
 import { friendlyError } from '@/lib/errors';
 import { fetchDiscover, setLiked, type DiscoverCursor, type DiscoverPost } from '@/lib/feed';
 import { countUnguessed } from '@/lib/guess';
@@ -16,6 +16,7 @@ import { inviteFriends } from '@/lib/invite';
 import { liveMaybeAvailable } from '@/lib/liveAccess';
 import { fetchFriendsLiveNow, type FriendLive } from '@/lib/lives';
 import { onNotificationArrived } from '@/lib/notifications';
+import { useDropSending } from '@/lib/outbox';
 import { noteDropSeen } from '@/lib/peeks';
 import { useMediaUrls } from '@/lib/media';
 import { deletePost } from '@/lib/posts';
@@ -27,6 +28,9 @@ import { colors, font, space, pageBackground } from '@/theme';
 import { useTabBarSpace } from './HomeTabBar';
 import { PageHeader } from './PageHeader';
 import { StoryRow, type Rings } from './StoryRow';
+
+// How long Home waits for a drop you just sent before loading again anyway.
+const DROP_WAIT_MS = 3000;
 
 // Home, like Instagram: story circles along the top, then the feed – your friends' posts (and yours) first,
 // then everyone else's public posts.
@@ -42,7 +46,9 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   // Your own drops: posting one opens every drop until the next day's drop goes off ("give a peek to get a peek").
-  const [myDrops, setMyDrops] = useState<MyDrops | null>(null);
+  // The drop you just posted counts the moment it's saved, before Home has loaded your drops again.
+  const [loadedDrops, setMyDrops] = useState<MyDrops | null>(null);
+  const myDrops = useWithMyNewDrop(userId, loadedDrops);
   // Is your latest drop still the current one? (Redraws Home whenever drops lock again.)
   const dropKey = useDropKeyOpen(myDrops);
   // How many Guess Who posts you can still guess (a number on the Guess Who circle).
@@ -50,28 +56,13 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
   // Friends who are live right now 🔴 (only on downloads that can open a live).
   const [lives, setLives] = useState<FriendLive[]>([]);
 
-  const show = useCallback(
-    (loaded: {
-      rings: Rings;
-      page: { posts: DiscoverPost[]; next: DiscoverCursor | null };
-      drops: MyDrops;
-      toGuess: number;
-      lives: FriendLive[];
-    }) => {
-      setRings(loaded.rings);
-      setPosts(loaded.page.posts);
-      setNext(loaded.page.next);
-      setMyDrops(loaded.drops);
-      setToGuess(loaded.toGuess);
-      setLives(loaded.lives);
-    },
-    [],
-  );
-
-  const loadAll = useCallback(async () => {
-    const ticket = storyRingsTicket();
-    const [rings, page, drops, toGuess, lives] = await Promise.all([
-      fetchStoryRings(userId)
+  // Loads everything on Home. Each part shows the moment it arrives: the posts never wait for the stories, your
+  // drops, the Guess Who number or the lives (before, the slowest of them held up all the others). `current()` says
+  // whether this load still counts (Home may have been left meanwhile). Resolves once every part is done.
+  const loadAll = useCallback(
+    (current: () => boolean) => {
+      const ticket = storyRingsTicket();
+      const stories = fetchStoryRings(userId)
         .then((loaded) => {
           // The same list gives the rings on profile pictures everywhere else.
           setStoryRings(userId, loaded, ticket);
@@ -80,14 +71,41 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
         .catch((error) => {
           console.warn('Could not load stories', error);
           return { mine: null, friends: [] } as Rings;
-        }),
-      fetchDiscover(userId),
-      fetchMyDrops(userId).catch(() => NO_DROPS),
-      countUnguessed().catch(() => 0),
-      liveMaybeAvailable() ? fetchFriendsLiveNow().catch(() => [] as FriendLive[]) : Promise.resolve([] as FriendLive[]),
-    ]);
-    return { rings, page, drops, toGuess, lives };
-  }, [userId]);
+        })
+        .then((loaded) => {
+          if (current()) setRings(loaded);
+        });
+      const feed = fetchDiscover(userId)
+        .then((page) => {
+          if (!current()) return;
+          setPosts(page.posts);
+          setNext(page.next);
+        })
+        .catch((error) => {
+          console.warn('Could not load Home', error);
+          if (current()) setPosts((shown) => shown ?? []);
+        });
+      const drops = fetchMyDrops(userId)
+        .catch(() => NO_DROPS)
+        .then((loaded) => {
+          if (current()) setMyDrops(loaded);
+        });
+      const guess = countUnguessed()
+        .catch(() => 0)
+        .then((count) => {
+          if (current()) setToGuess(count);
+        });
+      const live = liveMaybeAvailable()
+        ? fetchFriendsLiveNow()
+            .catch(() => [] as FriendLive[])
+            .then((loaded) => {
+              if (current()) setLives(loaded);
+            })
+        : Promise.resolve();
+      return Promise.all([stories, feed, drops, guess, live]).then(() => {});
+    },
+    [userId],
+  );
 
   // Friends who are live: checked again every 30 seconds while Home is on screen, and when a "… is live"
   // notification comes in.
@@ -107,23 +125,29 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
     };
   }, [visible, refreshLives]);
 
-  // Fresh stories and posts every time you come to this page.
+  // Your drop is still on its way (you just sent it from "Send to…"): Home waits for it before loading again – at
+  // most 3 seconds – so its loading (posts, stories, pictures) doesn't slow your drop down on a weak signal. The
+  // server stamps On time / Late when your drop is saved, so every second counts.
+  const dropSending = useDropSending(userId);
+  const [waitedFor, setWaitedFor] = useState<string | null>(null);
   useEffect(() => {
-    if (!visible) return;
+    if (!dropSending) return;
+    const timer = setTimeout(() => setWaitedFor(dropSending), DROP_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [dropSending]);
+  const waitingForDrop = !!dropSending && waitedFor !== dropSending;
+
+  // Fresh stories and posts every time you come to this page – and again when your drop has just been saved (so
+  // your own drop shows in the feed; your friends' drops already unlocked the moment it was saved).
+  const dropPosts = useMyDropPosts();
+  useEffect(() => {
+    if (!visible || waitingForDrop) return;
     let cancelled = false;
-    loadAll()
-      .then((loaded) => !cancelled && show(loaded))
-      .catch((error) => {
-        console.warn('Could not load Home', error);
-        if (!cancelled) {
-          setPosts((current) => current ?? []);
-          setRings((current) => current ?? { mine: null, friends: [] });
-        }
-      });
+    void loadAll(() => !cancelled);
     return () => {
       cancelled = true;
     };
-  }, [visible, loadAll, show]);
+  }, [visible, waitingForDrop, loadAll, dropPosts]);
 
   // You just posted your drop: celebrate – every drop is unlocking (friends' and everyone's, old ones too).
   const hadKey = useRef<boolean | null>(null);
@@ -138,11 +162,7 @@ export function HomePage({ visible, onCamera }: { visible: boolean; onCamera: ()
 
   async function refresh() {
     setRefreshing(true);
-    try {
-      show(await loadAll());
-    } catch (error) {
-      console.warn('Could not refresh Home', error);
-    }
+    await loadAll(() => true);
     setRefreshing(false);
   }
 

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -13,12 +13,16 @@ import { dareFriends, fetchDareChain, inviteToDare, MAX_DARES_PER_DAY } from '@/
 import { todayDareDay, useDare } from '@/lib/dares';
 import { friendlyError } from '@/lib/errors';
 import { fetchFriends } from '@/lib/friends';
+import { retry, SEND_NOT_FOUND, whenSent } from '@/lib/outbox';
 import type { Profile } from '@/lib/types';
 import { colors, font, radius, space } from '@/theme';
 
 // Right after you've done today's dare: dare up to 3 friends. They get 24 hours.
+// Your dare post may still be on its way (it's sent in the background, lib/outbox.ts): "Dare them" waits for it,
+// because the dares point at your post.
 export default function DareChain() {
-  const { post } = useLocalSearchParams<{ post?: string }>();
+  // `post`: your dare post's id. `job`: its send, while it may still be going out.
+  const { post, job } = useLocalSearchParams<{ post?: string; job?: string }>();
   const { userId, profile } = useMe();
   const { showToast } = useOverlays();
   const dare = useDare(todayDareDay());
@@ -27,6 +31,17 @@ export default function DareChain() {
   const [alreadyDared, setAlreadyDared] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  // Waiting for your dare post to be saved.
+  const [waitingForPost, setWaitingForPost] = useState(false);
+  // Still on this screen? Waiting for your post can take a while on a weak signal, and you can go back meanwhile:
+  // then nobody is dared, no message pops up, and no other screen is closed.
+  const open = useRef(true);
+  useEffect(
+    () => () => {
+      open.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     Promise.all([fetchFriends(userId), fetchDareChain(userId, todayDareDay())])
@@ -49,16 +64,56 @@ export default function DareChain() {
   }
 
   async function send() {
+    if (sending) return;
+    setSending(true);
+    if (job) {
+      setWaitingForPost(true);
+      const posted = await whenSent(job);
+      // You left while it was on its way: you backed out of daring them.
+      if (!open.current) return;
+      setWaitingForPost(false);
+      if (posted.state !== 'sent' && posted.error === SEND_NOT_FOUND) {
+        setSending(false);
+        // This phone doesn't know about the post any more (so "Try again" can't help).
+        Alert.alert("We couldn't find your dare post", 'Try again from the Dare page, or dare them without it.', [
+          { text: 'Dare them anyway', onPress: () => void dareNow(null) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+        return;
+      }
+      if (posted.state !== 'sent') {
+        setSending(false);
+        // Your post didn't go: try it again, or dare them without pointing at it.
+        Alert.alert("Your dare post didn't go", posted.error ?? 'No connection – tap to try again', [
+          {
+            text: 'Try again',
+            onPress: () => {
+              retry(job);
+              void send();
+            },
+          },
+          { text: 'Dare them anyway', onPress: () => void dareNow(null) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+        return;
+      }
+    }
+    await dareNow(post ?? null);
+  }
+
+  async function dareNow(sourcePost: string | null) {
+    if (!open.current) return;
     setSending(true);
     try {
-      const count = await dareFriends(picked, post ?? null);
+      const count = await dareFriends(picked, sourcePost);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(count > 0 ? `😈 Dared ${count} friend${count === 1 ? '' : 's'} – they have 24 hours` : 'Those friends already did the dare');
-      router.back();
+      // Only close this screen if you're still on it (never the screen you went to instead).
+      if (open.current) router.back();
     } catch (error) {
-      Alert.alert('Could not send the dare', friendlyError(error));
+      if (open.current) Alert.alert('Could not send the dare', friendlyError(error));
     } finally {
-      setSending(false);
+      if (open.current) setSending(false);
     }
   }
 
@@ -107,7 +162,13 @@ export default function DareChain() {
         )}
 
         <Button
-          title={picked.length > 0 ? `Dare ${picked.length} friend${picked.length === 1 ? '' : 's'} 😈` : 'Pick friends to dare'}
+          title={
+            waitingForPost
+              ? 'Posting your dare…'
+              : picked.length > 0
+                ? `Dare ${picked.length} friend${picked.length === 1 ? '' : 's'} 😈`
+                : 'Pick friends to dare'
+          }
           icon="flame"
           disabled={picked.length === 0}
           loading={sending}

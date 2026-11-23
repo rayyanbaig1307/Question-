@@ -1,8 +1,9 @@
 import { requireOptionalNativeModule } from 'expo';
+import { randomUUID } from 'expo-crypto';
 
-import type { Message } from './chat';
+import { insertMessage, type Message } from './chat';
+import { isClearRefusal } from './errors';
 import { deleteMedia, uploadMedia } from './media';
-import { supabase } from './supabase';
 
 // Recording and playing sound is a native part of the app. Expo Go has it, but an app built before voice notes
 // were added doesn't – then the mic button is hidden and voice notes say to update the app.
@@ -38,6 +39,12 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// How long a voice note is, as it's saved.
+export function voiceLength(durationMs: number): number {
+  return Math.min(MAX_VOICE_MS, Math.round(durationMs));
+}
+
+// A voice note sent straight away (the chats now send theirs through the outbox, lib/outbox.ts).
 export async function sendVoice(
   me: string,
   friend: string,
@@ -46,22 +53,20 @@ export async function sendVoice(
   waveform: number[],
 ): Promise<Message> {
   const media_path = await uploadMedia(me, 'voice', uri, 'audio');
-  const { data, error } = await supabase
-    .from('messages')
-    .insert({
-      sender_id: me,
-      recipient_id: friend,
+  try {
+    return await insertMessage(me, {
+      id: randomUUID(),
+      friendId: friend,
       kind: 'voice',
       media_path,
-      audio_ms: Math.min(MAX_VOICE_MS, Math.round(durationMs)),
+      audio_ms: voiceLength(durationMs),
       waveform,
-    })
-    .select('*')
-    .single();
-  if (error) {
-    // Undo the upload. If even that fails, you still see the real reason it couldn't be sent.
-    await deleteMedia([media_path]).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    });
+  } catch (error) {
+    // Undo the upload only when the server clearly said no (a lost answer may still have saved the message).
+    if (isClearRefusal(error as { code?: string; status?: number })) {
+      await deleteMedia([media_path]).catch((cleanupError) => console.warn('Could not remove an unfinished upload', cleanupError));
+    }
     throw error;
   }
-  return data as Message;
 }

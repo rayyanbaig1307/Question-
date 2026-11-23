@@ -63,7 +63,8 @@ function loadUpdates({ live }) {
     reloadAsync: async () => { steps.push('reload'); },
   };
   const lib = loadLibrary('appUpdates', {
-    mocks: { ...phoneMocks(), 'expo-updates': updates, './liveAccess': live },
+    // Nothing is sending and the drop isn't live (appUpdates.ts also waits for those – tests/unit/app-updates.test.mjs).
+    mocks: { ...phoneMocks(), 'expo-updates': updates, './liveAccess': live, './outbox': { outboxBusy: () => false }, './drop': { dropStatus: () => ({ kind: 'waiting' }) } },
     globals: { __DEV__: false },
   });
   return { lib, steps, finishFetch: () => finishFetch() };

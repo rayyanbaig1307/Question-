@@ -1,3 +1,4 @@
+import { isClearRefusal, serverFailure } from './errors';
 import { deleteAvatar, deleteMedia, mediaFiles, uploadAvatar, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
 
@@ -114,6 +115,50 @@ export async function sendGroupSticker(groupId: string, sticker: string, text: s
     .single();
   if (error) throw error;
   return data as GroupMessage;
+}
+
+// ---------------------------------------------------------------------------
+// Saving group messages for the outbox (lib/outbox.ts): each row gets its id on the phone before the first try,
+// so a try repeated after a lost answer can look it up first and never saves a second copy.
+// ---------------------------------------------------------------------------
+export type NewGroupMessage = {
+  id: string;
+  // Who sent it (the outbox always says): the server refuses the row under anyone else's login.
+  sender_id?: string;
+  group_id: string;
+  kind?: GroupMessage['kind'];
+  body?: string | null;
+  sticker?: string | null;
+  reply_to?: string | null;
+  dare_id?: string | null;
+  media_path?: string | null;
+  media_type?: 'photo' | 'video' | null;
+  poster_path?: string | null;
+  overlay_path?: string | null;
+  audio_ms?: number | null;
+  waveform?: number[] | null;
+};
+
+export async function insertGroupMessage(row: NewGroupMessage): Promise<GroupMessage> {
+  const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+  if (typeof clean.body === 'string' && (row.kind === undefined || row.kind === 'text' || row.kind === 'dare')) {
+    clean.body = clean.body.trim();
+  }
+  const { data, error, status } = await supabase.from('group_messages').insert(clean).select('*').single();
+  if (error) {
+    // A server that doesn't take group snaps yet: say what you can do instead (it's a clear "no").
+    if (row.kind === 'snap' && snapsNotReady(error)) throw serverFailure({ ...error, message: SNAPS_NOT_READY }, status);
+    throw serverFailure(error, status);
+  }
+  return data as GroupMessage;
+}
+
+// The group messages with these ids that you can see (the ones that really were saved).
+export async function findGroupMessages(ids: string[]): Promise<GroupMessage[]> {
+  if (ids.length === 0) return [];
+  const { data, error, status } = await supabase.from('group_messages').select('*').in('id', ids);
+  if (error) throw serverFailure(error, status);
+  return (data ?? []) as GroupMessage[];
 }
 
 // A photo or video for the group chat (or, with `dareId`, your proof for a group dare).
@@ -396,7 +441,7 @@ export async function setGroupPhoto(me: string, groupId: string, localUri: strin
   try {
     const { error, status } = await supabase.rpc('set_group_photo', { grp: groupId, photo });
     failure = error;
-    refused = !!error && serverSaidNo(error, status);
+    refused = !!error && isClearRefusal(error, status);
   } catch (error) {
     // The request never got an answer (no internet, timed out…).
     failure = error;
@@ -409,15 +454,6 @@ export async function setGroupPhoto(me: string, groupId: string, localUri: strin
     await deleteAvatar(photo).catch((cleanupError) => console.warn('Could not remove an unfinished group photo', cleanupError));
   }
   throw failure;
-}
-
-// Did the server clearly refuse (rather than the answer getting lost)? The database's own errors carry a code
-// (like "P0001"), and a refusal comes with an HTTP status from 400 to 499. A network failure has neither
-// (status 0). A 5xx status without a code usually comes from a gateway that gave up waiting, while the
-// database may still have saved the change, so that doesn't count as a clear "no".
-function serverSaidNo(error: { code?: string | null }, status: number | undefined): boolean {
-  if (typeof error.code === 'string' && error.code !== '') return true;
-  return typeof status === 'number' && status >= 400 && status < 500;
 }
 
 // Live: the group itself changed (new pin, photo or name). Own channel name per listener.

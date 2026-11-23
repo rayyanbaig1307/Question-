@@ -2,10 +2,11 @@ import { expect, it, vi } from 'vitest';
 import { query } from '../api/edgeHarness.mjs';
 import { loadLibrary } from './libHarness.mjs';
 
-function captureService(failAt, cleanupFails = false) {
-  let count = 0;
+// `fail`: the file endings whose upload fails ('mp4' = the video, 'jpg' = its still picture, 'png' = its text layer).
+// A video's files now upload at the same time, so which one fails is chosen by file, not by order.
+function captureService(fail = [], cleanupFails = false) {
   const failure = { message: 'Synthetic upload failure' };
-  const upload = vi.fn(async () => ({ error: ++count === failAt ? failure : null }));
+  const upload = vi.fn(async (path) => ({ error: fail.includes(path.split('.').pop()) ? failure : null }));
   const remove = vi.fn(async () => ({ error: cleanupFails ? { message: 'Synthetic cleanup failure' } : null }));
   const media = loadLibrary('media', {
     supabase: {
@@ -25,19 +26,21 @@ function captureService(failAt, cleanupFails = false) {
 }
 
 for (const folder of ['posts', 'stories', 'snaps', 'mystery', 'keeps', 'group']) {
-  for (const failAt of [2, 3]) {
-    it(`cleans up already-uploaded ${folder} video files when upload ${failAt} fails`, async () => {
-      const { media, upload, remove, failure } = captureService(failAt);
+  for (const [failing, kept] of [[['png'], ['mp4', 'jpg']], [['jpg'], ['mp4', 'png']], [['mp4'], ['jpg', 'png']]]) {
+    it(`cleans up already-uploaded ${folder} video files when the ${failing[0]} upload fails`, async () => {
+      const { media, upload, remove, failure } = captureService(failing);
       await expect(media.uploadCapture('A', folder, { kind: 'video', uri: 'file:///video.mp4', overlayUri: 'file:///overlay.png' })).rejects.toMatchObject(failure);
       const prefix = folder === 'mystery' ? 'mystery' : `A/${folder}`;
-      expect(remove).toHaveBeenCalledExactlyOnceWith(failAt === 2 ? [`${prefix}/test-file.mp4`] : [`${prefix}/test-file.mp4`, `${prefix}/test-file.jpg`]);
-      expect(upload).toHaveBeenCalledTimes(failAt);
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect([...remove.mock.calls[0][0]].sort()).toEqual(kept.map((ending) => `${prefix}/test-file.${ending}`).sort());
+      // The three files go up at the same time, so each was tried once.
+      expect(upload).toHaveBeenCalledTimes(3);
     });
   }
 }
 
 it('does not replace the original upload error if cleanup also fails', async () => {
-  const { media, remove, failure } = captureService(2, true);
+  const { media, remove, failure } = captureService(['jpg'], true);
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   try {
     await expect(media.uploadCapture('A', 'posts', { kind: 'video', uri: 'file:///video.mp4' })).rejects.toMatchObject(failure);
@@ -47,13 +50,13 @@ it('does not replace the original upload error if cleanup also fails', async () 
 });
 
 it('does not delete an object when no upload was known to have succeeded', async () => {
-  const { media, remove, failure } = captureService(1);
+  const { media, remove, failure } = captureService(['mp4', 'jpg']);
   await expect(media.uploadCapture('A', 'posts', { kind: 'video', uri: 'file:///video.mp4' })).rejects.toMatchObject(failure);
   expect(remove).not.toHaveBeenCalled();
 });
 
 it('keeps all files after a complete successful capture upload', async () => {
-  const { media, remove } = captureService(-1);
+  const { media, remove } = captureService([]);
   const result = await media.uploadCapture('A', 'posts', { kind: 'video', uri: 'file:///video.mp4', overlayUri: 'file:///overlay.png' });
   expect(result).toEqual({ fields: { media_path: 'A/posts/test-file.mp4', media_type: 'video', poster_path: 'A/posts/test-file.jpg', overlay_path: 'A/posts/test-file.png' }, stillUri: 'file:///poster.jpg' });
   expect(remove).not.toHaveBeenCalled();

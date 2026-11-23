@@ -16,6 +16,7 @@ import { useUnreadCount } from '@/lib/chat';
 import { useIncomingRequestCount } from '@/lib/friends';
 import { useHitUps } from '@/lib/hitups';
 import { useClearNotificationsWhenOpen } from '@/lib/notifications';
+import { noteHomeDrawn, useStartupDone } from '@/lib/startup';
 import { colors, isDark, themeScene } from '@/theme';
 import { ThemeScene } from '@/components/ThemeScene';
 
@@ -35,13 +36,20 @@ export default function Home() {
   // True while your finger is swiping (or the page is still gliding into place).
   const [swiping, setSwiping] = useState(false);
   const focused = useIsFocused();
-  const unread = useUnreadCount(userId, focused);
+  // ⚡ The badge numbers below start about 2 seconds after Home is drawn (lib/startup.ts), so Home's posts and
+  // stories go first when the app opens on a weak signal.
+  useEffect(() => {
+    noteHomeDrawn();
+  }, []);
+  const later = useStartupDone();
+  const badges = focused && later;
+  const unread = useUnreadCount(userId, badges);
   // Hit ups waiting for you (shown at the top of Chat, and counted on the Chat tab).
-  const { hitUps, reload: reloadHitUps } = useHitUps(userId, focused);
+  const { hitUps, reload: reloadHitUps } = useHitUps(userId, badges);
   // Friend requests waiting for you (shown at the top of Chat too).
-  const requestCount = useIncomingRequestCount(userId, focused);
+  const requestCount = useIncomingRequestCount(userId, badges);
   // Activity (likes, comments, new friends…) lives in the Inbox; new ones count on the bell and the Chat tab.
-  const activity = useActivity(userId, focused);
+  const activity = useActivity(userId, badges);
   // Everything waiting in the Inbox 🔔 (the bell at the top of Chat).
   const inboxCount = hitUps.length + requestCount + activity.unseen;
   const { reload: reloadActivity } = activity;
@@ -54,9 +62,9 @@ export default function Home() {
   // Other screens can send you back here with ?page=camera (or chat / home) to land on that page.
   const { page: wantedPage } = useLocalSearchParams<{ page?: string }>();
 
-  // No birthday saved yet → ask once (you can also add it later in Settings).
+  // No birthday saved yet → ask once (you can also add it later in Settings). Not while the app is still opening.
   useEffect(() => {
-    if (!focused) return;
+    if (!badges) return;
     let cancelled = false;
     wasAskedForBirthday(userId)
       .then(async (asked) => {
@@ -68,7 +76,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [focused, userId]);
+  }, [badges, userId]);
 
   // How far you've swiped: 0 = Chat, 1 = Camera, 2 = Home (1.5 = halfway to Home).
   // Tracked on the phone's animation thread, so the pages move smoothly with your finger.

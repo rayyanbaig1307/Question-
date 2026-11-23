@@ -18,8 +18,10 @@ import { PLUS_THEMES, saveThemeChoice, themeChoice, type PlusTheme } from '@/the
 // It only acts when we're SURE there's no Plus (plusSurelyOff): never on "not sure yet" or "no internet".
 // ---------------------------------------------------------------------------
 
-export function usePlusLapse(): void {
+// `enabled`: false while the app is still opening (lib/startup.ts) – it starts a moment later.
+export function usePlusLapse(enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     let done = false;
     const check = () => {
       if (done || !plusSurelyOff()) return;
@@ -35,7 +37,7 @@ export function usePlusLapse(): void {
       stop();
       subscription.remove();
     };
-  }, []);
+  }, [enabled]);
 }
 
 // Puts the free app icon and theme back. Exported for the tests.

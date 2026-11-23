@@ -9,14 +9,16 @@ const passThrough = props => React.createElement('SafeScreen', props, props.chil
 // group: a snap in a group chat (`/snap/<id>?group=1`): `message` is then the group_messages row, `opens` the
 // group_snap_opens rows, and `open` / `replay` what the server says to opening / replaying it.
 // screenshotTold: what the server answers to a group snap screenshot (true = its sender was told).
-function loadViewer({ message, sender = null, prefetch = async () => true, extra = {}, group = false, opens = [], open = async () => true, replay = async () => true, save = async () => true, id = 'qa-peek', screenshotTold = async () => true }) {
-  const calls = { opened: 0, backs: 0, menus: [], reports: [], timings: [], cancels: 0, toasts: [], groupOpens: [], groupReplays: [], links: [], saves: [], order: [], screenshots: [], detector: null };
+// params: more route params (the chat passes the peek's file names, so the viewer can start downloading at once).
+// urlFor: the one-minute link given for a file. calls.signings counts link requests (one request can sign several files).
+function loadViewer({ message, sender = null, prefetch = async () => true, extra = {}, group = false, opens = [], open = async () => true, replay = async () => true, save = async () => true, id = 'qa-peek', screenshotTold = async () => true, params = {}, fetchMessage = async () => message, urlFor = () => 'http://127.0.0.1/qa-photo.jpg' }) {
+  const calls = { opened: 0, backs: 0, menus: [], reports: [], timings: [], cancels: 0, toasts: [], groupOpens: [], groupReplays: [], links: [], saves: [], order: [], screenshots: [], detector: null, signings: 0, profileAsks: 0, downloads: [] };
   // Snaps opened on this phone but not shown yet (src/lib/groupChat.ts keeps these while the app is open).
   const unshown = new Map();
   const bar = { at: 0 };
   const screen = loadScreen('src/app/(app)/snap/[id].tsx', {
-    'expo-image': { Image: { prefetch: async (...args) => { calls.order.push('download'); return prefetch(...args); } } },
-    'expo-router': { router: { canGoBack: () => true, back() { calls.backs++; } }, useLocalSearchParams: () => ({ id, ...(group ? { group: '1' } : {}) }) },
+    'expo-image': { Image: { prefetch: async (...args) => { calls.order.push('download'); calls.downloads.push(args[0]); return prefetch(...args); } } },
+    'expo-router': { router: { canGoBack: () => true, back() { calls.backs++; } }, useLocalSearchParams: () => ({ id, ...(group ? { group: '1' } : {}), ...params }) },
     'expo-status-bar': { StatusBar: () => null },
     'react-native-reanimated': {
       __esModule: true,
@@ -34,9 +36,10 @@ function loadViewer({ message, sender = null, prefetch = async () => true, extra
     '@/components/Overlays': { useOverlays: () => ({ showToast: value => calls.toasts.push(value), showOptions: request => calls.menus.push(request) }) },
     '@/lib/useSafetyActions': { useSafetyActions: () => ({ report: params => calls.reports.push(params), confirmBlock() {} }) },
     '@/lib/chat': {
-      fetchMessage: async () => message,
+      fetchMessage: (...args) => fetchMessage(...args),
       canReplay: () => false,
-      getSnapUrl: async path => { calls.links.push(path); calls.order.push('link'); return 'http://127.0.0.1/qa-photo.jpg'; },
+      getSnapUrl: async path => { calls.signings++; calls.links.push(path); calls.order.push('link'); return urlFor(path); },
+      getSnapUrls: async paths => { calls.signings++; calls.links.push(...paths); calls.order.push('link'); return Object.fromEntries(paths.map(path => [path, urlFor(path)])); },
       openSnap: async () => { calls.opened++; },
       replaySnap: async () => true,
       setSnapSaved: async () => true,
@@ -56,7 +59,7 @@ function loadViewer({ message, sender = null, prefetch = async () => true, extra
       forgetGroupSnapUnshown: (me, snapId) => { unshown.delete(`${me}:${snapId}`); },
       groupSnapUnshown: (me, snapId) => unshown.get(`${me}:${snapId}`) ?? null,
     },
-    '@/lib/profiles': { fetchProfile: async () => sender },
+    '@/lib/profiles': { fetchProfile: async () => { calls.profileAsks++; return sender; } },
     // calls.detector: the screenshot detector for group snaps (whether it's on, and what a screenshot does).
     '@/lib/screenshots': { useScreenshotNotice() {}, useScreenshotDetector: (enabled, onScreenshot) => { calls.detector = { enabled, onScreenshot }; } },
     ...extra,
@@ -426,4 +429,66 @@ test('a photo picked from Photos in a one-on-one chat is called a photo everywhe
     assert.match(textOf(tree2.toJSON()), /Opening…/);
     assert.doesNotMatch(textOf(tree2.toJSON()), /Opening peek/);
   } finally { release?.(true); await unmount(tree2); }
+});
+
+// ---------------------------------------------------------------------------
+// Speed fix 5: opening a peek takes 1–2 round trips instead of 5–7 in a row. The chat passes the peek's file names,
+// so its one-minute links (one request for all its files) and the download start while the peek itself is still
+// being loaded, and the sender's name loads alongside. The view is still only used up after the download.
+// ---------------------------------------------------------------------------
+const later = () => { let settle; const promise = new Promise(resolve => { settle = resolve; }); return { promise, settle }; };
+const shownUris = tree => tree.root.findAll(node => typeof node.props?.uri === 'string').map(node => node.props.uri);
+
+test('with the file names from the chat, the link and the download start while the peek is still loading; the view is used only after', async () => {
+  const loading = later();
+  const { screen, calls } = loadViewer({ message: fromBob, sender: bob, params: { path: 'bob/test.jpg', type: 'photo', from: 'bob' }, fetchMessage: () => loading.promise });
+  const tree = await renderScreen(screen);
+  try {
+    assert.deepEqual(calls.order, ['link', 'download'], 'started before the peek itself has loaded');
+    assert.equal(calls.profileAsks, 1, 'the sender\'s name loads alongside');
+    assert.equal(calls.opened, 0, 'nothing used up yet');
+    await act(async () => { loading.settle(fromBob); });
+    await act(async () => {});
+    assert.equal(calls.opened, 1);
+    assert.equal(calls.signings, 1, 'never signed twice');
+    assert.equal(calls.profileAsks, 1);
+    assert.ok(shownUris(tree).includes('http://127.0.0.1/qa-photo.jpg'));
+  } finally { await unmount(tree); }
+});
+
+test('file names from the chat that don\'t match the peek are never shown', async () => {
+  const urlFor = path => `http://127.0.0.1/${path}`;
+  const { screen, calls } = loadViewer({ message: fromBob, sender: bob, params: { path: 'bob/old.jpg', type: 'photo', from: 'bob' }, urlFor });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.equal(calls.opened, 1);
+    assert.ok(calls.links.includes('bob/test.jpg'), 'the real file was signed');
+    assert.ok(shownUris(tree).includes('http://127.0.0.1/bob/test.jpg'));
+    assert.ok(!shownUris(tree).includes('http://127.0.0.1/bob/old.jpg'));
+  } finally { await unmount(tree); }
+});
+
+test('a video peek gets the links for its video, still picture and text layer in ONE request', async () => {
+  const video = { ...fromBob, media_type: 'video', media_path: 'bob/clip.mp4', poster_path: 'bob/clip.jpg', overlay_path: 'bob/clip.png' };
+  const { screen, calls } = loadViewer({ message: video, sender: bob });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.equal(calls.signings, 1);
+    assert.deepEqual(calls.links, ['bob/clip.mp4', 'bob/clip.jpg', 'bob/clip.png']);
+    assert.equal(calls.opened, 1);
+  } finally { await unmount(tree); }
+});
+
+test('a group video snap: opened first, then one request for all its links', async () => {
+  const video = { ...groupSnap, media_type: 'video', media_path: 'bob/snaps/clip.mp4', poster_path: 'bob/snaps/clip.jpg', overlay_path: null };
+  const { screen, calls } = loadViewer({ message: video, sender: bob, group: true, id: 'qa-snap' });
+  const tree = await renderScreen(screen);
+  try {
+    await act(async () => {});
+    assert.deepEqual(calls.order, ['open', 'link', 'download']);
+    assert.equal(calls.signings, 1);
+    assert.deepEqual(calls.links, ['bob/snaps/clip.mp4', 'bob/snaps/clip.jpg']);
+  } finally { await unmount(tree); }
 });

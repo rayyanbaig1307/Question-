@@ -23,7 +23,7 @@ import { SafeEdge, SafeScreen } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { ZoomableImage } from '@/components/ZoomableImage';
 import { useMe } from '@/lib/auth';
-import { canReplay, fetchMessage, getSnapUrl, isChatPhoto, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
+import { canReplay, fetchMessage, getSnapUrls, isChatPhoto, openSnap, replaySnap, setSnapSaved } from '@/lib/chat';
 import { friendlyError } from '@/lib/errors';
 import {
   canUnsaveGroupSnap,
@@ -81,11 +81,47 @@ type State =
       canToggleSave: boolean;
     };
 
+// A peek's files, and what's needed to show it.
+type PeekFiles = { media: string; poster: string | null; overlay: string | null; video: boolean };
+type ReadyFiles = { url: string; posterUrl: string | null; overlayUrl: string | null };
+
+// ⚡ Gets the one-minute links for all of a peek's files in ONE request (never the chat's longer-lasting links), then
+// downloads its picture (the photo, or a video's still picture). null if that didn't work (no internet?).
+async function fetchPeekFiles(files: PeekFiles): Promise<ReadyFiles | null> {
+  const links = await getSnapUrls([files.media, ...(files.video ? [files.poster, files.overlay] : [])].filter((path): path is string => !!path));
+  const url = links[files.media] ?? null;
+  const posterUrl = files.video && files.poster ? (links[files.poster] ?? null) : null;
+  const overlayUrl = files.video && files.overlay ? (links[files.overlay] ?? null) : null;
+  if (!url) return null;
+  const ready = files.video ? !posterUrl || (await Image.prefetch(posterUrl, 'memory')) : await Image.prefetch(url, 'memory');
+  return ready ? { url, posterUrl, overlayUrl } : null;
+}
+
+const filesOf = (message: { media_path: string; poster_path: string | null; overlay_path: string | null; media_type: string | null }): PeekFiles => ({
+  media: message.media_path,
+  poster: message.poster_path ?? null,
+  overlay: message.overlay_path ?? null,
+  video: message.media_type === 'video',
+});
+const sameFiles = (a: PeekFiles, b: PeekFiles) =>
+  a.media === b.media && a.poster === b.poster && a.overlay === b.overlay && a.video === b.video;
+
 // Shows a peek (a photo sent in chat) for 10 seconds. You get one replay afterwards,
 // and a peek that's saved in the chat can be opened any time.
 export default function SnapViewer() {
   // `group=1`: a snap in a group chat (a group_messages row); otherwise a peek in a one-on-one chat.
-  const { id, group } = useLocalSearchParams<{ id: string; group?: string }>();
+  // ⚡ From a one-on-one chat, the peek's file names (`path`, `poster`, `overlay`, `type`) and who sent it (`from`)
+  // come along too, so the links, the download and the sender's name can start while the peek itself is still being
+  // loaded. They're only used if they match the peek the server gives back.
+  const { id, group, path, poster, overlay, type, from } = useLocalSearchParams<{
+    id: string;
+    group?: string;
+    path?: string;
+    poster?: string;
+    overlay?: string;
+    type?: string;
+    from?: string;
+  }>();
   const inGroup = group === '1';
   // What it's called on screen (once it's loaded, a photo picked from Photos is called a photo: see shownWord).
   const word = inGroup ? 'snap' : 'peek';
@@ -115,6 +151,8 @@ export default function SnapViewer() {
         setState({ kind: 'gone' });
         return;
       }
+      // The sender's name loads alongside (not after the download).
+      const senderLoading = fetchProfile(message.sender_id).catch(() => null);
       let mode: Mode;
       if (message.saved_at) {
         // Saved in the chat: a normal photo for everyone in the group (and always yours to see if you sent it).
@@ -150,25 +188,21 @@ export default function SnapViewer() {
       }
       // You may have gone back meanwhile: it stays ready for a few minutes (see UNSHOWN_RETRY_MS).
       if (cancelled) return;
-      // A one-minute link, never the chat's longer-lasting ones.
-      const url = await getSnapUrl(message.media_path);
       const isVideo = message.media_type === 'video';
-      const posterUrl = isVideo && message.poster_path ? await getSnapUrl(message.poster_path) : null;
-      const overlayUrl = isVideo && message.overlay_path ? await getSnapUrl(message.overlay_path) : null;
-      const ready = isVideo ? !!url && (!posterUrl || (await Image.prefetch(posterUrl, 'memory'))) : !!url && (await Image.prefetch(url, 'memory'));
+      const ready = await fetchPeekFiles(filesOf({ ...message, media_path: message.media_path }));
       if (cancelled) return;
-      if (!url || !ready) {
+      if (!ready) {
         setState({ kind: 'error' });
         return;
       }
       forgetGroupSnapUnshown(userId, message.id);
-      const sender = await fetchProfile(message.sender_id).catch(() => null);
+      const sender = await senderLoading;
       if (cancelled) return;
       setSaved(mode === 'saved');
       setState({
         kind: 'showing',
-        url,
-        video: isVideo ? { posterUrl, overlayUrl } : null,
+        url: ready.url,
+        video: isVideo ? { posterUrl: ready.posterUrl, overlayUrl: ready.overlayUrl } : null,
         sender,
         mode,
         other: null,
@@ -182,6 +216,13 @@ export default function SnapViewer() {
           await loadGroupSnap();
           return;
         }
+        // ⚡ Started straight away with the file names from the chat (if it passed them): the links (one request)
+        // and the download run while the peek itself is loading, and so does the sender's name.
+        const hinted: PeekFiles | null = path
+          ? { media: path, poster: poster || null, overlay: overlay || null, video: type === 'video' }
+          : null;
+        const early = hinted ? fetchPeekFiles(hinted).catch(() => null) : null;
+        const earlySender = from ? fetchProfile(from).catch(() => null) : null;
         const message = await fetchMessage(id);
         if (cancelled) return;
         if (!message || message.kind !== 'snap' || !message.media_path) {
@@ -201,16 +242,16 @@ export default function SnapViewer() {
           if (!cancelled) setState({ kind: 'gone' });
           return;
         }
-        // Get the one-minute link and download the photo BEFORE using up the view or replay,
-        // so a bad connection doesn't waste it.
-        const url = await getSnapUrl(message.media_path);
+        // Get the one-minute links and download the photo BEFORE using up the view or replay,
+        // so a bad connection doesn't waste it. (Already on its way if the chat's file names were right.)
         const isVideo = message.media_type === 'video';
-        const posterUrl = isVideo && message.poster_path ? await getSnapUrl(message.poster_path) : null;
-        const overlayUrl = isVideo && message.overlay_path ? await getSnapUrl(message.overlay_path) : null;
-        const ready = isVideo ? !!url && (!posterUrl || (await Image.prefetch(posterUrl, 'memory'))) : !!url && (await Image.prefetch(url, 'memory'));
+        const real = filesOf({ ...message, media_path: message.media_path });
+        const senderLoading =
+          earlySender && from === message.sender_id ? earlySender : fetchProfile(message.sender_id).catch(() => null);
+        const ready = early && hinted && sameFiles(hinted, real) ? await early : await fetchPeekFiles(real);
         // You may have gone back while the file was downloading. Keep its view for next time.
         if (cancelled) return;
-        if (!url || !ready) {
+        if (!ready) {
           if (!cancelled) setState({ kind: 'error' });
           return;
         }
@@ -220,12 +261,21 @@ export default function SnapViewer() {
           if (!cancelled) setState({ kind: 'gone' });
           return;
         }
-        const sender = await fetchProfile(message.sender_id).catch(() => null);
+        const sender = await senderLoading;
         if (!cancelled) {
           setSaved(mode === 'saved');
           const other = message.sender_id === userId ? message.recipient_id : message.sender_id;
           const photo = mode === 'saved' && isChatPhoto(message);
-          setState({ kind: 'showing', url, video: isVideo ? { posterUrl, overlayUrl } : null, sender, mode, other, photo, canToggleSave: !photo });
+          setState({
+            kind: 'showing',
+            url: ready.url,
+            video: isVideo ? { posterUrl: ready.posterUrl, overlayUrl: ready.overlayUrl } : null,
+            sender,
+            mode,
+            other,
+            photo,
+            canToggleSave: !photo,
+          });
         }
       } catch {
         if (!cancelled) setState({ kind: 'error' });
@@ -234,7 +284,7 @@ export default function SnapViewer() {
     return () => {
       cancelled = true;
     };
-  }, [id, userId, inGroup]);
+  }, [id, userId, inGroup, path, poster, overlay, type, from]);
 
   // The timer runs unless the peek is saved (saving it stops the timer): 10 seconds for a photo, the video's
   // length for a video (it starts once the video has loaded). It waits while the ⋯ menu is open (the peek is

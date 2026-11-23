@@ -1,4 +1,5 @@
-import { fetchFriends } from './friends';
+import { serverFailure } from './errors';
+import { fetchFriendIds } from './friends';
 import { supabase } from './supabase';
 import type { PostWithAuthor, Profile } from './types';
 
@@ -46,11 +47,62 @@ async function withLikes(me: string, rows: PostRow[]): Promise<FeedPost[]> {
   }));
 }
 
-// Where Discover is up to: first your friends' posts (and yours), then everyone else's public posts.
-export type DiscoverCursor = { phase: 'friends' | 'everyone'; before?: string };
+// Where Discover is up to: first your friends' posts (and yours), then everyone else's public posts. `circle` is you
+// and your friends (found once for the first page and kept for "load more").
+export type DiscoverCursor = { phase: 'friends' | 'everyone'; before?: string; circle?: string[] };
 export type DiscoverPost = FeedPost & { fromEveryone: boolean };
 
 const POST_FIELDS = '*, group_hold, peek_stats, dare_hype, author:profiles!posts_user_id_fkey(*), likes(count), comments(count)';
+// The same, plus your own like on each post (`my_like`, filtered to just you), so the likes don't need a request
+// of their own after the posts have arrived.
+const POST_FIELDS_WITH_MY_LIKE = `${POST_FIELDS}, my_like:likes(user_id)`;
+
+// If the server ever says it can't do the like-inside request, the likes are asked for separately (as before) for
+// the rest of the time the app is open. A lost answer or no internet never counts as that.
+let likesInside = true;
+function cantDoLikesInside(error: { code?: string } | null, status: number): boolean {
+  return !!error && (status === 400 || /^PGRST/.test(error.code ?? '') || error.code === '42703');
+}
+
+type PostRowWithMyLike = PostRow & { my_like?: { user_id: string }[] | null };
+
+// One page of posts: your circle's (friends and you), or everyone else's.
+async function postsPage(me: string, circle: string[], everyone: boolean, before?: string): Promise<DiscoverPost[]> {
+  const ask = (fields: string) => {
+    let query = supabase.from('posts').select(fields).order('created_at', { ascending: false }).limit(FEED_PAGE_SIZE);
+    query = everyone ? query.not('user_id', 'in', `(${circle.join(',')})`) : query.in('user_id', circle);
+    if (before) query = query.lt('created_at', before);
+    return query;
+  };
+  let rows: FeedPost[] | null = null;
+  if (likesInside) {
+    const { data, error, status } = await ask(POST_FIELDS_WITH_MY_LIKE).eq('my_like.user_id', me);
+    if (!error) {
+      rows = ((data ?? []) as unknown as PostRowWithMyLike[]).map(({ likes, comments, my_like, ...post }) => ({
+        ...post,
+        likeCount: likes?.[0]?.count ?? 0,
+        commentCount: comments?.[0]?.count ?? 0,
+        // (Checked by person too, so even a server that ignored the filter can't mark someone else's like as yours.)
+        likedByMe: (my_like ?? []).some((like) => like.user_id === me),
+      }));
+    } else if (cantDoLikesInside(error, status)) {
+      likesInside = false;
+    } else {
+      throw error;
+    }
+  }
+  if (!rows) {
+    const { data, error } = await ask(POST_FIELDS);
+    if (error) throw error;
+    rows = await withLikes(me, (data ?? []) as unknown as PostRow[]);
+  }
+  return rows.map((post) => ({ ...post, fromEveryone: everyone }));
+}
+
+// Did your friends' posts run out on the first page last time (per person)? Then the first page asks for
+// everyone's posts at the same time as your friends' (one round trip instead of two). With plenty of friends'
+// posts, it doesn't (no wasted download).
+let shortLastTime: { me: string; short: boolean } | null = null;
 
 // Discover, Instagram-style: your friends' posts and yours, newest first – and when those run out,
 // everyone else on Peekaboo. (The database leaves out private accounts you're not friends with, and anyone
@@ -59,24 +111,27 @@ export async function fetchDiscover(
   me: string,
   cursor: DiscoverCursor = { phase: 'friends' },
 ): Promise<{ posts: DiscoverPost[]; next: DiscoverCursor | null }> {
-  const friends = await fetchFriends(me);
-  const circle = [me, ...friends.map((friend) => friend.id)];
-  const everyone = cursor.phase === 'everyone';
+  // Just the ids of your friends (a small request), once per first page.
+  const circle = cursor.circle ?? [me, ...(await fetchFriendIds(me))];
+  const nextAfter = (posts: DiscoverPost[], phase: DiscoverCursor['phase']): DiscoverCursor | null =>
+    posts.length === FEED_PAGE_SIZE ? { phase, before: posts[posts.length - 1].created_at, circle } : null;
 
-  let query = supabase.from('posts').select(POST_FIELDS).order('created_at', { ascending: false }).limit(FEED_PAGE_SIZE);
-  query = everyone ? query.not('user_id', 'in', `(${circle.join(',')})`) : query.in('user_id', circle);
-  if (cursor.before) query = query.lt('created_at', cursor.before);
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const page = (await withLikes(me, (data ?? []) as PostRow[])).map((post) => ({ ...post, fromEveryone: everyone }));
-  if (page.length === FEED_PAGE_SIZE) {
-    return { posts: page, next: { phase: cursor.phase, before: page[page.length - 1].created_at } };
+  if (cursor.phase === 'everyone') {
+    const posts = await postsPage(me, circle, true, cursor.before);
+    return { posts, next: nextAfter(posts, 'everyone') };
   }
-  if (everyone) return { posts: page, next: null };
-  // Friends' posts ran out: carry straight on with everyone else's.
-  const rest = await fetchDiscover(me, { phase: 'everyone' });
-  return { posts: [...page, ...rest.posts], next: rest.next };
+
+  const firstPage = !cursor.before;
+  const askEveryoneNow = firstPage && (shortLastTime?.me !== me || shortLastTime.short);
+  const everyoneNow = askEveryoneNow ? postsPage(me, circle, true) : null;
+  // (If it isn't needed after all, a failure there is no problem.)
+  everyoneNow?.catch(() => {});
+  const friendsPosts = await postsPage(me, circle, false, cursor.before);
+  if (firstPage) shortLastTime = { me, short: friendsPosts.length < FEED_PAGE_SIZE };
+  if (friendsPosts.length === FEED_PAGE_SIZE) return { posts: friendsPosts, next: nextAfter(friendsPosts, 'friends') };
+  // Your friends' posts ran out: carry straight on with everyone else's.
+  const rest = await (everyoneNow ?? postsPage(me, circle, true));
+  return { posts: [...friendsPosts, ...rest], next: nextAfter(rest, 'everyone') };
 }
 
 // Likes + comments for one post (used on the full-screen photo).
@@ -138,6 +193,30 @@ export async function addComment(me: string, postId: string, body: string, reply
   if (error) throw error;
   const { comment_likes: _ignored, ...comment } = data as CommentRow;
   return { ...comment, likeCount: 0, likedByMe: false };
+}
+
+// Saves a comment with the id given – for the outbox (lib/outbox.ts).
+export async function insertComment(
+  me: string,
+  comment: { id: string; postId: string; body: string; parentId: string | null },
+): Promise<Comment> {
+  const { data, error, status } = await supabase
+    .from('comments')
+    .insert({ id: comment.id, post_id: comment.postId, user_id: me, body: comment.body.trim(), parent_id: comment.parentId })
+    .select(COMMENT_FIELDS)
+    .single();
+  if (error) throw serverFailure(error, status);
+  const { comment_likes: _ignored, ...saved } = data as CommentRow;
+  return { ...saved, likeCount: 0, likedByMe: false };
+}
+
+// A comment by id (null if it isn't there).
+export async function findComment(commentId: string): Promise<Comment | null> {
+  const { data, error, status } = await supabase.from('comments').select(COMMENT_FIELDS).eq('id', commentId).maybeSingle();
+  if (error) throw serverFailure(error, status);
+  if (!data) return null;
+  const { comment_likes, ...saved } = data as CommentRow;
+  return { ...saved, likeCount: comment_likes?.[0]?.count ?? 0, likedByMe: false };
 }
 
 export async function setCommentLiked(me: string, commentId: string, liked: boolean): Promise<void> {

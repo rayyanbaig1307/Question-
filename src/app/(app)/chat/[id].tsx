@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBackground, ChatInkProvider, chatInk, useChatInk } from '@/components/chat/ChatBackground';
 import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
 import { ChatSticker } from '@/components/chat/ChatSticker';
+import { PendingBubble } from '@/components/chat/PendingBubble';
 import { StickerPicker } from '@/components/editor/StickerPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
@@ -42,6 +43,7 @@ import { StoryAvatar } from '@/components/StoryAvatar';
 import { useMe } from '@/lib/auth';
 import { friendChatKey, useChatBackground } from '@/lib/chatBackgrounds';
 import {
+  cachedConversation,
   canReplay,
   canSave,
   claimChatDare,
@@ -54,16 +56,15 @@ import {
   isChatPhoto,
   markChatRead,
   type Message,
+  rememberConversation,
   searchConversation,
-  sendDare,
-  sendSticker,
-  sendText,
   setSnapSaved,
-  subscribeToMyMessages,
+  subscribeToChat,
 } from '@/lib/chat';
 import { canSendSticker, isKnownSticker, stickerText, wordStickerId } from '@/lib/chatStickers';
 import { friendlyError } from '@/lib/errors';
 import { useMediaUrl } from '@/lib/media';
+import { ackSent, discard, getVisibleScope, inScope, onOutboxDone, retry, sendLater, setVisibleScope, useOutbox, type Job } from '@/lib/outbox';
 import { fetchRelation } from '@/lib/friends';
 import { fetchPeekASaves, type BrokenStreak, type PlusAllowances } from '@/lib/plusExtras';
 import { usePlus } from '@/lib/plus';
@@ -72,7 +73,7 @@ import { useScreenshotNotice } from '@/lib/screenshots';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
 import { timeAgo } from '@/lib/time';
 import { useTyping } from '@/lib/typing';
-import { Audio, sendVoice } from '@/lib/voice';
+import { Audio } from '@/lib/voice';
 import type { Profile } from '@/lib/types';
 import { useSafetyActions } from '@/lib/useSafetyActions';
 import { useOpenChat } from '@/lib/notifications';
@@ -93,7 +94,14 @@ export default function ChatScreen() {
 
   const [friend, setFriend] = useState<Profile | null>(null);
   const [areFriends, setAreFriends] = useState(true);
-  const [messages, setMessages] = useState<Message[] | null>(null);
+  // ⚡ Opening a chat again shows its last messages at once (remembered while the app is open), then checks for new ones.
+  const [messages, setMessages] = useState<Message[] | null>(() => cachedConversation(userId, friendId));
+  // What's on screen, remembered for next time (with a message you just sent, deleted or hid).
+  const shownIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    shownIds.current = new Set((messages ?? []).map((m) => m.id));
+    if (messages) rememberConversation(userId, friendId, messages);
+  }, [messages, userId, friendId]);
   // Your dare streak with this friend 🔥 (dares you two completed in a row).
   const [streak, setStreak] = useState(0);
   // 🙈 Your dare streak with this friend just broke (less than 24 hours ago): Peek-a-Save can bring it back.
@@ -110,9 +118,10 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList<Message>>(null);
   const [text, setText] = useState('');
   const draft = useRef('');
-  const sendingNow = useRef(false);
-  const [sending, setSending] = useState(false);
   const cleanedUp = useRef(false);
+  // 📤 What you sent to this friend that isn't in yet (lib/outbox.ts): shown at once as "Sending…" bubbles.
+  const scope = `friend:${friendId}` as const;
+  const outbox = useOutbox(userId, scope);
   const insets = useSafeAreaInsets();
   const { friendTyping, onTextChange, clearFriendTyping } = useTyping(userId, friendId, areFriends);
   // Screenshot this chat → your friend sees a notice. (Only while you're looking at it, not a peek on top of it.)
@@ -155,39 +164,53 @@ export default function ChatScreen() {
       fetchRelation(userId, friendId)
         .then((relation) => setAreFriends(relation.kind === 'friends'))
         .catch(() => {});
-      const stopMessages = subscribeToMyMessages(`chat-${userId}-${friendId}`, loadMessages);
+      // Only this chat's messages reload it (not a message in one of your other chats).
+      const stopMessages = subscribeToChat(userId, friendId, (id) => shownIds.current.has(id), loadMessages);
       const stopReactions = subscribeToReactions(false, loadMessages);
+      // While this chat is on screen, its sends show here as bubbles (not in the banner at the top). Sends that
+      // finished while it wasn't on screen are in the messages that just loaded.
+      setVisibleScope(`friend:${friendId}`);
       return () => {
         stopMessages();
         stopReactions();
+        // Only if another screen hasn't taken over already.
+        if (getVisibleScope() === `friend:${friendId}`) setVisibleScope(null);
       };
     }, [friendId, userId, loadMessages]),
   );
 
-  async function send() {
-    const originalText = text;
-    const body = text.trim();
+  // A send that's in: its real message takes the bubble's place (no reload needed).
+  useEffect(
+    () =>
+      onOutboxDone((job) => {
+        if (job.state !== 'sent' || job.owner !== userId || !inScope(job, `friend:${friendId}`)) return;
+        const rows = ((job.rows ?? []) as Message[]).filter(
+          (row) => row && typeof row.id === 'string' && row.recipient_id === friendId,
+        );
+        if (rows.length > 0) {
+          setMessages((current) => {
+            if (current === null) return current;
+            const fresh = new Set(rows.map((row) => row.id));
+            return [...rows, ...current.filter((m) => !fresh.has(m.id))].sort((a, b) => b.created_at.localeCompare(a.created_at));
+          });
+        }
+        ackSent(job.key);
+      }),
+    [friendId, userId],
+  );
+
+  // Sends what's in the box. The box empties at once and the message shows as "Sending…" (lib/outbox.ts sends it in
+  // the background, in the order you tapped). A double tap finds the box empty, so it's sent once.
+  function send() {
+    const body = draft.current.trim();
     // Private chats between friends aren't filtered: people can say whatever they want here (the owner's
     // choice). Report and Block still work on every message.
-    if (!body || sendingNow.current) return;
-    sendingNow.current = true;
-    const replyId = replyTo?.id;
-    setSending(true);
-    try {
-      const sent = await sendText(userId, friendId, body, replyId);
-      setReplyTo((current) => current?.id === replyId ? null : current);
-      if (draft.current === originalText) {
-        draft.current = '';
-        setText('');
-        onTextChange('');
-      }
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Message not sent', friendlyError(error));
-    } finally {
-      sendingNow.current = false;
-      setSending(false);
-    }
+    if (!body) return;
+    sendLater(userId, scope, { kind: 'text', friendId, body, replyTo: replyTo?.id ?? null });
+    draft.current = '';
+    setText('');
+    onTextChange('');
+    setReplyTo(null);
   }
 
   // Their dare: open the camera – the peek you send is the proof, and the dare counts as done for you.
@@ -225,62 +248,64 @@ export default function ChatScreen() {
   // Your own dare for this friend, sent as a dare card (private, so not word-filtered like the chat).
   const [dareOpen, setDareOpen] = useState(false);
   async function sendMyDare(dare: string): Promise<boolean> {
-    try {
-      const sent = await sendDare(userId, friendId, dare);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-      return true;
-    } catch (error) {
-      Alert.alert('Dare not sent', friendlyError(error));
-      return false;
-    }
+    sendLater(userId, scope, { kind: 'dare', friendId, body: dare.trim() });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    return true;
   }
 
   // 🏷️ Stickers. Peekaboo+ ones are locked in the picker without Peekaboo+ (and the server says no too).
   const plus = usePlus();
   const [stickersOpen, setStickersOpen] = useState(false);
-  async function sendStickerMessage(sticker: string) {
+  function sendStickerMessage(sticker: string) {
     setStickersOpen(false);
     if (!canSendSticker(sticker, plus)) {
       router.push('/plus');
       return;
     }
-    const replyId = replyTo?.id;
-    try {
-      const sent = await sendSticker(userId, friendId, sticker, stickerText(sticker), replyId);
-      Haptics.selectionAsync();
-      setReplyTo((current) => (current?.id === replyId ? null : current));
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Sticker not sent', friendlyError(error));
-    }
+    sendLater(userId, scope, { kind: 'sticker', friendId, sticker, body: stickerText(sticker), replyTo: replyTo?.id ?? null });
+    Haptics.selectionAsync();
+    setReplyTo(null);
   }
   // An emoji from the sticker picker goes as a normal chat message.
-  async function sendEmoji(emoji: string) {
+  function sendEmoji(emoji: string) {
     setStickersOpen(false);
-    const replyId = replyTo?.id;
-    try {
-      const sent = await sendText(userId, friendId, emoji, replyId);
-      setReplyTo((current) => (current?.id === replyId ? null : current));
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Message not sent', friendlyError(error));
-    }
+    sendLater(userId, scope, { kind: 'text', friendId, body: emoji, replyTo: replyTo?.id ?? null });
+    setReplyTo(null);
   }
 
-  async function sendVoiceNote(recording: Recording) {
-    if (sendingNow.current) return;
-    sendingNow.current = true;
-    setSending(true);
-    try {
-      const sent = await sendVoice(userId, friendId, recording.uri, recording.durationMs, recording.waveform);
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Voice note not sent', friendlyError(error));
-    } finally {
-      sendingNow.current = false;
-      setSending(false);
-    }
+  function sendVoiceNote(recording: Recording) {
+    sendLater(userId, scope, {
+      kind: 'voice',
+      friendId,
+      uri: recording.uri,
+      durationMs: recording.durationMs,
+      waveform: recording.waveform,
+    });
+  }
+
+  // A bubble that couldn't be sent: try again, or delete it. (Texts can also go back in the box to change them.)
+  function pendingMenu(job: Job) {
+    const words = job.what.kind === 'text' || job.what.kind === 'dare' ? job.what.body : null;
+    const canTry = !(job.restored && job.final);
+    showOptions({
+      title: job.error ?? "Couldn't send",
+      options: [
+        ...(canTry ? [{ label: 'Try again', onPress: () => retry(job.key) }] : []),
+        ...(words && job.what.kind === 'text'
+          ? [
+              {
+                label: 'Change it',
+                onPress: () => {
+                  draft.current = words;
+                  setText(words);
+                  void discard(job.key);
+                },
+              },
+            ]
+          : []),
+        { label: 'Delete', destructive: true, onPress: () => void discard(job.key) },
+      ],
+    });
   }
 
   // Save a peek in the chat (or unsave it). Either of you can.
@@ -367,14 +392,25 @@ export default function ChatScreen() {
     }
   }
 
+  // Reactions show at once. If the server says no, it's taken back with a toast.
   async function react(message: Message, emoji: string) {
-    const mine = reactions.get(message.id)?.find((r) => r.user_id === userId)?.emoji ?? null;
+    const before = reactions.get(message.id) ?? [];
+    const mine = before.find((r) => r.user_id === userId)?.emoji ?? null;
+    const others = before.filter((r) => r.user_id !== userId);
+    const after = mine === emoji ? others : [...others, { message_id: message.id, user_id: userId, emoji }];
+    const put = (list: Reaction[]) =>
+      setReactions((current) => {
+        const next = new Map(current);
+        next.set(message.id, list);
+        return next;
+      });
+    put(after);
+    Haptics.selectionAsync();
     try {
       await toggleReaction(userId, message.id, emoji, mine, false);
-      Haptics.selectionAsync();
-      loadMessages();
     } catch (error) {
-      Alert.alert('Could not react', friendlyError(error));
+      put(before);
+      showToast(`Couldn't react – ${friendlyError(error)}`);
     }
   }
 
@@ -439,6 +475,19 @@ export default function ChatScreen() {
   const name = friend ? friend.display_name || friend.username : '';
   // Show "Delivered / Seen" under your most recent message (peeks always show theirs).
   const myLatestId = messages?.find((m) => m.sender_id === userId && m.kind !== 'screenshot')?.id;
+  // Bubbles for sends that aren't in yet (one that already came back in a reload isn't shown twice).
+  const loadedIds = new Set((messages ?? []).map((m) => m.id));
+  const pending = outbox.filter(
+    (job) => job.state !== 'sent' && !(job.rowIds.length > 0 && job.rowIds.every((id) => loadedIds.has(id))),
+  );
+  const pendingBubbles = pending.map((job) => (
+    <PendingBubble
+      key={job.key}
+      job={job}
+      onPress={() => pendingMenu(job)}
+      sticker={job.what.kind === 'sticker' && job.what.sticker ? <ChatSticker id={job.what.sticker} /> : undefined}
+    />
+  ));
 
   return (
     <View style={styles.fill}>
@@ -547,7 +596,7 @@ export default function ChatScreen() {
               />
             ) : messages === null ? (
               <ActivityIndicator color={colors.accent} style={styles.loading} />
-            ) : messages.length === 0 ? (
+            ) : messages.length === 0 && pending.length === 0 ? (
               <View style={styles.empty}>
                 {/* On a chat background the words sit on a soft card, so they're easy to read. */}
                 <View style={background.shown ? styles.emptyCard : null}>
@@ -563,8 +612,16 @@ export default function ChatScreen() {
                 keyExtractor={(m) => m.id}
                 contentContainerStyle={styles.list}
                 keyboardDismissMode="interactive"
-                // The list is upside down, so this "header" sits at the very bottom, under the newest message.
-                ListHeaderComponent={friendTyping ? <TypingBubble /> : undefined}
+                // The list is upside down, so this "header" sits at the very bottom, under the newest message:
+                // your sends that aren't in yet, then their typing dots.
+                ListHeaderComponent={
+                  pendingBubbles.length > 0 || friendTyping ? (
+                    <>
+                      {pendingBubbles}
+                      {friendTyping ? <TypingBubble /> : null}
+                    </>
+                  ) : undefined
+                }
                 renderItem={({ item }) => {
                   const mine = item.sender_id === userId;
                   const replied = item.reply_to ? messages.find((m) => m.id === item.reply_to) : null;
@@ -654,7 +711,6 @@ export default function ChatScreen() {
                     label="Send"
                     background={text.trim() ? colors.blue : colors.card}
                     onPress={send}
-                    disabled={sending}
                   />
                 ) : (
                   <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
@@ -872,7 +928,7 @@ function MessageView({ message, me, friendName, showStatus, onLongPress, dareAct
     return (
       <View style={[styles.bubbleWrap, mine ? styles.right : styles.left]}>
         <Pressable
-          onPress={tappable ? () => router.push(`/snap/${message.id}`) : undefined}
+          onPress={tappable ? () => router.push(peekRoute(message)) : undefined}
           onLongPress={onLongPress}
           accessibilityRole={tappable ? 'button' : undefined}
           accessibilityLabel={look.text}
@@ -974,6 +1030,22 @@ function TypingDot({ delay }: { delay: number }) {
     transform: [{ translateY: -up.get() * 4 }],
   }));
   return <Animated.View style={[styles.dot, style]} />;
+}
+
+// Opening a peek: its file names and who sent it go along, so the viewer can get its links and start downloading
+// while it loads the peek itself (src/app/(app)/snap/[id].tsx only uses them if they match).
+function peekRoute(message: Message) {
+  return {
+    pathname: '/snap/[id]' as const,
+    params: {
+      id: message.id,
+      ...(message.media_path ? { path: message.media_path } : {}),
+      ...(message.poster_path ? { poster: message.poster_path } : {}),
+      ...(message.overlay_path ? { overlay: message.overlay_path } : {}),
+      type: message.media_type === 'video' ? 'video' : 'photo',
+      from: message.sender_id,
+    },
+  };
 }
 
 const styles = StyleSheet.create({

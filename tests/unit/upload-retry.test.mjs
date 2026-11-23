@@ -8,17 +8,28 @@ const serverError = (status) => ({ name: 'StorageApiError', message: `HTTP ${sta
 const noSignal = () => ({ name: 'StorageUnknownError', message: 'Network request failed', originalError: new TypeError('Network request failed') });
 const alreadyExists = () => ({ name: 'StorageApiError', message: 'The resource already exists', status: 400, statusCode: '409' });
 
-// `answers` is what the store says to each try, in order (null = saved). `inserts` counts chat messages saved.
+// `answers` is what the store says to each try, in order (null = saved). It can also be a map from a file ending
+// ('mp4', 'png', …) to that file's own answers, for files that upload at the same time.
+// `inserts` counts chat messages saved.
 function service(answers) {
   const tries = [];
   const waits = [];
   let inserts = 0;
+  const perFile = new Map();
+  const removed = [];
   const bucket = {
     upload: async (path, _bytes, options) => {
       tries.push({ path, options });
-      return { data: null, error: answers[tries.length - 1] ?? null };
+      if (Array.isArray(answers)) return { data: null, error: answers[tries.length - 1] ?? null };
+      const ending = path.split('.').pop();
+      const count = perFile.get(ending) ?? 0;
+      perFile.set(ending, count + 1);
+      return { data: null, error: answers[ending]?.[count] ?? null };
     },
-    remove: async () => ({ error: null }),
+    remove: async (paths) => {
+      removed.push(...paths);
+      return { error: null };
+    },
   };
   const supabase = {
     auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
@@ -33,7 +44,7 @@ function service(answers) {
   // No real waiting in tests: note each wait and carry on at once.
   const globals = { setTimeout: (run, ms) => { waits.push(ms); run(); return 0; } };
   const load = (name) => loadLibrary(name, { supabase, globals });
-  return { load, tries, waits, inserts: () => inserts };
+  return { load, tries, waits, removed, inserts: () => inserts };
 }
 
 const photo = { kind: 'photo', uri: 'file:///photo.jpg' };
@@ -62,6 +73,16 @@ for (const [what, first] of [
   });
 }
 
+// A try that ran out of its time limit (src/lib/timedFetch.ts gave it 30 s + 1 s per 16 KB) already waited long on
+// a slow signal: it isn't tried again straight away (the outbox tries again a little later).
+it('an upload that ran out of time is not tried again at once', async () => {
+  const timedOut = { name: 'StorageUnknownError', message: 'Aborted', originalError: { name: 'AbortError', message: 'Aborted' } };
+  const s = service([timedOut]);
+  await expect(s.load('media').uploadMedia('A', 'snaps', 'file:///photo.jpg', 'jpg', { path: 'A/snaps/chosen.jpg' })).rejects.toBe(timedOut);
+  expect(s.tries).toHaveLength(1);
+  expect(s.waits).toEqual([]);
+});
+
 it('gives up after 2 more tries (3 in all), with a short wait before each new try, and keeps the real reason', async () => {
   const last = serverError(503);
   const s = service([serverError(520), noSignal(), last]);
@@ -72,7 +93,7 @@ it('gives up after 2 more tries (3 in all), with a short wait before each new tr
   expect(s.waits.every((ms) => ms > 0 && ms <= 2000)).toBe(true);
 });
 
-it('the chat message is never saved when the upload finally fails', async () => {
+it('the group message is not saved when the upload finally fails (saving rows is the outbox\'s job, with ids chosen once)', async () => {
   const s = service([serverError(520), serverError(520), serverError(520)]);
   await expect(s.load('groupChat').sendGroupCapture('A', 'group-1', photo)).rejects.toMatchObject({ status: 520 });
   expect(s.inserts()).toBe(0);
@@ -107,6 +128,24 @@ it('"already exists" on the FIRST try is a real refusal (not ours)', async () =>
   expect(s.tries).toHaveLength(1);
 });
 
+// The outbox and early uploads choose the file name before the first try and write it down. "Already exists" on
+// such a name means an earlier try of ours (maybe before the app was closed) did save it.
+it('a chosen path that answers "already exists" on the FIRST try counts as done', async () => {
+  const s = service([alreadyExists()]);
+  await expect(s.load('media').uploadMedia('A', 'snaps', 'file:///photo.jpg', 'jpg', { path: 'A/snaps/chosen.jpg' })).resolves.toBe('A/snaps/chosen.jpg');
+  expect(s.tries).toHaveLength(1);
+  expect(s.tries[0].path).toBe('A/snaps/chosen.jpg');
+});
+
+it('a video with chosen paths keeps the files it already saved when another file fails (the next try reuses the names)', async () => {
+  const s = service({ png: [serverError(400)] });
+  const media = s.load('media');
+  const paths = { media: 'A/snaps/v.mp4', poster: 'A/snaps/v.jpg', overlay: 'A/snaps/v.png' };
+  await expect(media.uploadCapture('A', 'snaps', { kind: 'video', uri: 'file:///clip.mp4', overlayUri: 'file:///layer.png' }, { paths })).rejects.toMatchObject({ status: 400 });
+  expect(s.removed).toEqual([]);
+  expect(s.tries.map((t) => t.path).sort()).toEqual(['A/snaps/v.mp4', 'A/snaps/v.png']);
+});
+
 it('profile and group pictures are tried again too', async () => {
   const s = service([noSignal()]);
   await expect(s.load('media').uploadAvatar('A', 'file:///me.jpg')).resolves.toBe('A/test-file.jpg');
@@ -114,18 +153,21 @@ it('profile and group pictures are tried again too', async () => {
   expect(s.tries[0].options).toEqual({ contentType: 'image/jpeg' });
 });
 
+// The video and its text layer now upload at the same time (they used to go one after another), so each file has
+// its own answers here.
+it('without chosen paths, a video still undoes the files it saved when another file fails (as before)', async () => {
+  const s = service({ png: [serverError(400)] });
+  await expect(s.load('media').uploadCapture('A', 'group', { kind: 'video', uri: 'file:///clip.mp4', overlayUri: 'file:///layer.png' })).rejects.toMatchObject({ status: 400 });
+  expect(s.removed).toEqual(['A/group/test-file.mp4']);
+});
+
 it('a video and its text layer each get their own tries', async () => {
   // The video goes through on its 2nd try, the text layer on its 3rd. (No still-picture maker in tests.)
-  const s = service([serverError(520), null, noSignal(), serverError(502), null]);
+  const s = service({ mp4: [serverError(520), null], png: [noSignal(), serverError(502), null] });
   const { fields } = await s.load('media').uploadCapture('A', 'group', { kind: 'video', uri: 'file:///clip.mp4', overlayUri: 'file:///layer.png' });
   expect(fields).toMatchObject({ media_path: 'A/group/test-file.mp4', overlay_path: 'A/group/test-file.png' });
-  expect(s.tries.map((t) => t.path)).toEqual([
-    'A/group/test-file.mp4',
-    'A/group/test-file.mp4',
-    'A/group/test-file.png',
-    'A/group/test-file.png',
-    'A/group/test-file.png',
-  ]);
+  expect(s.tries.filter((t) => t.path.endsWith('.mp4'))).toHaveLength(2);
+  expect(s.tries.filter((t) => t.path.endsWith('.png'))).toHaveLength(3);
 });
 
 it('worthTryingAgain: only no-answer and 5xx', async () => {

@@ -160,3 +160,31 @@ it('a newer login event is not overwritten by an old logout response', async () 
     expect(h.current.userId).toBe('B');
   } finally { await unmount(tree); }
 });
+
+// Review R7 / F1: unsent messages are only thrown away when you log out yourself. A login that ends by itself
+// (it ran out and couldn't be renewed on a weak signal) keeps them for when you log back in (lib/outbox.ts).
+it('the before-log-out steps run on Log out, before the login ends – never when a login ends by itself', async () => {
+  let saved = { user: { id: 'A' } };
+  const order = [];
+  const h = harness(async () => ({ data: { session: saved }, error: null }), async () => {
+    order.push('signOut');
+    saved = null;
+    return { error: null };
+  });
+  const stop = h.screen.exports.runBeforeLogOut((id) => order.push(`step:${id}`));
+  const tree = await h.render();
+  try {
+    await act(() => h.event('SIGNED_IN', { user: { id: 'A' } }));
+    // The login ends by itself: no step.
+    await act(() => h.event('SIGNED_OUT', null));
+    expect(order).toEqual([]);
+    // Logged in again, then Log out: the step runs first.
+    saved = { user: { id: 'A' } };
+    await act(() => h.event('SIGNED_IN', { user: { id: 'A' } }));
+    await act(async () => { await h.current.signOut('A'); });
+    expect(order).toEqual(['step:A', 'signOut']);
+  } finally {
+    stop();
+    await unmount(tree);
+  }
+});

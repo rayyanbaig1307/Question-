@@ -37,50 +37,86 @@ function fixture({ group = false, chatDare = false, failClaim = false, claimErro
     '@/lib/keeps': { CAN_SAVE_TO_PHOTOS: false, addKeep: async () => {} },
     ...overrides,
   }, { timers: 'real' }); // the editor waits a moment for moving text to stop before it takes the picture
+  // The editor now hands straight sends to the outbox (lib/outbox.ts) and leaves at once: [me, scope, what, extra].
+  calls.sends = screen.calls.outbox.sendLater;
   return { screen, calls };
 }
+// Values made inside the screen come from its own little world: compare them as plain data.
+const plain = value => JSON.parse(JSON.stringify(value));
 const sendButton = tree => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'button' && /^Send/.test(textOf(node)));
 
+// ---------------------------------------------------------------------------
+// 📤 Straight sends (a chat's, a group's or the public chat's camera, and Guess Who) go to the outbox and the editor
+// goes back at once: only the picture itself is waited for. Uploading, saving, trying again and the dare-claim
+// alerts are the outbox's job now (tests/unit/outbox.test.mjs, toasts in src/components/OutboxBanner.tsx).
+// ---------------------------------------------------------------------------
+
+// F6: the owner's brother waited on "Sending…" forever.
+test('chat camera Send goes straight back to the chat while the peek uploads', async () => {
+  const { screen, calls } = fixture({ send: () => new Promise(() => {}) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send');
+    await act(() => sendButton(tree).props.onPress());
+    assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
+    assert.equal(calls.sends.length, 1);
+    const [me, scope, what, extra] = calls.sends[0];
+    assert.deepEqual([me, scope], ['alice', 'friend:bob']);
+    assert.deepEqual(plain(what), { kind: 'peek', friendIds: ['bob'] });
+    assert.deepEqual(plain(extra.capture), { kind: 'photo', uri: 'file:///qa-finished.jpg' });
+    assert.equal(calls.snaps, 0, 'nothing is uploaded while you wait');
+    assert.equal(screen.calls.alerts.length, 0);
+    // Pressing again on the way out sends nothing more.
+    await act(() => sendButton(tree).props.onPress());
+    assert.equal(calls.sends.length, 1);
+  } finally { await unmount(tree); }
+});
+
+// F7: the group camera, and a chat dare proof (the dare is marked as done by the outbox after the peek is in).
+test('group camera Send goes straight back to the group while the snap uploads', async () => {
+  const { screen, calls } = fixture({ group: true, params: { group: 'g1' }, send: () => new Promise(() => {}) });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(textOf(sendButton(tree)), 'Send snap');
+    await act(() => sendButton(tree).props.onPress());
+    assert.deepEqual(calls.dismissedTo, ['/groups/chat/g1']);
+    const [, scope, what, extra] = calls.sends[0];
+    assert.equal(scope, 'group:g1');
+    assert.deepEqual(plain(what), { kind: 'groupMedia', groupId: 'g1', snap: true });
+    assert.equal(extra.capture.kind, 'photo');
+    assert.equal(calls.groupSnaps.length, 0);
+  } finally { await unmount(tree); }
+});
+
+test('a chat dare proof goes back to the chat at once; the dare is marked by the outbox (no alert here)', async () => {
+  const { screen, calls } = fixture({ chatDare: true, failClaim: true, claimError: 'This dare is gone' });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree).props.onPress());
+    assert.deepEqual(plain(calls.sends[0][2]), { kind: 'peek', friendIds: ['bob'], chatDare: 'dare1' });
+    assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
+    assert.equal(screen.calls.alerts.length, 0);
+    assert.equal(calls.claimed, 0, 'the claim runs after the peek is saved, in the background');
+  } finally { await unmount(tree); }
+});
+
+test('when the dare is gone the toast still says the peek was sent (it used to be an alert in the editor)', async () => {
+  const banner = loadScreen('src/components/OutboxBanner.tsx').exports;
+  const proof = { what: { kind: 'peek', friendIds: ['bob'], chatDare: 'dare1' } };
+  assert.equal(banner.sentWords({ ...proof, result: { dareProblem: 'gone' } }), "Peek sent – that dare isn't there any more");
+  assert.equal(banner.sentWords({ ...proof, result: { dareProblem: null } }), 'Proof sent 🎯 Now they confirm it');
+  assert.match(banner.sentWords({ ...proof, result: { dareProblem: 'No internet' } }), /Peek sent – the dare wasn't updated: No internet/);
+});
+
 test('repeated editor presses send one group photo', async () => {
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  const { screen, calls } = fixture({ group: true, send: () => pending, params: { roll: '1' } });
+  const { screen, calls } = fixture({ group: true, params: { roll: '1' } });
   const tree = await renderScreen(screen);
   try {
     const press = sendButton(tree).props.onPress;
     let a, b;
     await act(async () => { a = press(); b = press(); await Promise.resolve(); });
-    release(); await act(() => Promise.all([a, b]));
-    assert.equal(calls.groups, 1);
-  } finally { release(); await unmount(tree); }
-});
-
-test('a half-saved chat proof explains the failure and retries the dare update without resending its photo', async () => {
-  const { screen, calls } = fixture({ chatDare: true, failClaim: true });
-  const tree = await renderScreen(screen);
-  try {
-    await act(() => sendButton(tree).props.onPress());
-    assert.equal(screen.calls.alerts.length, 1, 'a failed dare update must not be reported as a complete success');
-    assert.equal(screen.calls.toasts.length, 0);
-    await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.snaps, 1);
-    assert.equal(calls.claimed, 2);
-  } finally { await unmount(tree); }
-});
-
-test('a chat proof whose dare is gone says so once and goes back to the chat instead of asking to try again', async () => {
-  const { screen, calls } = fixture({ chatDare: true, failClaim: true, claimError: 'This dare is gone' });
-  const tree = await renderScreen(screen);
-  try {
-    await act(() => sendButton(tree).props.onPress());
-    assert.equal(screen.calls.alerts.length, 1);
-    assert.equal(screen.calls.alerts[0][0], 'Photo sent');
-    assert.doesNotMatch(screen.calls.alerts[0][1], /Tap Send again/, 'trying again can never work when the dare is gone');
-    assert.deepEqual(calls.dismissedTo, ['/chat/bob'], 'back to the chat');
-    // The photo is not sent twice if Send is pressed again on the way out.
-    await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.snaps, 1);
-    assert.equal(calls.claimed, 1);
+    await act(() => Promise.all([a, b]));
+    assert.equal(calls.sends.length, 1);
   } finally { await unmount(tree); }
 });
 
@@ -94,29 +130,37 @@ test('a group Guess Who goes to that group with no name: never as a group photo,
   try {
     assert.equal(textOf(sendButton(tree)), 'Send Guess Who');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groups, 0, 'not sent as a normal (named) group photo');
-    assert.equal(calls.mysteries.length, 0, 'not posted to friends');
-    assert.equal(calls.groupGuesses.length, 1);
-    const [me, group, capture] = calls.groupGuesses[0];
-    assert.deepEqual([me, group, capture.kind, capture.uri], ['alice', 'squad', 'photo', 'file:///qa-finished.jpg']);
+    assert.equal(calls.sends.length, 1);
+    const [me, scope, what, extra] = calls.sends[0];
+    assert.deepEqual([me, scope], ['alice', 'group:squad']);
+    assert.deepEqual(plain(what), { kind: 'groupGuess', groupId: 'squad' });
+    assert.deepEqual(plain(extra.capture), { kind: 'photo', uri: 'file:///qa-finished.jpg' });
     assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
-    assert.deepEqual(screen.calls.toasts.at(-1), ['Guess Who sent 🕵️ No name on it – let the group guess!']);
     // Pressing again on the way out sends nothing more.
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupGuesses.length, 1);
+    assert.equal(calls.sends.length, 1);
   } finally { await unmount(tree); }
 });
 
-test('a refused group Guess Who says why, and Send can be tried again', async () => {
-  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1' }, groupGuess: async () => { throw new Error('You can post 3 Guess Whos in this group a day'); } });
+test('a video in group Guess Who mode is refused at once (photos only) and nothing is sent', async () => {
+  const { screen, calls } = fixture({ group: true, params: { groupGuess: '1', video: '1' }, overrides: { '@/lib/groupGuess': { GROUP_GUESS_PHOTOS_ONLY: 'Guess Who in groups is photos only for now' } } });
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not send', 'You can post 3 Guess Whos in this group a day']);
+    assert.equal(calls.sends.length, 0);
+    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not send', 'Guess Who in groups is photos only for now']);
     assert.deepEqual(calls.dismissedTo, []);
-    assert.equal(calls.groups, 0);
+  } finally { await unmount(tree); }
+});
+
+test('a video that is too big is said at once, before leaving, and nothing is sent', async () => {
+  const { screen, calls } = fixture({ params: { video: '1', uri: 'file:///huge.mov' }, overrides: { '@/lib/media': { resizePhoto: async uri => uri, videoTooBig: () => true } } });
+  const tree = await renderScreen(screen);
+  try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupGuesses.length, 2);
+    assert.equal(calls.sends.length, 0);
+    assert.match(screen.calls.alerts.at(-1)[1], /too big/);
+    assert.deepEqual(calls.dismissedTo, []);
   } finally { await unmount(tree); }
 });
 
@@ -126,9 +170,7 @@ test('a group camera can never post a friends-wide Guess Who (guess=1 with a gro
   try {
     assert.notEqual(textOf(sendButton(tree)), 'Post Guess Who');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.mysteries.length, 0);
-    assert.equal(calls.groupGuesses.length, 0);
-    assert.equal(calls.groups, 0);
+    assert.equal(calls.sends.length, 0);
   } finally { await unmount(tree); }
 });
 
@@ -137,9 +179,8 @@ test('a group dare proof is never a Guess Who, even with groupGuess=1', async ()
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupGuesses.length, 0);
-    assert.equal(calls.groups, 0, 'nor a named proof the person thought was anonymous');
-    assert.equal(calls.mysteries.length, 0);
+    assert.equal(calls.sends.filter(([, , what]) => what.kind === 'groupGuess').length, 0);
+    assert.equal(calls.sends.filter(([, , what]) => what.kind === 'groupMedia').length, 0, 'nor a named proof the person thought was anonymous');
   } finally { await unmount(tree); }
 });
 
@@ -149,9 +190,7 @@ test('a photo picked from Photos (roll=1) still goes to the group as a normal ph
   try {
     assert.equal(textOf(sendButton(tree)), 'Send to group');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groups, 1);
-    assert.equal(calls.groupSnaps.length, 0, 'never a snap');
-    assert.equal(calls.groupGuesses.length, 0);
+    assert.deepEqual(plain(calls.sends.map(([, , what]) => what)), [{ kind: 'groupMedia', groupId: 'squad', snap: false }]);
     assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
   } finally { await unmount(tree); }
 });
@@ -167,15 +206,15 @@ test('a picture taken with the group chat camera goes as a snap (never as a norm
   try {
     assert.equal(textOf(sendButton(tree)), 'Send snap');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groups, 0, 'not a normal (permanent) group photo');
-    assert.equal(calls.groupSnaps.length, 1);
-    const [me, group, capture] = calls.groupSnaps[0];
-    assert.deepEqual([me, group, capture.kind, capture.uri], ['alice', 'squad', 'photo', 'file:///qa-finished.jpg']);
-    assert.deepEqual(screen.calls.toasts.at(-1), ['Snap sent 👀']);
+    assert.equal(calls.sends.length, 1);
+    const [me, scope, what, extra] = calls.sends[0];
+    assert.deepEqual([me, scope], ['alice', 'group:squad']);
+    assert.deepEqual(plain(what), { kind: 'groupMedia', groupId: 'squad', snap: true });
+    assert.deepEqual(plain(extra.capture), { kind: 'photo', uri: 'file:///qa-finished.jpg' });
     assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
     // Pressing again on the way out sends nothing more.
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupSnaps.length, 1);
+    assert.equal(calls.sends.length, 1);
   } finally { await unmount(tree); }
 });
 
@@ -184,38 +223,21 @@ test('a video taken with the group chat camera goes as a snap too', async () => 
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupSnaps.length, 1);
-    assert.equal(calls.groupSnaps[0][2].kind, 'video');
-    assert.equal(calls.groups, 0);
+    assert.equal(calls.sends.length, 1);
+    assert.equal(calls.sends[0][2].snap, true);
+    assert.equal(calls.sends[0][3].capture.kind, 'video');
   } finally { await unmount(tree); }
 });
 
 test('repeated presses send one group snap', async () => {
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  const { screen, calls } = fixture({ group: true, send: () => pending });
+  const { screen, calls } = fixture({ group: true });
   const tree = await renderScreen(screen);
   try {
     const press = sendButton(tree).props.onPress;
     let a, b;
     await act(async () => { a = press(); b = press(); await Promise.resolve(); });
-    release(); await act(() => Promise.all([a, b]));
-    assert.equal(calls.groupSnaps.length, 1);
-  } finally { release(); await unmount(tree); }
-});
-
-test('a group snap that could not be sent says why, and Send can be tried again', async () => {
-  let fail = true;
-  const { screen, calls } = fixture({ group: true, send: async () => { if (fail) throw new Error('Simulated upload failure'); } });
-  const tree = await renderScreen(screen);
-  try {
-    await act(() => sendButton(tree).props.onPress());
-    assert.deepEqual(screen.calls.alerts.at(-1), ['Could not send', 'Simulated upload failure']);
-    assert.deepEqual(calls.dismissedTo, []);
-    fail = false;
-    await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupSnaps.length, 2);
-    assert.deepEqual(calls.dismissedTo, ['/groups/chat/squad']);
+    await act(() => Promise.all([a, b]));
+    assert.equal(calls.sends.length, 1);
   } finally { await unmount(tree); }
 });
 
@@ -225,9 +247,7 @@ test('a group dare proof from the camera stays a normal proof (the group votes o
   try {
     assert.equal(textOf(sendButton(tree)), 'Send to group');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groups, 1);
-    assert.equal(calls.groupSnaps.length, 0);
-    assert.deepEqual(screen.calls.toasts.at(-1), ['Proof posted in the group 🎯']);
+    assert.deepEqual(plain(calls.sends.map(([, , what]) => what)), [{ kind: 'groupMedia', groupId: 'squad', snap: false, dareId: 'dare1' }]);
   } finally { await unmount(tree); }
 });
 
@@ -238,9 +258,8 @@ test('the public chat camera still posts a public photo, never a snap', async ()
   try {
     assert.ok(postButton(), 'the button says Post in public chat');
     await act(() => postButton().props.onPress());
-    assert.equal(calls.publicPhotos, 1);
-    assert.equal(calls.groupSnaps.length, 0);
-    assert.equal(calls.groups, 0);
+    assert.deepEqual(plain(calls.sends.map(([, scope, what]) => [scope, what])), [['public', { kind: 'publicPhoto' }]]);
+    assert.deepEqual(calls.dismissedTo, ['/public-chat']);
   } finally { await unmount(tree); }
 });
 
@@ -249,8 +268,17 @@ test('a group Guess Who is never a snap', async () => {
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.groupGuesses.length, 1);
-    assert.equal(calls.groupSnaps.length, 0);
+    assert.deepEqual(plain(calls.sends.map(([, , what]) => what.kind)), ['groupGuess']);
+  } finally { await unmount(tree); }
+});
+
+test('Guess Who from Home posts straight to Guess Who and goes there', async () => {
+  const { screen, calls } = fixture({ params: { to: undefined, guess: '1' } });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => sendButton(tree)?.props.onPress() ?? tree.root.findAllByType('Pressable').find(node => textOf(node) === 'Post Guess Who').props.onPress());
+    assert.deepEqual(plain(calls.sends.map(([, scope, what]) => [scope, what])), [['me', { kind: 'guess', caption: '' }]]);
+    assert.deepEqual(calls.dismissedTo, ['/guess']);
   } finally { await unmount(tree); }
 });
 
@@ -345,9 +373,7 @@ test('a one-on-one chat camera picture is still a peek', async () => {
   try {
     assert.equal(textOf(sendButton(tree)), 'Send');
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.snaps, 1);
-    assert.equal(calls.chatPhotos.length, 0);
-    assert.deepEqual(screen.calls.toasts.at(-1), ['Peek sent 👀']);
+    assert.deepEqual(plain(calls.sends.map(([, , what]) => what)), [{ kind: 'peek', friendIds: ['bob'] }]);
     assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
   } finally { await unmount(tree); }
 });
@@ -357,15 +383,15 @@ test('a photo picked from Photos in a one-on-one chat goes as a photo (never as 
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.snaps, 0, 'not a disappearing peek');
-    assert.equal(calls.chatPhotos.length, 1);
-    const [me, friend, capture] = calls.chatPhotos[0];
-    assert.deepEqual([me, friend, capture.kind], ['alice', 'bob', 'photo']);
-    assert.deepEqual(screen.calls.toasts.at(-1), ['Photo sent 📷']);
+    assert.equal(calls.sends.length, 1);
+    const [me, scope, what, extra] = calls.sends[0];
+    assert.deepEqual(plain([me, scope, what, extra.capture.kind]), ['alice', 'friend:bob', { kind: 'chatPhoto', friendId: 'bob' }, 'photo']);
     assert.deepEqual(calls.dismissedTo, ['/chat/bob']);
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.chatPhotos.length, 1);
+    assert.equal(calls.sends.length, 1);
   } finally { await unmount(tree); }
+  const banner = loadScreen('src/components/OutboxBanner.tsx').exports;
+  assert.equal(banner.sentWords({ what: { kind: 'chatPhoto', friendId: 'bob' }, capture: { kind: 'photo' } }), 'Photo sent 📷');
 });
 
 test('a dare proof picked from Photos is still a peek (your friend confirms it)', async () => {
@@ -373,9 +399,7 @@ test('a dare proof picked from Photos is still a peek (your friend confirms it)'
   const tree = await renderScreen(screen);
   try {
     await act(() => sendButton(tree).props.onPress());
-    assert.equal(calls.snaps, 1);
-    assert.equal(calls.chatPhotos.length, 0);
-    assert.equal(calls.claimed, 1);
+    assert.deepEqual(plain(calls.sends.map(([, , what]) => what)), [{ kind: 'peek', friendIds: ['bob'], chatDare: 'dare1' }]);
   } finally { await unmount(tree); }
 });
 

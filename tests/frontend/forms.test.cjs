@@ -167,7 +167,7 @@ test('signup: swearing in the username is still refused, even with a display nam
   }
 });
 
-function editProfileHarness() {
+function editProfileHarness(extra = {}) {
   const saved = [];
   const screen = loadScreen('src/app/(app)/edit-profile.tsx', {
     'expo-image-picker': {},
@@ -175,6 +175,7 @@ function editProfileHarness() {
     '@/lib/media': { deleteAvatar: async () => {}, resizePhoto: async uri => uri, uploadAvatar: async () => 'alice/avatar.jpg' },
     '@/lib/profiles': { ...validators, isUsernameAvailable: async () => true, updateMyProfile: async (_id, fields) => { saved.push(fields); return { id: 'alice', ...fields }; } },
     '@/lib/cleanWords': validators,
+    ...extra,
   });
   return { screen, saved };
 }
@@ -242,3 +243,67 @@ for (const [label, day, month, year, valid] of [
   ['future', '5', '11', '2026', false], ['under 13', '5', '11', '2013', false],
   ['exactly 13', '4', '11', '2013', true], ['over 100', '3', '11', '1926', false], ['exactly 100', '4', '11', '1926', true],
 ]) test(`birthday validates ${label}`, () => assert.equal(birthday(day, month, year, today) === null, valid));
+
+// 📤 A new profile picture starts uploading as soon as it's picked (lib/preupload.ts), so Save only has to save the
+// profile. F14.
+test('edit profile: picking a photo starts its upload before Save is tapped; Save uses it', async () => {
+  const options = [];
+  const { screen, saved } = editProfileHarness({
+    'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///new-me.jpg' }] }) },
+    '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => options.push(value) }) },
+  });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Change profile picture').props.onPress());
+    await act(() => options.at(-1).options.find(choice => /camera roll/.test(choice.label)).onPress());
+    assert.deepEqual(JSON.parse(JSON.stringify(screen.calls.preupload.prepareAvatar)), [['alice', 'file:///new-me.jpg']]);
+    assert.equal(saved.length, 0, 'nothing saved before Save');
+    await act(() => button(tree, 'Save').props.onPress());
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].avatar_path, 'alice/early-avatar.jpg');
+    // The same upload: not started again at Save.
+    assert.equal(screen.calls.preupload.prepareAvatar.length, 1);
+  } finally { await unmount(tree); }
+});
+
+// Review R3: the early upload of a photo picked in a dead spot failed, and every Save after that failed straight
+// away ("Can't reach the internet") because it waited on the same failed upload again. Save now tries it again.
+test('edit profile: a photo whose early upload failed is uploaded again at Save, and the profile is saved', async () => {
+  const options = [];
+  const ready = [];
+  const failedUpload = Promise.reject(new Error('Network request failed'));
+  failedUpload.catch(() => {});
+  const { screen, saved } = editProfileHarness({
+    'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///dead-spot.jpg' }] }) },
+    '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => options.push(value) }) },
+    '@/lib/preupload': {
+      prepareAvatar: (owner, uri) => ({ owner, uri, path: `${owner}/early-avatar.jpg`, done: failedUpload, state: 'uploading', failed: true }),
+      avatarReady: (avatar) => { ready.push(avatar.uri); return Promise.resolve(avatar.path); },
+      discardAvatar() {}, markAvatarUsed() {},
+    },
+  });
+  const tree = await renderScreen(screen);
+  try {
+    await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Change profile picture').props.onPress());
+    await act(() => options.at(-1).options.find(choice => /camera roll/.test(choice.label)).onPress());
+    await act(() => button(tree, 'Save').props.onPress());
+    assert.deepEqual(ready, ['file:///dead-spot.jpg']);
+    assert.deepEqual(screen.calls.alerts, []);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].avatar_path, 'alice/early-avatar.jpg');
+  } finally { await unmount(tree); }
+});
+
+test('edit profile: a picked photo that is not saved is thrown away when you leave', async () => {
+  const options = [];
+  const { screen } = editProfileHarness({
+    'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///maybe.jpg' }] }) },
+    '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: value => options.push(value) }) },
+  });
+  const tree = await renderScreen(screen);
+  await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Change profile picture').props.onPress());
+  await act(() => options.at(-1).options.find(choice => /camera roll/.test(choice.label)).onPress());
+  await unmount(tree);
+  const thrown = screen.calls.preupload.discardAvatar.map(([avatar]) => avatar?.uri).filter(Boolean);
+  assert.deepEqual(thrown, ['file:///maybe.jpg']);
+});

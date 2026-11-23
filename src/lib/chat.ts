@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { serverFailure } from './errors';
 import { deleteMedia, mediaFiles, uploadCapture, type Capture } from './media';
 import type { MediaFields, Profile } from './types';
 import { supabase } from './supabase';
@@ -76,6 +77,25 @@ export function canSave(message: Message): boolean {
 const pairFilter = (me: string, friend: string) =>
   `and(sender_id.eq.${me},recipient_id.eq.${friend}),and(sender_id.eq.${friend},recipient_id.eq.${me})`;
 
+// ⚡ Each chat's last list is remembered while the app is open (only for the person logged in now, and only the
+// last 30 chats), so opening a chat again shows its messages at once while it checks for new ones.
+const REMEMBERED_CHATS = 30;
+let rememberedChats: { me: string; lists: Map<string, Message[]> } | null = null;
+
+export function cachedConversation(me: string, friend: string): Message[] | null {
+  return rememberedChats?.me === me ? (rememberedChats.lists.get(friend) ?? null) : null;
+}
+
+// The chat screen hands back what it shows (with a message you just sent, deleted or hid), so the next time it opens
+// it starts from that.
+export function rememberConversation(me: string, friend: string, list: Message[]): void {
+  if (rememberedChats?.me !== me) rememberedChats = { me, lists: new Map() };
+  const { lists } = rememberedChats;
+  lists.delete(friend);
+  lists.set(friend, list);
+  if (lists.size > REMEMBERED_CHATS) lists.delete(lists.keys().next().value as string);
+}
+
 // Newest first.
 export async function fetchConversation(me: string, friend: string, limit = 100): Promise<Message[]> {
   const [{ data, error }, hidden] = await Promise.all([
@@ -88,7 +108,9 @@ export async function fetchConversation(me: string, friend: string, limit = 100)
     fetchHiddenIds(me),
   ]);
   if (error) throw error;
-  return ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
+  const list = ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
+  rememberConversation(me, friend, list);
+  return list;
 }
 
 // 🔎 Messages in your chat with a friend containing `text` (newest first, hidden ones left out).
@@ -111,27 +133,55 @@ export async function searchConversation(me: string, friend: string, text: strin
 }
 
 // Messages you deleted "for me" (or cleared): hidden from your side only.
-async function fetchHiddenIds(me: string): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from('message_hides')
-    .select('message_id')
-    .eq('user_id', me)
-    .order('hidden_at', { ascending: false })
-    .limit(5000);
-  // A failed privacy check must not make cleared messages reappear.
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.message_id as string));
+// ⚡ The list is remembered while the app is open (for the person logged in now) and asked for again every few
+// minutes, instead of being downloaded with every chat load. "Delete for me" and "Clear chat" on this phone make the
+// next load ask again straight away. (A message hidden on another phone shows here until the next check.)
+const HIDDEN_FRESH_MS = 3 * 60 * 1000;
+let hiddenKnown: { me: string; ids: Set<string>; at: number } | null = null;
+let hiddenOnTheWay: { me: string; version: number; request: Promise<Set<string>> } | null = null;
+// Goes up whenever you hide something here: an answer to a question asked before that is never kept.
+let hiddenVersion = 0;
+
+function fetchHiddenIds(me: string): Promise<Set<string>> {
+  if (hiddenKnown?.me === me && Date.now() - hiddenKnown.at < HIDDEN_FRESH_MS) return Promise.resolve(hiddenKnown.ids);
+  if (hiddenOnTheWay?.me === me && hiddenOnTheWay.version === hiddenVersion) return hiddenOnTheWay.request;
+  const version = hiddenVersion;
+  const request = (async () => {
+    const { data, error } = await supabase
+      .from('message_hides')
+      .select('message_id')
+      .eq('user_id', me)
+      .order('hidden_at', { ascending: false })
+      .limit(5000);
+    // A failed privacy check must not make cleared messages reappear.
+    if (error) throw error;
+    const ids = new Set((data ?? []).map((row) => row.message_id as string));
+    if (version === hiddenVersion) hiddenKnown = { me, ids, at: Date.now() };
+    return ids;
+  })().finally(() => {
+    if (hiddenOnTheWay?.request === request) hiddenOnTheWay = null;
+  });
+  hiddenOnTheWay = { me, version, request };
+  return request;
+}
+
+// You just hid something: the next load asks for the hidden list again.
+function hiddenChanged() {
+  hiddenVersion += 1;
+  hiddenKnown = null;
 }
 
 // "Delete for me": hides a message (yours or theirs) from your chat only. Your friend still sees it.
 export async function hideMessage(messageId: string): Promise<void> {
   const { error } = await supabase.rpc('hide_message', { message: messageId });
+  hiddenChanged();
   if (error) throw error;
 }
 
 // "Clear chat": hides every message in your chat with a friend, from your side only.
 export async function clearChat(friend: string): Promise<void> {
   const { error } = await supabase.rpc('clear_chat', { friend });
+  hiddenChanged();
   if (error) throw error;
 }
 
@@ -289,6 +339,81 @@ export async function sendChatPhoto(me: string, friend: string, capture: Capture
   }
 }
 
+// ---------------------------------------------------------------------------
+// Saving messages for the outbox (lib/outbox.ts). Each row gets its id on the phone BEFORE the first try, so a
+// try repeated after a lost answer can look the row up first, and a second copy is impossible (the server says
+// "duplicate key", 23505). They throw an error that keeps the server's code and status (lib/errors.ts), so the
+// outbox can tell a clear "no" from a lost answer.
+// ---------------------------------------------------------------------------
+
+// Peeks (one photo or video, already uploaded) to one or more friends: one row each, with the ids given.
+// `savedPhoto`: a photo picked from Photos, saved in the chat from the start (see sendChatPhoto).
+export async function insertSnaps(
+  me: string,
+  rows: { id: string; friendId: string }[],
+  fields: MediaFields,
+  options: { savedPhoto?: boolean } = {},
+): Promise<Message[]> {
+  const savedAt = options.savedPhoto ? new Date().toISOString() : null;
+  const { data, error, status } = await supabase
+    .from('messages')
+    .insert(
+      rows.map((row) => ({
+        id: row.id,
+        sender_id: me,
+        recipient_id: row.friendId,
+        kind: 'snap',
+        ...fields,
+        ...(savedAt ? { saved_at: savedAt } : {}),
+      })),
+    )
+    .select('*');
+  if (error) throw serverFailure(error, status);
+  return (data ?? []) as Message[];
+}
+
+// One text, sticker, dare or voice note, with the id given.
+export type NewMessage = {
+  id: string;
+  friendId: string;
+  kind: 'text' | 'sticker' | 'dare' | 'voice';
+  body?: string | null;
+  sticker?: string | null;
+  replyTo?: string | null;
+  media_path?: string | null;
+  audio_ms?: number | null;
+  waveform?: number[] | null;
+};
+
+export async function insertMessage(me: string, row: NewMessage): Promise<Message> {
+  const { data, error, status } = await supabase
+    .from('messages')
+    .insert({
+      id: row.id,
+      sender_id: me,
+      recipient_id: row.friendId,
+      kind: row.kind,
+      ...(row.body !== undefined ? { body: row.kind === 'text' || row.kind === 'dare' ? (row.body ?? '').trim() : row.body } : {}),
+      ...(row.sticker ? { sticker: row.sticker } : {}),
+      ...(row.replyTo ? { reply_to: row.replyTo } : {}),
+      ...(row.media_path ? { media_path: row.media_path } : {}),
+      ...(row.audio_ms !== undefined && row.audio_ms !== null ? { audio_ms: row.audio_ms } : {}),
+      ...(row.waveform ? { waveform: row.waveform } : {}),
+    })
+    .select('*')
+    .single();
+  if (error) throw serverFailure(error, status);
+  return data as Message;
+}
+
+// The messages with these ids that you can see (the ones that really were saved).
+export async function findMessages(ids: string[]): Promise<Message[]> {
+  if (ids.length === 0) return [];
+  const { data, error, status } = await supabase.from('messages').select('*').in('id', ids);
+  if (error) throw serverFailure(error, status);
+  return (data ?? []) as Message[];
+}
+
 // Was this sent as a photo (picked from Photos), not as a peek? It's a peek saved by whoever sent it, at the very
 // moment it was sent. (A peek someone saved later is a "saved peek".)
 export function isChatPhoto(message: Pick<Message, 'kind' | 'sender_id' | 'created_at' | 'saved_at' | 'saved_by'>): boolean {
@@ -325,6 +450,20 @@ export async function getSnapUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('media').createSignedUrl(path, 60);
   if (error) return null;
   return data.signedUrl;
+}
+
+// One-minute links for all of a peek's files (its photo or video, a video's still picture and its text layer) in ONE
+// request instead of one each. A file that couldn't be signed is simply left out.
+export async function getSnapUrls(paths: string[]): Promise<Record<string, string>> {
+  const unique = [...new Set(paths.filter(Boolean))];
+  if (unique.length === 0) return {};
+  const { data, error } = await supabase.storage.from('media').createSignedUrls(unique, 60);
+  if (error || !data) return {};
+  const links: Record<string, string> = {};
+  for (const item of data) {
+    if (item.path && item.signedUrl && !item.error) links[item.path] = item.signedUrl;
+  }
+  return links;
 }
 
 export async function markChatRead(friend: string): Promise<void> {
@@ -384,16 +523,42 @@ async function countUnread(me: string): Promise<number> {
   return count ?? 0;
 }
 
-// Calls `onChange` whenever one of your messages is sent, read, opened or unsent.
+// What changed: a new or changed message comes with its row; an unsent (deleted) one only says its id.
+export type MessageChange = {
+  eventType?: string;
+  new?: Partial<Pick<Message, 'id' | 'sender_id' | 'recipient_id'>> | null;
+  old?: Partial<Pick<Message, 'id' | 'sender_id' | 'recipient_id'>> | null;
+};
+
+// Calls `onChange` whenever one of your messages is sent, read, opened or unsent (in any of your chats).
 let messageListener = 0;
-export function subscribeToMyMessages(name: string, onChange: () => void): () => void {
+export function subscribeToMyMessages(name: string, onChange: (change?: MessageChange) => void): () => void {
   const channel = supabase
     .channel(`${name}-${++messageListener}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (change) => onChange(change as MessageChange))
     .subscribe();
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+// Is this change about your chat with `friend`? `shown(id)` says whether a message is on screen there (an unsent
+// message only says its id). Anything unclear counts: better one load too many than a missed message.
+function changeIsForChat(change: MessageChange | undefined, me: string, friend: string, shown: (id: string) => boolean): boolean {
+  const row = change?.new && Object.keys(change.new).length > 0 ? change.new : change?.old;
+  if (!row) return true;
+  if (row.sender_id && row.recipient_id) {
+    return (row.sender_id === me && row.recipient_id === friend) || (row.sender_id === friend && row.recipient_id === me);
+  }
+  return row.id ? shown(row.id) : true;
+}
+
+// ⚡ Calls `onChange` only when a message between you and `friend` is sent, read, opened or unsent. Before, a message in
+// ANY of your chats reloaded the chat on screen (4–6 requests each time; the logs showed 8 reloads in 25 seconds).
+export function subscribeToChat(me: string, friend: string, shown: (id: string) => boolean, onChange: () => void): () => void {
+  return subscribeToMyMessages(`chat-${me}-${friend}`, (change) => {
+    if (changeIsForChat(change, me, friend, shown)) onChange();
+  });
 }
 
 // Live number of unread chats + unopened peeks waiting for you.

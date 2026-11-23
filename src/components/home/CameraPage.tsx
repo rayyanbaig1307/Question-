@@ -139,7 +139,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const lensesHere = isHome || ((!!sendTo || !!sendToGroup) && !dare && !drop && !guess && !forfeit);
   const requestCount = useIncomingRequestCount(userId, active && isHome);
   const dareDone = useDareDone(userId, active && isHome);
-  const dropDone = useDropDone(userId, active && isHome);
+  // "Have you posted today's drop?" – asked by the home camera, and by the drop camera too: there it's the first
+  // request after the app was idle, so it gets the connection (and your login) ready before you take the photo.
+  const dropDone = useDropDone(userId, active && (isHome || drop));
   // A group chat's camera (not a group dare proof), in a group where Guess Who can work: its dial has a Guess Who
   // bubble too.
   const groupGuessHere = groupGuessOk && !!sendToGroup && !groupDare && !sendTo && !dare && !drop && !guess && !forfeit;
@@ -149,7 +151,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   const dareOn = dare || (isHome && homeMode === 'dare');
   // While today's drop is live (2 minutes) and you haven't posted it, the normal camera IS the drop camera:
   // no bubble to pick, just snap. (The drop notification also opens the camera straight in drop mode.)
-  const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone === false;
+  // It doesn't wait for the server to say "not posted yet" (every second of the 2 minutes counts): only a known
+  // "already posted" turns it off. Posting a second drop is refused by the server anyway.
+  const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone !== true;
   const dropOn = drop || autoDrop;
   // Missed it: a small "post today's drop · you're late" button on the camera until you do.
   const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false;

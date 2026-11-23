@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
@@ -11,7 +11,8 @@ import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
 import { checkClean } from '@/lib/cleanWords';
 import { friendlyError } from '@/lib/errors';
-import { deleteAvatar, resizePhoto, uploadAvatar } from '@/lib/media';
+import { deleteAvatar } from '@/lib/media';
+import { avatarReady, discardAvatar, markAvatarUsed, prepareAvatar, type PreparedAvatar } from '@/lib/preupload';
 import {
   checkUsernameFormat,
   cleanUsername,
@@ -35,6 +36,16 @@ export default function EditProfile() {
   const [photo, setPhoto] = useState<{ kind: 'keep' } | { kind: 'new'; uri: string } | { kind: 'remove' }>({ kind: 'keep' });
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 📤 A new picture starts uploading as soon as you pick it (lib/preupload.ts), so Save only has to save your
+  // profile. One you don't save (you pick another, or leave) is deleted again.
+  const avatar = useRef<PreparedAvatar | null>(null);
+  useEffect(() => () => discardAvatar(avatar.current), []);
+
+  function takePicked(uri: string) {
+    discardAvatar(avatar.current);
+    avatar.current = prepareAvatar(userId, uri);
+    setPhoto({ kind: 'new', uri });
+  }
 
   const hasPhoto = photo.kind === 'new' || (photo.kind === 'keep' && !!profile?.avatar_path);
 
@@ -44,7 +55,19 @@ export default function EditProfile() {
       options: [
         { label: '📸 Take a photo', onPress: takePhoto },
         { label: '🖼️ Choose from camera roll', onPress: choosePhoto },
-        ...(hasPhoto ? [{ label: 'Remove photo', destructive: true, onPress: () => setPhoto({ kind: 'remove' }) }] : []),
+        ...(hasPhoto
+          ? [
+              {
+                label: 'Remove photo',
+                destructive: true,
+                onPress: () => {
+                  discardAvatar(avatar.current);
+                  avatar.current = null;
+                  setPhoto({ kind: 'remove' });
+                },
+              },
+            ]
+          : []),
       ],
     });
   }
@@ -63,7 +86,7 @@ export default function EditProfile() {
       quality: 0.9,
       cameraType: ImagePicker.CameraType.front,
     });
-    if (!result.canceled && result.assets[0]) setPhoto({ kind: 'new', uri: result.assets[0].uri });
+    if (!result.canceled && result.assets[0]) takePicked(result.assets[0].uri);
   }
 
   async function choosePhoto() {
@@ -73,7 +96,7 @@ export default function EditProfile() {
       aspect: [1, 1],
       quality: 0.9,
     });
-    if (!result.canceled && result.assets[0]) setPhoto({ kind: 'new', uri: result.assets[0].uri });
+    if (!result.canceled && result.assets[0]) takePicked(result.assets[0].uri);
   }
 
   async function save() {
@@ -103,7 +126,17 @@ export default function EditProfile() {
         return;
       }
       let avatarPath = profile.avatar_path;
-      if (photo.kind === 'new') avatarPath = await uploadAvatar(userId, await resizePhoto(photo.uri, 512));
+      let picked: PreparedAvatar | null = null;
+      if (photo.kind === 'new') {
+        // Usually uploaded already (it started when you picked it). If that upload failed (you picked it in a
+        // dead spot), it's tried again now.
+        if (!avatar.current || avatar.current.uri !== photo.uri) {
+          discardAvatar(avatar.current);
+          avatar.current = prepareAvatar(userId, photo.uri);
+        }
+        picked = avatar.current;
+        avatarPath = await avatarReady(picked);
+      }
       if (photo.kind === 'remove') avatarPath = null;
       const updated = await updateMyProfile(userId, {
         display_name: displayName.trim(),
@@ -112,6 +145,7 @@ export default function EditProfile() {
         is_private: isPrivate,
         avatar_path: avatarPath,
       });
+      if (picked) markAvatarUsed(picked);
       // Clean up the old picture once the new one is saved.
       if (photo.kind !== 'keep' && profile.avatar_path) deleteAvatar(profile.avatar_path).catch(() => {});
       // Updating the saved profile makes the new picture show up everywhere in the app right away.

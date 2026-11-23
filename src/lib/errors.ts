@@ -26,7 +26,14 @@ export function friendlyError(error: unknown): string {
   if (lower.includes('rate limit') || lower.includes('too many')) {
     return 'Whoa, too many tries! Wait a minute and try again.';
   }
-  if (lower.includes('network request failed') || lower.includes('failed to fetch')) {
+  // A request that got no answer in time was given up (lib/timedFetch.ts): the same as no internet.
+  if (
+    lower.includes('network request failed') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('aborterror') ||
+    lower.includes('aborted') ||
+    lower.includes('timed out')
+  ) {
     return "Can't reach the internet. Check your connection and try again.";
   }
   if (lower.includes('profiles_username_key') || (lower.includes('duplicate') && lower.includes('username'))) {
@@ -49,4 +56,32 @@ export function friendlyError(error: unknown): string {
     return "You don't have permission to do that.";
   }
   return message || 'Something went wrong. Please try again.';
+}
+
+// Did the server clearly refuse (rather than the answer getting lost)? The database's own errors carry a code
+// (like "P0001" or "23505"), and a refusal comes with an HTTP status from 400 to 499. A request that got no
+// answer (no signal, or given up after its time limit) has neither: status 0. A 5xx status without a code
+// usually comes from a gateway that gave up waiting while the database may still have saved the change, so that
+// doesn't count as a clear "no" either. `status` can be passed, or travel on the error itself.
+export function isClearRefusal(error: { code?: string | null; status?: unknown } | null | undefined, status?: number): boolean {
+  if (!error) return false;
+  if (typeof error.code === 'string' && error.code !== '') return true;
+  const answer = typeof status === 'number' ? status : Number(error.status);
+  return Number.isFinite(answer) && answer >= 400 && answer < 500;
+}
+
+// A failed server answer as an Error that keeps its database code and HTTP status, so the outbox
+// (lib/outbox.ts) can tell a clear "no" from a lost answer. The message stays the server's own.
+export type ServerFailure = Error & { code?: string; status?: number; details?: string; hint?: string };
+
+export function serverFailure(
+  error: { message?: string | null; code?: string | null; details?: string | null; hint?: string | null },
+  status?: number,
+): ServerFailure {
+  const failure = new Error(error.message || 'Something went wrong. Please try again.') as ServerFailure;
+  if (error.code) failure.code = error.code;
+  if (typeof status === 'number') failure.status = status;
+  if (error.details) failure.details = error.details;
+  if (error.hint) failure.hint = error.hint;
+  return failure;
 }

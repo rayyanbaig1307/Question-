@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
+import { timedFetch } from './timedFetch';
+
 // These come from the .env file (see .env.example).
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseKey =
@@ -20,6 +22,9 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: false,
     },
+    // Every request gets a time limit (lib/timedFetch.ts), so a lost answer can never keep a screen waiting
+    // forever. Supabase uses this fetch for rows, storage, login and the server functions.
+    global: { fetch: timedFetch },
   },
 );
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { supabase } from './supabase';
 
@@ -167,22 +167,72 @@ export function useDropKeyOpen(mine: MyDrops | null): boolean {
   return dropKeyOpen(mine);
 }
 
-// Have I posted today's drop? Checked whenever `enabled` turns on. `null` = still checking.
+// ---------------------------------------------------------------------------
+// What this phone already knows about your own drops, shared by every screen while the app is open:
+// - "have you posted the drop of day X?" (the server's last answer, or "yes" the moment your drop is saved);
+// - the drop you just posted (lib/outbox.ts saves it in the background after "Send to…" has already closed).
+// Screens use it straight away, so the camera never waits to know if it's in drop mode, and your friends' drops
+// unlock the moment yours is saved – not after the screens have loaded everything again.
+// ---------------------------------------------------------------------------
+// `seq` counts the answers in the order they were saved (a clock could show the same time for two of them).
+type DoneAnswer = { done: boolean; seq: number };
+const doneAnswers = new Map<string, DoneAnswer>();
+let answersSaved = 0;
+export type PostedDrop = { me: string; day: string; offset: number | null };
+let postedDrop: PostedDrop | null = null;
+let dropsPosted = 0;
+const dropListeners = new Set<() => void>();
+
+function tellDropListeners() {
+  dropListeners.forEach((listener) => listener());
+}
+
+function listenToDrops(listener: () => void) {
+  dropListeners.add(listener);
+  return () => {
+    dropListeners.delete(listener);
+  };
+}
+
+const doneKey = (me: string, day: string) => `${me}|${day}`;
+
+// Saves an answer, unless a newer one came in while this one was on its way (an answer to a question asked
+// before your drop was saved must not say "not posted" after it was). `askedAfter` = how many answers were saved
+// when the question was asked.
+function rememberDone(me: string, day: string, done: boolean, askedAfter: number) {
+  const key = doneKey(me, day);
+  const known = doneAnswers.get(key);
+  if (known && known.seq > askedAfter) return;
+  doneAnswers.set(key, { done, seq: ++answersSaved });
+  tellDropListeners();
+}
+
+// Have I posted today's drop? Asked again whenever `enabled` turns on; until the answer is in, the last answer this
+// phone knows is used. `null` = not known yet.
+// The question is tiny (no rows come back), and it's also what warms the drop camera up: it's the first request
+// after the app was idle, so the connection is ready – and a login that was about to run out is refreshed – before
+// you take the photo, not while you wait on Send.
 export function useDropDone(me: string, enabled: boolean): boolean | null {
-  const [done, setDone] = useState<{ day: string; done: boolean } | null>(null);
+  const day = localDay();
+  const known = useSyncExternalStore(
+    listenToDrops,
+    () => doneAnswers.get(doneKey(me, day)),
+    () => doneAnswers.get(doneKey(me, day)),
+  );
   useEffect(() => {
     if (!enabled) return;
-    const day = localDay();
+    const today = localDay();
+    const askedAfter = answersSaved;
     supabase
       .from('posts')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', me)
-      .eq('drop_day', day)
+      .eq('drop_day', today)
       .then(({ count, error }) => {
-        if (!error) setDone({ day, done: (count ?? 0) > 0 });
+        if (!error) rememberDone(me, today, (count ?? 0) > 0, askedAfter);
       });
   }, [me, enabled]);
-  return done?.day === localDay() ? done.done : null;
+  return known?.done ?? null;
 }
 
 // Why someone else's drop photo is still blurred for you (the database enforces this too):
@@ -239,19 +289,64 @@ export function visiblePath(post: PostFiles, me: string, mine: MyDrops | null, n
   return postMedia(post, me, mine, now).still;
 }
 
-// Your own drops, loaded again whenever `refreshKey` changes. `null` = still loading (until then, other
-// people's drops count as locked). Redraws the screen when the next drop goes off.
+// Your drop was just saved (by lib/outbox.ts). `post` is the saved row: it says which day the drop is for and the
+// time zone it was posted from. Every screen knows at once: the camera stops offering the drop, and your friends'
+// drops unlock on screen straight away.
+export function noteMyDropPosted(
+  me: string,
+  post?: { drop_day?: string | null; drop_offset_minutes?: number | null } | null,
+): void {
+  const day = post?.drop_day ?? localDay();
+  const offset = post?.drop_offset_minutes ?? timeZoneOffsetMinutes();
+  postedDrop = { me, day, offset };
+  doneAnswers.set(doneKey(me, day), { done: true, seq: ++answersSaved });
+  dropsPosted += 1;
+  tellDropListeners();
+}
+
+// A number that goes up each time you post a drop (use it to load things again).
+export function useMyDropPosts(): number {
+  return useSyncExternalStore(
+    listenToDrops,
+    () => dropsPosted,
+    () => dropsPosted,
+  );
+}
+
+// Your drops as loaded, plus the one you just posted if that load doesn't have it yet. (Exported for the tests.)
+export function withPostedDrop(mine: MyDrops | null, me: string, posted: PostedDrop | null): MyDrops | null {
+  if (!posted || posted.me !== me) return mine;
+  const base = mine ?? NO_DROPS;
+  const until = nextDropAt(posted.day, posted.offset);
+  if (base.days.has(posted.day) && base.windows.some((window) => window.day === posted.day)) return base;
+  const windows = until + OLDER_DROPS_EXTRA_MS > Date.now() ? [...base.windows, { day: posted.day, until }] : base.windows;
+  return { days: new Set([...base.days, posted.day]), windows };
+}
+
+// The same, as a hook: the screen changes the moment your drop is saved.
+export function useWithMyNewDrop(me: string, mine: MyDrops | null): MyDrops | null {
+  const posted = useSyncExternalStore(
+    listenToDrops,
+    () => postedDrop,
+    () => postedDrop,
+  );
+  return useMemo(() => withPostedDrop(mine, me, posted), [mine, me, posted]);
+}
+
+// Your own drops, loaded again whenever `refreshKey` changes. `null` = still loading (until then, other people's
+// drops count as locked). A drop you post meanwhile counts at once. Redraws the screen when the next drop goes off.
 export function useMyDrops(me: string, refreshKey: unknown): MyDrops | null {
-  const [mine, setMine] = useState<MyDrops | null>(null);
+  const [loaded, setLoaded] = useState<MyDrops | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetchMyDrops(me)
-      .then((loaded) => !cancelled && setMine(loaded))
-      .catch(() => !cancelled && setMine(NO_DROPS));
+      .then((drops) => !cancelled && setLoaded(drops))
+      .catch(() => !cancelled && setLoaded(NO_DROPS));
     return () => {
       cancelled = true;
     };
   }, [me, refreshKey]);
+  const mine = useWithMyNewDrop(me, loaded);
   useDropKeyOpen(mine);
   return mine;
 }

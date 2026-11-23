@@ -22,6 +22,7 @@ import { Button } from '@/components/Button';
 import { ChatBackground, ChatInkProvider, chatInk } from '@/components/chat/ChatBackground';
 import { ChatBackgroundPicker } from '@/components/chat/ChatBackgroundPicker';
 import { ChatSticker } from '@/components/chat/ChatSticker';
+import { PendingBubble } from '@/components/chat/PendingBubble';
 import { StickerPicker } from '@/components/editor/StickerPicker';
 import { DareComposer } from '@/components/DareComposer';
 import { MessageActions, ReactionChips, ReplyQuote, type MessageAction } from '@/components/MessageActions';
@@ -61,10 +62,6 @@ import {
   proofCounts,
   proofOutcome,
   searchGroupMessages,
-  sendGroupDare,
-  sendGroupMessage,
-  sendGroupSticker,
-  sendGroupVoice,
   setGroupChatMuted,
   setGroupPhoto,
   setGroupSnapSaved,
@@ -81,6 +78,7 @@ import { fetchGroupGuesses, subscribeToGroupGuesses, type GroupGuess, type Group
 import { blockMysteryPoster, deleteMystery, guessMystery, reportMystery } from '@/lib/guess';
 import { usePlus } from '@/lib/plus';
 import { useMediaUrls } from '@/lib/media';
+import { ackSent, discard, getVisibleScope, inScope, onOutboxDone, retry, sendLater, setVisibleScope, useOutbox, type Job } from '@/lib/outbox';
 import { fetchReactions, subscribeToReactions, toggleReaction, type Reaction } from '@/lib/reactions';
 import { REPORT_REASONS } from '@/lib/safety';
 import { timeAgo } from '@/lib/time';
@@ -155,9 +153,10 @@ export default function GroupChat() {
   const [muted, setMuted] = useState(false);
   const [text, setText] = useState('');
   const draft = useRef('');
-  const sendingNow = useRef(false);
-  const [sending, setSending] = useState(false);
   const [dareOpen, setDareOpen] = useState(false);
+  // 📤 What you sent to this group that isn't in yet (lib/outbox.ts): shown at once as "Sending…" bubbles.
+  const scope = `group:${groupId}` as const;
+  const outbox = useOutbox(userId, scope);
   // Search: the box is open while `search` isn't null.
   const [search, setSearch] = useState<string | null>(null);
   const [results, setResults] = useState<{ query: string; list: GroupMessage[] } | null>(null);
@@ -345,6 +344,8 @@ export default function GroupChat() {
       // A group Guess Who was posted or deleted: load just the Guess Whos again (never the whole chat, which
       // would mark it as read).
       const stopGuesses = subscribeToGroupGuesses(groupId, loadGuesses);
+      // While this chat is on screen, its sends show here as bubbles (not in the banner at the top).
+      setVisibleScope(`group:${groupId}`);
       const readsTimer = setInterval(() => {
         fetchGroupReads(groupId)
           .then(setReads)
@@ -359,8 +360,32 @@ export default function GroupChat() {
         stopGroup();
         stopGuesses();
         clearInterval(readsTimer);
+        // Only if another screen hasn't taken over already.
+        if (getVisibleScope() === `group:${groupId}`) setVisibleScope(null);
       };
     }, [groupId, load, onChatChange, loadGuesses, moveClock]),
+  );
+
+  // A send that's in: its real message takes the bubble's place (no reload needed).
+  useEffect(
+    () =>
+      onOutboxDone((job) => {
+        if (job.state !== 'sent' || job.owner !== userId || !inScope(job, `group:${groupId}`)) return;
+        const rows = ((job.rows ?? []) as GroupMessage[]).filter(
+          (row) => row && typeof row.id === 'string' && row.group_id === groupId,
+        );
+        if (rows.length > 0) {
+          setMessages((current) => {
+            if (current === null) return current;
+            const fresh = new Set(rows.map((row) => row.id));
+            return [...rows, ...current.filter((m) => !fresh.has(m.id))].sort((a, b) => b.created_at.localeCompare(a.created_at));
+          });
+        }
+        // A Guess Who is not a chat message: the Guess Whos load again.
+        if (job.what.kind === 'groupGuess') loadGuesses();
+        ackSent(job.key);
+      }),
+    [groupId, userId, loadGuesses],
   );
 
   const people = new Map<string, Profile>();
@@ -379,6 +404,20 @@ export default function GroupChat() {
       : [...messages.map((message) => ({ message })), ...shownGuesses.map((guess) => ({ guess }))].sort(
           (a, b) => itemTime(b) - itemTime(a),
         );
+
+  // Bubbles for sends that aren't in yet (one that already came back in a reload isn't shown twice).
+  const loadedIds = new Set((messages ?? []).map((m) => m.id));
+  const pending = outbox.filter(
+    (job) => job.state !== 'sent' && !(job.rowIds.length > 0 && job.rowIds.every((id) => loadedIds.has(id))),
+  );
+  const pendingBubbles = pending.map((job) => (
+    <PendingBubble
+      key={job.key}
+      job={job}
+      onPress={() => pendingMenu(job)}
+      sticker={job.what.kind === 'groupSticker' && job.what.sticker ? <ChatSticker id={job.what.sticker} /> : undefined}
+    />
+  ));
 
   // Photos, videos, proofs and Guess Whos need their links. A snap's never do (unless it's saved in the chat): the
   // snap viewer opens it first and then gets a one-minute link of its own. (The server wouldn't give one anyway.)
@@ -403,89 +442,78 @@ export default function GroupChat() {
     }
   }
 
-  async function send() {
-    const originalText = text;
-    const body = text.trim();
-    if (!body || sendingNow.current) return;
-    sendingNow.current = true;
-    const replyId = replyTo?.id;
-    setSending(true);
-    try {
-      const sent = await sendGroupMessage(groupId, body, replyId);
-      setReplyTo((current) => current?.id === replyId ? null : current);
-      // Leave the next draft alone if you started typing while this message was sending.
-      if (draft.current === originalText) {
-        draft.current = '';
-        setText('');
-        onTextChange('');
-      }
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Message not sent', friendlyError(error));
-    } finally {
-      sendingNow.current = false;
-      setSending(false);
-    }
+  // Sends what's in the box: it empties at once and the message shows as "Sending…" (lib/outbox.ts sends it in
+  // the background, in the order you tapped). A double tap finds the box empty, so it's sent once.
+  function send() {
+    const body = draft.current.trim();
+    if (!body) return;
+    sendLater(userId, scope, { kind: 'groupText', groupId, body, replyTo: replyTo?.id ?? null });
+    draft.current = '';
+    setText('');
+    onTextChange('');
+    setReplyTo(null);
   }
 
-  async function sendVoiceNote(recording: Recording) {
-    if (sendingNow.current) return;
-    sendingNow.current = true;
-    setSending(true);
-    try {
-      const sent = await sendGroupVoice(userId, groupId, recording.uri, recording.durationMs, recording.waveform);
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Voice note not sent', friendlyError(error));
-    } finally {
-      sendingNow.current = false;
-      setSending(false);
-    }
+  function sendVoiceNote(recording: Recording) {
+    sendLater(userId, scope, {
+      kind: 'groupVoice',
+      groupId,
+      uri: recording.uri,
+      durationMs: recording.durationMs,
+      waveform: recording.waveform,
+    });
   }
 
   // 🏷️ Stickers. Peekaboo+ ones are locked in the picker without Peekaboo+ (and the server says no too).
   const plus = usePlus();
   const [stickersOpen, setStickersOpen] = useState(false);
-  async function sendStickerMessage(sticker: string) {
+  function sendStickerMessage(sticker: string) {
     setStickersOpen(false);
     if (!canSendSticker(sticker, plus)) {
       router.push('/plus');
       return;
     }
-    const replyId = replyTo?.id;
-    try {
-      const sent = await sendGroupSticker(groupId, sticker, stickerText(sticker), replyId);
-      Haptics.selectionAsync();
-      setReplyTo((current) => (current?.id === replyId ? null : current));
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Sticker not sent', friendlyError(error));
-    }
+    sendLater(userId, scope, { kind: 'groupSticker', groupId, sticker, body: stickerText(sticker), replyTo: replyTo?.id ?? null });
+    Haptics.selectionAsync();
+    setReplyTo(null);
   }
   // An emoji from the sticker picker goes as a normal chat message.
-  async function sendEmoji(emoji: string) {
+  function sendEmoji(emoji: string) {
     setStickersOpen(false);
-    const replyId = replyTo?.id;
-    try {
-      const sent = await sendGroupMessage(groupId, emoji, replyId);
-      setReplyTo((current) => (current?.id === replyId ? null : current));
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-    } catch (error) {
-      Alert.alert('Message not sent', friendlyError(error));
-    }
+    sendLater(userId, scope, { kind: 'groupText', groupId, body: emoji, replyTo: replyTo?.id ?? null });
+    setReplyTo(null);
   }
 
   async function sendDare(dare: string): Promise<boolean> {
-    try {
-      const sent = await sendGroupDare(groupId, dare);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMessages((current) => [sent, ...(current ?? []).filter((m) => m.id !== sent.id)]);
-      showToast('Dared the whole group 🎯');
-      return true;
-    } catch (error) {
-      Alert.alert('Dare not sent', friendlyError(error));
-      return false;
-    }
+    sendLater(userId, scope, { kind: 'groupDare', groupId, body: dare.trim() });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showToast('Dared the whole group 🎯');
+    return true;
+  }
+
+  // A bubble that couldn't be sent: try again, or delete it. (Texts can also go back in the box to change them.)
+  function pendingMenu(job: Job) {
+    const words = job.what.kind === 'groupText' ? job.what.body : null;
+    const canTry = !(job.restored && job.final);
+    showOptions({
+      title: job.error ?? "Couldn't send",
+      options: [
+        ...(canTry ? [{ label: 'Try again', onPress: () => retry(job.key) }] : []),
+        ...(words
+          ? [
+              {
+                label: 'Change it',
+                onPress: () => {
+                  draft.current = words;
+                  setText(words);
+                  void discard(job.key);
+                },
+              },
+            ]
+          : []),
+        { label: 'Delete', destructive: true, onPress: () => void discard(job.key) },
+      ],
+    });
   }
 
   // 🔥 / 🧢 on someone's proof. Tapping the vote you already gave takes it back.
@@ -792,14 +820,25 @@ export default function GroupChat() {
     setMenuFor({ message, actions });
   }
 
+  // Reactions show at once. If the server says no, it's taken back with a toast.
   async function react(message: GroupMessage, emoji: string) {
-    const mine = reactions.get(message.id)?.find((r) => r.user_id === userId)?.emoji ?? null;
+    const before = reactions.get(message.id) ?? [];
+    const mine = before.find((r) => r.user_id === userId)?.emoji ?? null;
+    const others = before.filter((r) => r.user_id !== userId);
+    const after = mine === emoji ? others : [...others, { message_id: message.id, user_id: userId, emoji }];
+    const put = (list: Reaction[]) =>
+      setReactions((current) => {
+        const next = new Map(current);
+        next.set(message.id, list);
+        return next;
+      });
+    put(after);
+    Haptics.selectionAsync();
     try {
       await toggleReaction(userId, message.id, emoji, mine, true);
-      Haptics.selectionAsync();
-      load();
     } catch (error) {
-      Alert.alert('Could not react', friendlyError(error));
+      put(before);
+      showToast(`Couldn't react – ${friendlyError(error)}`);
     }
   }
 
@@ -1014,7 +1053,7 @@ export default function GroupChat() {
               />
             ) : messages === null ? (
               <ActivityIndicator color={colors.accent} style={styles.loading} />
-            ) : items.length === 0 ? (
+            ) : items.length === 0 && pending.length === 0 ? (
               <View style={[styles.fill, background.shown ? styles.clear : null]}>
                 {/* On a chat background the words sit on a soft card, so they're easy to read. */}
                 <View style={background.shown ? styles.emptyCard : null}>
@@ -1030,6 +1069,8 @@ export default function GroupChat() {
                 contentContainerStyle={styles.list}
                 keyboardDismissMode="interactive"
                 onScrollToIndexFailed={() => showToast('Scroll up a bit and try again')}
+                // The list is upside down, so this "header" sits at the very bottom: your sends that aren't in yet.
+                ListHeaderComponent={pendingBubbles.length > 0 ? <>{pendingBubbles}</> : undefined}
                 renderItem={({ item: entry, index }) => {
                   if (entry.guess) {
                     // 🕵️ A group Guess Who: no name and no picture of who sent it, in the middle of the chat.
@@ -1253,7 +1294,7 @@ export default function GroupChat() {
                 )}
               </View>
               {text.trim() || !Audio ? (
-                <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} disabled={sending} />
+                <IconButton icon="arrow-up" label="Send" background={text.trim() ? colors.blue : colors.card} onPress={send} />
               ) : (
                 <MicButton onRecorded={sendVoiceNote} onHint={showToast} />
               )}

@@ -20,16 +20,16 @@ import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
 import { SafeEdge } from '@/components/SafeEdge';
 import { VideoClip } from '@/components/VideoClipSafe';
+import { useNoRestartWhileOpen } from '@/lib/appUpdates';
 import { useMe } from '@/lib/auth';
-import { claimChatDare, sendChatPhoto, sendSnap } from '@/lib/chat';
-import { sendGroupCapture, sendGroupSnap } from '@/lib/groupChat';
-import { PUBLIC_CHAT, sendPublicPhoto } from '@/lib/publicChat';
-import { postGroupGuess } from '@/lib/groupGuess';
-import { postMystery } from '@/lib/guess';
+import { PUBLIC_CHAT } from '@/lib/publicChat';
+import { GROUP_GUESS_PHOTOS_ONLY } from '@/lib/groupGuess';
 import { friendlyError } from '@/lib/errors';
 import { addTrackToPng, CAN_TRACK_EYES, trackEyes, type EyeTrack } from '@/lib/eyeTrack';
 import { addKeep } from '@/lib/keeps';
-import { resizePhoto, type Capture } from '@/lib/media';
+import { resizePhoto, videoTooBig, type Capture } from '@/lib/media';
+import { sendLater } from '@/lib/outbox';
+import { TOO_BIG_VIDEO } from '@/lib/videoLimits';
 import { saveOut } from '@/lib/shareOut';
 import type { EyePair } from '@/lib/faceLens';
 import { colors, radius, space } from '@/theme';
@@ -129,8 +129,10 @@ export default function Editor() {
   const [stickersOpen, setStickersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const working = useRef(false);
-  const sentToChat = useRef(false);
+  // Sent straight away (to a chat, a group, the public chat or Guess Who): a second tap does nothing.
   const finishedDirect = useRef(false);
+  // No restart for a new app version while you're decorating your picture.
+  useNoRestartWhileOpen();
   const isVideo = video === '1';
   // Photos can be cropped: the cropped photo replaces the original here (and is shown whole, not cut to the screen).
   const [photoUri, setPhotoUri] = useState(uri);
@@ -340,66 +342,63 @@ export default function Editor() {
         ...(forfeit ? { forfeit } : {}),
       };
       if (straightAway) {
+        // Only the picture is waited for here (it must be taken while it's on screen). Shrinking, uploading and
+        // saving happen in the background (lib/outbox.ts): the chat shows "Sending…" until it's in.
         const photo: Capture = isVideo
-          ? {
-              kind: 'video',
-              uri,
-              overlayUri: await videoLayer(),
-            }
-          : { kind: 'photo', uri: await resizePhoto(await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' }), 1080) };
+          ? { kind: 'video', uri, overlayUri: await videoLayer() }
+          : { kind: 'photo', uri: await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' }) };
+        // Said now, before leaving: a video that's too big, and a video where only photos go.
+        if (photo.kind === 'video' && videoTooBig(photo.uri)) {
+          Alert.alert('Could not send', TOO_BIG_VIDEO);
+          return;
+        }
+        if (photo.kind === 'video' && straightToGroupGuess) {
+          Alert.alert('Could not send', GROUP_GUESS_PHOTOS_ONLY);
+          return;
+        }
+        if (photo.kind === 'video' && straightToGroup && group === PUBLIC_CHAT) {
+          Alert.alert('Could not send', 'The public chat is photos only – no videos.');
+          return;
+        }
+        finishedDirect.current = true;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         // 🕵️ Guess Who in the group: checked first, so it can never go out as a normal (named) group photo.
         if (straightToGroupGuess && group) {
-          await postGroupGuess(userId, group, photo);
-          finishedDirect.current = true;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast('Guess Who sent 🕵️ No name on it – let the group guess!');
+          sendLater(userId, `group:${group}`, { kind: 'groupGuess', groupId: group }, { capture: photo });
           router.dismissTo(`/groups/chat/${group}`);
           return;
         }
         // From the public chat's camera (18+, photos only): it goes to the public chat, never to a group.
         if (straightToGroup && group === PUBLIC_CHAT) {
-          await sendPublicPhoto(userId, photo);
-          finishedDirect.current = true;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast('Posted in the public chat 📸');
+          sendLater(userId, 'public', { kind: 'publicPhoto' }, { capture: photo });
           router.dismissTo('/public-chat');
           return;
         }
         if (straightToGroupSnap && group) {
-          await sendGroupSnap(userId, group, photo);
-          finishedDirect.current = true;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast('Snap sent 👀');
+          sendLater(userId, `group:${group}`, { kind: 'groupMedia', groupId: group, snap: true }, { capture: photo });
           router.dismissTo(`/groups/chat/${group}`);
           return;
         }
         if (straightToGroup && group) {
-          await sendGroupCapture(userId, group, photo, groupDare);
-          finishedDirect.current = true;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast(groupDare ? 'Proof posted in the group 🎯' : 'Sent to the group 📸');
+          sendLater(
+            userId,
+            `group:${group}`,
+            { kind: 'groupMedia', groupId: group, snap: false, ...(groupDare ? { dareId: groupDare } : {}) },
+            { capture: photo },
+          );
           router.dismissTo(`/groups/chat/${group}`);
           return;
         }
         if (straightToGuess) {
-          await postMystery(userId, photo, '');
-          finishedDirect.current = true;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast("Guess Who posted 🕵️ Let's see who figures it out!");
+          sendLater(userId, 'me', { kind: 'guess', caption: '' }, { capture: photo });
           router.dismissTo('/guess');
           return;
         }
-        if (!sentToChat.current) {
-          if (straightToChatPhoto) await sendChatPhoto(userId, to ?? '', photo);
-          else await sendSnap(userId, [to ?? ''], photo);
-          sentToChat.current = true;
-        }
-        // The proof for their dare: tell them you did it (they confirm it in the chat).
-        if (chatDare) await claimChatDare(chatDare);
-        finishedDirect.current = true;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(chatDare ? 'Proof sent 🎯 Now they confirm it' : straightToChatPhoto ? (isVideo ? 'Video sent 🎬' : 'Photo sent 📷') : 'Peek sent 👀');
-        router.dismissTo(`/chat/${to}`);
+        const friend = to ?? '';
+        // The proof for their dare: once the peek is saved, the outbox tells them you did it (they confirm it).
+        if (straightToChatPhoto) sendLater(userId, `friend:${friend}`, { kind: 'chatPhoto', friendId: friend }, { capture: photo });
+        else sendLater(userId, `friend:${friend}`, { kind: 'peek', friendIds: [friend], ...(chatDare ? { chatDare } : {}) }, { capture: photo });
+        router.dismissTo(`/chat/${friend}`);
         return;
       }
       if (isVideo) {
@@ -412,20 +411,8 @@ export default function Editor() {
       const finished = await snapshot({ format: 'jpg', quality: 0.9, result: 'tmpfile' });
       router.push({ pathname: '/share', params: { uri: finished, ...extra } });
     } catch (error) {
-      const dareGone = /This dare is gone/i.test(String((error as { message?: unknown } | null)?.message ?? ''));
-      if (straightToChat && chatDare && sentToChat.current && dareGone) {
-        // The dare was deleted (or you can't chat any more), so trying again can never work: go back to the chat.
-        finishedDirect.current = true;
-        Alert.alert('Photo sent', "That dare isn't there any more, so it can't be marked as done. Your photo is already sent.");
-        router.dismissTo(`/chat/${to}`);
-      } else if (straightToChat && chatDare && sentToChat.current) {
-        Alert.alert('Photo sent, dare not updated', `${friendlyError(error)}\n\nYour photo is already sent. Tap Send again to update the dare.`);
-      } else {
-        Alert.alert(
-          straightToChat || straightToGroup || straightToGroupGuess ? 'Could not send' : straightToGuess ? 'Could not post' : 'Could not save the photo',
-          friendlyError(error),
-        );
-      }
+      // Only the picture itself can fail here (sending goes on in the background).
+      Alert.alert(straightAway ? 'Could not send' : 'Could not save the photo', friendlyError(error));
     } finally {
       working.current = false;
       setBusy(false);

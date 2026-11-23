@@ -782,6 +782,83 @@ try {
     const result = await request('messages', { method: 'POST', body: { sender_id: users[0], recipient_id: users[1], kind: 'dare', body: 'Be an errand runner for the day' }, headers: { Prefer: 'return=representation' } });
     assert.equal(result.status, 201, JSON.stringify(result.data)); assert.equal(result.data[0].body, 'Be an errand runner for the day');
   });
+  // 📤 The outbox (src/lib/outbox.ts) gives each row its id on the phone before the first try. Over real HTTP/JWT/RLS:
+  // an insert with your own id works, the same id again is 409 / 23505 (the outbox's "it was saved after all"), and
+  // the sender can look the row up by id. (tests/database/client-ids.test.mjs checks the same in the database.)
+  if (!original) {
+    const sameIdTwice = async (table, row, user = 0) => {
+      const first = await request(`${table}?select=id`, { user, method: 'POST', body: row, headers: { Prefer: 'return=representation' } });
+      assert.equal(first.status, 201, `${table} first: ${JSON.stringify(first.data)}`);
+      assert.equal(first.data[0].id, row.id);
+      const again = await request(`${table}?select=id`, { user, method: 'POST', body: row, headers: { Prefer: 'return=representation' } });
+      assert.equal(again.status, 409, `${table} again: ${again.status} ${JSON.stringify(again.data)}`);
+      assert.equal(again.data.code, '23505');
+      const found = await request(`${table}?select=id&id=eq.${row.id}`, { user });
+      assert.equal(found.status, 200);
+      assert.deepEqual(found.data.map((r) => r.id), [row.id]);
+    };
+    const fileOf = async (index, path) => { await own(index, "insert into storage.objects(bucket_id,name) values('media',$1)", [path]); return path; };
+    await check('HTTP insert with a client-chosen id works once for messages, peeks to two friends and group messages', async () => {
+      await friend(db, users[0], users[1]);
+      await friend(db, users[0], users[2]);
+      await sameIdTwice('messages', { id: crypto.randomUUID(), sender_id: users[0], recipient_id: users[1], kind: 'text', body: 'outbox hi' });
+      const snap = await fileOf(0, `${users[0]}/snaps/${crypto.randomUUID()}.jpg`);
+      const ids = [crypto.randomUUID(), crypto.randomUUID()];
+      const both = await request('messages?select=id', { method: 'POST', body: ids.map((id, n) => ({ id, sender_id: users[0], recipient_id: users[n + 1], kind: 'snap', media_path: snap, media_type: 'photo' })), headers: { Prefer: 'return=representation' } });
+      assert.equal(both.status, 201, JSON.stringify(both.data));
+      const found = await request(`messages?select=id&id=in.(${ids.join(',')})`);
+      assert.equal(found.data.length, 2);
+      await sameIdTwice('group_messages', { id: crypto.randomUUID(), group_id: group, body: 'outbox group hi' }, 4);
+    });
+    await check('HTTP insert with a client-chosen id works once for posts, stories, Guess Who and comments', async () => {
+      const photo = await fileOf(0, `${users[0]}/posts/${crypto.randomUUID()}.jpg`);
+      await sameIdTwice('posts', { id: crypto.randomUUID(), user_id: users[0], media_path: photo, media_type: 'photo', caption: '' });
+      const story = await fileOf(0, `${users[0]}/stories/${crypto.randomUUID()}.jpg`);
+      await sameIdTwice('stories', { id: crypto.randomUUID(), user_id: users[0], media_path: story, media_type: 'photo' });
+      const mystery = await fileOf(0, `mystery/${crypto.randomUUID()}.jpg`);
+      await sameIdTwice('mystery_posts', { id: crypto.randomUUID(), user_id: users[0], media_path: mystery, media_type: 'photo', caption: '' }, 0);
+      await sameIdTwice('comments', { id: crypto.randomUUID(), post_id: post, user_id: users[0], body: 'outbox comment' });
+    });
+  }
+  // ⚡ Home's feed (src/lib/feed.ts): your friends' ids from a light request, then the posts with YOUR like inside
+  // (`my_like:likes(user_id)` filtered with `my_like.user_id=eq.<you>`), so no separate likes request is needed.
+  // Through the app's own fetchDiscover and supabase-js, over real HTTP/JWT/RLS.
+  if (!original) {
+    await check("the app's own Home feed: friend ids, posts and likes in two round trips, with only YOUR like marked", async () => {
+      await friend(db, users[10], users[11]);
+      const theirs = (await own(11, 'insert into posts(user_id,media_path,caption) values($1,$2,$3) returning id', [users[11], `${users[11]}/posts/feed.jpg`, 'friend post'])).rows[0].id;
+      const liked = (await own(11, 'insert into posts(user_id,media_path,caption) values($1,$2,$3) returning id', [users[11], `${users[11]}/posts/feed2.jpg`, 'liked post'])).rows[0].id;
+      // Someone else liked the first post; you liked the second.
+      await own(11, 'insert into likes(post_id,user_id) values($1,$2)', [theirs, users[11]]);
+      await own(10, 'insert into likes(post_id,user_id) values($1,$2)', [liked, users[10]]);
+      const sent = [];
+      const supabase = createClient('http://local.invalid', 'local-test-key', {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: {
+          headers: { Authorization: `Bearer ${token(10)}` },
+          fetch: (url, init) => {
+            const local = String(url).replace('http://local.invalid/rest/v1', runtime.base);
+            sent.push(decodeURIComponent(new URL(local).pathname + new URL(local).search));
+            return fetch(local, init);
+          },
+        },
+      });
+      const { fetchDiscover } = loadLibrary('feed', { supabase });
+      const result = await fetchDiscover(users[10]);
+      const byId = new Map(result.posts.map((row) => [row.id, row]));
+      assert.ok(byId.has(theirs) && byId.has(liked), JSON.stringify(result.posts.map((row) => row.id)));
+      assert.equal(byId.get(theirs).likedByMe, false, 'someone else\'s like is not yours');
+      assert.equal(byId.get(theirs).likeCount, 1);
+      assert.equal(byId.get(liked).likedByMe, true);
+      assert.equal(byId.get(liked).fromEveryone, false);
+      assert.ok(!('my_like' in byId.get(liked)));
+      assert.ok(sent.every((path) => !path.startsWith('/likes')), `no separate likes request: ${sent.join(' | ')}`);
+      assert.ok(sent.some((path) => path.includes('my_like.user_id=eq.')), sent.join(' | '));
+      const friendships = sent.filter((path) => path.startsWith('/friendships'));
+      assert.equal(friendships.length, 1);
+      assert.doesNotMatch(friendships[0], /profiles/);
+    });
+  }
 } finally {
   await mkdir(new URL('../../.qa/', import.meta.url), { recursive: true });
   const result = { engine: 'PostgreSQL 16 + PostgREST 16.5, real HTTP/JWT/roles/RLS; Auth signup and Storage service not running', revision: 'a9e5ddf88e785bd8378b2b7d9dcd7e341df439b1', original, stress, checks, metrics, knownIssues };

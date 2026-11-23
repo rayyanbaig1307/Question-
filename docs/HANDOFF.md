@@ -37,6 +37,35 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Instant sends + faster loading (23 Nov – on `testing` only: update `01a20a5a` from hotfix commit `c191239` on top of `16f4227`; NOT on production yet)
+
+- **What was wrong:** on 22 Nov the owner's "Send to…" (drop camera, Ray ticked, 1 bar) spun forever, and peeks
+  from a chat camera to their brother "kept saying send forever". The server logs showed the peek WAS saved – the
+  phone just never got the answer: the phone's fetch has no time limit, and every send waited on a spinner for
+  the whole chain (shrink → upload → save → close).
+- **What changed:** every request now has a time limit (`src/lib/timedFetch.ts`; renewing a login gets 90 seconds
+  and is never cut short, and an upload that ran out of time gets 3× as long on its next try). Everything you send
+  goes out in the background (`src/lib/outbox.ts`): the screen closes at once, a "Sending…" bubble or pill shows,
+  it tries again after 1, 3 and 8 seconds, then says "No connection – tap to try again". Ids are picked on the phone
+  first, so a repeated try never sends twice. "Send to…" starts uploading the photo the moment it opens
+  (`src/lib/preupload.ts`), so the drop's Send only has to save the row (On time / Late is stamped then).
+- **Review fixes (23 Nov):** no login no longer spins forever (it counts as "no connection"); after coming back to
+  the app, a send 10 minutes old or more waits for a tap (no drop posted hours late by itself); a login that ends by
+  itself keeps unsent sends ("Not sent – tap to try again" after logging back in) – only Log out deletes them, with
+  their photo copies on the phone; a profile picture picked in a dead spot can still be saved, and the picture your
+  profile uses is never deleted; leftover files are deleted one at a time, and the outbox writes its file names
+  down first; a failed early upload is tried again while you pick friends; a video drop's blurry preview is made
+  while the video uploads; group messages say who sent them; leaving "Dare your friends" while it waits dares
+  nobody; the pill sits under the top bars and lets taps through; the Send to… toast shows even when one part
+  failed; after "I understand" the send waits for the rules sheet to slide away.
+- **Check on a phone:** `docs/TESTING.md` Steps 73, 74 and 75 (75: 1 bar / airplane mode, the drop's 2 minutes
+  running out, retry never doubles, locking the phone mid-send).
+- **Deferred:** a reminder notification ("Your peek is still sending – open Peekaboo") when you lock the phone
+  mid-send (iOS stops the app; a JS-only update can't ask for extra time); a warning at Log out that unsent sends
+  will be deleted; a request that's already on its way when you come back after a long time can still land late
+  (rare). JS-only (an OTA for App Store builds 10 and 12 and TestFlight 13), no database change needed. Ship order
+  as always: `testing` first, then `production`.
+
 ## LIVE on the App Store app (22 Nov, owner: "push everything else to the live apple app", lives left out)
 
 - **Production OTA `45214c66-07c5-4373-9199-83172bab19ea`** (iOS `01a20489-c50b-727b-b70e-cc6fa2b70df6`) from

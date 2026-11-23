@@ -29,7 +29,10 @@ function loadDrop(state) {
   }
   const query = {
     select() { return query; }, eq() { return query; },
-    not() { return Promise.resolve({ data: state.mine.map((row) => ({ ...row })), error: null }); },
+    // "Have you posted today's drop?" (a count, no rows): answered with `state.head` (a promise the test settles).
+    then(resolve, reject) { return Promise.resolve(state.head ?? { count: 0, error: null }).then(resolve, reject); },
+    // `state.hang`: a weak signal – loading your drops again never answers.
+    not() { return state.hang ? new Promise(() => {}) : Promise.resolve({ data: state.mine.map((row) => ({ ...row })), error: null }); },
   };
   const supabase = { from: (table) => { assert.equal(table, 'posts'); return query; } };
   const module = { exports: {} };
@@ -74,14 +77,15 @@ function dropPost(id, user, day, extra = {}) {
 // Home
 // ---------------------------------------------------------------------------
 
-function loadHome(state, posts) {
+function loadHome(state, posts, extra = {}) {
   const toasts = [];
+  const loads = { feed: 0 };
   const drop = loadDrop(state);
   const screen = loadScreen('src/components/home/HomePage.tsx', {
     '@/components/FeedCard': { FeedCard: host('FeedCard') },
     '@/components/Overlays': { useOverlays: () => ({ showToast: (text) => toasts.push(text), showOptions() {} }) },
     '@/lib/drop': drop,
-    '@/lib/feed': { fetchDiscover: async () => ({ posts, next: null }), setLiked: async () => {} },
+    '@/lib/feed': { fetchDiscover: async () => { loads.feed++; return { posts, next: null }; }, setLiked: async () => {} },
     '@/lib/guess': { countUnguessed: async () => 0 },
     '@/lib/invite': { inviteFriends() {}, prefetchInviteCode() {} },
     '@/lib/liveAccess': liveAccessMock(false),
@@ -98,8 +102,9 @@ function loadHome(state, posts) {
     './HomeTabBar': { useTabBarSpace: () => 0 },
     './PageHeader': { PageHeader: host('PageHeader') },
     './StoryRow': { StoryRow: host('StoryRow') },
+    ...extra,
   });
-  return { screen, toasts, drop };
+  return { screen, toasts, drop, loads };
 }
 
 async function renderHome(setup) {
@@ -196,6 +201,106 @@ test('a Group Peek drop still waits for the group, even after you posted', async
   try {
     assert.equal(cards(tree)['group-drop'].lock, 'group');
     assert.match(cards(tree)['group-drop'].url, /\/blurs\//);
+  } finally { await unmount(tree); }
+});
+
+// ---------------------------------------------------------------------------
+// Speed: your drop unlocks everything the moment it's saved
+// ---------------------------------------------------------------------------
+
+test('your friends\' drops unlock the moment your drop is saved, without waiting for Home to load again', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  const setup = loadHome(state, [dropPost('prab-today', 'prab', today), dropPost('prab-old', 'prab', utcDay(state.now - 3 * DAY_MS))]);
+  const tree = await renderHome(setup);
+  try {
+    assert.equal(cards(tree)['prab-today'].lock, 'drop');
+    // One bar of signal: loading your drops again never answers.
+    state.hang = true;
+    // The outbox saved your drop (the server's row says which day it is for).
+    await act(async () => { setup.drop.noteMyDropPosted('alice', { drop_day: today, drop_offset_minutes: 0 }); });
+    const shown = cards(tree);
+    assert.equal(shown['prab-today'].lock, null);
+    assert.equal(shown['prab-old'].lock, null);
+    assert.match(shown['prab-today'].url, /\/posts\//);
+    assert.deepEqual(setup.toasts, ['🔓 All drops unlocked!']);
+  } finally { await unmount(tree); }
+});
+
+test('someone else\'s saved drop never unlocks yours', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  const setup = loadHome(state, [dropPost('prab-today', 'prab', today)]);
+  const tree = await renderHome(setup);
+  try {
+    await act(async () => { setup.drop.noteMyDropPosted('bob', { drop_day: today, drop_offset_minutes: 0 }); });
+    assert.equal(cards(tree)['prab-today'].lock, 'drop');
+  } finally { await unmount(tree); }
+});
+
+test('the camera knows at once that your drop is saved, and a "not posted" answer asked before that never undoes it', async () => {
+  const state = newState();
+  let answer;
+  state.head = new Promise((resolve) => { answer = resolve; });
+  const drop = loadDrop(state);
+  let seen;
+  function Probe() { seen = drop.useDropDone('alice', true); return null; }
+  let tree;
+  await act(async () => { tree = renderer.create(React.createElement(Probe)); });
+  try {
+    assert.equal(seen, null, 'still asking');
+    await act(async () => { drop.noteMyDropPosted('alice', { drop_day: drop.localDay(), drop_offset_minutes: 0 }); });
+    assert.equal(seen, true);
+    // The question was asked before the drop was saved: its "not posted" is out of date.
+    await act(async () => { answer({ count: 0, error: null }); });
+    assert.equal(seen, true);
+  } finally { await unmount(tree); }
+  // Opening the camera again: the answer is known straight away (no waiting).
+  state.head = new Promise(() => {});
+  await act(async () => { tree = renderer.create(React.createElement(Probe)); });
+  try { assert.equal(seen, true); } finally { await unmount(tree); }
+});
+
+// A stand-in for the outbox's "is your drop still on its way?" that the test can change.
+function dropSendingSwitch(start) {
+  let sending = start;
+  const listeners = new Set();
+  return {
+    set(next) { sending = next; listeners.forEach((listener) => listener()); },
+    mock: { useDropSending: () => React.useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => sending) },
+  };
+}
+
+test('back on Home while your drop is still sending, Home waits for it (so it doesn\'t slow the drop down), then loads once', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  const sending = dropSendingSwitch(true);
+  const setup = loadHome(state, [dropPost('prab-today', 'prab', today)], { '@/lib/outbox': sending.mock });
+  const tree = await renderHome(setup);
+  try {
+    assert.equal(setup.loads.feed, 0, 'nothing loads while the drop is on its way');
+    await act(async () => {
+      setup.drop.noteMyDropPosted('alice', { drop_day: today, drop_offset_minutes: 0 });
+      sending.set(false);
+    });
+    await act(async () => {});
+    assert.equal(setup.loads.feed, 1, 'one load once it is saved');
+    assert.equal(cards(tree)['prab-today'].lock, null);
+  } finally { await unmount(tree); }
+});
+
+test('Home never waits more than 3 seconds for a drop that is still sending', async () => {
+  const state = newState();
+  const sending = dropSendingSwitch(true);
+  const setup = loadHome(state, [dropPost('prab-today', 'prab', utcDay(state.now))], { '@/lib/outbox': sending.mock });
+  const tree = await renderHome(setup);
+  try {
+    assert.equal(setup.loads.feed, 0);
+    const timers = setup.screen.calls.timers;
+    assert.ok(timers.length >= 1, 'a 3 second limit is set');
+    await act(async () => { timers.forEach((timer) => timer()); });
+    await act(async () => {});
+    assert.equal(setup.loads.feed, 1);
   } finally { await unmount(tree); }
 });
 
