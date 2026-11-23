@@ -13,7 +13,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { describeActivity, useActivity, type ActivityItem } from '@/lib/activity';
 import { useMe } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
-import { fetchIncomingRequests, relationFrom, type FriendLink } from '@/lib/friends';
+import { fetchIncomingRequests, friendsChanged, relationFrom, type FriendLink } from '@/lib/friends';
 import { respondToHitUp, useHitUps, type HitUp } from '@/lib/hitups';
 import { clearDeliveredNotifications } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
@@ -36,13 +36,20 @@ export default function Inbox() {
   const [requests, setRequests] = useState<FriendLink[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadRequests = useCallback(
-    () =>
-      fetchIncomingRequests(userId)
-        .then(setRequests)
-        .catch(() => setRequests((current) => current ?? [])),
-    [userId],
-  );
+  // Each load gets a number, so an answer that comes in after a newer one is already on screen is left out (it may
+  // be from before a change).
+  const asked = useRef(0);
+  const shown = useRef(0);
+  const loadRequests = useCallback(() => {
+    const ticket = ++asked.current;
+    return fetchIncomingRequests(userId)
+      .then((list) => {
+        if (ticket < shown.current) return;
+        shown.current = ticket;
+        setRequests(list);
+      })
+      .catch(() => setRequests((current) => current ?? []));
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -63,9 +70,15 @@ export default function Inbox() {
         }, 600);
       };
       const channel = supabase.channel(`inbox-${userId}-${++inboxListener}`);
-      for (const table of ['likes', 'comments', 'comment_likes', 'friendships', 'hit_ups']) {
+      for (const table of ['likes', 'comments', 'comment_likes', 'hit_ups']) {
         channel.on('postgres_changes', { event: '*', schema: 'public', table }, soon);
       }
+      // A friend request came in or changed: a load of your friends that started before it may not have it, so the
+      // reload asks the server again (it never reuses that older load).
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+        friendsChanged();
+        soon();
+      });
       channel.subscribe();
       return () => {
         if (timer) clearTimeout(timer);

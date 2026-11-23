@@ -27,9 +27,12 @@ export function friendlyError(error: unknown): string {
     return 'Whoa, too many tries! Wait a minute and try again.';
   }
   // A request that got no answer in time was given up (lib/timedFetch.ts): the same as no internet.
+  // "fetch failed: …" is how the phone's own fetch (expo/fetch) says it couldn't reach the server at all
+  // (no signal, the connection dropped, the request was cancelled).
   if (
     lower.includes('network request failed') ||
     lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
     lower.includes('aborterror') ||
     lower.includes('aborted') ||
     lower.includes('timed out')

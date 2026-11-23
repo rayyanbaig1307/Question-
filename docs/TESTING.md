@@ -1640,3 +1640,23 @@ Airplane mode works too. Turn both off at the end.
 12. **First drop ever on this phone**: on a test account that never agreed to the dare rules, tick "Today's drop"
     and My Story → Send → "I understand" → the rules sheet slides away, then the story preview opens by itself
     (no second tap needed) → Share → Home.
+13. **Clear a chat from the Chat list, then open it**: open a chat that has messages → back to the Chat list →
+    long-press that chat → **🧹 Clear chat** → open it again → it's empty (the old messages never flash up). Do it once
+    more with airplane mode on: the messages still don't come back.
+14. **A failed drop left until the next day**: 100% Loss → post the drop → "⚠️ Drop not posted · tap" → close the
+    app (swipe it away) and turn the bad network off. The NEXT day (within 24 hours), after that day's drop has
+    gone off, open Peekaboo → tap the pill → it says "This drop was for an earlier day – it can't be posted now" with only
+    **Delete** (no Try again). Leave it there, turn 100% Loss on again and post today's drop → it fails → tap the
+    pill → it says "Your drop didn't post – tap the banner to try again" with **Try again** and **Delete (2)** →
+    turn the bad network off → **Try again** → today's drop posts (and yesterday's photo is never posted).
+15. **Deleting your own drop locks your friends' drops again**: post today's drop → your friends' drops open → on
+    Home tap ⋯ on your drop → **Delete post** → Delete → your friends' drops are the blurry 🙈 cards again at once,
+    and the camera offers today's drop again. Then on a weak signal: post the drop again, turn Very Bad Network
+    on, delete it → if it says "Could not delete", turn the bad network off and pull Home down → if your drop is
+    gone, your friends' drops are blurry again (never empty cards); if your drop is still there, they stay open.
+16. **The camera while your drop is still posting**: Very Bad Network → post the drop → while the pill says "📤
+    Posting your drop…", swipe to the Home camera → no drop timer or late-drop button → take a photo → on Send to…
+    "Today's drop" is NOT ticked (it says "Your drop is still on its way…").
+17. **A friend request accepted on the other phone**: send a friend request to the test account → stay on your
+    Friends page → on the other phone accept it → within a few seconds they move to your friends by themselves
+    (no pull-down needed). Same with the bell (Inbox) open when a new request comes in.

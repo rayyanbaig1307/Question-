@@ -109,6 +109,8 @@ export type MyDrops = { days: Set<string>; windows: DropWindow[] };
 export const NO_DROPS: MyDrops = { days: new Set(), windows: [] };
 
 export async function fetchMyDrops(me: string): Promise<MyDrops> {
+  // How many drops this phone had saved when it asked (see withPostedDrop).
+  const asked = dropsNoted;
   const { data, error } = await supabase
     .from('posts')
     .select('drop_day, drop_offset_minutes')
@@ -124,7 +126,9 @@ export async function fetchMyDrops(me: string): Promise<MyDrops> {
     const until = nextDropAt(day, row.drop_offset_minutes as number | null);
     if (until + OLDER_DROPS_EXTRA_MS > now) windows.push({ day, until });
   }
-  return { days, windows };
+  const mine: MyDrops = { days, windows };
+  dropsWhenAsked.set(mine, asked);
+  return mine;
 }
 
 // Is your latest drop still the current one (so every drop is open for you)?
@@ -178,9 +182,17 @@ export function useDropKeyOpen(mine: MyDrops | null): boolean {
 type DoneAnswer = { done: boolean; seq: number };
 const doneAnswers = new Map<string, DoneAnswer>();
 let answersSaved = 0;
-export type PostedDrop = { me: string; day: string; offset: number | null };
+// `noted`: which drop saved on this phone it was (1 = the first one since the app was opened).
+export type PostedDrop = { me: string; day: string; offset: number | null; noted?: number };
 let postedDrop: PostedDrop | null = null;
-let dropsPosted = 0;
+// How many drops were saved on this phone since the app was opened. Each load of your drops (fetchMyDrops)
+// remembers how many there were when it asked: a load asked after your drop was saved comes from the server with it.
+let dropsNoted = 0;
+const dropsWhenAsked = new WeakMap<MyDrops, number>();
+// How many times you posted or deleted a drop (Home loads again when this changes), and how many times you deleted
+// one (screens with their own copy of your drops load it again).
+let dropChanges = 0;
+let dropsDeleted = 0;
 const dropListeners = new Set<() => void>();
 
 function tellDropListeners() {
@@ -298,24 +310,39 @@ export function noteMyDropPosted(
 ): void {
   const day = post?.drop_day ?? localDay();
   const offset = post?.drop_offset_minutes ?? timeZoneOffsetMinutes();
-  postedDrop = { me, day, offset };
+  postedDrop = { me, day, offset, noted: ++dropsNoted };
   doneAnswers.set(doneKey(me, day), { done: true, seq: ++answersSaved });
-  dropsPosted += 1;
+  dropChanges += 1;
   tellDropListeners();
 }
 
-// A number that goes up each time you post a drop (use it to load things again).
+// You deleted your drop of `day` (lib/posts.ts calls this once the delete is done). Every screen knows at once:
+// your friends' drops lock again (the server stops showing them to you too), and the camera offers the drop again.
+// Screens that loaded your drops before the delete load them again.
+export function forgetMyDrop(me: string, day: string): void {
+  if (postedDrop?.me === me && postedDrop.day === day) postedDrop = null;
+  doneAnswers.set(doneKey(me, day), { done: false, seq: ++answersSaved });
+  dropChanges += 1;
+  dropsDeleted += 1;
+  tellDropListeners();
+}
+
+// A number that goes up each time you post or delete a drop (use it to load things again).
 export function useMyDropPosts(): number {
   return useSyncExternalStore(
     listenToDrops,
-    () => dropsPosted,
-    () => dropsPosted,
+    () => dropChanges,
+    () => dropChanges,
   );
 }
 
 // Your drops as loaded, plus the one you just posted if that load doesn't have it yet. (Exported for the tests.)
+// Only for a load that was asked BEFORE your drop was saved. A load asked after it comes from the server with your
+// drop: if it isn't there, you deleted it – also when the delete's answer got lost on a weak signal, and the app
+// thought the delete hadn't worked. Then your friends' drops lock again, like the server does.
 export function withPostedDrop(mine: MyDrops | null, me: string, posted: PostedDrop | null): MyDrops | null {
   if (!posted || posted.me !== me) return mine;
+  if (mine && posted.noted !== undefined && (dropsWhenAsked.get(mine) ?? 0) >= posted.noted) return mine;
   const base = mine ?? NO_DROPS;
   const until = nextDropAt(posted.day, posted.offset);
   if (base.days.has(posted.day) && base.windows.some((window) => window.day === posted.day)) return base;
@@ -333,10 +360,16 @@ export function useWithMyNewDrop(me: string, mine: MyDrops | null): MyDrops | nu
   return useMemo(() => withPostedDrop(mine, me, posted), [mine, me, posted]);
 }
 
-// Your own drops, loaded again whenever `refreshKey` changes. `null` = still loading (until then, other people's
-// drops count as locked). A drop you post meanwhile counts at once. Redraws the screen when the next drop goes off.
+// Your own drops, loaded again whenever `refreshKey` changes, and when you delete a drop. `null` = still loading
+// (until then, other people's drops count as locked). A drop you post meanwhile counts at once. Redraws the screen
+// when the next drop goes off.
 export function useMyDrops(me: string, refreshKey: unknown): MyDrops | null {
   const [loaded, setLoaded] = useState<MyDrops | null>(null);
+  const deleted = useSyncExternalStore(
+    listenToDrops,
+    () => dropsDeleted,
+    () => dropsDeleted,
+  );
   useEffect(() => {
     let cancelled = false;
     fetchMyDrops(me)
@@ -345,7 +378,7 @@ export function useMyDrops(me: string, refreshKey: unknown): MyDrops | null {
     return () => {
       cancelled = true;
     };
-  }, [me, refreshKey]);
+  }, [me, refreshKey, deleted]);
   const mine = useWithMyNewDrop(me, loaded);
   useDropKeyOpen(mine);
   return mine;

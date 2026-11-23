@@ -21,7 +21,7 @@ import { cachedFriends, fetchFriends } from '@/lib/friends';
 import type { Capture } from '@/lib/media';
 import { todayDareDay, useDare } from '@/lib/dares';
 import { useDareRulesAccepted } from '@/lib/legal';
-import { queueShare, type SharePlan } from '@/lib/outbox';
+import { dropSendingKey, queueShare, useDropSending, type SharePlan } from '@/lib/outbox';
 import { fetchPlusAllowances, type PlusAllowances } from '@/lib/plusExtras';
 import { discardUpload, markUsed, prepareUpload, type Prepared, type UploadFolder } from '@/lib/preupload';
 import type { Audience, Profile } from '@/lib/types';
@@ -79,7 +79,10 @@ export default function Share() {
   const [audience, setAudience] = useState<Audience>('everyone');
   const [toProfile, setToProfile] = useState(false);
   const [toDare, setToDare] = useState(fromDare);
-  const [toDrop, setToDrop] = useState(fromDrop);
+  // Your drop from a moment ago is still on its way: this photo doesn't start as a second drop (there's only one
+  // drop a day, and a second one could even be saved before the first).
+  const dropSending = useDropSending(userId);
+  const [toDrop, setToDrop] = useState(fromDrop && !dropSending);
   // ⏰ Peekaboo+ drop rewind: post a late drop without the "late" label (once a week). `rewindInfo` stays null
   // when the server doesn't have it yet, and then the choice isn't shown.
   const [rewind, setRewind] = useState(false);
@@ -146,8 +149,18 @@ export default function Share() {
   // A dare, drop or forfeit photo is a post on your profile too, so "Post to my profile" isn't needed then.
   const postToProfile = toProfile && !toDare && !toDrop && !toForfeit;
 
+  // Your drop is still on its way: a second drop isn't sent (only one drop a day). Says so, and gives true.
+  function dropStillSending(): boolean {
+    if (!toDrop || !dropSendingKey(userId)) return false;
+    Alert.alert(
+      'Your drop is still on its way',
+      "Wait until it's posted – there's only one drop a day. Or untick \"Today's drop\" to send this photo somewhere else.",
+    );
+    return true;
+  }
+
   async function send(storyOk = storyChecked) {
-    if (sent.current) return;
+    if (sent.current || dropStillSending()) return;
     const notAllowed = checkClean(caption, 'content');
     if (notAllowed) {
       Alert.alert('Caption not allowed', notAllowed);
@@ -200,7 +213,7 @@ export default function Share() {
   // stamps On time / Late when it's saved); the toasts and the "Sending…" banner say how it went.
   function sendNow() {
     // A second tap can arrive before the screen closes.
-    if (sent.current || nothingPicked) return;
+    if (sent.current || nothingPicked || dropStillSending()) return;
     // The caption can change in the preview, so check the final text too.
     const notAllowed = checkClean(caption, 'content');
     if (notAllowed) {
@@ -292,7 +305,7 @@ export default function Share() {
             <Option
               emoji="👀"
               title="Today's drop"
-              subtitle="Unlocks everyone's drops"
+              subtitle={dropSending ? 'Your drop is still on its way…' : "Unlocks everyone's drops"}
               selected={toDrop}
               onPress={() => toggle(setToDrop, !toDrop)}
             />

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScreen, renderScreen, act, button, option, unmount } = require('./harness.cjs');
+const { loadScreen, renderScreen, act, button, option, unmount, textOf } = require('./harness.cjs');
 
 // "Send to…" (src/app/(app)/share.tsx) starts uploading the photo when it opens (lib/preupload.ts) and hands the sends
 // to the outbox (lib/outbox.ts) when you tap Send, then closes at once. The outbox's own rules (never twice, the
@@ -261,5 +261,40 @@ test('your friends show at once from the last list while a fresh one loads', asy
   const tree = await renderScreen(screen);
   try {
     assert.ok(option(tree, 'Ray'), 'Ray shows before the fresh list arrives');
+  } finally { await unmount(tree); }
+});
+
+// SPEED-3: Send to… closes at once now, so another photo can reach Send to… while your drop is still on its way
+// (the server only knows about it once it's saved). It started with "Today's drop" ticked, and that second drop
+// post could even be saved before the real one.
+test("while your drop is still on its way, Send to… doesn't start as a second drop, and won't send one", async () => {
+  const outbox = { sending: 'job-drop', shares: [] };
+  const ray = { id: 'ray', username: 'ray', display_name: 'Ray' };
+  const screen = loadScreen('src/app/(app)/share.tsx', {
+    'expo-router': { router: router([]), useLocalSearchParams: () => ({ uri: 'file:///qa-photo.jpg', drop: '1' }) },
+    '@/lib/friends': { fetchFriends: async () => [ray], cachedFriends: () => [ray] },
+    '@/lib/outbox': {
+      queueShare: (...args) => { outbox.shares.push(args); return { group: 'group-1', postId: null, postJob: null }; },
+      useDropSending: () => outbox.sending,
+      dropSendingKey: () => outbox.sending,
+    },
+  });
+  const tree = await renderScreen(screen);
+  try {
+    const dropOption = () => option(tree, "Today's drop");
+    assert.equal(dropOption().props.accessibilityState.checked, false);
+    assert.match(textOf(dropOption()), /Your drop is still on its way/);
+    // Ticked anyway: Send says why, and nothing is sent.
+    await act(() => dropOption().props.onPress());
+    await act(() => option(tree, 'Ray').props.onPress());
+    await act(() => button(tree, /^Send to/).props.onPress());
+    assert.equal(outbox.shares.length, 0);
+    assert.equal(screen.calls.alerts[0][0], 'Your drop is still on its way');
+    // Unticked: the photo goes to Ray as a peek, and no drop.
+    await act(() => dropOption().props.onPress());
+    await act(() => button(tree, /^Send to/).props.onPress());
+    assert.equal(outbox.shares.length, 1);
+    assert.equal(outbox.shares[0][1].post, null);
+    assert.deepEqual(plain(outbox.shares[0][1].friendIds), ['ray']);
   } finally { await unmount(tree); }
 });

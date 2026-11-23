@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -9,7 +9,7 @@ import { PersonRow } from '@/components/PersonRow';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { useMe } from '@/lib/auth';
-import { fetchMyFriendLinks, otherPerson, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
+import { fetchMyFriendLinks, friendsChanged, otherPerson, relationFrom, searchUsers, type FriendLink } from '@/lib/friends';
 import { inviteFriends } from '@/lib/invite';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
@@ -25,22 +25,35 @@ export default function Friends() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ query: string; people: Profile[] } | null>(null);
 
+  // Each load gets a number, so an answer that comes in after a newer one is already on screen is left out (it may
+  // be from before a change).
+  const asked = useRef(0);
+  const shown = useRef(0);
   const loadLinks = useCallback(() => {
+    const ticket = ++asked.current;
     fetchMyFriendLinks(userId)
-      .then(setLinks)
+      .then((list) => {
+        if (ticket < shown.current) return;
+        shown.current = ticket;
+        setLinks(list);
+      })
       .catch((error) => {
         console.warn('Could not load friends', error);
         setLinks((current) => current ?? []);
       });
   }, [userId]);
 
-  // Load when the screen opens, and again whenever a request arrives or changes.
+  // Load when the screen opens, and again whenever a request arrives or changes. (That reload asks the server again:
+  // it never reuses a load that started before the change.)
   useFocusEffect(
     useCallback(() => {
       loadLinks();
       const channel = supabase
         .channel(`friends-screen-${userId}-${++friendsListener}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, loadLinks)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+          friendsChanged();
+          loadLinks();
+        })
         .subscribe();
       return () => {
         supabase.removeChannel(channel);

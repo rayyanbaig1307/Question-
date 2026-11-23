@@ -192,7 +192,7 @@ function outboxStore() {
     inScope,
     groupSize: () => 1,
     restoreOutbox: async () => {},
-    useDropSending: () => null,
+    useDropSending: () => null, dropSendingKey: () => null,
   };
   return store;
 }
@@ -251,7 +251,7 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
       whenSent: async (key) => ({ key, state: 'sent' }),
       outboxBusy: () => false, setVisibleScope() {}, getVisibleScope: () => null,
       onOutboxDone: () => () => {}, inScope: () => false, groupSize: () => 1, restoreOutbox: async () => {},
-      useDropSending: () => null,
+      useDropSending: () => null, dropSendingKey: () => null,
     },
     // 📤 Early uploads: recorded, and never finish by themselves.
     '@/lib/preupload': {

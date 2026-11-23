@@ -37,14 +37,14 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Instant sends + faster loading (23 Nov – on `testing` only: update `01a20a5a` from hotfix commit `c191239` on top of `16f4227`; NOT on production yet)
+## Instant sends + faster loading (23 Nov – on `testing` only: update `01a20aca` from hotfix commits `c191239` + `50124d5` on top of `16f4227`; NOT on production yet)
 
 - **What was wrong:** on 22 Nov the owner's "Send to…" (drop camera, Ray ticked, 1 bar) spun forever, and peeks
   from a chat camera to their brother "kept saying send forever". The server logs showed the peek WAS saved – the
   phone just never got the answer: the phone's fetch has no time limit, and every send waited on a spinner for
   the whole chain (shrink → upload → save → close).
-- **What changed:** every request now has a time limit (`src/lib/timedFetch.ts`; renewing a login gets 90 seconds
-  and is never cut short, and an upload that ran out of time gets 3× as long on its next try). Everything you send
+- **What changed:** every request now has a time limit, counted until the whole answer has been read (`src/lib/timedFetch.ts`;
+  renewing a login gets 90 seconds so a slow answer is still waited for, and an upload that ran out of time gets 3× as long on its next try). Everything you send
   goes out in the background (`src/lib/outbox.ts`): the screen closes at once, a "Sending…" bubble or pill shows,
   it tries again after 1, 3 and 8 seconds, then says "No connection – tap to try again". Ids are picked on the phone
   first, so a repeated try never sends twice. "Send to…" starts uploading the photo the moment it opens
@@ -58,8 +58,18 @@ and the owner's standing preferences.
   while the video uploads; group messages say who sent them; leaving "Dare your friends" while it waits dares
   nobody; the pill sits under the top bars and lets taps through; the Send to… toast shows even when one part
   failed; after "I understand" the send waits for the rules sheet to slide away.
+- **Second review fixes (23 Nov):** the 20-second limit now also covers the reply itself (a reply that stopped
+  halfway on 1 bar used to wait forever), and a request cut off by that limit is no longer tried 3 more times
+  (about 20 seconds, not 90) and says "No connection"; a drop or dare that didn't post on its own day can't be
+  posted the next day (it used to become the next day's drop, marked Late) – it can only be deleted; the pill
+  offers "Try again" whenever one of the failed sends can still go, and talks about the drop that can still go
+  (not yesterday's); a send that was waiting behind another one isn't sent late by itself when you come back to
+  the app after 10 minutes or more (it waits for a tap); "Clear chat" from the Chat list (and "Delete for me") never
+  shows the cleared messages again; deleting your own drop locks your friends' drops again at once – and if the
+  delete's answer got lost on a weak signal, the next Home load locks them; while your drop is still posting, the
+  camera is a normal camera (no second drop); a friend request accepted on the other phone shows up by itself.
 - **Check on a phone:** `docs/TESTING.md` Steps 73, 74 and 75 (75: 1 bar / airplane mode, the drop's 2 minutes
-  running out, retry never doubles, locking the phone mid-send).
+  running out, retry never doubles, locking the phone mid-send, and checks 13–17 for the second review fixes).
 - **Deferred:** a reminder notification ("Your peek is still sending – open Peekaboo") when you lock the phone
   mid-send (iOS stops the app; a JS-only update can't ask for extra time); a warning at Log out that unsent sends
   will be deleted; a request that's already on its way when you come back after a long time can still land late

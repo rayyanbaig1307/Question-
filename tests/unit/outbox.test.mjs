@@ -5,7 +5,12 @@ import { backend } from './outboxHarness.mjs';
 // The owner's 22 Nov drop: the peek's insert was saved (201 on the server) but the phone never got the answer,
 // so the button spun forever and a second tap would have sent a second copy.
 
-beforeEach(() => vi.useFakeTimers());
+// Midday (on the phone's own clock), so a test that moves the clock on by a few hours stays on the same day (a drop
+// or dare post is only ever posted on its own day).
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 10, 22, 12, 0));
+});
 afterEach(() => vi.useRealTimers());
 
 const photo = { kind: 'photo', uri: 'file:///photo.jpg' };
@@ -310,7 +315,7 @@ it('a refused send deletes its files when no try was ever unclear', async () => 
 it('a saved drop is passed on at once with its day and time zone; useDropSending says it is on its way until then', async () => {
   const noted = [];
   const b = backend();
-  const outbox = b.load('outbox', { './drop': { noteMyDropPosted: (...args) => noted.push(args), timeZoneOffsetMinutes: () => -300 } });
+  const outbox = b.load('outbox', { './drop': { noteMyDropPosted: (...args) => noted.push(args), timeZoneOffsetMinutes: () => -300, localDay: () => '2026-11-22' } });
   await settle();
   let release;
   b.rules.insert = (table) => (table === 'posts' ? new Promise((resolve) => { release = () => resolve('ok'); }) : 'ok');
@@ -566,4 +571,233 @@ it('group rows always say who sent them, and a retry never goes out after the lo
 it('whenSent for a send this phone does not know says so in plain words', async () => {
   const { outbox } = await setup();
   expect(await outbox.whenSent('nope')).toMatchObject({ state: 'failed', final: true, error: "We couldn't find this send any more" });
+});
+
+// ---------------------------------------------------------------------------
+// Second review: late drops and dares, and sends that went out by themselves after hours away.
+// ---------------------------------------------------------------------------
+const drop = { kind: 'post', caption: '', audience: 'everyone', drop: true };
+
+// DB-1: the server files a drop (or dare) under the day it's SAVED. A drop that failed at 21:50 and was tapped
+// again the next afternoon was posted as the new day's drop ("2h late"), and then the real one was refused.
+it('DB-1: a drop that failed on its day is never posted the next day – a tap says why, and it can only be deleted', async () => {
+  vi.setSystemTime(new Date(2026, 10, 22, 21, 50));
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => (online ? 'ok' : 'noanswer');
+  const key = outbox.sendLater('A', 'me', drop, { capture: photo });
+  await vi.advanceTimersByTimeAsync(1000 + 3000 + 8000);
+  expect(await outbox.whenSent(key)).toMatchObject({ state: 'failed', error: 'No connection – tap to try again' });
+  // The day it was made for is kept with the send.
+  expect(recordsOf(b)[key].what.dropDay).toBe('2026-11-22');
+  const tries = b.inserts('posts').length;
+  // The next afternoon (after that day's drop): the signal is back and "Try again" is tapped.
+  vi.setSystemTime(new Date(2026, 10, 23, 15, 0));
+  online = true;
+  outbox.retry(key);
+  const job = await outbox.whenSent(key);
+  expect(job).toMatchObject({ state: 'failed', final: true, restored: true, error: outbox.DROP_DAY_OVER });
+  expect(outbox.DROP_DAY_OVER).toBe("This drop was for an earlier day – it can't be posted now");
+  expect(b.db.posts).toHaveLength(0);
+  expect(b.inserts('posts')).toHaveLength(tries);
+});
+
+it('DB-1: a drop that was saved on its day (only the answer got lost) still counts as sent when tapped the next day', async () => {
+  vi.setSystemTime(new Date(2026, 10, 22, 21, 50));
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => 'lost';
+  b.rules.select = () => (online ? null : 'noanswer');
+  const key = outbox.sendLater('A', 'me', drop, { capture: photo });
+  await vi.advanceTimersByTimeAsync(1000 + 3000 + 8000);
+  expect(await outbox.whenSent(key)).toMatchObject({ state: 'failed', error: 'No connection – tap to try again' });
+  vi.setSystemTime(new Date(2026, 10, 23, 15, 0));
+  online = true;
+  outbox.retry(key);
+  expect((await outbox.whenSent(key)).state).toBe('sent');
+  expect(b.db.posts).toHaveLength(1);
+  expect(b.inserts('posts')).toHaveLength(1);
+});
+
+it('DB-1: a dare post that missed its dare day is never filed under the next dare, even when it goes again by itself', async () => {
+  // 09:59 UTC: one minute before the new dare (10:00 UTC).
+  vi.setSystemTime(new Date(Date.UTC(2026, 10, 22, 9, 59)));
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => (online ? 'ok' : 'noanswer');
+  const key = outbox.sendLater('A', 'me', { kind: 'post', caption: '', audience: 'everyone', dare: true }, { capture: photo });
+  await vi.advanceTimersByTimeAsync(1000 + 3000 + 8000);
+  expect(await outbox.whenSent(key)).toMatchObject({ state: 'failed', error: 'No connection – tap to try again' });
+  expect(recordsOf(b)[key].what.dareDay).toBe('2026-11-21');
+  // 10:05 UTC, a new dare: back in the app with signal, sends under 10 minutes old go again by themselves.
+  vi.setSystemTime(new Date(Date.UTC(2026, 10, 22, 10, 5)));
+  online = true;
+  b.becomeActive();
+  const job = await outbox.whenSent(key);
+  expect(job).toMatchObject({ state: 'failed', final: true, error: outbox.DARE_DAY_OVER });
+  expect(b.db.posts).toHaveLength(0);
+});
+
+it("DB-1: at sign-in, a drop from an earlier day says why it can't go (no Try again); a forfeit still can go", async () => {
+  vi.setSystemTime(new Date(2026, 10, 23, 15, 0));
+  const { b, outbox } = await setup();
+  const fields = { media_path: 'A/posts/x.jpg', media_type: 'photo', poster_path: null, overlay_path: null };
+  const base = { owner: 'A', scope: 'me', maybeSaved: false, state: 'failed', attempts: 3, createdAt: new Date(2026, 10, 22, 21, 50).getTime(), fields };
+  b.store.set('outbox.v1.A', JSON.stringify({
+    drop: { ...base, key: 'drop', rowIds: ['row-drop'], what: { ...drop, dropDay: '2026-11-22' } },
+    // Saved by an older version of the app (no day kept): the day the send was made counts.
+    older: { ...base, key: 'older', rowIds: ['row-older'], what: drop },
+    // Forfeits aren't tied to a day.
+    forfeit: { ...base, key: 'forfeit', rowIds: ['row-forfeit'], what: { kind: 'post', caption: '', audience: 'everyone', forfeit: 'f1' } },
+  }));
+  await outbox.restoreOutbox('A');
+  const over = { state: 'failed', restored: true, final: true, error: outbox.DROP_DAY_OVER };
+  expect(await outbox.whenSent('drop')).toMatchObject(over);
+  expect(await outbox.whenSent('older')).toMatchObject(over);
+  expect(await outbox.whenSent('forfeit')).toMatchObject({ state: 'failed', restored: true, final: false, error: 'Not sent – tap to try again' });
+  outbox.retry('forfeit');
+  expect((await outbox.whenSent('forfeit')).state).toBe('sent');
+  // Even a tap on the old drop never posts it.
+  outbox.retry('drop');
+  expect(await outbox.whenSent('drop')).toMatchObject({ state: 'failed', final: true, error: outbox.DROP_DAY_OVER });
+  expect(b.db.posts.map((post) => post.id)).toEqual(['row-forfeit']);
+});
+
+it("DB-1: at sign-in with no signal (can't look it up), an old drop can still be tapped: it looks first, and is never posted late", async () => {
+  vi.setSystemTime(new Date(2026, 10, 23, 15, 0));
+  const { b, outbox } = await setup();
+  const fields = { media_path: 'A/posts/x.jpg', media_type: 'photo', poster_path: null, overlay_path: null };
+  const day1 = new Date(2026, 10, 22, 21, 50).getTime();
+  b.store.set('outbox.v1.A', JSON.stringify({
+    saved: { key: 'saved', owner: 'A', scope: 'me', what: { ...drop, dropDay: '2026-11-22' }, rowIds: ['row-saved'], maybeSaved: true, state: 'failed', attempts: 3, createdAt: day1, fields },
+    lost: { key: 'lost', owner: 'A', scope: 'me', what: { ...drop, dropDay: '2026-11-22' }, rowIds: ['row-lost'], maybeSaved: true, state: 'failed', attempts: 3, createdAt: day1, fields },
+  }));
+  b.rules.select = () => 'noanswer';
+  await outbox.restoreOutbox('A');
+  expect(await outbox.whenSent('saved')).toMatchObject({ state: 'failed', final: false, error: 'Not sent – tap to try again' });
+  // The signal is back: it was saved on its day after all (a tap finds it), the other one never goes.
+  b.rules.select = null;
+  b.db.posts.push({ id: 'row-saved', user_id: 'A', drop_day: '2026-11-22' });
+  outbox.retry('saved');
+  outbox.retry('lost');
+  expect((await outbox.whenSent('saved')).state).toBe('sent');
+  expect(await outbox.whenSent('lost')).toMatchObject({ state: 'failed', final: true, error: outbox.DROP_DAY_OVER });
+  expect(b.inserts('posts')).toHaveLength(0);
+});
+
+it('a post that is not a drop or dare (your profile) still goes the next day', async () => {
+  vi.setSystemTime(new Date(2026, 10, 22, 21, 50));
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => (online ? 'ok' : 'noanswer');
+  const key = outbox.sendLater('A', 'me', { kind: 'post', caption: 'hi', audience: 'everyone' }, { capture: photo });
+  await vi.advanceTimersByTimeAsync(1000 + 3000 + 8000);
+  vi.setSystemTime(new Date(2026, 10, 23, 15, 0));
+  online = true;
+  outbox.retry(key);
+  expect((await outbox.whenSent(key)).state).toBe('sent');
+  expect(b.db.posts).toHaveLength(1);
+});
+
+// LATE-AFTER-RETURN: on iPhones a retry timer that was due while the app was closed runs as soon as the app wakes,
+// before the app hears it's back. It started a new try, and the drop was posted 3 hours late with no tap.
+it('back after hours away (iPhone order): the overdue retry runs before the app hears it is back – it still waits for a tap', async () => {
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => (online ? 'ok' : 'noanswer');
+  const key = outbox.sendLater('A', 'me', drop, { capture: photo });
+  await vi.advanceTimersByTimeAsync(10); // the first try got no answer: it waits 1 second
+  b.goAway();
+  vi.setSystemTime(Date.now() + 3 * 60 * 60 * 1000);
+  online = true;
+  await vi.advanceTimersByTimeAsync(1000); // the overdue timer runs first…
+  b.becomeActive(); // …then the app hears it's back
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(await outbox.whenSent(key)).toMatchObject({ state: 'failed', restored: true, error: 'Not sent – tap to try again' });
+  expect(b.inserts('posts')).toHaveLength(1);
+  expect(b.db.posts).toHaveLength(0);
+  outbox.retry(key);
+  expect((await outbox.whenSent(key)).state).toBe('sent');
+  expect(b.db.posts).toHaveLength(1);
+});
+
+it('back after hours away: a try whose upload only finishes after you are back stops before saving; a tap saves it without uploading again', async () => {
+  const { b, outbox } = await setup();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  b.rules.upload = () => gate;
+  const key = outbox.sendLater('A', 'me', drop, { capture: photo });
+  await vi.waitFor(() => expect(b.uploads().length).toBeGreaterThan(0));
+  b.goAway();
+  vi.setSystemTime(Date.now() + 3 * 60 * 60 * 1000);
+  b.becomeActive();
+  release('ok');
+  const job = await outbox.whenSent(key);
+  expect(job).toMatchObject({ state: 'failed', restored: true, error: 'Not sent – tap to try again' });
+  expect(b.inserts('posts')).toHaveLength(0);
+  const uploads = b.uploads().length;
+  outbox.retry(key);
+  expect((await outbox.whenSent(key)).state).toBe('sent');
+  expect(b.db.posts).toHaveLength(1);
+  expect(b.uploads()).toHaveLength(uploads);
+});
+
+it('back after a short trip away (iPhone order): the overdue retry of a young send simply goes', async () => {
+  const { b, outbox } = await setup();
+  let online = false;
+  b.rules.insert = () => (online ? 'ok' : 'noanswer');
+  const key = outbox.sendLater('A', 'friend:B', { kind: 'text', friendId: 'B', body: 'brb' });
+  await vi.advanceTimersByTimeAsync(10);
+  b.goAway();
+  vi.setSystemTime(Date.now() + 3 * 60 * 1000);
+  online = true;
+  await vi.advanceTimersByTimeAsync(1000);
+  expect((await outbox.whenSent(key)).state).toBe('sent');
+  b.becomeActive();
+});
+
+// LATE-AFTER-RETURN (second review): a text waiting behind an earlier one in the same chat. On iPhones the earlier
+// text's answer can arrive as the app wakes, before it hears you're back: that one counts (it was already on its
+// way), but the next one started right then and went out 30 minutes late with no tap.
+it('back after a while away (iPhone order): a text that waited behind another one in the chat waits for a tap', async () => {
+  const { b, outbox } = await setup();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let inserts = 0;
+  b.rules.insert = () => (++inserts === 1 ? gate : 'ok');
+  const first = outbox.sendLater('A', 'friend:B', { kind: 'text', friendId: 'B', body: 'one' });
+  const second = outbox.sendLater('A', 'friend:B', { kind: 'text', friendId: 'B', body: 'on my way' });
+  await settle();
+  b.goAway();
+  vi.setSystemTime(Date.now() + 30 * 60 * 1000);
+  release('ok'); // the first text's answer arrives as the phone wakes…
+  await settle();
+  b.becomeActive(); // …then the app hears it's back
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect((await outbox.whenSent(first)).state).toBe('sent');
+  expect(await outbox.whenSent(second)).toMatchObject({ state: 'failed', restored: true, error: 'Not sent – tap to try again' });
+  expect(b.db.messages.map((message) => message.body)).toEqual(['one']);
+  // A tap sends it at once.
+  outbox.retry(second);
+  expect((await outbox.whenSent(second)).state).toBe('sent');
+  expect(b.db.messages.map((message) => message.body)).toEqual(['one', 'on my way']);
+});
+
+it('away for a short while: a text that waited behind another one still goes by itself', async () => {
+  const { b, outbox } = await setup();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let inserts = 0;
+  b.rules.insert = () => (++inserts === 1 ? gate : 'ok');
+  const first = outbox.sendLater('A', 'friend:B', { kind: 'text', friendId: 'B', body: 'one' });
+  const second = outbox.sendLater('A', 'friend:B', { kind: 'text', friendId: 'B', body: 'two' });
+  await settle();
+  b.goAway();
+  vi.setSystemTime(Date.now() + 2 * 60 * 1000);
+  release('ok');
+  await settle();
+  expect((await outbox.whenSent(first)).state).toBe('sent');
+  expect((await outbox.whenSent(second)).state).toBe('sent');
+  expect(b.db.messages.map((message) => message.body)).toEqual(['one', 'two']);
+  b.becomeActive();
 });

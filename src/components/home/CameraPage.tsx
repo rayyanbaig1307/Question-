@@ -31,6 +31,7 @@ import { useIncomingRequestCount } from '@/lib/friends';
 import { friendlyError } from '@/lib/errors';
 import { markCameraReleased, useCameraHeldByLive } from '@/lib/liveAccess';
 import { useLiveBubble } from '@/lib/lives';
+import { useDropSending } from '@/lib/outbox';
 import { colors, font, radius, space } from '@/theme';
 import { TAB_BAR_HEIGHT } from './HomeTabBar';
 import type { FaceLensHandle } from './FaceLensCamera';
@@ -153,10 +154,13 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // no bubble to pick, just snap. (The drop notification also opens the camera straight in drop mode.)
   // It doesn't wait for the server to say "not posted yet" (every second of the 2 minutes counts): only a known
   // "already posted" turns it off. Posting a second drop is refused by the server anyway.
-  const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone !== true;
+  // While your drop is still on its way (Send to… closes at once), the camera is a normal camera: the server only
+  // knows about your drop once it's saved, and your next photo (for a friend) must not become a second drop.
+  const dropSending = useDropSending(userId);
+  const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone !== true && !dropSending;
   const dropOn = drop || autoDrop;
   // Missed it: a small "post today's drop · you're late" button on the camera until you do.
-  const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false;
+  const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false && !dropSending;
   const guessOn = guess || (isHome && homeMode === 'guess');
   // 🔴 Go live (home camera only): the bubble shows when this download can do lives and the server says you may
   // (asked each time the camera comes into view). In live mode the shutter opens the Go live sheet.

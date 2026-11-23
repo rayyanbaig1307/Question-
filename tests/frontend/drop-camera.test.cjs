@@ -15,8 +15,10 @@ const COLORS = {
 };
 
 // `done`: what "have you posted today's drop?" says (null = still asking). `status`: where today's drop is at.
-function loadCamera({ done, status }) {
+// `sending`: your drop that's still on its way (its send's key), or null. `pushed`: the screens the camera opened.
+function loadCamera({ done, status, sending = null }) {
   const asked = [];
+  const pushed = [];
   const noop = () => {};
   class CameraView extends React.Component {
     async takePictureAsync() { return { uri: 'file:///qa-shot.jpg' }; }
@@ -26,7 +28,7 @@ function loadCamera({ done, status }) {
   const screen = loadScreen('src/components/home/CameraPage.tsx', {
     'expo-camera': { CameraView, useCameraPermissions: () => [{ granted: true }, noop], useMicrophonePermissions: () => [{ granted: true }, noop] },
     'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: true, assets: [] }) },
-    'expo-router': { router: { push: noop, back: noop } },
+    'expo-router': { router: { push: (to) => pushed.push(to), back: noop } },
     'react-native-reanimated': {
       __esModule: true, default: { View: host('AnimatedView') },
       cancelAnimation: noop, Easing: { linear: 'linear' }, useAnimatedStyle: (callback) => callback(), useSharedValue: useShared,
@@ -47,6 +49,7 @@ function loadCamera({ done, status }) {
       useDropDone: (me, enabled) => { asked.push(enabled); return done; },
       useDropStatus: () => status,
     },
+    '@/lib/outbox': { useDropSending: () => sending },
     '@/lib/faceLens': { FACE_LENS_AVAILABLE: false },
     '@/lib/faceMesh': { FACE_MESH_AVAILABLE: false },
     '@/lib/friends': { useIncomingRequestCount: () => 0 },
@@ -56,7 +59,7 @@ function loadCamera({ done, status }) {
     './HomeTabBar': { TAB_BAR_HEIGHT: 60 },
     './ModeDial': { ModeDial: host('ModeDial'), GroupGuessCaption: host('GroupGuessCaption') },
   });
-  return { screen, asked };
+  return { screen, asked, pushed };
 }
 
 async function renderCamera(setup, props) {
@@ -102,4 +105,30 @@ test('the drop camera (from the drop notification) asks its small question as so
     assert.ok(setup.asked.includes(true), 'asked while the drop camera is open');
     assert.ok(has(tree, 'DropTimer'));
   } finally { await unmount(tree); }
+});
+
+// SPEED-3: Send to… closes at once now, so you can be back on the camera while your drop is still on its way. The
+// server only knows about your drop once it's saved, so the camera stayed in drop mode, and the next photo (meant
+// for a friend) went to Send to… as a second drop – on a weak signal it could even be saved before the real one.
+test('while your drop is still on its way, the camera is a normal camera: the next photo is not a second drop', async () => {
+  const shutterFor = (tree) => tree.root.find((node) => node.type === 'Bouncy' && typeof node.props.accessibilityLabel === 'string' && /^Take/.test(node.props.accessibilityLabel));
+  const late = { kind: 'late', at: new Date(Date.now() - 3_600_000), now: Date.now() };
+  for (const [sending, dropMode] of [[null, true], ['job-drop', false]]) {
+    const setup = loadCamera({ done: false, status: LIVE, sending });
+    const tree = await renderCamera(setup, {});
+    try {
+      assert.equal(has(tree, 'DropTimer'), dropMode, `sending=${sending}`);
+      const shutter = shutterFor(tree);
+      assert.equal(shutter.props.accessibilityLabel, dropMode ? 'Take your Peekaboo drop photo' : 'Take photo, or hold to record a video');
+      await act(async () => { await shutter.props.onPress(); });
+      assert.equal(setup.pushed.length, 1);
+      assert.equal(setup.pushed[0].params.drop, dropMode ? '1' : undefined, `sending=${sending}`);
+    } finally { await unmount(tree); }
+    // A late drop: no "post today's drop" button while it's on its way either.
+    const lateSetup = loadCamera({ done: false, status: late, sending });
+    const lateTree = await renderCamera(lateSetup, {});
+    try {
+      assert.equal(has(lateTree, 'DropPill'), dropMode, `late, sending=${sending}`);
+    } finally { await unmount(lateTree); }
+  }
 });

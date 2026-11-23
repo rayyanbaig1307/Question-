@@ -132,3 +132,93 @@ it('an open chat only reloads for its own messages', () => {
   stop();
   expect(server.channels).toHaveLength(0);
 });
+
+// ---------------------------------------------------------------------------
+// Cleared and hidden messages never come back from the remembered chats
+// ---------------------------------------------------------------------------
+
+// A pretend Supabase that keeps a real list of hidden messages: "Clear chat" hides every message in the chat with
+// that friend, "Delete for me" hides one. A messages load can be held (`holdMessages`) until the test lets it answer.
+function hidingServer(messages) {
+  const state = { hidden: new Set(), held: [], holdMessages: false, rpcError: null, hideRequests: 0 };
+  const supabase = {
+    from(table) {
+      const chain = {};
+      for (const method of ['select', 'or', 'order', 'eq', 'in', 'limit', 'ilike']) chain[method] = () => chain;
+      chain.then = (resolve, reject) => {
+        if (table === 'message_hides') {
+          state.hideRequests += 1;
+          // The server's answer at the moment it was asked.
+          return Promise.resolve({ data: [...state.hidden].map((id) => ({ message_id: id })), error: null }).then(resolve, reject);
+        }
+        const answer = { data: messages.map((m) => ({ ...m })), error: null };
+        if (!state.holdMessages) return Promise.resolve(answer).then(resolve, reject);
+        return new Promise((release) => state.held.push(() => release(answer))).then(resolve, reject);
+      };
+      return chain;
+    },
+    rpc: async (name, args) => {
+      if (state.rpcError) return { data: null, error: state.rpcError };
+      if (name === 'clear_chat') messages.filter((m) => m.sender_id === args.friend || m.recipient_id === args.friend).forEach((m) => state.hidden.add(m.id));
+      if (name === 'hide_message') state.hidden.add(args.message);
+      return { data: null, error: null };
+    },
+  };
+  return { supabase, state };
+}
+
+const ids = (list) => (list ? list.map((m) => m.id) : list);
+
+it('"Clear chat" forgets the remembered chat: opening it again never shows the cleared messages, even if loading fails', async () => {
+  const server = hidingServer([msg('m1', 'me', 'ray'), msg('m2', 'ray', 'me')]);
+  const chat = loadLibrary('chat', { supabase: server.supabase, mocks: { './media': {} } });
+  await chat.fetchConversation('me', 'ray');
+  chat.rememberConversation('me', 'sam', [msg('s1', 'sam', 'me')]);
+  expect(ids(chat.cachedConversation('me', 'ray'))).toEqual(['m1', 'm2']);
+  await chat.clearChat('ray');
+  // The chat screen starts from this: nothing remembered means it waits for a fresh load (an empty chat if that
+  // fails), instead of drawing the cleared messages straight away.
+  expect(chat.cachedConversation('me', 'ray')).toBe(null);
+  expect(ids(chat.cachedConversation('me', 'sam'))).toEqual(['s1']);
+  // The next load leaves them out too.
+  expect(ids(await chat.fetchConversation('me', 'ray'))).toEqual([]);
+});
+
+it('"Clear chat" that fails (or can\'t tell if it worked) still forgets the remembered chat', async () => {
+  const server = hidingServer([msg('m1', 'me', 'ray')]);
+  const chat = loadLibrary('chat', { supabase: server.supabase, mocks: { './media': {} } });
+  await chat.fetchConversation('me', 'ray');
+  server.state.rpcError = { message: 'Network request failed' };
+  await expect(chat.clearChat('ray')).rejects.toMatchObject({ message: 'Network request failed' });
+  expect(chat.cachedConversation('me', 'ray')).toBe(null);
+});
+
+it('a chat load that was on its way when you cleared the chat can\'t bring the cleared messages back', async () => {
+  const server = hidingServer([msg('m1', 'me', 'ray'), msg('m2', 'ray', 'me')]);
+  const chat = loadLibrary('chat', { supabase: server.supabase, mocks: { './media': {} } });
+  // You open Ray's chat on a weak signal and go back before it loads; the hidden list (empty) is already in.
+  server.state.holdMessages = true;
+  const loading = chat.fetchConversation('me', 'ray');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(server.state.held).toHaveLength(1);
+  // On the Chat list you clear the chat with Ray...
+  await chat.clearChat('ray');
+  // ...then the old load comes in, with messages from before the clear.
+  server.state.held.shift()();
+  expect(ids(await loading)).toEqual([]);
+  expect(ids(chat.cachedConversation('me', 'ray'))).toEqual([]);
+});
+
+it('"Delete for me" takes the message out of every remembered chat', async () => {
+  const server = hidingServer([msg('m1', 'me', 'ray'), msg('m2', 'ray', 'me')]);
+  const chat = loadLibrary('chat', { supabase: server.supabase, mocks: { './media': {} } });
+  await chat.fetchConversation('me', 'ray');
+  chat.rememberConversation('me', 'sam', [msg('s1', 'sam', 'me')]);
+  await chat.hideMessage('m2');
+  expect(ids(chat.cachedConversation('me', 'ray'))).toEqual(['m1']);
+  expect(ids(chat.cachedConversation('me', 'sam'))).toEqual(['s1']);
+  // Even when we can't tell if it worked, it's not drawn again from the remembered chat.
+  server.state.rpcError = { message: 'Network request failed' };
+  await expect(chat.hideMessage('m1')).rejects.toMatchObject({ message: 'Network request failed' });
+  expect(ids(chat.cachedConversation('me', 'ray'))).toEqual([]);
+});

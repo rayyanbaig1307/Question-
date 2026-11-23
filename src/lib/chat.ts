@@ -98,7 +98,8 @@ export function rememberConversation(me: string, friend: string, list: Message[]
 
 // Newest first.
 export async function fetchConversation(me: string, friend: string, limit = 100): Promise<Message[]> {
-  const [{ data, error }, hidden] = await Promise.all([
+  let askedAt = hiddenVersion;
+  const [{ data, error }, hiddenFirst] = await Promise.all([
     supabase
       .from('messages')
       .select('*, story:stories(media_path, media_type, poster_path)')
@@ -108,6 +109,13 @@ export async function fetchConversation(me: string, friend: string, limit = 100)
     fetchHiddenIds(me),
   ]);
   if (error) throw error;
+  // You deleted a message "for me" or cleared a chat on this phone while this was loading: the hidden list may be
+  // from before that, so ask for it again. (A cleared message must never come back, not even for a moment.)
+  let hidden = hiddenFirst;
+  while (askedAt !== hiddenVersion) {
+    askedAt = hiddenVersion;
+    hidden = await fetchHiddenIds(me);
+  }
   const list = ((data ?? []) as Message[]).filter((m) => !hidden.has(m.id));
   rememberConversation(me, friend, list);
   return list;
@@ -173,16 +181,31 @@ function hiddenChanged() {
 
 // "Delete for me": hides a message (yours or theirs) from your chat only. Your friend still sees it.
 export async function hideMessage(messageId: string): Promise<void> {
-  const { error } = await supabase.rpc('hide_message', { message: messageId });
-  hiddenChanged();
-  if (error) throw error;
+  try {
+    const { error } = await supabase.rpc('hide_message', { message: messageId });
+    if (error) throw error;
+  } finally {
+    // Even when we can't tell if it worked: the remembered chats lose it, so it's never drawn again from them.
+    hiddenChanged();
+    if (rememberedChats) {
+      for (const [friend, list] of rememberedChats.lists) {
+        if (list.some((m) => m.id === messageId)) rememberedChats.lists.set(friend, list.filter((m) => m.id !== messageId));
+      }
+    }
+  }
 }
 
 // "Clear chat": hides every message in your chat with a friend, from your side only.
 export async function clearChat(friend: string): Promise<void> {
-  const { error } = await supabase.rpc('clear_chat', { friend });
-  hiddenChanged();
-  if (error) throw error;
+  try {
+    const { error } = await supabase.rpc('clear_chat', { friend });
+    if (error) throw error;
+  } finally {
+    // Even when we can't tell if it worked: the remembered list for this chat is forgotten, so opening it again
+    // never shows the cleared messages (it waits for a fresh load, and shows an empty chat if that fails).
+    hiddenChanged();
+    rememberedChats?.lists.delete(friend);
+  }
 }
 
 // Your recent messages with everyone, newest first (for the chat list).

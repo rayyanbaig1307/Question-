@@ -6,7 +6,7 @@
 // request gives up after a while, so the screens and the outbox (lib/outbox.ts) can try again or say
 // "Couldn't send" instead of waiting forever.
 //
-// The limits:
+// The limits (each one covers the whole answer, until it has been read to the end):
 // - 20 seconds to read or save rows, run a database function, or make a small storage call (a link, a copy,
 //   a delete).
 // - 30 seconds for the login server (/auth/v1/), for example logging in.
@@ -75,10 +75,32 @@ function noteOutOfTime(url: string) {
   if (outOfTime.size > OUT_OF_TIME_KEPT) outOfTime.delete(outOfTime.keys().next().value as string);
 }
 
+// The ways to read the rest of an answer (its "body"). The clock keeps running until one of them has read it all.
+const BODY_READERS = ['arrayBuffer', 'blob', 'bytes', 'formData', 'json', 'text'] as const;
+
+// Answers that never have a body (a HEAD request only asks for the headers; 204, 205 and 304 are always empty).
+function hasNoBody(method: string, status: number): boolean {
+  return method === 'HEAD' || status === 204 || status === 205 || status === 304;
+}
+
+// A request that was given up (its time ran out, or the caller cancelled it) always fails with an "AbortError".
+// The phone's own fetch says "fetch failed: Fetch request has been canceled" instead, which Supabase doesn't
+// recognise: it then tried a lost read 3 more times (about 87 seconds instead of 20), uploads didn't see that
+// their time had run out, and the app showed that raw text instead of "Can't reach the internet".
+function givenUp(timedOut: boolean, cause?: unknown): Error {
+  const error = new Error(timedOut ? 'The request was aborted: no answer in time.' : 'The request was aborted.');
+  error.name = 'AbortError';
+  if (cause !== undefined) (error as Error & { cause?: unknown }).cause = cause;
+  return error;
+}
+
 // fetch, with the time limit above. If the caller passes its own way to cancel (a signal), that still works too.
-// The clock stops as soon as the answer is in (the phone's fetch only answers once the whole reply has arrived).
+// The limit covers the WHOLE answer. The phone's fetch (expo/fetch) hands back an answer as soon as its first part
+// (the "headers") has arrived, and the rest (the "body": the rows, the JSON) is read after that. On a weak signal
+// the body can stall too, so the clock only stops once the body has been read.
 export function timedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = String((input as { url?: unknown }).url ?? input);
+  const method = (init?.method ?? 'GET').toUpperCase();
   const limit = deadlineFor(url, init);
   const upload = isUpload(url, init);
   const controller = new AbortController();
@@ -88,32 +110,106 @@ export function timedFetch(input: RequestInfo | URL, init?: RequestInit): Promis
     if (callerSignal.aborted) controller.abort();
     else callerSignal.addEventListener('abort', passOn);
   }
-  // Given up after the limit: the request fails with an "AbortError", which Supabase treats as no answer.
+  // The first part of the answer has arrived (so an upload did get there).
+  let answered = false;
+  let timedOut = false;
+  // Given up after the limit: the request (or the reading of its body) fails with an "AbortError", which Supabase
+  // treats as no answer.
   const timer = setTimeout(() => {
-    if (upload) noteOutOfTime(url);
+    timedOut = true;
+    // Only an upload that got no answer at all was too slow for its limit: its next try gets longer.
+    if (upload && !answered) noteOutOfTime(url);
     controller.abort();
   }, limit);
   const tidy = () => {
     clearTimeout(timer);
     callerSignal?.removeEventListener('abort', passOn);
   };
+  // Once the request was given up, whatever error the phone's fetch gives becomes an "AbortError".
+  const failure = (error: unknown): unknown => {
+    tidy();
+    return controller.signal.aborted ? givenUp(timedOut, error) : error;
+  };
+
+  // Reads the body with the clock still running. It fails with an "AbortError" the moment the request is given up,
+  // even if the phone's own read never finishes. After a cancel, Android can still hand back the part of the body
+  // that had arrived; by then this has already failed, so a cut-off body is never used.
+  function timedRead<T>(read: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const signal = controller.signal;
+      function stop() {
+        signal.removeEventListener('abort', onGivenUp);
+        tidy();
+      }
+      function onGivenUp() {
+        stop();
+        reject(givenUp(timedOut));
+      }
+      if (signal.aborted) {
+        onGivenUp();
+        return;
+      }
+      signal.addEventListener('abort', onGivenUp);
+      let reading: Promise<T>;
+      try {
+        reading = Promise.resolve(read());
+      } catch (error) {
+        stop();
+        reject(error);
+        return;
+      }
+      reading.then(
+        (value) => {
+          stop();
+          resolve(value);
+        },
+        (error) => {
+          stop();
+          reject(signal.aborted ? givenUp(timedOut, error) : error);
+        },
+      );
+    });
+  }
+
+  // Puts the clock on every way to read this answer's body. Says false if that couldn't be done.
+  const timeBody = (response: Response): boolean => {
+    const answer = response as unknown as Record<string, unknown>;
+    let found = false;
+    for (const name of BODY_READERS) {
+      const read = answer[name];
+      if (typeof read !== 'function') continue;
+      found = true;
+      try {
+        Object.defineProperty(answer, name, {
+          configurable: true,
+          writable: true,
+          value: (...args: unknown[]) => timedRead(() => read.apply(response, args) as Promise<unknown>),
+        });
+      } catch {
+        return false;
+      }
+    }
+    return found;
+  };
+
   let request: Promise<Response>;
   try {
     request = fetch(input, { ...init, signal: controller.signal });
   } catch (error) {
-    tidy();
-    return Promise.reject(error);
+    return Promise.reject(failure(error));
   }
   return request.then(
     (response) => {
-      tidy();
+      answered = true;
       // An answer came back: the next upload to this address starts from the normal limit again.
       if (upload) outOfTime.delete(url);
+      // Nothing more to wait for when the answer has no body. (Also when there's no way to read one, or, very
+      // unlikely, the clock can't be put on reading it: then the clock stops now, like it used to.)
+      if (hasNoBody(method, response.status) || !timeBody(response)) tidy();
       return response;
     },
     (error) => {
-      tidy();
-      throw error;
+      throw failure(error);
     },
   );
 }

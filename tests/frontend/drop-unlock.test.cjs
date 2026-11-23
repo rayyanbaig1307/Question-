@@ -279,6 +279,8 @@ test('back on Home while your drop is still sending, Home waits for it (so it do
   const tree = await renderHome(setup);
   try {
     assert.equal(setup.loads.feed, 0, 'nothing loads while the drop is on its way');
+    // The outbox saved your drop: the server has it now (a load asked after this trusts the server).
+    state.mine = [{ drop_day: today, drop_offset_minutes: 0 }];
     await act(async () => {
       setup.drop.noteMyDropPosted('alice', { drop_day: today, drop_offset_minutes: 0 });
       sending.set(false);
@@ -360,4 +362,140 @@ test('the rule: never posted → locked; your drop opens other days until the ne
   assert.equal(drop.dropLock({ drop_day: null, user_id: 'prab' }, 'me', null), null);
   // 20 Nov 2026's next drop (21 Nov) is at 19:14 in New York = 00:14 UTC on 22 Nov.
   assert.equal(new Date(until).toISOString(), '2026-11-22T00:14:00.000Z');
+});
+
+// ---------------------------------------------------------------------------
+// Deleting your own drop locks the drops again (src/lib/posts.ts deletePost → forgetMyDrop)
+// ---------------------------------------------------------------------------
+
+// The real src/lib/posts.ts, sharing the real drop.ts above. Deleting a post takes it out of the stand-in database
+// (`state.mine` is what "which drops have I posted?" answers).
+// `state.loseDeleteAnswer`: the server deletes it, but its answer never gets back (a weak signal).
+function loadPosts(state, drop) {
+  const supabase = {
+    from: (table) => {
+      assert.equal(table, 'posts');
+      return {
+        delete: () => ({
+          eq: async (_column, id) => {
+            state.deleted = [...(state.deleted ?? []), id];
+            state.mine = [];
+            return { error: state.loseDeleteAnswer ? { name: 'AbortError', message: 'The request took too long' } : null };
+          },
+        }),
+      };
+    },
+  };
+  return loadScreen('src/lib/posts.ts', {
+    'expo-crypto': { randomUUID: () => 'qa-id' },
+    './dares': { todayDareDay: () => '2026-11-23' },
+    './drop': drop,
+    './errors': { serverFailure: () => null },
+    './media': { deleteMedia: async () => {}, mediaFiles: (row) => [row.media_path] },
+    './supabase': { supabase },
+  }).exports;
+}
+
+test('deleting the drop you just posted locks your friends\' drops on Home again (no empty "unlocked" cards)', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  const menus = [];
+  const drop = loadDrop(state);
+  const posts = loadPosts(state, drop);
+  const setup = loadHome(state, [dropPost('alice-today', 'alice', today), dropPost('prab-today', 'prab', today), dropPost('prab-old', 'prab', utcDay(state.now - 3 * DAY_MS))], {
+    '@/lib/drop': drop,
+    '@/lib/posts': posts,
+    '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: (menu) => menus.push(menu) }) },
+  });
+  const tree = await renderHome(setup);
+  try {
+    assert.equal(cards(tree)['prab-today'].lock, 'drop');
+    // The outbox saved your drop, and Home loaded again (the server has it now).
+    state.mine = [{ drop_day: today, drop_offset_minutes: 0 }];
+    await act(async () => { drop.noteMyDropPosted('alice', { drop_day: today, drop_offset_minutes: 0 }); });
+    await act(async () => {});
+    assert.equal(cards(tree)['prab-today'].lock, null);
+    assert.equal(cards(tree)['prab-old'].lock, null);
+
+    // ⋯ on your drop → Delete post → Delete.
+    await act(async () => { tree.root.findAllByType('FeedCard').find((card) => card.props.post.id === 'alice-today').props.onMenu(); });
+    await act(async () => { menus.at(-1).options.find((option) => option.label === 'Delete post').onPress(); });
+    const [, , choices] = setup.screen.calls.alerts.at(-1);
+    await act(async () => { await choices.find((choice) => choice.text === 'Delete').onPress(); });
+    await act(async () => {});
+    assert.deepEqual(state.deleted, ['alice-today']);
+
+    // Your friends' drops are the 🙈 cards again, with only their blurry preview (the server won't show more).
+    const shown = cards(tree);
+    for (const id of ['prab-today', 'prab-old']) {
+      assert.equal(shown[id].lock, 'drop', id);
+      assert.match(shown[id].url, /\/blurs\//, id);
+    }
+  } finally { await unmount(tree); }
+});
+
+test('profile grid: after you delete your drop, the drops lock again without leaving the profile', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  state.mine = [{ drop_day: today, drop_offset_minutes: 0 }];
+  const drop = loadDrop(state);
+  const posts = [0, 2].map((n) => dropPost(`d${n}`, 'prab', utcDay(state.now - n * DAY_MS)));
+  const screen = loadScreen('src/components/PostGrid.tsx', {
+    'expo-image': { Image: host('ExpoImage') },
+    'expo-router': { router: { push() {} } },
+    '@/lib/drop': drop,
+    '@/lib/media': { useMediaUrls: (paths) => Object.fromEntries(paths.map((p) => [p, `https://example.invalid/${p}`])) },
+  });
+  let tree;
+  await act(async () => {
+    tree = renderer.create(React.createElement(screen.exports.PostGrid, { posts, header: null, refreshing: false, onRefresh() {} }));
+  });
+  await act(async () => {});
+  try {
+    assert.equal((textOf(tree.toJSON()).match(/🙈/g) ?? []).length, 0);
+    // You delete your drop (somewhere else in the app): the server no longer has it.
+    await loadPosts(state, drop).deletePost({ id: 'mine', user_id: 'alice', drop_day: today, media_path: 'alice/posts/mine.jpg' });
+    await act(async () => {});
+    assert.equal((textOf(tree.toJSON()).match(/🙈/g) ?? []).length, 2);
+  } finally { await unmount(tree); }
+});
+
+// SPEED-2 (second review): the delete went through on the server, but its answer got lost. The app says "Could not
+// delete", and used to keep every drop "open" for good (empty cards). Home's next load now asks the server, which
+// knows the drop is gone: your friends' drops lock again.
+test('a drop delete whose answer got lost: the next Home load locks your friends\' drops again', async () => {
+  const state = newState();
+  const today = utcDay(state.now);
+  const menus = [];
+  const drop = loadDrop(state);
+  const posts = loadPosts(state, drop);
+  const setup = loadHome(state, [dropPost('alice-today', 'alice', today), dropPost('prab-today', 'prab', today), dropPost('prab-old', 'prab', utcDay(state.now - 3 * DAY_MS))], {
+    '@/lib/drop': drop,
+    '@/lib/posts': posts,
+    '@/components/Overlays': { useOverlays: () => ({ showToast() {}, showOptions: (menu) => menus.push(menu) }) },
+  });
+  const tree = await renderHome(setup);
+  try {
+    state.mine = [{ drop_day: today, drop_offset_minutes: 0 }];
+    await act(async () => { drop.noteMyDropPosted('alice', { drop_day: today, drop_offset_minutes: 0 }); });
+    await act(async () => {});
+    assert.equal(cards(tree)['prab-today'].lock, null);
+
+    // ⋯ on your drop → Delete post → Delete, on a weak signal.
+    state.loseDeleteAnswer = true;
+    await act(async () => { tree.root.findAllByType('FeedCard').find((card) => card.props.post.id === 'alice-today').props.onMenu(); });
+    await act(async () => { menus.at(-1).options.find((option) => option.label === 'Delete post').onPress(); });
+    const [, , choices] = setup.screen.calls.alerts.at(-1);
+    await act(async () => { await choices.find((choice) => choice.text === 'Delete').onPress(); });
+    assert.equal(setup.screen.calls.alerts.at(-1)[0], 'Could not delete');
+    assert.deepEqual(state.mine, [], 'the server deleted it all the same');
+
+    // Pull down to load Home again: the server has no drop of yours, so your friends' drops lock again.
+    await pullToRefresh(tree);
+    const shown = cards(tree);
+    for (const id of ['prab-today', 'prab-old']) {
+      assert.equal(shown[id].lock, 'drop', id);
+      assert.match(shown[id].url, /\/blurs\//, id);
+    }
+  } finally { await unmount(tree); }
 });

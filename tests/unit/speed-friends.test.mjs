@@ -132,3 +132,61 @@ it('a moment after the app opens, the friend list is loaded once in the backgrou
   lib.warmFriends('me');
   expect(server.requests.length).toBe(1);
 });
+
+// A live update says your friends changed on the server (the other person sent you a request, or accepted yours).
+// A load that started before that may not have it, so the screens' reload must ask again, not reuse it. Before
+// this fix the reload got the older load's answer: the Inbox could say "All caught up!" while the badge counted the
+// new request, and the Friends screen kept showing "Requested" after they accepted.
+it('after a live update about your friends, the next load asks the server again (it never reuses the older load)', async () => {
+  const server = fakeServer();
+  const lib = loadLibrary('friends', { supabase: server.supabase });
+  const before = lib.fetchMyFriendLinks('me');
+  const idsBefore = lib.fetchFriendIds('me');
+  expect(server.requests.length).toBe(2);
+  lib.friendsChanged();
+  const after = lib.fetchMyFriendLinks('me');
+  const idsAfter = lib.fetchFriendIds('me');
+  expect(server.requests.length).toBe(4);
+  // The older load answers without the new request; the fresh one has it.
+  server.requests[0].answer([]);
+  server.requests[1].answer([]);
+  server.requests[2].answer([link('l5', 'zed', 'me', 'pending')]);
+  server.requests[3].answer([{ requester_id: 'zed', addressee_id: 'me' }]);
+  expect(await before).toEqual([]);
+  expect((await after).map((l) => l.id)).toEqual(['l5']);
+  expect(await idsBefore).toEqual([]);
+  expect(await idsAfter).toEqual(['zed']);
+});
+
+it('a load that started while your add, answer or remove was on its way is not reused after it', async () => {
+  for (const change of [
+    (lib) => lib.sendFriendRequest('zed'),
+    (lib) => lib.respondToRequest('l2', true),
+    (lib) => lib.removeFriendLink('l1'),
+  ]) {
+    const server = fakeServer();
+    // The change waits until the test answers it (a slow signal).
+    let finishRpc;
+    server.supabase.rpc = (name, args) => {
+      server.rpcs.push([name, args]);
+      return new Promise((resolve) => { finishRpc = () => resolve({ data: 'pending', error: null }); });
+    };
+    const lib = loadLibrary('friends', { supabase: server.supabase });
+    const changing = change(lib);
+    // Another screen loads your friends while the change is still on its way: the server reads them before the
+    // change is saved.
+    const during = lib.fetchMyFriendLinks('me');
+    const loads = () => server.requests.filter((request) => request.calls.some(([method]) => method === 'select'));
+    expect(loads().length).toBe(1);
+    // The change is saved.
+    const deleteRequest = server.requests.find((request) => request.calls.some(([method]) => method === 'delete'));
+    if (deleteRequest) deleteRequest.answer(null);
+    else finishRpc();
+    await changing;
+    // The next load (the screen reloading after the tap) is a fresh request, not the one from during the change.
+    lib.fetchMyFriendLinks('me');
+    expect(loads().length).toBe(2);
+    loads().forEach((request) => request.answer([]));
+    await during;
+  }
+});

@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import { todayDareDay } from './dares';
-import { timeZoneOffsetMinutes } from './drop';
+import { forgetMyDrop, timeZoneOffsetMinutes } from './drop';
 import { serverFailure } from './errors';
 import { deleteMedia, makeBlurPreview, mediaFiles, uploadCapture, uploadMedia, type Capture } from './media';
 import { supabase } from './supabase';
@@ -103,6 +103,8 @@ export async function fetchPost(postId: string): Promise<PostWithAuthor | null> 
 export async function deletePost(post: Post): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', post.id);
   if (error) throw error;
+  // It was your drop: every screen forgets it at once (your friends' drops lock again until you post a new one).
+  if (post.drop_day) forgetMyDrop(post.user_id, post.drop_day);
   await deleteMedia(mediaFiles(post)).catch((cleanupError) => console.warn('Post removed; its files could not be cleaned up yet', cleanupError));
 }
 

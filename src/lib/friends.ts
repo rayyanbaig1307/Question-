@@ -38,10 +38,22 @@ export function otherPerson(link: FriendLink, me: string): Profile | null {
 const linksOnTheWay = new Map<string, Promise<FriendLink[]>>();
 const idsOnTheWay = new Map<string, Promise<string[]>>();
 
-// You just added, answered or removed someone: a request that started before that may not have it, so don't share it.
-function friendsChanged() {
+// Your friends just changed: you added, answered or removed someone here, or a live update says someone else did
+// (they sent you a request, or accepted yours). A request that started before that may not have the change, so
+// it's not shared any more: the next load asks the server again.
+export function friendsChanged(): void {
   linksOnTheWay.clear();
   idsOnTheWay.clear();
+}
+
+// Runs your change. Loads that start while it's on its way may not have it either, so they're not shared after it.
+async function changeFriends<T>(change: () => PromiseLike<T>): Promise<T> {
+  friendsChanged();
+  try {
+    return await change();
+  } finally {
+    friendsChanged();
+  }
 }
 
 // Shares `load` with anyone else asking for the same person while it's on its way.
@@ -126,22 +138,19 @@ export async function searchUsers(query: string, me: string): Promise<Profile[]>
 //   accounts and for anyone under 18 or without a birthday saved, even if their account is public.
 // Anything else the server might answer counts as 'pending', so the app never shows "Friends" by mistake.
 export async function sendFriendRequest(target: string): Promise<'pending' | 'accepted'> {
-  friendsChanged();
-  const { data, error } = await supabase.rpc('send_friend_request', { target });
+  const { data, error } = await changeFriends(() => supabase.rpc('send_friend_request', { target }));
   if (error) throw error;
   return data === 'accepted' ? 'accepted' : 'pending';
 }
 
 export async function respondToRequest(linkId: string, accept: boolean): Promise<void> {
-  friendsChanged();
-  const { error } = await supabase.rpc('respond_to_friend_request', { request_id: linkId, accept });
+  const { error } = await changeFriends(() => supabase.rpc('respond_to_friend_request', { request_id: linkId, accept }));
   if (error) throw error;
 }
 
 // Cancels a request you sent, or unfriends.
 export async function removeFriendLink(linkId: string): Promise<void> {
-  friendsChanged();
-  const { error } = await supabase.from('friendships').delete().eq('id', linkId);
+  const { error } = await changeFriends(() => supabase.from('friendships').delete().eq('id', linkId));
   if (error) throw error;
 }
 

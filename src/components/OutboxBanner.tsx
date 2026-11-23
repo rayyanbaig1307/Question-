@@ -208,11 +208,16 @@ export function SendingPill({ userId }: { userId: string }) {
             : 'Sending…';
   function open() {
     if (failed.length === 0) return;
-    const first = failed[0];
+    // "Try again" is there as long as ANY of them can still go (one that can't – its picture is gone, or its day is
+    // over – can only be deleted). The sheet talks about your drop first – a drop that can still go before an old
+    // one whose day is over – then about one that can still go.
+    const canTry = failed.filter((job) => !(job.restored && job.final));
+    const isDrop = (job: Job) => job.what.kind === 'post' && !!job.what.drop;
+    const first = canTry.find(isDrop) ?? failed.find(isDrop) ?? canTry[0] ?? failed[0];
     showOptions({
       title: failureWords(first),
       options: [
-        ...(first.restored && first.final ? [] : [{ label: 'Try again', onPress: () => failed.forEach((job) => !(job.restored && job.final) && retry(job.key)) }]),
+        ...(canTry.length > 0 ? [{ label: 'Try again', onPress: () => canTry.forEach((job) => retry(job.key)) }] : []),
         { label: failed.length > 1 ? `Delete (${failed.length})` : 'Delete', destructive: true, onPress: () => failed.forEach((job) => void discard(job.key)) },
       ],
     });

@@ -6,7 +6,8 @@ import { AppState } from 'react-native';
 
 import { runBeforeLogOut } from './auth';
 import { claimChatDare, findMessages, insertMessage, insertSnaps, setSnapSaved } from './chat';
-import { noteMyDropPosted } from './drop';
+import { todayDareDay } from './dares';
+import { localDay, noteMyDropPosted } from './drop';
 import { friendlyError, isClearRefusal } from './errors';
 import { findComment, insertComment } from './feed';
 import { findGroupMessages, insertGroupMessage } from './groupChat';
@@ -58,6 +59,8 @@ import { voiceLength } from './voice';
 // own (when you come back to the app, or when your login is back). A send that was still going when you left
 // the app, and is 10 minutes old or more when you come back, waits for a tap too (the phone stops sending while
 // the app is closed, so it could otherwise arrive hours late – a drop would be posted hours late as Late).
+// A drop or dare post is only ever posted on its own day: once that day is over it can only be deleted (the
+// server would file yesterday's photo under today's drop or dare).
 //
 // No login for a moment (it's being renewed, maybe on a weak signal): that's never a "no". It counts as a try
 // with no answer, so after the same waits it says "No connection – tap to try again" instead of spinning forever.
@@ -79,7 +82,18 @@ export type What =
   | { kind: 'groupGuess'; groupId: string }
   | { kind: 'publicPhoto' }
   | { kind: 'story'; audience: Audience }
-  | { kind: 'post'; caption: string; audience: Audience; dare?: boolean; drop?: boolean; rewind?: boolean; forfeit?: string }
+  // `dropDay` / `dareDay`: the day a drop or dare post was made for (set when it's queued; see dayIsOver).
+  | {
+      kind: 'post';
+      caption: string;
+      audience: Audience;
+      dare?: boolean;
+      drop?: boolean;
+      rewind?: boolean;
+      forfeit?: string;
+      dropDay?: string;
+      dareDay?: string;
+    }
   | { kind: 'guess'; caption: string }
   | { kind: 'comment'; postId: string; body: string; parentId: string | null };
 
@@ -110,7 +124,8 @@ export type Job = {
   final?: boolean;
   attempts: number;
   createdAt: number;
-  // Shown again after the app was closed: waits for a tap.
+  // Shown again after the app was closed: waits for a tap. Together with `final` it can't be sent any more (its
+  // picture is gone, or its drop or dare day is over): it can only be deleted, so "Try again" isn't offered.
   restored?: boolean;
   rows?: unknown[];
   result?: {
@@ -132,7 +147,8 @@ export type Job = {
   // When the trying started (when it was made, or when you last tapped "Try again"). Only sends under 10 minutes
   // from this are tried again by themselves.
   triedAt?: number;
-  // You left the app while this was being sent, long enough ago: if this try fails, it waits for a tap.
+  // You left the app while this was being sent, long enough ago: this try stops before saving (or, if it fails,
+  // isn't tried again), and it waits for a tap.
   holdAfterTry?: boolean;
 };
 
@@ -161,6 +177,12 @@ export const NOT_SENT = 'Not sent – tap to try again';
 export const NOT_SENT_GONE = 'Not sent – tap to remove';
 // whenSent for a send this phone doesn't know (any more).
 export const SEND_NOT_FOUND = "We couldn't find this send any more";
+// A drop or dare post that didn't go on its own day (see dayIsOver).
+export const DROP_DAY_OVER = "This drop was for an earlier day – it can't be posted now";
+export const DARE_DAY_OVER = "This dare was for an earlier day – it can't be posted now";
+const DAY_OVER = 'DAY_OVER';
+// A retry timer that goes off this much later than planned: the phone was asleep (the app was closed).
+const ASLEEP_MS = 60 * 1000;
 
 const TEXT_KINDS = new Set<What['kind']>(['text', 'sticker', 'dare', 'groupText', 'groupSticker', 'groupDare', 'comment']);
 const isText = (job: Job) => TEXT_KINDS.has(job.what.kind);
@@ -306,12 +328,22 @@ function rowCount(what: What): number {
   return 1;
 }
 
+// A drop or dare post remembers the day it was made for: it's only ever posted on that day (see dayIsOver).
+function withDay(what: What): What {
+  if (what.kind !== 'post') return what;
+  return {
+    ...what,
+    ...(what.drop && !what.dropDay ? { dropDay: localDay() } : {}),
+    ...(what.dare && !what.dareDay ? { dareDay: todayDareDay() } : {}),
+  };
+}
+
 function makeJob(owner: string, scope: Scope, what: What, extra: { capture?: Capture; prepared?: Prepared; group?: string; after?: string } = {}): Job {
   return {
     key: randomUUID(),
     owner,
     scope,
-    what,
+    what: withDay(what),
     ...(extra.group ? { group: extra.group } : {}),
     ...(extra.after ? { after: extra.after } : {}),
     ...(extra.capture ? { capture: extra.capture } : extra.prepared ? { capture: extra.prepared.capture } : {}),
@@ -421,10 +453,15 @@ function pump() {
 
 function later(job: Job, ms: number) {
   clearTimer(job.key);
+  const due = Date.now() + ms;
   timers.set(
     job.key,
     setTimeout(() => {
       timers.delete(job.key);
+      // Much later than planned: the phone was asleep (the app was closed). Old sends now wait for a tap, the same
+      // as when you come back to the app – on iPhones this can run before the app hears that you're back, and the
+      // send would otherwise go out hours late by itself.
+      if (Date.now() - due > ASLEEP_MS) holdOldSends();
       pump();
     }, ms),
   );
@@ -477,6 +514,13 @@ async function run(job: Job) {
     if (needsFiles(job) && !job.fields) {
       job.fields = await files(job);
       await persist(job);
+    }
+    if (job.holdAfterTry || oldWhileAway(job)) {
+      // You left the app while this was going, and it's old now: it isn't saved hours late by itself. It waits
+      // for a tap (the files are up, so a tap saves it at once). This also stops a send that only started while
+      // the app was waking up, before it heard that you're back (one that waited behind an earlier one).
+      if (jobs.has(job.key)) await holdForTap(job);
+      return;
     }
     stage = 'save';
     const rows = await save(job);
@@ -622,6 +666,8 @@ async function failed(job: Job, error: unknown, stage: Stage) {
   job.final = true;
   job.noAnswer = false;
   job.error = friendlyError(error);
+  // Its drop or dare day is over: it can never go now, so only Delete is offered (no "Try again").
+  if (codeOf(error) === DAY_OVER) job.restored = true;
   // Its own uploaded files go (also ones only partly uploaded), but only if no try ever got lost on the way
   // (otherwise a row may use them). An early upload other sends may share is left to the leftovers clean-up
   // (lib/preupload.ts). The next try picks new names.
@@ -937,6 +983,19 @@ function plainFields(fields: MediaFields & { blur_path?: string | null }): Media
 
 const codeOf = (error: unknown) => String((error as { code?: unknown } | null)?.code ?? '');
 
+// A drop or dare post only counts on its own day: the server files it under the day it's SAVED. So one that didn't
+// go on its day is never posted later (yesterday's photo would become today's drop, marked late, and use up
+// today's drop – or answer the wrong day's dare). Gives the reason in plain words, or null when it can still go.
+// Forfeits aren't tied to a day, so they can go any time. Older records don't have the day: the day the send
+// was made is used.
+function dayIsOver(job: Pick<Job, 'what' | 'createdAt'>, now = Date.now()): string | null {
+  const what = job.what;
+  if (what.kind !== 'post') return null;
+  if (what.drop && (what.dropDay ?? localDay(new Date(job.createdAt))) !== localDay(new Date(now))) return DROP_DAY_OVER;
+  if (what.dare && (what.dareDay ?? todayDareDay(job.createdAt)) !== todayDareDay(now)) return DARE_DAY_OVER;
+  return null;
+}
+
 async function save(job: Job): Promise<unknown[]> {
   let found: unknown[] = [];
   let missing = job.rowIds;
@@ -953,6 +1012,10 @@ async function save(job: Job): Promise<unknown[]> {
   }
   // Still on the list (a login change takes the old person's sends off it), and still that person's send.
   if (!jobs.has(job.key) || job.owner !== currentOwner) throw new Error(NOT_SENT);
+  // A drop or dare post whose day is over is never saved now. (One that was saved on its day was found above and
+  // counts as sent.)
+  const over = dayIsOver(job);
+  if (over) throw Object.assign(new Error(over), { code: DAY_OVER });
   try {
     return [...found, ...(await insertRows(job, missing))];
   } catch (error) {
@@ -1215,6 +1278,7 @@ export async function restoreOutbox(owner: string): Promise<void> {
     }
     // Closed in the middle of saving: it may be saved.
     if (record.state === 'sending') job.maybeSaved = true;
+    let lookedUp = false;
     try {
       const found = job.rowIds.length > 0 ? await lookUp(job) : [];
       if (found.length > 0 && found.length >= job.rowIds.length) {
@@ -1224,13 +1288,18 @@ export async function restoreOutbox(owner: string): Promise<void> {
         void dropLocalCopy(job);
         continue;
       }
+      lookedUp = true;
     } catch {
       // Can't tell right now: shown as not sent, and a tap looks it up first.
       job.maybeSaved = true;
     }
+    // A drop or dare post whose day is over (and that we know wasn't saved): it can only be deleted now. (If we
+    // couldn't look, a tap looks first, and it's still never saved on a later day.)
+    const dayOver = lookedUp ? dayIsOver(job, now) : null;
     const canSend =
-      !!job.fields ||
-      (job.what.kind === 'voice' || job.what.kind === 'groupVoice' ? localFileThere(job.what.uri) : !job.capture || localFileThere(job.capture.uri));
+      !dayOver &&
+      (!!job.fields ||
+        (job.what.kind === 'voice' || job.what.kind === 'groupVoice' ? localFileThere(job.what.uri) : !job.capture || localFileThere(job.capture.uri)));
     jobs.set(job.key, {
       ...job,
       state: 'failed',
@@ -1238,7 +1307,7 @@ export async function restoreOutbox(owner: string): Promise<void> {
       final: !canSend,
       noAnswer: false,
       holdAfterTry: false,
-      error: canSend ? NOT_SENT : NOT_SENT_GONE,
+      error: dayOver ?? (canSend ? NOT_SENT : NOT_SENT_GONE),
       attempts: 0,
     });
   }
@@ -1346,8 +1415,16 @@ function holdOldSends() {
   for (const job of [...jobs.values()]) {
     if (job.state !== 'waiting' && job.state !== 'sending') continue;
     if (now - (job.triedAt ?? job.createdAt) < AUTO_RETRY_MAX_AGE_MS) continue;
-    // The try that's running now can still finish; if it fails, it isn't tried again by itself.
+    // A request that's already on its way can still land. Nothing new starts after it: the try stops before
+    // saving (run), and if it fails it isn't tried again by itself.
     if (job.state === 'sending') job.holdAfterTry = true;
     else void holdForTap(job);
   }
+}
+
+// The app is closed (or waking up, but hasn't heard yet that you're back) and this send is 10 minutes old or more:
+// it isn't saved now by itself. On iPhones the answer to an earlier send can arrive before the app hears you're
+// back, and the next send in that chat would start and go out late. A tap starts the 10 minutes again.
+function oldWhileAway(job: Job): boolean {
+  return wentAway && Date.now() - (job.triedAt ?? job.createdAt) >= AUTO_RETRY_MAX_AGE_MS;
 }
