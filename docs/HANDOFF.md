@@ -81,7 +81,7 @@ and the owner's standing preferences.
   but no drop can be posted then (yesterday's is over, today's hasn't gone off) – it ended in "Your drop didn't post:
   Today's Peekaboo drop hasn't happened yet". Now the lock card (`DropLockAction` in `FeedCard.tsx`, also on the post
   screen) shows "⏰ Today's drop is at …" instead, the drop camera takes a normal photo then, and Send to… doesn't
-  offer or send a drop. Phone check: Step 74 check 18.
+  offer or send a drop. Phone check: Step 75 check 18.
 - **Deferred:** a reminder notification ("Your peek is still sending – open Peekaboo") when you lock the phone
   mid-send (iOS stops the app; a JS-only update can't ask for extra time); a warning at Log out that unsent sends
   will be deleted; a request that's already on its way when you come back after a long time can still land late
