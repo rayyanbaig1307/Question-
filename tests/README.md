@@ -139,7 +139,10 @@ API and library (Vitest, part of `npm test`):
 - `tests/api/username-auth-limits.test.mjs`: the username-auth function running the real SQL. 8 wrong tries
   per name and address, 40 per name from all addresses, 30 per address; a correct login gives its try back;
   an outage fails closed and gives tries back. The address comes from `cf-connecting-ip`, otherwise from
-  `X-Forwarded-For` read from the end (forged entries ignored); IPv6 counts per /64 block.
+  `X-Forwarded-For` read from the end (forged entries ignored); IPv6 counts per /64 block. Sign-up is switched
+  off (26 Nov 2026): every sign-up request – any details, many at once, forged or IPv6 addresses, the database
+  down – gets 410 and the Apple/Google message, makes no account, reserves no counter and runs no name check or
+  lookup, and logins afterwards still have every try. `edge-security.test.mjs` checks the same with its own fakes.
 - `tests/api/delete-account-review.test.mjs`: an iPhone signed in to a different Apple ID can still delete
   the account, and an Apple login that is not the caller's is never cancelled. An Apple code from an account
   with no Apple login is never sent to Apple, and the account is still deleted.
@@ -148,8 +151,9 @@ API and library (Vitest, part of `npm test`):
   Guess Who file list has loaded.
 - `tests/unit/word-filter-parity.test.mjs`: the app's filter (`src/lib/cleanWords.ts`) and the database's
   give the same answer: same word lists, a fixed word list, every invisible and look-alike letter, accents,
-  and thousands of seeded random strings. It also checks that the sign-up name check (`public_name_allowed`)
-  treats the username as a name and the display name as content, like the app. Run it after changing either
+  and thousands of seeded random strings. It also checks that the database's name check (`public_name_allowed`, which
+  username sign-up used until it was switched off on 26 Nov 2026) treats the username as a name and the display
+  name as content, like the app. Run it after changing either
   side.
 - `tests/unit/drop-unlock-parity.test.mjs`: the app's "when does the next drop go off" (`nextDropAt`) and the
   database's (`private.next_drop_at`) agree to the millisecond for 1,200 days and time zones from -12:00 to
@@ -317,11 +321,12 @@ Frontend (rendered screens, part of `npm test`):
   Try again), `settings.test.cjs` (queued privacy saves, deletion after leaving Settings, switch rows not
   marked disabled), `navigation.test.cjs` (no screen until the saved login has loaded, so a start-up link is
   kept), `editor.test.cjs` (chat-dare proof when the dare is gone).
-- Word filter on the name screens, with the app's real filter: `forms.test.cjs` (Sign up and Edit profile)
-  and `social-setup.test.cjs` (the Apple/Google setup screen). A display name that swears saves; a slur in the
-  display name or bio (in any disguise) or swearing in the username is refused and nothing is saved. On Sign up
-  and Edit profile, a slur split across the username and the name is refused too (the app checks this; the
-  database doesn't).
+- Word filter on the name screens, with the app's real filter: `forms.test.cjs` (Edit profile) and
+  `social-setup.test.cjs` (the Apple/Google setup screen). A display name that swears saves; a slur in the
+  display name or bio (in any disguise) or swearing in the username is refused and nothing is saved. On Edit
+  profile, a slur split across the username and the name is refused too (the app checks this; the database
+  doesn't). Sign up has no form since 26 Nov 2026: `forms.test.cjs` checks it only shows the Apple/Google
+  message (the server's own words) and leads to Log in.
 - 🎭 Peekaboo+ face filters (9 Nov), on the camera side:
   - `mode-dial.test.cjs` (added to): the row is Dare, Guess Who, Googly, then the 7 Plus filters in the order of
     `src/lib/lensLooks.ts` (chat cameras get all of them); without Plus only the filter bubbles get the ⭐ and say
@@ -720,6 +725,16 @@ call, a second tap and a failing share sheet; `tests/frontend/invite-screens.tes
 screen, the real share from it, the who-can-add line, "Turn off my old invite link" and the friend-code box):
 `npm test` node part 1042 passed, 0 failed, 0 skipped, and the Vitest part 79 files, 1201 passed. Type check and
 lint: no errors. `node scripts/build-website.mjs` leaves `website/` unchanged.
+
+Re-run on 2026-11-26, after username sign-up was switched off (the `username-auth` function answers every sign-up
+with 410 and the Apple/Google message and makes nothing; the Sign up screen is that message with a Log in button;
+the password rules went with the old form): `npm test` node part 1134 passed, 0 failed, 0 skipped (was 1141: the
+sign-up form checks in `forms.test.cjs` were replaced by 2 screen checks), and the Vitest part 93 files, 1454
+passed (was 1480: the sign-up checks in `edge-security.test.mjs` and `username-auth-limits.test.mjs` were replaced
+by "sign-up makes nothing" checks, and the password-rule checks in `library-security.test.mjs` went with the file).
+Every sign-in check is unchanged and passes. The new checks were also run against the old function and screen and
+failed there. Type check and lint: no errors. Browser, REST, rehearsal and concurrency runs were not repeated (no
+database change; `tests/browser/auth.spec.ts`'s sign-up check was rewritten for the new screen but not run here).
 
 The concurrency, stress and rehearsal runs, and 3 of the 4 browser runs, were made just before the last
 small fix (the Community dares list leaves out ideas from people who blocked you). `npm test`, type check,

@@ -4,15 +4,25 @@ The automated local-only suite and commands are in [tests/README.md](../tests/RE
 Use a dedicated test project for this manual checklist. The automated suite never
 needs a real Supabase URL, account or key. Its results do not replace phone checks:
 camera, microphone, gestures, native playback, push and real Apple/Google login
-still need a test build on a device. Use the new social sign-in/setup flow where
-available; the legacy signup steps below apply to fallback builds.
+still need a test build on a device. New accounts are made only with **Continue with Apple** (iPhone) or
+**Continue with Google** (Android) – Step 56 – and those buttons are only in a real build (TestFlight or the APK).
+Expo Go and older builds have no sign-up form any more (since 26 Nov 2026): there you can only log in to an
+account that has a password (Step 2).
 
 Before anything: do the one-time setup in the [README](../README.md), then run `npx expo start`
 and scan the QR code with your phone (iPhone: Camera app, Android: Expo Go).
 
-**Tip:** to test things between two people (friends, chat…), create a second account.
+**Tip:** to test things between two people (friends, chat…), you need a second account. Make it one of these ways:
+- On a real build (TestFlight or the APK): **Continue with Apple** with a second Apple ID, or **Continue with
+  Google** with a second Google account (Step 56).
+- On your test project: Supabase → **Authentication → Users → Add user → Create new user**. Type a made-up email
+  like `test1@example.com` and a password, tick **Auto Confirm User**, then log in with them in the app
+  (**I already have an account**). Do this on a test project where the "Before User Created" sign-up guard is
+  switched off (see `docs/HANDOFF.md`), or it may say no. The account starts with a name like `@user3f9a1c` –
+  change it in Edit profile – and shows the **Our Terms** page once (Step 40 item 1).
+
+Accounts made with Apple or Google have no password, so they can't log in in Expo Go – use a real build for them.
 You can log out and log in as the other person, or use a second phone.
-If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` work fine.
 
 **Something looks stuck?** Shake your phone → tap **Reload**.
 
@@ -27,21 +37,18 @@ If "Confirm email" is off in Supabase, made-up emails like `test1@example.com` w
 ## Step 2 – Sign up / log in
 
 1. You land on the **Welcome** screen with the bouncing eyes 👀.
-2. Tap **Create account**.
-   - Type a username with capitals or spaces – they're removed automatically.
-   - After a second it says **"✅ @yourname is free!"**.
-   - Tap **Let's go!** without ticking "I'm 13 or older" → you get a friendly error.
-3. Fill everything in and tap **Let's go!** → the app opens straight to the **camera** 📸 (you're logged in).
-   - If it says **"Check your email"** instead, "Confirm email" is still on in Supabase. Either tap the link in the
-     email (the page it opens may look broken – that's OK, the account is confirmed) and log in, or turn the setting
-     off (README step 3).
+2. New accounts are made only with **Continue with Apple** (iPhone) or **Continue with Google** (Android) in the
+   newest download – see Step 56.
+   - In Expo Go and older downloads, **Create account** shows "New accounts use Apple or Google" and an
+     **I already have an account** button – there's no form any more (since 26 Nov 2026). That button opens Log in.
+3. Log in with an account that has a password (see the **Tip** at the top for making a test one), or make an
+   account with Apple/Google on a real build → the app opens (you're logged in).
 4. **Close the app completely and open it again** → you're still logged in.
 5. Log out: tap your round picture (top-left) → ⚙️ gear (top-right) → **Log out** → back to Welcome.
 6. Tap **I already have an account**:
    - Wrong password → "That email or password doesn't look right."
    - Right password → you're back in.
-7. Try signing up again with the **same username** → it says it's taken.
-8. In Supabase → **Table Editor → profiles**, you'll see a row for each account you made.
+7. In Supabase → **Table Editor → profiles**, you'll see a row for each account.
 
 ## Step 3 – Profiles
 
@@ -656,9 +663,11 @@ Use 2 friend accounts (A and B).
 1. **Existing account:** open Peekaboo → a full-screen **Our Terms** page with a short summary. Tap any of the four
    links (Terms, Dare Safety Rules, Privacy, Guidelines) – the document opens right there, **Back** returns.
    **I agree** → into the app. (**Log out** is the only other way out.) It never shows again unless the Terms change.
-2. **New account:** Sign up has a second tick box "I agree to the Terms of Service (including the Dare Safety Rules)
-   and the Privacy Policy" with tappable links. You can't make an account without ticking it. After signing up you
-   are **not** shown the Terms page again – the tick counted.
+2. **New account:** after **Continue with Apple/Google**, the **Almost there! 🎉** screen (Step 56 item 3) has the
+   tick box "I agree to the Terms of Service (including the Dare Safety Rules) and the Privacy Policy" with
+   tappable links. You can't finish without ticking it. After that you are **not** shown the Terms page again –
+   the tick counted. (There's no sign-up form with a tick box any more: since 26 Nov 2026 new accounts are made
+   only with Apple or Google.)
 3. **First dare:** do a dare, a drop, pay a forfeit or suggest a dare idea → a **Before your first dare 🎯** sheet:
    the safety points + "I understand – let's go". **Not now** cancels. After agreeing once it never shows again.
 4. **Settings → Legal & safety:** Terms, Privacy Policy, Community Guidelines, Dare Safety Rules all open in the app.
@@ -800,15 +809,16 @@ You need 2 test accounts that **aren't friends**, both with a birthday saved, bo
    go, the black bar never comes onto the screen past the photo's edge (while the zoomed photo is still shorter
    than the screen it just stays in the middle, up and down).
 
-## Step 50 – Sign up with just a username 👤
+## Step 50 – Log in with a username 👤
 
-1. Log out → **Sign up**. Under the username there's a choice: **📧 With email** or **👤 Just a username**.
-2. Pick **Just a username** → the email box disappears and a note warns that without an email a forgotten
-   password can't be recovered. Fill in name, username, password, tick the boxes → **Let's go!** → you're in.
-3. A username that's taken says "That username is already taken" (same as before).
-4. **Log in** now has one box: **Email or username**. Type the username (with or without @) and the password.
-   Email accounts can log in with their username too. A wrong password says "Wrong username or password".
-5. After 8 wrong passwords for the same username in 15 minutes it asks you to wait 15 minutes.
+1. Making an account with just a username is switched off (26 Nov 2026). On an old download that still shows
+   **👤 Just a username**, fill it in and tap **Let's go!** → it says "New accounts are made with the Apple or
+   Google button now – get the newest Peekaboo to make one." and no account is made (Supabase → Authentication →
+   Users shows nothing new).
+2. Accounts made with just a username before then still log in: **Log in** has one box, **Email or username**.
+   Type the username (with or without @) and the password. Email accounts can log in with their username too.
+   A wrong password says "Wrong username or password".
+3. After 8 wrong passwords for the same username in 15 minutes it asks you to wait 15 minutes.
 
 ## Step 51 – The real logo 👀✨
 
@@ -878,8 +888,8 @@ day and act within 24 hours.
 
 ## Step 56 – Sign in with Apple / Google 🍎
 
-Needs the newest download (new TestFlight / APK). Expo Go and older downloads still show the old
-"Create account" button.
+Needs the newest download (new TestFlight / APK). Expo Go shows a **Create account** button instead, which only
+says that new accounts use Apple or Google (Step 2); very old downloads still show their old sign-up form.
 
 1. **iPhone:** log out → the welcome screen shows **Continue with Apple** and **Log in with username or email**.
    Tap Continue with Apple → Face ID → the **Almost there! 🎉** screen.
@@ -888,15 +898,20 @@ Needs the newest download (new TestFlight / APK). Expo Go and older downloads st
    free), tick **I'm 13 or older** and **I agree to the Terms** → **Let's go!** → the camera opens.
 4. Back arrow or **Cancel and log out** on that screen → back to the welcome screen. Signing in again shows
    Almost there again (until you finish it).
-5. Log out, then **Continue with Apple/Google** again → straight into the app (no setup the second time).
+5. Log out, then **Continue with Apple/Google** again → straight into the app (no setup the second time). The same
+   works on a new phone **of the same kind** with the same Apple ID (or Google account): posts, friends and chats
+   are all there. Moving between iPhone and Android doesn't work yet – Android has no Apple button (and Apple
+   accounts have no password), and on an iPhone **Continue with Apple** usually makes a new, empty account for
+   someone who signed up with Google.
 6. **Old accounts:** **Log in with username or email** still works with the password, e.g. @coolname.
 7. **Delete account** on an Apple account: Settings → Delete account → Apple asks for Face ID once more → the
    account is gone. On iPhone: Settings → your name → Sign-In & Security → Sign in with Apple → Peekaboo is no
    longer listed (needs the Apple key secrets, see `docs/HANDOFF.md`). If the iPhone uses a different Apple ID
    than the account, the account is still deleted. After the QA round 2 release, Peekaboo then stays listed
    under both Apple IDs (see Step 62).
-8. **Sign-up guard** (once it's switched on): the old Create account button on an old download says "New accounts
-   are made with Apple or Google now. Update Peekaboo to the newest version."
+8. **Sign-up guard** (once it's switched on): an old download's sign-up form with **📧 With email** says "New
+   accounts are made with Apple or Google now. Update Peekaboo to the newest version." (Its **👤 Just a username**
+   choice is refused even without the guard – Step 50.)
 
 ## Step 56 – Inbox 🔔 (activity, hit ups, friend requests)
 

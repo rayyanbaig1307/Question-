@@ -37,6 +37,41 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Username sign-up switched off (26 Nov – code only, NOT deployed yet)
+
+- **Why:** the owner will pay people for each new account (affiliate codes), so every new account must come from
+  Sign in with Apple / Google. The live `username-auth` function still made a username-only account for anyone who
+  sent it a sign-up request with the app's public key – no Apple ID needed, 5 an hour per internet address. Only 2
+  such accounts exist, both the owner's.
+- **Server:** `supabase/functions/username-auth/index.ts` now answers every `{action:'signup'}` with **410** and
+  `{"error":"New accounts are made with the Apple or Google button now – get the newest Peekaboo to make one."}`.
+  It makes no account and touches no counter, name check or lookup. Username **log in** is unchanged (same limits,
+  address rules, give-backs, messages and login), so Ace, `@peekaboo_review` and every older username or email
+  account keep logging in. The database side stays as it is (`reserve_username_auth_attempt`, `public_name_allowed`).
+- **App:** `sign-up.tsx` (only shown in Expo Go and very old downloads, which have no Apple/Google button) has no
+  form any more – just that message and **I already have an account** → Log in. So there's no email sign-up from
+  the app either. Old downloads that still show their old form show the server's sentence in red under it.
+  `src/lib/password.ts` is gone (only that form used it).
+- **To go live:** deploy `username-auth` with the "Verify JWT" setting it has now – check it first (the 5 Nov
+  release notes say ON). The Supabase tool and `supabase functions deploy` turn it ON unless told otherwise, so
+  look before and after (see "Release order" step 4). Then check: a username log in still works (for example
+  `@peekaboo_review`), and a sign-up request gets 410. The new sign-up screen needs an OTA (JS only: `testing`
+  first, then `production`, never while Apple is reviewing).
+- **Still open:** sign-up with an email straight through Supabase Auth still works (an old download's "With email"
+  choice, or anyone calling Supabase's sign-up with the public key) until the "Before User Created" hook
+  (`public.hook_only_apple_or_google_sign_ups`, see "Sign in with Apple / Google" below) is switched on in
+  Supabase → Authentication → Auth Hooks. That hook is the real lock for "Apple or Google only". The Privacy Policy
+  still says we keep "the internet address of username sign-ups" – we no longer collect it; tidy that line at the
+  next legal update.
+- **Known limit (not new) – new phone, same account:** works iPhone → iPhone with the same Apple ID, or Android →
+  Android with the same Google account (posts, friends and chats all come back, no setup). Moving between iPhone
+  and Android doesn't: Apple sign-in is iPhone-only and Google sign-in Android-only (`src/lib/socialAuth.ts`), and
+  these accounts have no password, so an Apple account can't be opened on Android at all, and on an iPhone
+  **Continue with Apple** usually makes a new, empty account for a Google user (Supabase only joins the two when
+  both have the same confirmed email – never with Apple's Hide My Email). With paid affiliate sign-ups that empty
+  account would count as a new one. Fixing it (Apple sign-in on Android, or adding a second sign-in to an
+  account) is a separate task. Old username/email accounts (Ace, `@peekaboo_review`) use **Log in** anywhere.
+
 ## Names on the Supabase Users page (26 Nov – LIVE)
 
 - `supabase/migrations/20270103000000_names_on_users_page.sql` copies each person's display name and username from
@@ -797,12 +832,13 @@ guidelines, dare safety). Re-run it after legal changes, then re-upload the fold
 
 New accounts are made with **Sign in with Apple (iPhone)** or **Sign in with Google (Android)**. That means no
 passwords, no confirmation email and no Resend/domain. Old accounts (username or email + password) still log in.
-- Code: `src/lib/socialAuth.ts` (native modules guarded; hidden in Expo Go/old builds, which keep the old
-  Create account button), `components/SocialSignIn.tsx` (buttons on welcome + sign-in), `components/ProfileSetup.tsx`
-  (new Apple/Google people pick a username + agree to the Terms once; "setup done" = any `legal_acceptances`
-  terms row). Google is Android-only (`react-native.config.js` + `expo.autolinking.ios.exclude` keep it out of
-  iOS). Google's Web client ID (`687778288055-…apps.googleusercontent.com`, project `peekaboo-513706`, not a secret)
-  is in `socialAuth.ts`; `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` can override it.
+- Code: `src/lib/socialAuth.ts` (native modules guarded; hidden in Expo Go/old builds, which show a Create account
+  button – since 26 Nov it only says new accounts use Apple or Google), `components/SocialSignIn.tsx` (buttons on
+  welcome + sign-in), `components/ProfileSetup.tsx` (new Apple/Google people pick a username + agree to the Terms
+  once; "setup done" = any `legal_acceptances` terms row). Google is Android-only (`react-native.config.js` +
+  `expo.autolinking.ios.exclude` keep it out of iOS). Google's Web client ID
+  (`687778288055-…apps.googleusercontent.com`, project `peekaboo-513706`, not a secret) is in `socialAuth.ts`;
+  `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` can override it.
 - Migration `20261204000000_apple_google_sign_in.sql`: new-user trigger takes Google's name; plus
   `public.hook_only_apple_or_google_sign_ups`, inert until the owner switches on the "Before User Created" auth
   hook (do that only after the new builds are out).
@@ -846,8 +882,8 @@ passwords, no confirmation email and no Resend/domain. Old accounts (username or
 - Guess Who posts straight from the editor (no "Send to…"). It never goes to a story or the profile grid.
 - Birthday checks: real date, not in the future, not over 100 years ago, 13+. Checked in the app and the DB.
 - **Hit ups are 18+ only** (DB-enforced). Under-18s see no button and can't be hit up.
-- Passwords: 8+ characters with a letter and a number, in the app, the `username-auth` function and Supabase
-  Auth settings.
+- Passwords: 8+ characters with a letter and a number, in Supabase Auth settings (the app's and `username-auth`'s
+  own checks went with username sign-up on 26 Nov – no new account gets a password now).
 - Googly eyes follow the face live (Reanimated shared values) and in recorded videos (eye track stored in the
   overlay PNG, `src/lib/eyeTrack.ts`).
 - Earlier work: Keeps (save edits), username-only sign up, chat long-press options, the final logo

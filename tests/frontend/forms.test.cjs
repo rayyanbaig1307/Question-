@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 const { loadScreen, renderScreen, act, button, textOf, unmount } = require('./harness.cjs');
 
 function loginHarness(fail = false) {
@@ -54,118 +56,58 @@ test('wrong credentials show an error and allow retry', async () => {
 
 const validators = {
   ...loadScreen('src/lib/profiles.ts', { './supabase': { supabase: {} }, './socialAuth': {} }).exports,
-  ...loadScreen('src/lib/password.ts').exports,
   ...loadScreen('src/lib/cleanWords.ts').exports,
 };
 
-function signupHarness() {
-  const requests = [];
-  return { requests, screen: loadScreen('src/app/sign-up.tsx', {
-    '@/lib/profiles': { ...validators, isUsernameAvailable: async () => true },
-    '@/lib/password': validators,
-    '@/lib/cleanWords': validators,
-    '@/lib/legal': { TERMS_VERSION: 'qa-terms' },
-    '@/lib/supabase': { supabase: { auth: { signUp: async input => { requests.push(['email', input]); return { data: { session: null }, error: null }; } } } },
-    '@/lib/usernameAuth': { signUpWithUsername: async (...input) => { requests.push(['username', ...input]); } },
-  }) };
+// Sign-up is switched off (26 Nov 2026): new accounts are made only with the Apple or Google button. The sign-up
+// screen (only shown in Expo Go and very old downloads, which have no such button) is a message, not a form.
+// It uses the very words the server sends to old downloads that still show the old form.
+const SERVER_SIGNUP_MESSAGE = readFileSync(resolve(__dirname, '../../supabase/functions/username-auth/index.ts'), 'utf8').match(/const SIGNUP_CLOSED = '([^']+)';/)[1];
+
+function signupScreen(router) {
+  const routes = [];
+  const screen = loadScreen('src/app/sign-up.tsx', router ? {
+    'expo-router': { router: { canGoBack: () => router.canGoBack, ...Object.fromEntries(['back', 'push', 'replace'].map(name => [name, (...args) => routes.push([name, ...args])])) } },
+  } : {});
+  return { screen, routes: router ? routes : screen.calls.routes };
 }
 
-test('signup rejects an empty form without calling authentication', async () => {
-  const { screen, requests } = signupHarness();
+test('sign-up shows how to make an account (the Apple or Google button) and has no form to fill in', async () => {
+  const { screen, routes } = signupScreen();
   const tree = await renderScreen(screen);
   try {
-    await act(() => button(tree, "Let's go!").props.onPress());
-    assert.equal(requests.length, 0);
-    assert.equal(tree.root.findAllByType('TextField').find(node => node.props.label === 'Username').props.error, 'Pick a username.');
-    assert.match(textOf(tree.root), /13 or older/);
-    assert.match(textOf(tree.root), /agree to the Terms/);
+    assert.equal(tree.root.findAllByType('TextField').length, 0);
+    assert.equal(tree.root.findAllByType('Pressable').filter(node => ['checkbox', 'radio'].includes(node.props.accessibilityRole)).length, 0);
+    assert.equal(button(tree, "Let's go!"), undefined);
+    const message = tree.root.findByType('EmptyState').props;
+    assert.equal(message.title, 'New accounts use Apple or Google');
+    assert.ok(message.message.startsWith(SERVER_SIGNUP_MESSAGE), message.message);
+    // People who already have an account go to Log in.
+    await act(() => button(tree, 'I already have an account').props.onPress());
+    assert.deepEqual(routes, [['replace', '/sign-in']]);
   } finally { await unmount(tree); }
 });
 
-test('signup requires both age confirmation and terms before using email authentication', async () => {
-  const { screen, requests } = signupHarness();
-  const tree = await renderScreen(screen);
-  try {
-    await fill(tree, 'Your name', 'Alice 👋');
-    await fill(tree, 'Username', 'AL ICE!!');
-    await fill(tree, 'Email', 'alice@example.test');
-    await fill(tree, 'Password', 'Example123');
-    await act(() => button(tree, "Let's go!").props.onPress());
-    assert.equal(requests.length, 0);
-    await act(() => tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')[0].props.onPress());
-    await act(() => button(tree, "Let's go!").props.onPress());
-    assert.equal(requests.length, 0);
-    await act(() => tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')[1].props.onPress());
-    await act(() => button(tree, "Let's go!").props.onPress());
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0][1].options.data.username, 'alice');
-    assert.equal(requests[0][1].options.data.terms_version, 'qa-terms');
-    assert.equal(tree.root.findByType('FormScreen').props.title, 'Check your email 📬');
-  } finally { await unmount(tree); }
+test('sign-up: the back arrow goes back, or to the welcome screen when the screen was opened from a link', async () => {
+  for (const [canGoBack, expected] of [[true, [['back']]], [false, [['replace', '/welcome']]]]) {
+    const { screen, routes } = signupScreen({ canGoBack });
+    const tree = await renderScreen(screen);
+    try {
+      await act(() => tree.root.findByType('FormScreen').props.onBack());
+      assert.deepEqual(routes, expected, `canGoBack ${canGoBack}`);
+    } finally { await unmount(tree); }
+  }
 });
 
-for (const invalid of ['short', '12345678', 'abcdefgh', '😀'.repeat(4)]) test(`signup rejects a password missing its required parts (${JSON.stringify(invalid)})`, async () => {
-  const { screen, requests } = signupHarness();
-  const tree = await renderScreen(screen);
-  try {
-    await fill(tree, 'Username', 'alice');
-    await fill(tree, 'Email', 'alice@example.test');
-    await fill(tree, 'Password', invalid);
-    for (const row of tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')) await act(() => row.props.onPress());
-    await act(() => button(tree, "Let's go!").props.onPress());
-    assert.equal(requests.length, 0);
-  } finally { await unmount(tree); }
-});
-
-// The word filter on the sign-up and edit-profile screens, with the app's real filter. The owner's choice: a display
+// The word filter on the edit-profile screen, with the app's real filter. The owner's choice: a display
 // name may swear (like a bio); only the @username can't. Slurs are refused everywhere, however they are written.
+// (New Apple/Google accounts pick their name on the setup screen: tests/frontend/social-setup.test.cjs.)
 const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
 const WORD_NOT_ALLOWED = "That word isn't allowed on Peekaboo.";
 const SWEARY_NAMES = ['Fuck Off', 'Big Shit', 'ｆｕｃｋ', 'Total Bitch'];
 // Numbers for letters, dots, spaces, fancy letters, an invisible character, a Cyrillic look-alike letter, accents.
 const DISGUISED_SLURS = ['n1gg3r', 'F.A.G.G.O.T', 'K I K E', 'ｒｅｔａｒｄ', 'ki​ke', 'сhink', 'Wétbáck'];
 const SWEARY_USERNAMES = ['f.u.c.k', 'sh1t_head', 'fuckboy'];
-const field = (tree, label) => tree.root.findAllByType('TextField').find(node => node.props.label === label);
-
-async function trySignup({ name, username, withEmail = true }) {
-  const { screen, requests } = signupHarness();
-  const tree = await renderScreen(screen);
-  try {
-    await fill(tree, 'Your name', name);
-    await fill(tree, 'Username', username);
-    if (withEmail) await fill(tree, 'Email', 'alice@example.test');
-    else await act(() => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'radio' && textOf(node).includes('Just a username')).props.onPress());
-    await fill(tree, 'Password', 'Example123');
-    for (const row of tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityRole === 'checkbox')) await act(() => row.props.onPress());
-    await act(() => button(tree, "Let's go!").props.onPress());
-    // After an email sign-up the form is replaced by "Check your email", so the fields can be gone.
-    return { requests, nameError: field(tree, 'Your name')?.props.error ?? null, usernameError: field(tree, 'Username')?.props.error ?? null };
-  } finally { await unmount(tree); }
-}
-
-test('signup: a display name with swearing is fine, with email or with just a username', async () => {
-  for (const name of SWEARY_NAMES) {
-    const email = await trySignup({ name, username: 'alice' });
-    assert.deepEqual([name, email.nameError, email.usernameError, email.requests.length], [name, null, null, 1]);
-    assert.equal(email.requests[0][1].options.data.display_name, name);
-    const usernameOnly = await trySignup({ name, username: 'alice', withEmail: false });
-    assert.deepEqual(usernameOnly.requests, [['username', 'alice', 'Example123', name, 'qa-terms']]);
-  }
-});
-
-test('signup: a slur in the display name is refused under the name, however it is written', async () => {
-  for (const name of DISGUISED_SLURS) {
-    const result = await trySignup({ name, username: 'alice' });
-    assert.deepEqual([name, result.nameError, result.usernameError, result.requests.length], [name, WORD_NOT_ALLOWED, null, 0]);
-  }
-});
-
-test('signup: swearing in the username is still refused, even with a display name that swears', async () => {
-  for (const username of SWEARY_USERNAMES) {
-    const result = await trySignup({ name: 'Fuck Off', username });
-    assert.deepEqual([username, result.nameError, result.usernameError, result.requests.length], [username, null, NAME_NOT_ALLOWED, 0]);
-  }
-});
 
 function editProfileHarness(extra = {}) {
   const saved = [];
@@ -213,22 +155,16 @@ test('edit profile: a slur in the display name or bio, or swearing in the userna
 });
 
 // Only the app checks this, not the database: a slur split across the @username and the name is refused too.
-test('signup and edit profile: a slur split across the username and the name is refused', async () => {
+test('edit profile: a slur split across the username and the name is refused', async () => {
   for (const [username, name] of [['the_nig', 'Ger Bob'], ['ret', 'Ard'], ['tow', 'Elhead'], ['n_i_g', 'G E R']]) {
-    const result = await trySignup({ name, username });
-    assert.deepEqual([username, name, result.nameError, result.usernameError, result.requests.length], [username, name, null, WORD_NOT_ALLOWED, 0]);
     const { saved, alerts } = await tryEditProfile({ Username: username, Name: name });
     assert.deepEqual(alerts, [['Pick something else', WORD_NOT_ALLOWED]], `${username} + ${name}`);
     assert.equal(saved.length, 0, `${username} + ${name}`);
   }
   // The name is still checked on its own too: joined to "al_x", the spaced-out slur "K I K E" would slip through.
-  const spaced = await trySignup({ name: 'K I K E', username: 'al_x' });
-  assert.deepEqual([spaced.nameError, spaced.usernameError, spaced.requests.length], [WORD_NOT_ALLOWED, null, 0]);
   const edited = await tryEditProfile({ Username: 'al_x', Name: 'K I K E' });
   assert.deepEqual([edited.alerts, edited.saved.length], [[['Pick something else', WORD_NOT_ALLOWED]], 0]);
   // Swearing split across them is fine: the name may swear anyway.
-  const signup = await trySignup({ name: 'Ck Off', username: 'big_fu' });
-  assert.deepEqual([signup.nameError, signup.usernameError, signup.requests.length], [null, null, 1]);
   const { saved, alerts } = await tryEditProfile({ Username: 'big_fu', Name: 'Ck Off' });
   assert.deepEqual([alerts, saved.length], [[], 1]);
 });

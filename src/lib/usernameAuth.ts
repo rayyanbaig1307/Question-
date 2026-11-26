@@ -3,9 +3,9 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
-// Accounts without an email: sign up with just a username and password, and log in with your username.
+// Log in with your username and password (older accounts, including ones made with just a username).
 // The "username-auth" server helper (supabase/functions/username-auth) does the checking and hands back a login.
-// Without an email there's no way to reset a forgotten password – the sign-up screen says so.
+// It no longer makes new accounts (26 Nov 2026): those are made with Apple or Google (lib/socialAuth.ts).
 // ---------------------------------------------------------------------------
 
 type Login = { access_token: string; refresh_token: string };
@@ -16,7 +16,7 @@ async function call(body: Record<string, string>): Promise<void> {
     body,
   });
   if (error) {
-    // The helper explains what went wrong ("Wrong username or password", "That username is already taken"…).
+    // The helper explains what went wrong ("Wrong username or password", "Lots of login tries…").
     const reply = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null;
     throw new Error(reply?.error ?? error.message);
   }
@@ -24,10 +24,6 @@ async function call(body: Record<string, string>): Promise<void> {
   // Logged in: the app switches to the camera by itself.
   const { error: sessionError } = await supabase.auth.setSession(data.session);
   if (sessionError) throw sessionError;
-}
-
-export function signUpWithUsername(username: string, password: string, displayName: string, termsVersion: string) {
-  return call({ action: 'signup', username, password, display_name: displayName, terms_version: termsVersion });
 }
 
 export function logInWithUsername(username: string, password: string) {

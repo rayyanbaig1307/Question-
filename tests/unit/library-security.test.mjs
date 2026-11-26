@@ -136,15 +136,9 @@ describe('signed media URL account isolation', () => {
   });
 });
 
-describe('password and username boundaries', () => {
-  const password = loadLibrary('password');
+// (The password rules went with the sign-up form on 26 Nov 2026: new accounts use Apple or Google, no password.)
+describe('username boundaries', () => {
   const profiles = loadLibrary('profiles');
-  it.each(['', 'a1', 'abcdefgh', '12345678', 'a1'.repeat(500_000), '🔐🔐🔐🔐'])('rejects unsuitable passwords', (value) => {
-    expect(password.checkPassword(value)).not.toBeNull();
-  });
-  it.each(['Test1234', 'a1!@#$%^&*()', 'A1' + '🙂'.repeat(20)])('accepts suitable passwords with special characters', (value) => {
-    expect(password.checkPassword(value)).toBeNull();
-  });
   it.each(['', 'ab', 'ABC', "a' OR 1=1--", '<img onerror=alert(1)>', '👀abc', 'a'.repeat(21)])('rejects invalid usernames', (value) => {
     expect(profiles.checkUsernameFormat(value)).not.toBeNull();
   });

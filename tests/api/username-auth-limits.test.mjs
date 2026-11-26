@@ -1,6 +1,7 @@
-// Username login and sign-up limits (QA review: throttling).
-// Runs the real username-auth handler. Its limit checks run the real SQL functions from every migration in a
-// local, in-memory PostgreSQL (PGlite); the login service and the profiles lookup are small fakes.
+// Username login limits (QA review: throttling), and username sign-up switched off (26 Nov 2026: new accounts
+// are made only with Apple or Google). Runs the real username-auth handler. Its limit checks run the real SQL
+// functions from every migration in a local, in-memory PostgreSQL (PGlite); the login service and the profiles
+// lookup are small fakes.
 // Nothing here talks to a live project.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadEdge, request } from './edgeHarness.mjs';
@@ -8,8 +9,7 @@ import { asUser, createLocalDatabase } from '../database/local-db.mjs';
 
 const WRONG = { error: 'Wrong username or password' };
 const OUTAGE = { error: 'Could not reach the login service. Please try again.' };
-const SIGNUP_CAP = 5; // new username accounts per address per hour
-const SITE_SIGNUP_CAP = 100; // new username accounts per hour, everyone together
+const SIGNUP_CLOSED = { error: 'New accounts are made with the Apple or Google button now – get the newest Peekaboo to make one.' };
 
 let db;
 beforeAll(async () => { db = await createLocalDatabase(); }, 60_000);
@@ -24,7 +24,6 @@ function service() {
   const accounts = new Map([['owner', { id: 'id-owner', email: 'owner@noemail.peekaboo.invalid', password: 'right1password' }]]);
   const byId = (id) => [...accounts.values()].find((a) => a.id === id);
   const rpc = vi.fn(async (fn, args) => {
-    if (fn === 'public_name_allowed') return { data: true, error: null };
     const names = Object.keys(args);
     try {
       const { rows } = await asUser(db, null, (tx) => tx.query(
@@ -41,6 +40,7 @@ function service() {
     const chain = { select: () => chain, eq: (_c, v) => { username = v; return chain; }, maybeSingle: () => profileLookup(username) };
     return chain;
   });
+  // Sign-ups are switched off, so this must never be called (it would really make the account here).
   const createUser = vi.fn(async ({ email, password, user_metadata }) => {
     const id = `id-${user_metadata.username}`;
     accounts.set(user_metadata.username, { id, email, password });
@@ -166,16 +166,6 @@ describe('username login limits', () => {
     expect((await signin(s.handler, 'owner', 'right1password', platform('198.51.100.7'))).status).toBe(200);
   });
 
-  it('a limiter outage after the first counter during sign-up gives that counter back', async () => {
-    const s = service();
-    const real = s.rpc.getMockImplementation();
-    s.rpc.mockImplementation(async (fn, args) =>
-      fn === 'reserve_username_auth_attempt' && args.attempt_key === 'all' ? { data: null, error: { message: 'offline' } } : real(fn, args));
-    for (let i = 0; i < 8; i++) expect((await signup(s.handler, `try_${i}`, platform('198.51.100.7'))).status).toBe(503);
-    expect(s.createUser).not.toHaveBeenCalled();
-    expect(await logRows()).toEqual([]);
-  });
-
   it('fails closed when the limit check cannot run', async () => {
     const s = service();
     s.rpc.mockResolvedValue({ data: null, error: { message: 'offline' } });
@@ -208,14 +198,6 @@ describe('client address', () => {
     expect(keys.join(' ')).not.toContain('1.2.3.4');
   });
 
-  it('rotating forged X-Forwarded-For values without the platform header still stops at five sign-ups', async () => {
-    const { handler, createUser } = service();
-    const all = [];
-    for (let i = 0; i < 12; i++) all.push(await signup(handler, `forged${i}`, { 'x-forwarded-for': `9.9.${i}.9, 203.0.113.9, 172.64.1.9` }));
-    expect(createUser).toHaveBeenCalledTimes(SIGNUP_CAP);
-    expect(all.filter((r) => r.status === 429)).toHaveLength(12 - SIGNUP_CAP);
-  });
-
   it('counts a whole IPv6 /64 block as one address', async () => {
     const { handler } = service();
     await signin(handler, 'owner', 'wrong1password', platform('2001:0DB8:0001:0002:0000:0000:0000:0001'));
@@ -233,7 +215,7 @@ describe('client address', () => {
   });
 
   it('rotating addresses inside one IPv6 /64 gets no extra tries', async () => {
-    const { handler, createUser } = service();
+    const { handler } = service();
     const block = (i) => platform(`2001:db8:1:2::${(i + 1).toString(16)}`);
     // Wrong passwords for one name: 8 checks, then refused.
     const guesses = [];
@@ -246,9 +228,6 @@ describe('client address', () => {
     const spray = [];
     for (let i = 0; i < 60; i++) spray.push(await signin(handler, `victim_${i}`, 'wrong1password', block(100 + i)));
     expect(spray.filter((r) => r.status === 401)).toHaveLength(30 - 8);
-    // Sign-ups: five per block.
-    for (let i = 0; i < 20; i++) await signup(handler, `sixfour${i}`, block(200 + i));
-    expect(createUser).toHaveBeenCalledTimes(SIGNUP_CAP);
   });
 
   it('keeps different IPv6 /64 blocks apart', async () => {
@@ -272,61 +251,74 @@ describe('client address', () => {
   });
 });
 
-describe('username sign-up limits', () => {
-  it('rotating forged X-Forwarded-For values does not give more sign-ups from one address', async () => {
-    const { handler, createUser } = service();
-    const all = [];
-    for (let i = 0; i < 12; i++) all.push(await signup(handler, `newuser${i}`, platform('203.0.113.9', `10.0.${i}.1, 203.0.113.9`)));
-    expect(createUser).toHaveBeenCalledTimes(SIGNUP_CAP);
-    expect(all.filter((r) => r.status === 429)).toHaveLength(12 - SIGNUP_CAP);
-  });
+describe('username sign-up is switched off', () => {
+  // Nothing at all may happen for a sign-up: no account, no counter, no name check, no lookup, no login.
+  const nothingHappened = async (s) => {
+    expect(s.createUser).not.toHaveBeenCalled();
+    expect(s.rpc).not.toHaveBeenCalled();
+    expect(s.from).not.toHaveBeenCalled();
+    expect(s.getUserById).not.toHaveBeenCalled();
+    expect(s.login).not.toHaveBeenCalled();
+    expect(await logRows()).toEqual([]);
+  };
 
-  it('without the platform header, rotating forged values still stop at the hourly cap for everyone', async () => {
-    const { handler, createUser } = service();
-    const all = [];
-    for (let i = 0; i < SITE_SIGNUP_CAP + 10; i++) all.push(await signup(handler, `bot${i}`, { 'x-forwarded-for': `10.${i >> 8}.${i & 255}.1` }));
-    expect(createUser).toHaveBeenCalledTimes(SITE_SIGNUP_CAP);
-    const refused = all.filter((r) => r.status === 429);
-    expect(refused).toHaveLength(10);
-    expect((await refused[0].json()).error).toMatch(/right now/);
-    // A refused sign-up leaves no row for its own address.
-    expect(await logRows(`ip:10.0.${SITE_SIGNUP_CAP + 5}.1`)).toEqual([]);
-  });
-
-  it('a taken username gives the sign-up try back', async () => {
-    const { handler, createUser, accounts } = service();
-    accounts.set('taken_name', { id: 'id-taken', email: 'x@noemail.peekaboo.invalid', password: 'x1x1x1x1x' });
-    for (let i = 0; i < 8; i++) expect((await signup(handler, 'taken_name', platform('198.51.100.7'))).status).toBe(409);
-    expect((await signup(handler, 'free_name', platform('198.51.100.7'))).status).toBe(200);
-    expect(createUser).toHaveBeenCalledTimes(1);
-    expect(await logRows()).toEqual([{ kind: 'signup', key: 'ip:198.51.100.7' }, { kind: 'signup', key: 'all' }]);
-  });
-
-  it('a failed account creation gives the sign-up try back', async () => {
+  it('a sign-up makes no account, reserves no counter and answers with the Apple / Google message', async () => {
     const s = service();
-    const real = s.createUser.getMockImplementation();
-    s.createUser.mockResolvedValue({ data: { user: null }, error: { message: 'Database error creating new user' } });
-    for (let i = 0; i < 8; i++) expect((await signup(s.handler, `try_${i}`, platform('198.51.100.7'))).status).toBe(400);
-    s.createUser.mockImplementation(real);
-    expect((await signup(s.handler, 'works_now', platform('198.51.100.7'))).status).toBe(200);
-    expect(await logRows('ip:%')).toHaveLength(1);
+    const response = await signup(s.handler, 'newuser', platform('203.0.113.9'));
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual(SIGNUP_CLOSED);
+    await nothingHappened(s);
+    expect(s.accounts.has('newuser')).toBe(false);
   });
 
-  it('an outage during sign-up gives the sign-up try back', async () => {
+  it('30 sign-ups at once from one address, and rotating forged or IPv6 addresses, all get the message and make nothing', async () => {
     const s = service();
+    const all = await Promise.all(Array.from({ length: 30 }, (_, i) => signup(s.handler, `crowd${i}`, platform('192.0.2.44'))));
+    for (let i = 0; i < 12; i++) all.push(await signup(s.handler, `forged${i}`, { 'x-forwarded-for': `9.9.${i}.9, 203.0.113.9, 172.64.1.9` }));
+    for (let i = 0; i < 12; i++) all.push(await signup(s.handler, `sixfour${i}`, platform(`2001:db8:1:2::${(i + 1).toString(16)}`)));
+    expect(statuses(all)).toEqual(Array(54).fill(410));
+    for (const response of all) expect(await response.json()).toEqual(SIGNUP_CLOSED);
+    await nothingHappened(s);
+  });
+
+  it.each([
+    ['a full request from an old app (name and Terms version)', { username: 'alice', password: 'test12345', display_name: 'Alice 👀', terms_version: '2026-11-04' }],
+    ['a username that is already taken', { username: 'owner', password: 'right1password' }],
+    ['blocked words in the names', { username: 'fuckboy', password: 'test12345', display_name: 'n1gg3r' }],
+    ['a username that breaks the rules', { username: '<script>', password: 'test12345' }],
+    ['a password that breaks the rules', { username: 'alice', password: 'short' }],
+    ['no username or password at all', {}],
+    ['details of the wrong type', { username: 5, password: {}, display_name: [], terms_version: true }],
+  ])('%s gets the same answer and makes nothing', async (_why, details) => {
+    const s = service();
+    const response = await s.handler(request({ action: 'signup', ...details }, { headers: platform('198.51.100.7') }));
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual(SIGNUP_CLOSED);
+    await nothingHappened(s);
+  });
+
+  it('still answers with the message while the database and the login service are down', async () => {
+    const s = service();
+    s.rpc.mockResolvedValue({ data: null, error: { message: 'offline' } });
     s.profileLookup.mockResolvedValue({ data: null, error: { message: 'timeout' } });
-    for (let i = 0; i < 8; i++) expect((await signup(s.handler, `try_${i}`, platform('198.51.100.7'))).status).toBe(503);
-    expect(await logRows()).toEqual([]);
-    s.createUser.mockRejectedValueOnce(new Error('socket hang up'));
-    s.profileLookup.mockImplementation(async () => ({ data: null, error: null }));
-    expect((await signup(s.handler, 'try_x', platform('198.51.100.7'))).status).toBe(503);
-    expect(await logRows()).toEqual([]);
+    s.login.mockRejectedValue(new Error('socket hang up'));
+    const response = await signup(s.handler, 'newuser', platform('198.51.100.7'));
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual(SIGNUP_CLOSED);
+    expect(s.rpc).not.toHaveBeenCalled();
+    expect(s.createUser).not.toHaveBeenCalled();
   });
 
-  it('only real new accounts count: five per address per hour', async () => {
-    const { handler, createUser } = service();
-    const all = await Promise.all(Array.from({ length: 30 }, (_, i) => signup(handler, `crowd${i}`, platform('192.0.2.44'))));
-    expect(createUser).toHaveBeenCalledTimes(SIGNUP_CAP);
-    expect(all.filter((r) => r.status === 429)).toHaveLength(30 - SIGNUP_CAP);
+  it('sign-ups use up nothing: afterwards logins from the same address keep every try', async () => {
+    const s = service();
+    for (let i = 0; i < 60; i++) await signup(s.handler, `name_${i}`, platform('203.0.113.66'));
+    // The same 8 wrong tries for a name from this address as always, then the wait.
+    const wrong = [];
+    for (let i = 0; i < 9; i++) wrong.push(await signin(s.handler, 'owner', 'wrong1password', platform('203.0.113.66')));
+    expect(statuses(wrong)).toEqual([401, 401, 401, 401, 401, 401, 401, 401, 429]);
+    // And the right password still works from somewhere else.
+    expect((await signin(s.handler, 'owner', 'right1password', platform('198.51.100.7'))).status).toBe(200);
+    expect(s.createUser).not.toHaveBeenCalled();
+    expect((await logRows()).every((row) => row.kind === 'fail')).toBe(true);
   });
 });

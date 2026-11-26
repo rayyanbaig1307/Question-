@@ -1,7 +1,9 @@
-// Username accounts: sign up with just a username and password (no email), and log in with a username.
-// Accounts made without an email get a stand-in address that can never receive mail (".invalid" is reserved for
-// exactly that), so nobody else can ever get their password-reset emails. Logging in by username looks the
-// account up here on the server, so nobody's email is ever shown to the app.
+// Username accounts: log in with a username and password. Older accounts made with just a username (no email) have a
+// stand-in address that can never receive mail (".invalid" is reserved for exactly that). Logging in by username
+// looks the account up here on the server, so nobody's email is ever shown to the app.
+// Making NEW accounts here is switched off (26 Nov 2026): new accounts are made only with "Continue with Apple"
+// (iPhone) or "Continue with Google" (Android). A sign-up request gets a plain "no" and nothing else happens:
+// no account, no counters, no name check. Old app downloads that still show a sign-up form show that message.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const url = Deno.env.get('SUPABASE_URL')!;
@@ -11,7 +13,9 @@ const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
 });
 
 const USERNAME = /^[a-z0-9_.]{3,20}$/;
-const NO_EMAIL_DOMAIN = 'noemail.peekaboo.invalid';
+
+// What a sign-up request gets now. Old downloads show this sentence under their old sign-up form.
+const SIGNUP_CLOSED = 'New accounts are made with the Apple or Google button now – get the newest Peekaboo to make one.';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -20,13 +24,8 @@ const json = (body: unknown, status = 200) =>
 //  - 8 wrong tries per username from one address every 15 minutes (the main limit)
 //  - 40 wrong tries per username from all addresses together (so a guesser with a few addresses still stops)
 //  - 30 wrong tries from one address across all usernames (so nobody can try one password on many accounts)
-// Sign-ups: only tries that really make an account count.
-//  - 5 new username accounts per address per hour
-//  - 100 new username accounts per hour from everyone together (a backstop in case addresses are faked)
 const LOGIN_WINDOW_MINUTES = 15;
 const LOGIN_LIMITS = { pair: 8, username: 40, address: 30 };
-const SIGNUP_WINDOW_MINUTES = 60;
-const SIGNUP_LIMITS = { address: 5, everyone: 100 };
 
 // The caller's internet address, used to keep one person's tries apart from everyone else's.
 //  - cf-connecting-ip is set by Cloudflare, which sits in front of the hosted project; an app cannot change it.
@@ -124,7 +123,7 @@ function isProxyAddress(bytes: number[]): boolean {
 // Reserve a try before checking credentials. The database locks each counter so simultaneous requests
 // cannot all slip through; if the counter is unavailable, don't continue without protection.
 // Every try of one request carries the same request id, so they can all be given back together.
-async function reserveAttempt(kind: 'signup' | 'fail', key: string, max: number, minutes: number, attemptId: string): Promise<boolean> {
+async function reserveAttempt(kind: 'fail', key: string, max: number, minutes: number, attemptId: string): Promise<boolean> {
   const { data, error } = await admin.rpc('reserve_username_auth_attempt', {
     attempt_kind: kind, attempt_key: key, max_attempts: max, window_minutes: minutes, attempt_id: attemptId,
   });
@@ -133,7 +132,7 @@ async function reserveAttempt(kind: 'signup' | 'fail', key: string, max: number,
 }
 
 // Reserve several counters in order. If one is full, give back the ones already taken and say which was full.
-async function reserveAll(kind: 'signup' | 'fail', counters: [string, string, number][], minutes: number, attemptId: string): Promise<string | null> {
+async function reserveAll(kind: 'fail', counters: [string, string, number][], minutes: number, attemptId: string): Promise<string | null> {
   for (const [name, key, max] of counters) {
     if (!(await reserveAttempt(kind, key, max, minutes, attemptId))) {
       await refundAttempt(attemptId);
@@ -143,7 +142,7 @@ async function reserveAll(kind: 'signup' | 'fail', counters: [string, string, nu
   return null;
 }
 
-// Give back every try of one request (a correct login, a sign-up that made no account, or an outage).
+// Give back every try of one request (a correct login, or an outage).
 // If this fails the try simply keeps counting, which is the safe side, so it never stops the request.
 async function refundAttempt(attemptId: string): Promise<void> {
   try {
@@ -156,17 +155,6 @@ async function refundAttempt(attemptId: string): Promise<void> {
 
 // The login service itself had a problem (it is down, overloaded or rate limited) – not a wrong password.
 class LoginServiceError extends Error {}
-
-// The word filter lives in the database (private.blocked_word), so the app, the server and this function all
-// follow the same rules: no swearing or slurs in the username; the display name may swear, but no slurs.
-// If the check can't run, don't make the account.
-const NAME_NOT_ALLOWED = "Let's keep it clean – that word can't be in a username or name.";
-const WORD_NOT_ALLOWED = "That word isn't allowed on Peekaboo.";
-async function namesAllowed(username: string, displayName: string): Promise<boolean> {
-  const { data, error } = await admin.rpc('public_name_allowed', { username, display_name: displayName });
-  if (error || typeof data !== 'boolean') throw error ?? new Error('Could not check the name');
-  return data;
-}
 
 // Logs in like the app would, and hands back the login so the app can use it.
 // A wrong password gives null. Any other problem (the login service is down, busy or unreachable) throws,
@@ -215,6 +203,10 @@ Deno.serve(async (req) => {
   } finally {
     reader.releaseLock();
   }
+  // Sign-ups are switched off: answer straight away, before anything is checked, counted or looked up.
+  // 410 ("gone") so these show up clearly in the function's logs.
+  if (body.action === 'signup') return json({ error: SIGNUP_CLOSED }, 410);
+  // The same checks as before sign-ups were switched off, so logging in answers exactly as it did.
   if (typeof body.username !== 'string' || typeof body.password !== 'string' ||
       (body.display_name !== undefined && typeof body.display_name !== 'string') ||
       (body.terms_version !== undefined && typeof body.terms_version !== 'string')) {
@@ -228,62 +220,6 @@ Deno.serve(async (req) => {
   // True while this request holds tries that must be given back if something breaks (an outage).
   let giveBackOnError = false;
   try {
-    if (body.action === 'signup') {
-      if (!USERNAME.test(username)) {
-        return json({ error: 'Usernames are 3–20 characters: lowercase letters, numbers, dots and underscores' }, 400);
-      }
-      // Same rule as the app: 8+ characters with a letter and a number.
-      if (password.length < 8 || password.length > 72 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-        return json({ error: 'Your password needs at least 8 characters, with a letter and a number' }, 400);
-      }
-      const displayName = String(body.display_name ?? '').trim().slice(0, 40) || username;
-      // The same word filter as the app (the database's copy of it), checked before any account is made.
-      if (!(await namesAllowed(username, displayName))) {
-        // The same message as the app: a username that breaks the rules gets the username message; a slur in
-        // the display name (which may swear) gets the general one. An empty display name checks only the username.
-        return json({ error: (await namesAllowed(username, '')) ? WORD_NOT_ALLOWED : NAME_NOT_ALLOWED }, 400);
-      }
-      // Set before reserving: if the limiter breaks partway, the counters already taken are given back.
-      giveBackOnError = true;
-      const full = await reserveAll('signup', [
-        ['address', `ip:${clientAddress(req)}`, SIGNUP_LIMITS.address],
-        ['everyone', 'all', SIGNUP_LIMITS.everyone],
-      ], SIGNUP_WINDOW_MINUTES, attemptId);
-      if (full === 'address') return json({ error: 'Lots of new accounts from here already – try again in an hour' }, 429);
-      if (full) return json({ error: 'Lots of new accounts right now – try again in an hour' }, 429);
-      const { data: taken, error: lookupError } = await admin.from('profiles').select('id').eq('username', username).maybeSingle();
-      if (lookupError) throw lookupError;
-      if (taken) {
-        // No account was made, so this doesn't count.
-        await refundAttempt(attemptId);
-        giveBackOnError = false;
-        return json({ error: 'That username is already taken. Try another one!' }, 409);
-      }
-
-      const email = `${crypto.randomUUID()}@${NO_EMAIL_DOMAIN}`;
-      const { error } = await admin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          username,
-          display_name: displayName,
-          terms_version: String(body.terms_version ?? ''),
-          no_email: true,
-        },
-      });
-      if (error) {
-        console.error('createUser failed', error.message);
-        await refundAttempt(attemptId);
-        giveBackOnError = false;
-        return json({ error: 'Could not make your account – try again' }, 400);
-      }
-      // The account now exists, so this sign-up counts – even if logging in below doesn't work.
-      giveBackOnError = false;
-      const session = await logIn(email, password).catch(() => null);
-      return session ? json({ session }) : json({ error: 'Your account is ready – log in with your username' }, 500);
-    }
-
     if (body.action === 'signin') {
       if (!USERNAME.test(username) || !password || password.length > 72) return json({ error: 'Wrong username or password' }, 401);
       const address = clientAddress(req);

@@ -258,21 +258,16 @@ test('bad credentials stay logged out, hostile text stays text', async ({ page }
   expect(page.url()).toContain('sign-in');
 });
 
-test('sign-up empty input, username normalization, and username-only mode', async ({ page }) => {
+test('sign-up has no form: it says new accounts use the Apple or Google button, and leads to log in', async ({ page }) => {
   await page.goto('/sign-up');
-  // Once the icon font has loaded, the button's name starts with its ✨ icon, so match the words at the end.
-  await page.getByRole('button', { name: /^\W*Let's go!$/ }).click();
-  await expect(page.getByText('Pick a username.', { exact: true })).toBeVisible();
-  await expect(page.getByText('You need to be 13 or older to use Peekaboo.')).toBeVisible();
-  await page.getByPlaceholder('coolname', { exact: true }).fill('ABC 😀 <script> 123');
-  await expect(page.getByPlaceholder('coolname', { exact: true })).toHaveValue('abcscript123');
-  await expect(page.getByText('@abcscript123 is free!', { exact: false })).toBeVisible();
-  await page.getByPlaceholder('coolname', { exact: true }).fill('qa_taken');
-  await expect(page.getByText('Taken! Try another one.', { exact: true })).toBeVisible();
-  await page.getByRole('radio', { name: 'Just a username', exact: false }).click();
-  await expect(page.getByPlaceholder('you@example.com', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('No email means you log in with your username', { exact: false })).toBeVisible();
+  await expect(page.getByText('New accounts use Apple or Google', { exact: true })).toBeVisible();
+  await expect(page.getByText('New accounts are made with the Apple or Google button now', { exact: false })).toBeVisible();
+  await expect(page.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Let's go!$/ })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // Once the icon font has loaded, the button's name starts with its icon, so match the words at the end.
+  await page.getByRole('button', { name: /I already have an account$/ }).click();
+  await expect(page.getByText('Welcome back!')).toBeVisible();
 });
 
 test('protected deep links cannot show private content while logged out', async ({ page }) => {

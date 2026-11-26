@@ -259,9 +259,9 @@ describe('word filter: app and database agree', () => {
   });
 
   it('checks names at sign-up in the same places as the app: the username as a name, the display name as content', async () => {
-    // public_name_allowed is what username-auth asks before it makes an account. The owner's choice: a display
-    // name may swear (like a bio), only the @username can't. tests/api/edge-security.test.mjs uses this same rule
-    // as its stand-in for the database.
+    // public_name_allowed is what username-auth asked before it made an account. Username sign-ups are switched
+    // off since 26 Nov 2026, but the database function stays, so it still has to agree with the app. The owner's
+    // choice: a display name may swear (like a bio), only the @username can't.
     const texts = corpus();
     const answers = async (usernames, displayNames) => (await db.query(
       'select n, public_name_allowed(u, d) as ok from unnest($1::text[], $2::text[]) with ordinality as x(u, d, n) order by n',

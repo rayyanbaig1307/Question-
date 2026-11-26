@@ -60,7 +60,8 @@ export default function Welcome() {
               </Pressable>
             </>
           ) : (
-            // Expo Go and older downloads don't have Apple/Google sign-in.
+            // Expo Go and older downloads don't have Apple/Google sign-in. "Create account" there explains that
+            // new accounts are made with the Apple or Google button in the newest Peekaboo.
             <>
               <Button title="Create account" onPress={() => router.push('/sign-up')} />
               <Button
