@@ -37,6 +37,13 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
+## Names on the Supabase Users page (26 Nov – LIVE)
+
+- `supabase/migrations/20270103000000_names_on_users_page.sql` copies each person's display name and username from
+  `public.profiles` onto their login, so Supabase → Authentication → Users shows names (Apple/Google sign-ups pick
+  their name in the app, so the column was blank). A trigger keeps it up to date; it can never stop a profile from
+  saving. The app doesn't read the copies. Applied live on 26 Nov: all 38 logins show a name.
+
 ## Instant sends + faster loading (23 Nov – on `testing` only: update `01a20aca` from hotfix commits `c191239` + `50124d5` on top of `16f4227`; NOT on production yet)
 
 - **What was wrong:** on 22 Nov the owner's "Send to…" (drop camera, Ray ticked, 1 bar) spun forever, and peeks
