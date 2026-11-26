@@ -37,7 +37,7 @@ and the owner's standing preferences.
 | App review account | `review@peekaboo.invalid` / `@peekaboo_review` (password is in App Store Connect → App Review Information) |
 | Legal operator | 2865113 Ontario Inc. (Ontario, Canada), rbaig18@z2automation.net. There's no mailing address, on purpose. |
 
-## Username sign-up switched off (26 Nov – code only, NOT deployed yet)
+## Username sign-up switched off (26 Nov – LIVE on the server: `username-auth` version 10, Verify JWT ON; the new sign-up screen rides the next OTA)
 
 - **Why:** the owner will pay people for each new account (affiliate codes), so every new account must come from
   Sign in with Apple / Google. The live `username-auth` function still made a username-only account for anyone who
