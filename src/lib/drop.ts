@@ -52,6 +52,14 @@ export function dropStatus(date = new Date()): DropStatus {
   return { kind: 'late', at, now };
 }
 
+// Before today's drop has gone off (from midnight until the notification): the time it goes off, like "5:13 PM".
+// null once it has. Nobody can post a drop in that time – yesterday's is over and today's hasn't happened – so
+// screens say when it is instead of offering the camera.
+export function dropNotYetAt(date = new Date()): string | null {
+  const status = dropStatus(date);
+  return status.kind === 'waiting' ? status.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+}
+
 // The same, updated every second.
 export function useDropStatus(): DropStatus {
   const [status, setStatus] = useState(() => dropStatus());

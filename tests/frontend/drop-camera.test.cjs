@@ -132,3 +132,22 @@ test('while your drop is still on its way, the camera is a normal camera: the ne
     } finally { await unmount(lateTree); }
   }
 });
+
+// 26 Nov (owner's screenshot, 2:32 AM): "Open camera" on a friend's locked drop opened the drop camera after
+// midnight. Yesterday's drop is over by then and today's hasn't gone off, so the server refused the post ("Your drop
+// didn't post: Today's Peekaboo drop hasn't happened yet"). Now the drop camera opened before today's drop shows
+// the "hasn't happened yet" timer, and the photo is a normal one (not sent as a drop).
+test('the drop camera opened before today\'s drop has gone off takes a normal photo, not a drop', async () => {
+  const shutterFor = (tree) => tree.root.find((node) => node.type === 'Bouncy' && typeof node.props.accessibilityLabel === 'string' && /^Take/.test(node.props.accessibilityLabel));
+  const waiting = { kind: 'waiting', at: new Date(Date.now() + 3_600_000), now: Date.now() };
+  for (const [status, dropParam] of [[waiting, undefined], [LIVE, '1']]) {
+    const setup = loadCamera({ done: false, status });
+    const tree = await renderCamera(setup, { drop: true });
+    try {
+      assert.ok(has(tree, 'DropTimer'), 'the timer still says where the drop is at');
+      await act(async () => { await shutterFor(tree).props.onPress(); });
+      assert.equal(setup.pushed.length, 1);
+      assert.equal(setup.pushed[0].params.drop, dropParam, `status=${status.kind}`);
+    } finally { await unmount(tree); }
+  }
+});

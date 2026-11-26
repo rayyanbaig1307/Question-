@@ -240,7 +240,7 @@ function loadScreen(relative, overrides = {}, { timers = 'recorded' } = {}) {
     '@/lib/friends': { fetchFriends: async () => [], cachedFriends: () => null, warmFriends() {} },
     '@/lib/media': { resizePhoto: async uri => uri, videoTooBig: () => false },
     '@/lib/dares': { todayDareDay: () => '2026-11-04', useDare: () => ({ text: 'QA dare' }) },
-    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }), useMyDropPosts: () => 0 },
+    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }), useMyDropPosts: () => 0, dropStatus: () => ({ kind: 'late', at: new Date(0), now: 0 }), dropNotYetAt: () => null },
     // 📤 The outbox (sends go out in the background): sends are only recorded here. Tests that need to see
     // "Sending…" bubbles pass outboxStore().
     '@/lib/outbox': {

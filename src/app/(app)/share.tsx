@@ -20,6 +20,7 @@ import { checkClean } from '@/lib/cleanWords';
 import { cachedFriends, fetchFriends } from '@/lib/friends';
 import type { Capture } from '@/lib/media';
 import { todayDareDay, useDare } from '@/lib/dares';
+import { dropStatus } from '@/lib/drop';
 import { useDareRulesAccepted } from '@/lib/legal';
 import { dropSendingKey, queueShare, useDropSending, type SharePlan } from '@/lib/outbox';
 import { fetchPlusAllowances, type PlusAllowances } from '@/lib/plusExtras';
@@ -82,7 +83,9 @@ export default function Share() {
   // Your drop from a moment ago is still on its way: this photo doesn't start as a second drop (there's only one
   // drop a day, and a second one could even be saved before the first).
   const dropSending = useDropSending(userId);
-  const [toDrop, setToDrop] = useState(fromDrop && !dropSending);
+  // Before today's drop has gone off (midnight until the notification) a drop can't be posted: yesterday's is over
+  // and today's hasn't happened. Then "Today's drop" doesn't start ticked and isn't offered.
+  const [toDrop, setToDrop] = useState(fromDrop && !dropSending && dropStatus().kind !== 'waiting');
   // ⏰ Peekaboo+ drop rewind: post a late drop without the "late" label (once a week). `rewindInfo` stays null
   // when the server doesn't have it yet, and then the choice isn't shown.
   const [rewind, setRewind] = useState(false);
@@ -159,8 +162,20 @@ export default function Share() {
     return true;
   }
 
+  // It turned midnight while this screen was open: today's drop hasn't happened yet, so it can't be posted.
+  // Says so, unticks it, and gives true.
+  function dropNotYet(): boolean {
+    if (!toDrop || dropStatus().kind !== 'waiting') return false;
+    setToDrop(false);
+    Alert.alert(
+      "Today's drop hasn't happened yet",
+      "Wait for the 👀 notification to post today's drop. You can still send this photo somewhere else.",
+    );
+    return true;
+  }
+
   async function send(storyOk = storyChecked) {
-    if (sent.current || dropStillSending()) return;
+    if (sent.current || dropStillSending() || dropNotYet()) return;
     const notAllowed = checkClean(caption, 'content');
     if (notAllowed) {
       Alert.alert('Caption not allowed', notAllowed);
@@ -301,7 +316,7 @@ export default function Share() {
           </View>
 
           <Text style={styles.sectionTitle}>📣 Post it</Text>
-          {fromDrop ? (
+          {fromDrop && (toDrop || dropStatus().kind !== 'waiting') ? (
             <Option
               emoji="👀"
               title="Today's drop"

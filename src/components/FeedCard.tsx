@@ -23,7 +23,7 @@ import { HypeRating } from '@/components/HypeRating';
 import { ScratchReveal } from '@/components/ScratchRevealSafe';
 import { VideoClip } from '@/components/VideoClipSafe';
 import { StoryAvatar } from '@/components/StoryAvatar';
-import type { DropLock } from '@/lib/drop';
+import { dropNotYetAt, type DropLock } from '@/lib/drop';
 import type { FeedPost } from '@/lib/feed';
 import { timeAgo } from '@/lib/time';
 import { colors, font, radius, space } from '@/theme';
@@ -194,12 +194,10 @@ export function FeedCard({
               <View style={styles.lockedContent}>
                 <Text style={styles.lockedEmoji}>🙈</Text>
                 <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
-                <Text style={styles.lockedText}>Post your Peekaboo drop to see {name}&apos;s.</Text>
-                <Button
-                  title="Open camera"
-                  icon="camera"
+                <DropLockAction
+                  text={`Post your Peekaboo drop to see ${name}'s.`}
+                  waitingText={`Post today's drop when it goes off to see ${name}'s.`}
                   small
-                  onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
                 />
               </View>
             )}
@@ -322,6 +320,32 @@ export function FeedCard({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+// The bottom of a "Give a peek to get a peek" card: the camera button, or – before today's drop has gone off
+// (from midnight until the notification) – when it goes off. In that time a drop can't be posted (yesterday's is
+// over and today's hasn't happened), so the camera button only led to "Your drop didn't post".
+export function DropLockAction({ text, waitingText, small = false }: { text: string; waitingText: string; small?: boolean }) {
+  const notYetAt = dropNotYetAt();
+  if (notYetAt) {
+    return (
+      <>
+        <Text style={styles.lockedText}>{waitingText}</Text>
+        <Text style={styles.lockedText}>⏰ Today&apos;s drop is at {notYetAt}</Text>
+      </>
+    );
+  }
+  return (
+    <>
+      <Text style={styles.lockedText}>{text}</Text>
+      <Button
+        title="Open camera"
+        icon="camera"
+        small={small}
+        onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+      />
+    </>
   );
 }
 

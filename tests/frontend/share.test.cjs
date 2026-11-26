@@ -298,3 +298,51 @@ test("while your drop is still on its way, Send to… doesn't start as a second 
     assert.deepEqual(plain(outbox.shares[0][1].friendIds), ['ray']);
   } finally { await unmount(tree); }
 });
+
+// 26 Nov (owner's screenshot, 2:32 AM): a drop sent after midnight was refused – yesterday's drop is over and
+// today's hasn't gone off yet. Send to… now doesn't offer "Today's drop" then, and if the clock passes midnight
+// while it's open, Send says so instead of queuing a drop the server will refuse.
+test("before today's drop has gone off, Send to… doesn't offer or send a drop", async () => {
+  const ray = { id: 'ray', username: 'ray', display_name: 'Ray' };
+  const clock = { kind: 'waiting' };
+  const shares = [];
+  const screen = loadScreen('src/app/(app)/share.tsx', {
+    'expo-router': { router: router([]), useLocalSearchParams: () => ({ uri: 'file:///qa-photo.jpg', drop: '1' }) },
+    '@/lib/friends': { fetchFriends: async () => [ray], cachedFriends: () => [ray] },
+    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }), useMyDropPosts: () => 0, dropStatus: () => ({ kind: clock.kind, at: new Date(0), now: 0 }) },
+    '@/lib/outbox': {
+      queueShare: (...args) => { shares.push(args); return { group: 'group-1', postId: null, postJob: null }; },
+      useDropSending: () => null,
+      dropSendingKey: () => null,
+    },
+  });
+  const tree = await renderScreen(screen);
+  try {
+    assert.equal(option(tree, "Today's drop"), undefined, 'not offered before the drop');
+    await act(() => option(tree, 'Ray').props.onPress());
+    await act(() => button(tree, /^Send to/).props.onPress());
+    assert.equal(shares.length, 1);
+    assert.equal(shares[0][1].post, null, 'no drop post');
+    assert.deepEqual(plain(shares[0][1].friendIds), ['ray']);
+  } finally { await unmount(tree); }
+
+  // Opened late in the evening (the drop is ticked), and it turns midnight before Send.
+  clock.kind = 'late';
+  const late = loadScreen('src/app/(app)/share.tsx', {
+    'expo-router': { router: router([]), useLocalSearchParams: () => ({ uri: 'file:///qa-photo.jpg', drop: '1' }) },
+    '@/lib/drop': { lateLabel: () => ({ onTime: true, text: 'On time' }), useMyDropPosts: () => 0, dropStatus: () => ({ kind: clock.kind, at: new Date(0), now: 0 }) },
+    '@/lib/outbox': {
+      queueShare: (...args) => { shares.push(args); return { group: 'group-1', postId: 'post-1', postJob: 'job-post' }; },
+      useDropSending: () => null,
+      dropSendingKey: () => null,
+    },
+  });
+  const lateTree = await renderScreen(late);
+  try {
+    assert.equal(option(lateTree, "Today's drop").props.accessibilityState.checked, true);
+    clock.kind = 'waiting';
+    await act(() => button(lateTree, /^Send to/).props.onPress());
+    assert.equal(shares.length, 1, 'nothing more queued');
+    assert.equal(late.calls.alerts[0][0], "Today's drop hasn't happened yet");
+  } finally { await unmount(lateTree); }
+});

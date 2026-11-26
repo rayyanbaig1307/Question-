@@ -1660,3 +1660,8 @@ Airplane mode works too. Turn both off at the end.
 17. **A friend request accepted on the other phone**: send a friend request to the test account → stay on your
     Friends page → on the other phone accept it → within a few seconds they move to your friends by themselves
     (no pull-down needed). Same with the bell (Inbox) open when a new request comes in.
+18. **After midnight, before today's drop** (the owner's 26 Nov screenshot): don't post yesterday's drop → after
+    midnight open Home → a friend's locked drop says "Post today's drop when it goes off to see …'s" and
+    "⏰ Today's drop is at …" – no "Open camera" button. Tap an old drop notification → the camera says today's drop
+    hasn't happened yet, and your photo's Send to… has no "Today's drop" (send it to a friend instead). After the
+    notification, the "Open camera" button is back.

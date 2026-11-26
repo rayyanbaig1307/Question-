@@ -158,7 +158,9 @@ export function CameraPage({ active, warm = false, sendTo, chatDare, sendToGroup
   // knows about your drop once it's saved, and your next photo (for a friend) must not become a second drop.
   const dropSending = useDropSending(userId);
   const autoDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'live' && dropDone !== true && !dropSending;
-  const dropOn = drop || autoDrop;
+  // The drop camera opened before today's drop has gone off (an old notification, or a button tapped after
+  // midnight): the timer says it hasn't happened yet, and the photo is a normal one – a drop can't be posted then.
+  const dropOn = (drop && dropStatus.kind !== 'waiting') || autoDrop;
   // Missed it: a small "post today's drop · you're late" button on the camera until you do.
   const lateDrop = isHome && homeMode === 'photo' && dropStatus.kind === 'late' && dropDone === false && !dropSending;
   const guessOn = guess || (isHome && homeMode === 'guess');

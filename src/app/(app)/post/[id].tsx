@@ -15,6 +15,7 @@ import { DareBackButton } from '@/components/DareBackButton';
 import { DareTag, ForfeitTag } from '@/components/DareBanner';
 import { HypeRating } from '@/components/HypeRating';
 import { DropBadge } from '@/components/DropPill';
+import { DropLockAction } from '@/components/FeedCard';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { useOverlays } from '@/components/Overlays';
@@ -225,11 +226,9 @@ export default function PostViewer() {
               <>
                 <Text style={styles.lockedEmoji}>🙈</Text>
                 <Text style={styles.lockedTitle}>Give a peek to get a peek 👀</Text>
-                <Text style={styles.lockedText}>Post your Peekaboo drop to see this one.</Text>
-                <Button
-                  title="Open camera"
-                  icon="camera"
-                  onPress={() => router.push({ pathname: '/camera', params: { drop: '1' } })}
+                <DropLockAction
+                  text="Post your Peekaboo drop to see this one."
+                  waitingText="Post today's drop when it goes off to see this one."
                 />
               </>
             )}
